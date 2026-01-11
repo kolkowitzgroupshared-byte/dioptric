@@ -93,8 +93,8 @@ def create_fit_figure(nv_list, phis, norm_counts, norm_counts_ste):
 
     ax_all.set_xlabel("Phase (degrees)")
     ax_all.set_ylabel("Normalized Counts")
-    # ax_all.set_title(r"Cosine Fits ($\frac{\pi}{2}_x$ - xy8 – $\frac{\pi}{2}_\phi$)")
-    ax_all.set_title(r"Cosine Fits")
+    ax_all.set_title(r"Cosine Fits ($\frac{\pi}{2}_x$ - xy8 – $\frac{\pi}{2}_\phi$)")
+    # ax_all.set_title(r"Cosine Fits")
     ax_all.grid(True)
     ax_all.spines["right"].set_visible(False)
     ax_all.spines["top"].set_visible(False)
@@ -123,12 +123,8 @@ def create_fit_figure(nv_list, phis, norm_counts, norm_counts_ste):
         phi_fit = np.linspace(min(phis), max(phis), 200)
         ax_median.plot(phi_fit, cos_func(phi_fit, *popt_median), label="Fit")
         # ax_median.set_title(f"Median Fit  : phase offset ≈ {popt_median[1]:.1f}°")
-        ax_median.set_title(
-            r"Median Fringe: $\pi/2_x$ – $\pi_x$ – $\pi/2_\phi$"
-        )
-        # ax_median.set_title(
-        #     r"Median Fringe: $\pi/2_x$ – XY8 – $\pi/2_\phi$"
-        # )
+        # ax_median.set_title(r"Median Fringe: $\pi/2_x$ – $\pi_x$ – $\pi/2_\phi$")
+        ax_median.set_title(r"Median Fringe: $\pi/2_x$ – XY8 – $\pi/2_\phi$")
 
     ax_median.set_xlabel("Phase, $\phi$ (degrees)")
     ax_median.set_ylabel("Median Normalized Counts")
@@ -254,7 +250,16 @@ def create_fit_figure(nv_list, phis, norm_counts, norm_counts_ste):
 #     # plt.show()
 
 
-def main(nv_list, num_steps, num_reps, num_runs, phi_list, evol_time, seq_type, uwave_ind_list):
+def main(
+    nv_list,
+    num_steps,
+    num_reps,
+    num_runs,
+    phi_list,
+    evol_time,
+    seq_type,
+    uwave_ind_list,
+):
     pulse_gen = tb.get_server_pulse_gen()
     seq_file = "widefield_coherence.py"
 
@@ -288,7 +293,7 @@ def main(nv_list, num_steps, num_reps, num_runs, phi_list, evol_time, seq_type, 
     raw_data |= {
         "timestamp": timestamp,
         "phis": phi_list,
-        "phi-units": "deg",     # <-- FIX
+        "phi-units": "deg",  # <-- FIX
         "evol_time": evol_time,
         "evol_time-unit": "ns",
         "seq_type": seq_type,
@@ -300,7 +305,6 @@ def main(nv_list, num_steps, num_reps, num_runs, phi_list, evol_time, seq_type, 
 
     tb.reset_cfm()
     kpl.show()
-
 
     # if raw_fig is not None:
     #     dm.save_figure(raw_fig, file_path)
@@ -350,6 +354,4 @@ if __name__ == "__main__":
     num_steps = len(phis)
     fit_fig = create_fit_figure(nv_list, phis, norm_counts, norm_counts_ste)
 
-
-    
     kpl.show(block=True)
