@@ -63,7 +63,7 @@ def get_seq(base_scc_seq_args, step_vals, xy_seq, num_reps=1):
                 else:
                     qua.wait(step_val)  # τ after last pi
 
-            seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=180)
+            seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=0)
             qua.wait(buffer)
 
         with qua.for_each_(step_val, step_vals):

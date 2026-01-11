@@ -253,7 +253,7 @@ def main(
 
     ### Collect the data
     # Assume freqs is a 1D array (GHz) for RF sweep (e.g., 0.120–0.150 GHz)
-    delta = 0.60  # 60 MHz detuning for OFF
+    delta = 0.6  # 600 MHz detuning for OFF
     freqs_on = np.asarray(freqs, float)
     freqs_off = freqs_on + delta
 
@@ -300,7 +300,7 @@ def main(
         save_images=False,
         num_exps=1,
         ref_by_rep_parity=False,
-        load_iq=True,
+        # load_iq=True,
     )
 
     ### Process and plot
@@ -353,10 +353,17 @@ def main(
 if __name__ == "__main__":
     kpl.init_kplotlib()
     # --- Load saved raw ---
-    file_id = ["2025_10_15-17_27_25-rubin-nv0_2025_09_08"]
-    file_id = ["2026_01_08-21_38_45-johnson-nv0_2025_10_21"]
+    # file_id = ["2025_10_15-17_27_25-rubin-nv0_2025_09_08"]
+    # file_id = ["2026_01_08-21_38_45-johnson-nv0_2025_10_21",
+    #            "2026_01_09-01_42_12-johnson-nv0_2025_10_21"]
+    # file_id = ['2026_01_10-00_17_26-johnson-nv0_2025_10_21']
+    file_id = ['2026_01_10-04_25_53-johnson-nv0_2025_10_21',
+               "2026_01_10-08_18_23-johnson-nv0_2025_10_21"]
     
     # file_id = ["2025_10_11-20_03_11-rubin-nv0_2025_09_08", "2025_10_11-23_49_23-rubin-nv0_2025_09_08"]
+    
+    file_id = ["2026_01_11-04_19_03-johnson-nv0_2025_10_21",
+               "2026_01_11-12_50_25-johnson-nv0_2025_10_21"]
     
     data = widefield.process_multiple_files
     data = dm.get_raw_data(file_stem=file_id, load_npz=True, use_cache=True)
@@ -395,7 +402,8 @@ if __name__ == "__main__":
 
     
     # Loop through NVs one by one
-    indices_113_MHz = [0, 1, 3, 6, 10, 14, 16, 17, 19, 23, 24, 25, 26, 27, 32, 33, 34, 35, 37, 38, 41, 49, 50, 51, 53, 54, 55, 60, 62, 63, 64, 66, 67, 68, 70, 72, 73, 74, 75, 76, 78, 80, 81, 82, 83, 84, 86, 88, 90, 92, 93, 95, 96, 99, 100, 101, 102, 103, 105, 108, 109, 111, 113, 114]
+    # indices_113_MHz = [0, 1, 3, 6, 10, 14, 16, 17, 19, 23, 24, 25, 26, 27, 32, 33, 34, 35, 37, 38, 41, 49, 50, 51, 53, 54, 55, 60, 62, 63, 64, 66, 67, 68, 70, 72, 73, 74, 75, 76, 78, 80, 81, 82, 83, 84, 86, 88, 90, 92, 93, 95, 96, 99, 100, 101, 102, 103, 105, 108, 109, 111, 113, 114]
+    selected_indices = list(range(num_nvs))
     # for nv_i in indices_113_MHz:
     #     fig, ax = plt.subplots()
     #     ax.errorbar(freqs_on,
@@ -426,7 +434,7 @@ if __name__ == "__main__":
         return A
 
     for name, arr in metrics.items():
-        A = robust_stack(arr, indices_113_MHz)   # shape (M, Nf)
+        A = robust_stack(arr, selected_indices)   # shape (M, Nf)
 
         if A.size == 0:
             print(f"[WARN] No data for metric '{name}' with provided indices.")
@@ -439,37 +447,38 @@ if __name__ == "__main__":
         p16_curve    = np.nanpercentile(A, 16, axis=0)
         p84_curve    = np.nanpercentile(A, 84, axis=0)
 
-        
-        freqs_on*=1000 ## MH
-        fig, ax = plt.subplots()
-        # Interquartile band
-        ax.fill_between(freqs_on, p25_curve, p75_curve, alpha=0.3, linewidth=0)
-        # Median
-        ax.plot(freqs_on, median_curve, marker="o", ms=3, lw=1)
+        # --- frequency axis (DON'T modify freqs_on in-place) ---
+        freqs_MHz = freqs_on * 1000.0
 
-        # Nice labels
-        ylabels = {
-            "contrast": "Contrast",
-            # "sig_counts": "Signal counts",
-            # "ref_counts": "Reference counts",
-            # "snr": "SNR",
-        }
-        titles = {
-            "contrast":   "Median DEER Contrast",
-            # "sig_counts": "Median Signal counts",
-            # "ref_counts": "MedianReference counts",
-            # "snr":        "Median SNR",
-        }
-        ax.set_title(f"{titles[name]} ({len(indices_113_MHz)}NVs)")
-        ax.set_xlabel("RF frequency (MHz)")
-        ax.set_ylabel(f"{ylabels[name]}")
-        ax.grid(True, linestyle="--", alpha=0.4)
+        # =========================
+        # Plot 1: all NV contrasts
+        # =========================
+        fig_all, ax_all = plt.subplots(figsize=(7.5, 4.5))
+        for row in A:  # A shape (M, Nf)
+            ax_all.plot(freqs_MHz, row, lw=0.8, alpha=0.6)  # no errorbars to avoid clutter
+
+        ax_all.axhline(0, ls="--", alpha=0.4)
+        ax_all.set_title(f"DEER Contrast — all NVs (N={A.shape[0]})")
+        ax_all.set_xlabel("RF frequency (MHz)")
+        ax_all.set_ylabel("Contrast")
+        ax_all.grid(True, linestyle="--", alpha=0.35)
+
+        # =========================
+        # Plot 2: median + IQR band
+        # =========================
+        fig_med, ax_med = plt.subplots(figsize=(7.5, 4.5))
+        ax_med.fill_between(freqs_MHz, p25_curve, p75_curve, alpha=0.30, linewidth=0)
+        ax_med.plot(freqs_MHz, median_curve, marker="o", ms=3, lw=1)
+
+        ax_med.axhline(0, ls="--", alpha=0.4)
+        ax_med.set_title(f"Median DEER Contrast (N={A.shape[0]})")
+        ax_med.set_xlabel("RF frequency (MHz)")
+        ax_med.set_ylabel("Contrast")
+        ax_med.grid(True, linestyle="--", alpha=0.35)
 
         # Optional: overlay faint per-NV curves for context
         # for row in A:
         #     ax.plot(freqs_on, row, alpha=0.08, lw=0.7)
-
-
     kpl.show(block=True)
     sys.exit()
     # --- Process & fit (DEER: ON/OFF interleaved) ---

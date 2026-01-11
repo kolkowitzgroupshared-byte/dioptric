@@ -182,20 +182,20 @@ def process_and_plot_xy8(nv_list, taus, norm_counts, norm_counts_ste, seq_xy):
             label=f"NV {nv_ind}",
         )
         # fit funtions
-        if popt is not None:
-            tau_fit = tau_fit = np.logspace(
-                np.log10(min(taus)), np.log10(max(taus)), 200
-            )
-            fit_vals = max_counts - stretched_exp(tau_fit, *popt)
-            ax.plot(tau_fit, fit_vals, "-", label="Fit")
+        # if popt is not None:
+        #     tau_fit = tau_fit = np.logspace(
+        #         np.log10(min(taus)), np.log10(max(taus)), 200
+        #     )
+        #     fit_vals = max_counts - stretched_exp(tau_fit, *popt)
+        #     ax.plot(tau_fit, fit_vals, "-", label="Fit")
         ax.set_title(
-            f"{seq_xy} : NV {nv_ind} - T₂ = {T2} µs, n = {n}", fontsize=15
+            f"{seq_xy} : NV {nv_ind} - T2 = {T2} µs, n = {n}", fontsize=15
         )
         ax.set_xlabel("τ (µs)", fontsize=15)
         ax.set_ylabel("Norm. NV⁻ Population", fontsize=15)
         ax.tick_params(axis="both", labelsize=15)
         # ax.set_xscale("symlog", linthresh=1e5)
-        ax.set_xscale("log")
+        # ax.set_xscale("log")
         # ax.set_yscale("log")
         # ax.legend()
         # ax.grid(True)
@@ -1047,13 +1047,11 @@ if __name__ == "__main__":
     #     "2025_05_04-19_00_22-rubin-nv0_2025_02_26",
     # ]  # xy8 cpdd
     ### Internal Test Plots
-    
-    
+
     file_stems = [
-        "2026_01_08-04_50_43-johnson-nv0_2025_10_21",
-        "2026_01_08-03_07_17-johnson-nv0_2025_10_21",
-        "2026_01_08-01_24_05-johnson-nv0_2025_10_21",
-    ]  # xy14 log scale
+    "2026_01_09-06_06_55-johnson-nv0_2025_10_21",
+    "2026_01_09-10_35_51-johnson-nv0_2025_10_21",
+]  # xy14
     # plot_T2_on_T1()
     # contrast_plot()
     # T2_ratio_xy()

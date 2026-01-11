@@ -580,20 +580,23 @@ def do_resonance(nv_list):
 def do_deer_hahn(nv_list):
     freq_center = 0.174
     freq_range = 0.024
-    num_steps =  48
+    # num_steps =  48
     # num_reps = 6
-    num_reps = 3
+    num_reps = 4
     num_runs = 400
     # num_runs = 2
-    freqs = calculate_freqs(freq_center, freq_range, num_steps)
+    # freqs = calculate_freqs(freq_center, freq_range, num_steps)
+    # freqs = np.arange(20, 320 + 2, 2)
+    freqs = np.arange(130, 190 + 1, 1)
+    freqs = freqs / 1000
     ##
     # Remove duplicates and sort
     freqs = sorted(set(freqs))
     num_steps = len(freqs)
-    for _ in range(2):
+    for _ in range(1):
         do_widefield_image_sample(nv_sig, 50)
         deer_hahn.main(
-            nv_list,
+            nv_list, 
             num_steps,
             num_reps,
             num_runs,
@@ -1177,18 +1180,18 @@ def do_opx_constant_ac():
     # print((stop - start) / num_reps)
 
     # Microwave test
-    # if True:
-    #     sig_gen = cxn.sig_gen_STAN_sg394_3
-    #     amp = 10
-    #     chan = 3
-    # else:
-    #     sig_gen = cxn.sig_gen_STAN_sg394_2
-    #     amp = 10
-    #     chan = 10
-    # sig_gen.set_amp(amp)  # 12
-    # sig_gen.set_freq(0.75)
-    # sig_gen.uwave_on()
-    # opx.constant_ac([chan])
+    if True:
+        sig_gen = cxn.sig_gen_STAN_sg394_3
+        amp = 0
+        chan = 3
+    else:
+        sig_gen = cxn.sig_gen_STAN_sg394_2
+        amp = 10
+        chan = 10
+    sig_gen.set_amp(amp)  # 12
+    sig_gen.set_freq(0.175)
+    sig_gen.uwave_on()
+    opx.constant_ac([chan])
 
     # Camera frame rate test
     # seq_args = [500]
@@ -1450,8 +1453,8 @@ if __name__ == "__main__":
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
 
     # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
-    # green_coords_list = [[108.025, 107.919],[119.424, 119.448],[111.407, 95.655],[96.084, 118.821]]
-    # red_coords_list = [[73.387, 72.226],[82.299, 82.181],[76.583, 62.43],[63.242, 80.475]]
+    # green_coords_list = [[107.884, 107.983],[119.262, 119.511],[111.272, 95.718],[95.966, 118.875]]
+    # red_coords_list = [[73.27, 72.27],[82.164, 82.223],[76.471, 62.475],[63.144, 80.513]]
 
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
@@ -1577,7 +1580,7 @@ if __name__ == "__main__":
         # )
 
         do_compensate_for_drift(nv_sig)
-        do_widefield_image_sample(nv_sig, 50)
+        # do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list:
@@ -1669,7 +1672,7 @@ if __name__ == "__main__":
         # do_power_rabi(nv_list)
         # do_resonance(nv_list)
         # do_rabi(nv_list)
-        # do_deer_hahn(nv_list)
+        do_deer_hahn(nv_list)
         # do_deer_hahn_rabi(nv_list)
         # do_resonance_zoom(nv_list)
         # do_spin_echo(nv_list)
@@ -1692,8 +1695,8 @@ if __name__ == "__main__":
 
         # do_two_block_hahn_spatial_correlation(nv_list)
 
-        AVAILABLE_XY = ["hahn-n", "xy2-n", "xy4-n", "xy8-n", "xy16-n"]
-        do_xy(nv_list, xy_seq="xy4-1")
+        # AVAILABLE_XY = ["hahn-n", "xy2-n", "xy4-n", "xy8-n", "xy16-n"]
+        # do_xy(nv_list, xy_seq="xy4-1")
         # do_xy_uniform_revival_scan(nv_list, xy_seq="xy4-1")
         # do_xy_revival_scan(nv_list, xy_seq="xy4-1")
 
