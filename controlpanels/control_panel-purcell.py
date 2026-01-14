@@ -550,14 +550,14 @@ def do_calibrate_iq_delay(nv_list):
 
 
 def do_resonance(nv_list):
-    freq_center = 2.87
+    freq_center = 2.8785
     
-    freq_range = 0.36
-    num_steps = 65
+    # freq_range = 0.36
+    # num_steps = 65
     
-    # freq_range = 0.260
-    # num_steps = 40
-    num_reps = 2
+    freq_range = 0.260
+    num_steps = 45
+    num_reps = 3
     num_runs = 800
     # num_runs = 1
     freqs = calculate_freqs(freq_center, freq_range, num_steps)
@@ -576,24 +576,23 @@ def do_resonance(nv_list):
     # for _ in range(2):
     #     resonance.main(nv_list, num_steps, num_reps, num_runs, freqs=freqs)
 
-
 def do_deer_hahn(nv_list):
     freq_center = 0.174
     freq_range = 0.024
     # num_steps =  48
     # num_reps = 6
-    num_reps = 4
-    num_runs = 400
+    num_reps =2
+    num_runs = 600
     # num_runs = 2
     # freqs = calculate_freqs(freq_center, freq_range, num_steps)
-    # freqs = np.arange(20, 320 + 2, 2)
-    freqs = np.arange(130, 190 + 1, 1)
-    freqs = freqs / 1000
+    freqs = np.arange(10, 350 + 2, 2)
+    # freqs = np.arange(130, 190 + 1, 1)
+    freqs = freqs / 1000 
     ##
     # Remove duplicates and sort
     freqs = sorted(set(freqs))
     num_steps = len(freqs)
-    for _ in range(1):
+    for _ in range(2):
         do_widefield_image_sample(nv_sig, 50)
         deer_hahn.main(
             nv_list, 
@@ -605,15 +604,13 @@ def do_deer_hahn(nv_list):
         )
 
 def do_deer_hahn_rabi(nv_list):
-    min_tau = 16
-    max_tau = 240 + min_tau
-    # max_tau = 360 + min_tau
-    # max_tau = 480 + min_tau
-    num_steps = 31
-    num_reps = 10
-    num_runs = 400
+    min_tau = 200
+    max_tau = 8000 + min_tau
+    num_steps = 51
+    num_reps = 5
+    num_runs = 800
     # num_runs = 5
-    uwave_ind_list = [0, 1]
+    uwave_ind_list = [0, 1, 2]    
     deer_hahn_rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
     # for _ in range(2):
     #     rabi.main(
@@ -1670,9 +1667,9 @@ if __name__ == "__main__":
         # do_calibrate_iq_delay(nv_list)
         # do_rabi(nv_list)
         # do_power_rabi(nv_list)
-        # do_resonance(nv_list)
+        do_resonance(nv_list)
         # do_rabi(nv_list)
-        do_deer_hahn(nv_list)
+        # do_deer_hahn(nv_list)
         # do_deer_hahn_rabi(nv_list)
         # do_resonance_zoom(nv_list)
         # do_spin_echo(nv_list)

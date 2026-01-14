@@ -200,9 +200,9 @@ def plot_nv_resonance(
     # ----------------- Example of use in your pipeline -----------------
     # center_freqs is your list of (f1, f2) from the fit_results
     # If you can also return (amp1, amp2) per NV from the fit, pass as peak_amps=...
-    targets = (2.766, 2.786, 2.82, 2.840)  # GHz
+    # targets = (2.766, 2.786, 2.82, 2.840)  # GHz
     targets = (2.787527, 2.840802)  # GHz
-    targets = (2.7230, 2.7470, 2.8290, 2.8467)  # GHz
+    # targets = (2.7230, 2.7470, 2.8290, 2.8467)  # GHz
     out = classify_nv_by_ms_minus_targets(center_freqs, targets_ghz=targets, tol_mhz=60.0)
     # return
 
@@ -255,9 +255,9 @@ def plot_nv_resonance(
     # filter_nvs = False
     if filter_nvs:
         # target_peak_values = [0.113, 0.217]
-        # target_peak_values = [0.077, 0.176]
+        target_peak_values = [0.077, 0.176]
         # target_peak_values = [0.113, 0.264]
-        target_peak_values = [0.134, 0.326]
+        # target_peak_values = [0.134, 0.326]
         tolerance = 0.01
         # Filter indices based on proximity to target peak differences
         filtered_indices = [
@@ -784,13 +784,13 @@ if __name__ == "__main__":
     
     ####### Iy=0, IZ =-3A
     ## 312 nVs
-    file_ids = [
-        "2025_12_10-10_28_25-johnson-nv0_2025_10_21",
-    ]
+    # file_ids = [
+    #     "2025_12_10-10_28_25-johnson-nv0_2025_10_21",
+    # ]
     ## 312 nVs
-    file_ids = [
-        "2025_12_20-06_01_33-johnson-nv0_2025_10_21",
-    ]
+    # file_ids = [
+    #     "2025_12_20-06_01_33-johnson-nv0_2025_10_21",
+    # ]
  
     
     # Load the first dataset as a base

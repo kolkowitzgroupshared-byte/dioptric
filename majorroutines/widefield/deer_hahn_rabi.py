@@ -248,6 +248,7 @@ def main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_lis
     pulse_gen = tb.get_server_pulse_gen()
     seq_file = "deer_hahn_rabi.py"
     taus = np.linspace(min_tau, max_tau, num_steps)
+    taus = [int(4 * round(tau / 4)) for tau in taus]
 
     ### Collect the data
     def run_fn(shuffled_step_inds):
@@ -268,7 +269,7 @@ def main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_lis
         num_runs,
         run_fn=run_fn,
         uwave_ind_list=uwave_ind_list,
-        load_iq=True,
+        # load_iq=True,
     )
 
     ### save the raw data

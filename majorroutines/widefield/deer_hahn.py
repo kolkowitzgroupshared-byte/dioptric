@@ -411,17 +411,18 @@ if __name__ == "__main__":
     # file_id = ["2026_01_08-21_38_45-johnson-nv0_2025_10_21",
     #            "2026_01_09-01_42_12-johnson-nv0_2025_10_21"]
     # file_id = ['2026_01_10-00_17_26-johnson-nv0_2025_10_21']
-    file_id = [
-        "2026_01_10-04_25_53-johnson-nv0_2025_10_21",
-        "2026_01_10-08_18_23-johnson-nv0_2025_10_21",
-    ]
+
+    # file_id = ['2026_01_10-04_25_53-johnson-nv0_2025_10_21',
+    #            "2026_01_10-08_18_23-johnson-nv0_2025_10_21"]
 
     # file_id = ["2025_10_11-20_03_11-rubin-nv0_2025_09_08", "2025_10_11-23_49_23-rubin-nv0_2025_09_08"]
 
-    file_id = [
-        "2026_01_11-04_19_03-johnson-nv0_2025_10_21",
-        "2026_01_11-12_50_25-johnson-nv0_2025_10_21",
-    ]
+    # file_id = ["2026_01_11-04_19_03-johnson-nv0_2025_10_21",
+    #            "2026_01_11-12_50_25-johnson-nv0_2025_10_21"]
+
+    file_id = ["2026_01_11-19_26_26-johnson-nv0_2025_10_21"]
+
+    # file_id = ["2026_01_12-11_42_09-johnson-nv0_2025_10_21"]
 
     data = widefield.process_multiple_files
     data = dm.get_raw_data(file_stem=file_id, load_npz=True, use_cache=True)
