@@ -1406,7 +1406,7 @@ if __name__ == "__main__":
     # magnet_angle = 90
     date_str = "2025_10_21"
     sample_coords = [0.4, 0.8]
-    z_coord = 0.0
+    z_coord = -0.4
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_308nvs_reordered.npz",
@@ -1450,8 +1450,8 @@ if __name__ == "__main__":
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
 
     # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
-    # green_coords_list = [[107.884, 107.983],[119.262, 119.511],[111.272, 95.718],[95.966, 118.875]]
-    # red_coords_list = [[73.27, 72.27],[82.164, 82.223],[76.471, 62.475],[63.144, 80.513]]
+    # green_coords_list = [[107.894, 108.029],[119.285, 119.542],[111.292, 95.748],[95.965, 118.938]]
+    # red_coords_list = [[73.276, 72.308],[82.182, 82.25],[76.486, 62.5],[63.141, 80.564]]
 
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
@@ -1542,7 +1542,7 @@ if __name__ == "__main__":
     # nv_sig.expected_counts = 900
     # nv_sig.expected_counts = 1400
     nv_sig.expected_counts = 1300
-    # nv_sig.expected_counts = 1200
+    # nv_sig.expected_counts = 1250
     # nv_sig.expected_counts = 1800
 
     # nv_list = nv_list[::-1]  # flipping the order of NVs
@@ -1577,7 +1577,7 @@ if __name__ == "__main__":
         # )
 
         do_compensate_for_drift(nv_sig)
-        # do_widefield_image_sample(nv_sig, 50)
+        do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list:
@@ -1667,9 +1667,9 @@ if __name__ == "__main__":
         # do_calibrate_iq_delay(nv_list)
         # do_rabi(nv_list)
         # do_power_rabi(nv_list)
-        do_resonance(nv_list)
+        # do_resonance(nv_list)
         # do_rabi(nv_list)
-        # do_deer_hahn(nv_list)
+        do_deer_hahn(nv_list)
         # do_deer_hahn_rabi(nv_list)
         # do_resonance_zoom(nv_list)
         # do_spin_echo(nv_list)

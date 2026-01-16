@@ -418,13 +418,14 @@ if __name__ == "__main__":
     # file_id = ["2025_10_11-20_03_11-rubin-nv0_2025_09_08", "2025_10_11-23_49_23-rubin-nv0_2025_09_08"]
 
     # file_id = ["2026_01_11-04_19_03-johnson-nv0_2025_10_21",
-    #            "2026_01_11-12_50_25-johnson-nv0_2025_10_21"] #2000ns DEER
+    #            "2026_01_11-12_50_25-johnson-nv0_2025_10_21"]
 
-    file_id = ["2026_01_11-19_26_26-johnson-nv0_2025_10_21"]
+    # file_id = ["2026_01_11-19_26_26-johnson-nv0_2025_10_21"]
 
-    # file_id = ["2026_01_12-11_42_09-johnson-nv0_2025_10_21"]  # 4000ns DEER
+    # file_id = ["2026_01_12-11_42_09-johnson-nv0_2025_10_21"]
 
-    data = widefield.process_multiple_files
+    file_id = ["2026_01_15-04_02_02-johnson-nv0_2025_10_21"]
+
     data = dm.get_raw_data(file_stem=file_id, load_npz=True, use_cache=True)
 
     nv_list = data["nv_list"]
@@ -480,7 +481,12 @@ if __name__ == "__main__":
     #     plt.show(block=True)
 
     # ----- Aggregate + plot for multiple metrics in a loop -----
-    metrics = {"contrast": avg_contrast, "snr": avg_snr}  # (NV, Nf)  # (NV, Nf)
+    metrics = {
+        "contrast":   avg_contrast,        # (NV, Nf)
+        # "sig_counts": avg_sig_counts,      # (NV, Nf)
+        # "ref_counts": avg_ref_counts,      # (NV, Nf)
+        # "snr":        avg_snr              # (NV, Nf)
+    }
 
     def robust_stack(arr_2d, idx_list):
         """Return (M, Nf) array from arr_2d[(NV, Nf)] selecting rows in idx_list."""

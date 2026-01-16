@@ -157,9 +157,9 @@ def get_seq(
     buffer_cc = seq_utils.get_widefield_operation_buffer()
     # rf_pi_ns = seq_utils.get_common_duration_cc
     # -------- user knobs --------
-    tau_ns = 15_000          # 15 us (C13 revival target you mentioned)
+    tau_ns = 18_600          # 15 us (C13 revival target you mentioned)
     nv_pi_ns = 100           # your NV pi pulse length (digital gate)
-    rf_pi_ns = 1_000         # your RF pi pulse length (digital gate)
+    rf_pi_ns = 2_000         # your RF pi pulse length (digital gate)
     # ----------------------------
 
     tau_cc = _ns_to_cc(tau_ns)

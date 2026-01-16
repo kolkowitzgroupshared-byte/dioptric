@@ -395,54 +395,9 @@ def process_and_plot(data):
 
 if __name__ == "__main__":
     kpl.init_kplotlib()
-    # data = dm.get_raw_data(file_id=1722112403814)
-    # file_id = 1788617128620
-    # file_id = 1782649429980
-    # file_id = 1785836711605
-    # file_id = 1788617128620
-    # file_id = 1795203474331
-    # 81NVs
-    file_id = 1808377981742  # recalcuated phase
-    file_id = 1808347211800  #
-    file_id = 1808307867614
-    file_id = 1808261754113
-    file_id = 1808216414257
-
-    # file_id = 1809068442975
-    # file_id = 1809075570936
-    file_id = 1809453810157
-    # file_id = 1809507194286
-    file_id = 1809558487107
-    file_id = 1809589650041
-    file_id = 1809068442975
-    # file_id =ValueError 1809075570936
-    file_id = 1809168832402
-    # file_id = 1809192678440
-    # otu of 75 NVs these are NVs selected based on orientation
-    # file_id = 1819822931940  # 185MHz splitting
-    file_id = 1819995258302  # 68MHz splitting
-
-    # after making both orientation degenerate
-    # file_id = 1832307679039
-    # file_id = 1832324663858
-    file_id = 1832404389063
-    file_id = 1832798159468  # 176ns
-    file_id = 1832817621548  # 192ns
-    file_id = 1833844818805  # 176ns
-    # file_id = 1833871660179
-    # file_id = 1834116721897
-    file_id = 1834252235587
-    file_id = 1836504855692
-    file_id = 1840088912512
-    file_id = 1840125164899
-    file_id = 1840156737057
-
-    # nas data
-    # file_stem = "2025_05_01-15_02_45-rubin-nv0_2025_02_26"
-    # data = dm.get_raw_data(file_stem=file_stem)
 
     data = dm.get_raw_data(
-        file_stem="2025_10_27-21_05_02-johnson-nv0_2025_10_21", load_npz=True
+        file_stem="2026_01_15-19_26_11-johnson-nv0_2025_10_21", load_npz=True
     )
     # file_name = dm.get_file_name(file_id=file_id)
     # print(f"{file_name}_{file_id}")
