@@ -424,7 +424,7 @@ if __name__ == "__main__":
 
     # file_id = ["2026_01_12-11_42_09-johnson-nv0_2025_10_21"]
 
-    file_id = ["2026_01_15-04_02_02-johnson-nv0_2025_10_21"]
+    file_id = ["2026_01_17-12_07_43-johnson-nv0_2025_10_21"]  ### B=49G
 
     data = dm.get_raw_data(file_stem=file_id, load_npz=True, use_cache=True)
 
@@ -482,7 +482,7 @@ if __name__ == "__main__":
 
     # ----- Aggregate + plot for multiple metrics in a loop -----
     metrics = {
-        "contrast":   avg_contrast,        # (NV, Nf)
+        "contrast": avg_contrast,  # (NV, Nf)
         # "sig_counts": avg_sig_counts,      # (NV, Nf)
         # "ref_counts": avg_ref_counts,      # (NV, Nf)
         # "snr":        avg_snr              # (NV, Nf)
@@ -515,9 +515,7 @@ if __name__ == "__main__":
         # =========================
         fig_all, ax_all = plt.subplots(figsize=(7.5, 4.5))
         for row in A:  # A shape (M, Nf)
-            ax_all.plot(
-                freqs_MHz, row, lw=0.8, alpha=0.6
-            )  # no errorbars to avoid clutter
+            ax_all.plot(freqs_MHz, row, lw=0.8, alpha=0.6)
 
         ax_all.axhline(0, ls="--", alpha=0.4)
         ax_all.set_title(f"DEER Contrast — all NVs (N={A.shape[0]})")

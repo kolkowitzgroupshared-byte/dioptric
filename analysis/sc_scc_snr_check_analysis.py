@@ -20,6 +20,7 @@ from utils.constants import (
     PosControlMode,
     VirtualLaserKey,
 )
+
 # import seaborn as sns
 # import pandas as pd
 # def process_and_plot(data, error_threshold=0.2):
@@ -262,7 +263,7 @@ def process_and_plot(data):
     distances = []
     scc_durations = []
     for nv in nv_list:
-        coords = pos.get_nv_coords(nv, coords_key= CoordsKey.PIXEL, drift_adjust=False)
+        coords = pos.get_nv_coords(nv, coords_key=CoordsKey.PIXEL, drift_adjust=False)
         nv_coords.append(coords)
         dist = round(np.sqrt((125 - coords[0]) ** 2 + (125 - coords[1]) ** 2), 3)
         distances.append(dist)
@@ -270,7 +271,9 @@ def process_and_plot(data):
         scc_dur = pos.get_nv_pulse_duration(nv, VirtualLaserKey.SCC)
         scc_durations.append(scc_dur)
 
-    yellow_charge_readout_amp = data["opx_config"]["waveforms"]["yellow_charge_readout"]["sample"]
+    yellow_charge_readout_amp = data["opx_config"]["waveforms"][
+        "yellow_charge_readout"
+    ]["sample"]
     yellow_spin_pol_amp = data["opx_config"]["waveforms"]["yellow_spin_pol"]["sample"]
     a, b, c = 1.5133e04, 2.6976, -38.63
     yellow_charge_readout_amp = int(a * (yellow_charge_readout_amp**b) + c)
@@ -381,7 +384,10 @@ def process_and_plot(data):
         capsize=3,
         label=f"SNR (Median: {median})",
     )
-    plt.title(f"SNRs of {num_nvs}NVs(readout amp:{yellow_charge_readout_amp}uW, spin pol amp:{yellow_spin_pol_amp}uW)", fontsize=13)
+    plt.title(
+        f"SNRs of {num_nvs}NVs(readout amp:{yellow_charge_readout_amp}uW, spin pol amp:{yellow_spin_pol_amp}uW)",
+        fontsize=13,
+    )
     plt.xlabel("SCC Durations (ns)", fontsize=15)
     plt.ylabel("SNR", fontsize=15)
     plt.xticks(fontsize=15)
