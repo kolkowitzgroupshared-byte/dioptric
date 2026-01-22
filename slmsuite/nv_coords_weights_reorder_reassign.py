@@ -394,7 +394,7 @@ if __name__ == "__main__":
     remove_outliers_flag = False  # Set this flag to enable/disable outlier removal
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
-        file_stem="2025_10_26-18_08_38-johnson-nv0_2025_10_21", load_npz=True
+        file_stem="2025_10_30-16_04_15-johnson-nv0_2025_10_21", load_npz=True
     )
     img_array = np.array(data["ref_img_array"])
     # img_array = data["img_array"]
@@ -438,7 +438,7 @@ if __name__ == "__main__":
 
     # Filter and reorder NV coordinates based on reference NV
     # integrated_intensities = []
-    sigma = 3
+    sigma = 3.0
     reference_nv = [124.195, 127.341]
     filtered_reordered_coords, filtered_reordered_spot_weights, include_indices = (
         filter_and_reorder_nv_coords(
@@ -539,7 +539,7 @@ if __name__ == "__main__":
     ## 2 oruen
     # include_indices = [0, 1, 2, 4, 9, 10, 12, 14, 15, 17, 18, 20, 22, 23, 24, 27, 28, 29, 30, 33, 34, 37, 40, 41, 42, 45, 46, 49, 50, 51, 54, 55, 57, 58, 59, 60, 62, 65, 67, 68, 69, 72, 73, 75, 78, 79, 80, 81, 82, 85, 86, 87, 88, 90, 94, 95, 98, 99, 101, 102, 104, 106, 107, 111, 113, 114, 116, 117, 119, 122, 123, 125, 126, 127, 128, 130, 131, 133, 134, 135, 136, 137, 142, 143, 144, 145, 146, 148, 149, 151, 153, 155, 158, 161, 163, 164, 165, 166, 167, 170, 172, 173, 174, 175, 178, 181, 183, 185, 186, 187, 191, 192, 193, 195, 196, 197, 199, 200, 201, 203, 205, 207, 210, 211, 212, 214, 216, 218, 220, 221, 223, 225, 226, 227, 228, 229, 230, 233, 235, 237, 238, 239, 242, 244, 245, 246, 247, 249, 250, 252, 253]
     # include_indices = [i for i, val in enumerate(prep_fidelity_list) if val >= 0.4 or val is None]
-    include_indices =  [i for i, val in enumerate(snr_float) if val >= 0.02]
+    include_indices =  [i for i, val in enumerate(snr_float) if val >= 0.00]
     # import math
     # indices_113_MHz = [0, 1, 4, 8, 12, 17, 21, 22, 24, 29, 30, 31, 33, 34, 40, 41, 42, 43, 45, 46, 49, 58, 59, 61, 63, 64, 65, 70, 72, 73, 74, 76, 77, 79, 81, 83, 84, 85, 86, 87, 89, 91, 93, 95, 96, 97, 99, 101, 103, 105, 106, 110, 111, 115, 116, 117, 118, 119, 121, 126, 127, 129, 131, 132]
     # indices_217_MHz = [3, 6, 7, 9, 10, 11, 13, 14, 15, 18, 23, 26, 27, 28, 35, 36, 38, 39, 44, 47, 48, 50, 51, 53, 54, 55, 56, 57, 62, 66, 67, 68, 69, 71, 75, 80, 82, 88, 90, 98, 100, 102, 104, 109, 113, 114, 120, 122, 125, 128, 130, 133, 134, 135]
@@ -566,11 +566,11 @@ if __name__ == "__main__":
         [weight for i, weight in enumerate(spot_weights) if i in include_indices]
     )
     print(f"len spot_weights: {len(spot_weights)}")
-    filtered_pol_durs = [pol_duration_list[i] for i in include_indices]
-    filtered_scc_durs = [scc_duration_list[i] for i in include_indices]
-    print(filtered_pol_durs)
-    print(f"len spot_weights: {len(spot_weights)}")
-    print(filtered_scc_durs)
+    # filtered_pol_durs = [pol_duration_list[i] for i in include_indices]
+    # filtered_scc_durs = [scc_duration_list[i] for i in include_indices]
+    # print(filtered_pol_durs)
+    # print(f"len spot_weights: {len(spot_weights)}")
+    # print(filtered_scc_durs)
 
 
     # sys.exit()
@@ -695,9 +695,8 @@ if __name__ == "__main__":
     # )
 
     # # Plot the original image with circles around each NV
-
     fig, ax = plt.subplots()
-    title = "12ms, INTI_520_Combined_Image"
+    title = "LASER_589_Ref, 50ms"
     kpl.imshow(ax, img_array, title=title, cbar_label="Photons")
     # Draw circles and index numbers
     for idx, coord in enumerate(filtered_reordered_coords):

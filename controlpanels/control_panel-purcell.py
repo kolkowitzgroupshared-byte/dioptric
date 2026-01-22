@@ -37,6 +37,7 @@ from majorroutines.widefield import (
     optimize_scc_readout,
     optimize_scc_amp_duration,
     optimize_spin_pol,
+    optimize_aod_access_time,
     power_rabi,
     rabi,
     ramsey,
@@ -145,6 +146,7 @@ def do_optimize_pol_duration(nv_list):
     # max_duration = 9992
     num_reps = 10
     num_runs = 220
+    # num_runs = 2
     return optimize_charge_state_histograms_mcc.optimize_pol_duration(
         nv_list, num_steps, num_reps, num_runs, min_duration, max_duration
     )
@@ -390,7 +392,6 @@ def do_optimize_scc_duration(nv_list):
     num_reps = 15
     num_runs = 200
     # num_runs = 2
-
     optimize_scc.optimize_scc_duration(
         nv_list, num_steps, num_reps, num_runs, min_tau, max_tau
     )
@@ -426,6 +427,17 @@ def do_optimize_spin_pol_amp(nv_list):
         uwave_ind_list,
     )
 
+
+def do_optimize_aod_access_time(nv_list):
+    min_tau = 1e3
+    max_tau = 5e3
+    num_steps = 11
+    num_reps = 15
+    num_runs = 200
+    # num_runs = 2
+    optimize_aod_access_time.main(
+        nv_list, num_steps, num_reps, num_runs, min_tau, max_tau
+    )
 
 def do_scc_snr_check(nv_list):
     num_reps = 200
@@ -552,12 +564,12 @@ def do_calibrate_iq_delay(nv_list):
 def do_resonance(nv_list):
     freq_center = 2.8785
     
-    # freq_range = 0.36
-    # num_steps = 65
+    freq_range = 0.36
+    num_steps = 65
     
-    freq_range = 0.260
-    num_steps = 45
-    num_reps = 3
+    # freq_range = 0.260
+    # num_steps = 45
+    num_reps = 2
     num_runs = 800
     # num_runs = 1
     freqs = calculate_freqs(freq_center, freq_range, num_steps)
@@ -582,7 +594,7 @@ def do_deer_hahn(nv_list):
     # num_steps =  48
     # num_reps = 6
     num_reps =2
-    num_runs = 600
+    num_runs =600
     # num_runs = 2
     # freqs = calculate_freqs(freq_center, freq_range, num_steps)
     freqs = np.arange(10, 350 + 2, 2)
@@ -885,32 +897,131 @@ def do_ramsey(nv_list):
     ramsey.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, detuning)
 
 
+
+def _quant4_ns(x):
+    x = np.asarray(x, dtype=float)
+    return (np.round(x / 4.0) * 4.0).astype(int)
+
+def build_xy8_dip_taus(
+    revival_2tau_us=36.0,
+    centers=(1, 3),              # 1 -> TL/4, 3 -> 3TL/4
+    coarse_step_ns=200,
+    coarse_margin_us=6.0,        # coarse window around each center
+    fine_window_us=1.5,          # tight zoom window
+    fine_step_ns=40,
+    min_tau_ns=200,
+    max_tau_ns=60000             # must include 27 us => 27000 ns
+):
+    TL_us = float(revival_2tau_us)          # echo revival period in 2τ
+    base_center_us = TL_us / 4.0            # ~9 us
+
+    taus_all = []
+
+    # (A) coarse global sweep (optional but helpful to catch surprises)
+    taus_global = np.arange(min_tau_ns, max_tau_ns + 1, coarse_step_ns)
+    taus_all.append(taus_global)
+
+    # (B) add coarse + fine zoom windows around each requested center
+    for k in centers:
+        tau_c_us = k * base_center_us
+        # coarse around center
+        t0c = max(min_tau_ns, (tau_c_us - coarse_margin_us) * 1e3)
+        t1c = min(max_tau_ns, (tau_c_us + coarse_margin_us) * 1e3)
+        taus_all.append(np.arange(t0c, t1c + coarse_step_ns, coarse_step_ns))
+
+        # fine around center
+        t0f = max(min_tau_ns, (tau_c_us - fine_window_us) * 1e3)
+        t1f = min(max_tau_ns, (tau_c_us + fine_window_us) * 1e3)
+        taus_all.append(np.arange(t0f, t1f + fine_step_ns, fine_step_ns))
+
+    taus = np.unique(np.concatenate(taus_all))
+    taus = taus[(taus >= min_tau_ns) & (taus <= max_tau_ns)]
+    taus = _quant4_ns(taus)
+    taus = sorted(set(taus.tolist()))
+    return taus
+
 def do_xy(nv_list, xy_seq="xy8"):
-    min_tau = 200
-    max_tau = 1e6 + min_tau
-    # num_steps = 24
     num_reps = 2
-    uwave_ind_list = [0, 1]  # iq modulated
+    uwave_ind_list = [0, 1]
     num_runs = 400
-    # taus calculation
-    # taus = widefield.generate_log_spaced_taus(min_tau, max_tau, num_steps, base=4)
-    taus = np.arange(200, 20000 + 1, 200)   # all divisible by 4
-    taus = [int(t) for t in taus]
+
+    # include both 9 us and 27 us dips -> need max_tau >= 27000 ns
+    taus = build_xy8_dip_taus(
+        revival_2tau_us=36.0,
+        centers=(1, 3),           # 9us and 27us
+        coarse_step_ns=200,
+        coarse_margin_us=6.0,
+        fine_window_us=1.5,
+        fine_step_ns=40,
+        min_tau_ns=200,
+        max_tau_ns=3000          # cover up to ~35 us (safe for 27us)
+    )
+
     num_steps = len(taus)
-    # print(taus)
-    # sys.exit()
-    # num_runs = 2
-    # xy8.main(nv_list, num_steps, num_reps, num_runs, taus , uwave_ind_list)
+    print("num_steps:", num_steps, "tau range (ns):", taus[0], "to", taus[-1])
+
+    # drift-robust: randomize tau order each run block
+    rng = np.random.default_rng(0)
+
     for _ in range(3):
+        taus_shuf = list(rng.permutation(taus))
         xy.main(
             nv_list,
             num_steps,
             num_reps,
             num_runs,
-            taus,
+            taus_shuf,
             uwave_ind_list,
             xy_seq,
         )
+
+# def do_xy(nv_list, xy_seq="xy8"):
+#     # min_tau = 200
+#     # max_tau = 1e6 + min_tau
+#     # # num_steps = 24
+#     num_reps = 2
+#     uwave_ind_list = [0, 1]  # iq modulated
+#     num_runs = 400
+#     # # taus calculation
+#     # # taus = widefield.generate_log_spaced_taus(min_tau, max_tau, num_steps, base=4)
+#     # taus = np.arange(200, 20000 + 1, 200)   # all divisible by 4
+#     # taus = [int(t) for t in taus]
+#     # num_steps = len(taus)
+#     revival_2tau_us=36.0,
+#     coarse_window_us=4.0,
+#     coarse_step_ns=200,
+#     fine_window_us=1.5,
+#     fine_step_ns=40,
+#     # Echo revival period is in 2τ: T_L ~ revival_2tau_us
+#     # XY8 dip fundamental near τ ~ T_L / 4
+#     tau0_us = revival_2tau_us / 4.0  # ~9 us
+
+#     # Coarse sweep around tau0
+#     t0c = (tau0_us - coarse_window_us) * 1e3
+#     t1c = (tau0_us + coarse_window_us) * 1e3
+#     taus_coarse = np.arange(t0c, t1c + coarse_step_ns, coarse_step_ns)
+
+#     # Fine sweep around tau0
+#     t0f = (tau0_us - fine_window_us) * 1e3
+#     t1f = (tau0_us + fine_window_us) * 1e3
+#     taus_fine = np.arange(t0f, t1f + fine_step_ns, fine_step_ns)
+
+#     taus = np.unique(np.concatenate([taus_coarse, taus_fine]))
+#     taus = taus[taus > 0]  # keep positive
+#     taus = [(tau/4)*4 for tau in taus]
+#     num_steps = len(taus)
+#     print(len(num_steps))
+#     sys.exit()
+#     for _ in range(3):
+#         xy.main(
+#             nv_list,
+#             num_steps,
+#             num_reps,
+#             num_runs,
+#             taus,
+#             uwave_ind_list,
+#             xy_seq,
+#         )
 
 
 def do_xy_uniform_revival_scan(nv_list, xy_seq="xy8-1"):
@@ -1406,7 +1517,7 @@ if __name__ == "__main__":
     # magnet_angle = 90
     date_str = "2025_10_21"
     sample_coords = [0.4, 0.8]
-    z_coord = -0.4
+    z_coord = 0.0
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_308nvs_reordered.npz",
@@ -1450,8 +1561,8 @@ if __name__ == "__main__":
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
 
     # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
-    # green_coords_list = [[107.894, 108.029],[119.285, 119.542],[111.292, 95.748],[95.965, 118.938]]
-    # red_coords_list = [[73.276, 72.308],[82.182, 82.25],[76.486, 62.5],[63.141, 80.564]]
+    # green_coords_list = [[107.871, 108.068],[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
+    # red_coords_list = [    [73.256, 72.339],[82.15, 82.282],[76.463, 62.52],[63.114, 80.587]]
 
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
@@ -1503,7 +1614,7 @@ if __name__ == "__main__":
     indices_113_MHz = [0, 1, 3, 6, 10, 14, 16, 17, 19, 23, 24, 25, 26, 27, 32, 33, 34, 35, 37, 38, 41, 49, 50, 51, 53, 54, 55, 60, 62, 63, 64, 66, 67, 68, 70, 72, 73, 74, 75, 76, 78, 80, 81, 82, 83, 84, 86, 88, 90, 92, 93, 95, 96, 99, 100, 101, 102, 103, 105, 108, 109, 111, 113, 114]
     indices_217_MHz = [0, 2, 4, 5, 7, 8, 9, 11, 12, 13, 15, 18, 20, 21, 22, 28, 29, 30, 31, 36, 39, 40, 42, 43, 44, 45, 46, 47, 48, 52, 56, 57, 58, 59, 61, 65, 69, 71, 77, 79, 85, 87, 89, 91, 94, 97, 98, 104, 106, 107, 110, 112, 115, 116, 117]
     # scc_amp_list = [1.0] * num_nv
-    # scc_duration_list = [100] * num_nvs
+    # scc_duration_list = [88] * num_nvs
     # pol_duration_list = [600] * num_nvs
     # pol_duration_list = [1000] * num_nvs
     # nv_list[i] will have the ith coordinates from the above lists
@@ -1637,15 +1748,16 @@ if __name__ == "__main__":
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
         # do_optimize_pol_amp(nv_list)
-        # do_optimize_pol_duration(nv_list)
+        do_optimize_pol_duration(nv_list)
         # do_optimize_readout_amp(nv_list)
         # do_optimize_readout_duration(nv_list)
         # optimize_readout_amp_and_duration(nv_list) 
         # do_optimize_spin_pol_amp(nv_list)
         # do_check_readout_fidelity(nv_list)
+        do_optimize_aod_access_time(nv_list)
 
         # do_scc_snr_check(nv_list)
-        # do_optimize_scc_duration(nv_list)
+        do_optimize_scc_duration(nv_list)
         # do_optimize_scc_amp(nv_list)
         # optimize_scc_amp_and_duration(nv_list)
         # do_optimize_scc_readout_amp(nv_list)
@@ -1669,7 +1781,7 @@ if __name__ == "__main__":
         # do_power_rabi(nv_list)
         # do_resonance(nv_list)
         # do_rabi(nv_list)
-        do_deer_hahn(nv_list)
+        # do_deer_hahn(nv_list)
         # do_deer_hahn_rabi(nv_list)
         # do_resonance_zoom(nv_list)
         # do_spin_echo(nv_list)
@@ -1693,7 +1805,7 @@ if __name__ == "__main__":
         # do_two_block_hahn_spatial_correlation(nv_list)
 
         # AVAILABLE_XY = ["hahn-n", "xy2-n", "xy4-n", "xy8-n", "xy16-n"]
-        # do_xy(nv_list, xy_seq="xy4-1")
+        do_xy(nv_list, xy_seq="xy8-1")
         # do_xy_uniform_revival_scan(nv_list, xy_seq="xy4-1")
         # do_xy_revival_scan(nv_list, xy_seq="xy4-1")
 

@@ -25,6 +25,7 @@ def macro(
     spin_pol_amp_override=None,
     readout_duration_override=None,
     readout_amp_override=None,
+    aod_accees_time_override = None,
     reference=True,
 ):
     """Base spin sequence as a QUA macro for widefield experiments with many
@@ -100,7 +101,18 @@ def macro(
             duration_list=pol_duration_list,
             amp_list=pol_amp_list,
             spin_pol_duration_override=spin_pol_duration_override,
+            spin_pol_amp_override= spin_pol_amp_override,
+            aod_accees_time_override = aod_accees_time_override
+        )
+        
+    def macro_polarize_sub_reversed():
+        seq_utils.macro_polarize(
+            pol_coords_list[::-1],
+            duration_list=pol_duration_list[::-1],
+            amp_list=pol_amp_list[::-1],
+            spin_pol_duration_override=spin_pol_duration_override,
             spin_pol_amp_override=spin_pol_amp_override,
+            aod_accees_time_override = aod_accees_time_override,
         )
 
     def macro_scc_sub(do_target_list=None):
@@ -110,6 +122,7 @@ def macro(
             scc_amp_list,
             scc_duration_override,
             scc_amp_override,
+            aod_accees_time_override,
             do_target_list,
         )
 
@@ -121,18 +134,28 @@ def macro(
             scc_amp_list[::-1],
             scc_duration_override,
             scc_amp_override,
+            aod_accees_time_override,
             (do_target_list[::-1] if do_target_list is not None else None),
         )
 
     ### QUA stuff
     def one_exp(rep_ind, exp_ind):
         # exp_ind = num_exps_per_rep - 1  # MCC
-        macro_polarize_sub()
-        qua.align()
-        skip_spin_flip = uwave_macro[exp_ind](uwave_ind_list, step_val)
-        # qua variable for randomize SCC order
+        # macro_polarize_sub()
+        
+        #SBC: qua variable for randomize Pol and SCC order
         random_order = qua.declare(int)
         qua.assign(random_order, qua.Random().rand_int(2))
+
+        with qua.if_(random_order == 1):
+            macro_polarize_sub()
+        with qua.else_():
+             macro_polarize_sub_reversed()
+        
+        qua.align()
+        
+        skip_spin_flip = uwave_macro[exp_ind](uwave_ind_list, step_val)
+
         # Check if this is the automatically included reference experiment
         ref_exp = reference and exp_ind == num_exps_per_rep - 1
         print(f"exp_ind: {exp_ind}, ref_exp: {ref_exp}")

@@ -281,7 +281,7 @@ def nuvu2thorcam_calibration(coords):
     )
 
     cal_coords_nuvu = np.array(
-        [[222.916, 241.206], [190.472, 21.208], [18.333, 158.42]], dtype="float32"
+        [[222.775, 241.598], [190.047, 21.881], [18.284, 158.754]], dtype="float32"
     )
     # Compute the affine transformation matrix
     M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)

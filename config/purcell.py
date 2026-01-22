@@ -34,8 +34,8 @@ red_laser_aod = "laser_COBO_638_aod"
 
 
 calibration_coords_pixel = [[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
-calibration_coords_green = [[119.285, 119.542],[111.292, 95.748],[95.965, 118.938]]
-calibration_coords_red = [[82.182, 82.25],[76.486, 62.5],[63.141, 80.564]]
+calibration_coords_green = [[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
+calibration_coords_red = [[82.15, 82.282],[76.463, 62.52],[63.114, 80.587]]
 
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -77,7 +77,7 @@ config |= {
     # Common durations are in ns
     "CommonDurations": {
         "default_pulse_duration": 1000,
-        "aod_access_time": 11e3,  # access time in specs is 10us
+        "aod_access_time":3e3,  # access time in specs is 10us
         "widefield_operation_buffer": 1e3,
         "uwave_buffer": 0,
         "iq_buffer": 0,

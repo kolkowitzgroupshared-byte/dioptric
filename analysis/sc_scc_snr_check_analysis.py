@@ -357,7 +357,7 @@ def process_and_plot(data):
     # plt.xlabel("SNR")
     # plt.ylabel("Frequency")
     # plt.grid(True)
-    # plt.show()
+    # plt.show()    
 
     # Plot: SNR vs. Distance with error bars
     distance = df["Distance"]
@@ -403,7 +403,7 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
 
     data = dm.get_raw_data(
-        file_stem="2026_01_15-19_26_11-johnson-nv0_2025_10_21", load_npz=True
+        file_stem="2025_11_22-22_56_23-johnson-nv0_2025_10_21", load_npz=True
     )
     # file_name = dm.get_file_name(file_id=file_id)
     # print(f"{file_name}_{file_id}")

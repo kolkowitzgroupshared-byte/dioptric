@@ -134,6 +134,7 @@ def macro_polarize(
     spin_pol: bool = True,
     spin_pol_duration_override: int = None,
     spin_pol_amp_override: float = None,
+    aod_accees_time_override: int = None
 ):
     """Apply a green polarization pulse to each coordinate pair in the passed coords_list.
     Supports conditional charge-state initialization with targeted_polarization and
@@ -184,6 +185,7 @@ def macro_polarize(
             amp_list,
             duration_override,
             amp_override,
+            aod_accees_time_override,
             do_target_list,
         )
 
@@ -271,6 +273,7 @@ def macro_scc(
     scc_amp_list: list[float] = None,
     scc_duration_override: int = None,
     scc_amp_override: float = None,
+    aod_accees_time_override: int = None,
     do_target_list: list[bool] = None,
 ):
     """Apply an SCC pulse to each coordinate pair in the passed coords_list.
@@ -316,6 +319,7 @@ def macro_scc(
             scc_amp_list,
             scc_duration_override,
             scc_amp_override,
+            aod_accees_time_override,
             do_target_list,
         )
 
@@ -571,6 +575,7 @@ def macro_single_pulse(
     pulse_name: str,
     duration: int = None,
     amp: float = None,
+    aod_accees_time: int = None,
     convert_to_Hz: bool = True,
 ):
     """Apply a single laser pulse at the passed coordinate pair
@@ -591,7 +596,7 @@ def macro_single_pulse(
         Whether to convert coords from MHz to Hz, by default True
     """
     qua.align()
-    _macro_single_pulse(laser_name, coords, pulse_name, duration, amp, convert_to_Hz)
+    _macro_single_pulse(laser_name, coords, pulse_name, duration, amp, aod_accees_time, convert_to_Hz)
 
 
 def macro_pulse_combo(
@@ -657,7 +662,9 @@ def _macro_single_pulse(
     pulse_name: str,
     duration: int = None,
     amp: float = None,
+    aod_accees_time: int = None,
     convert_to_Hz: bool = True,
+    
 ):
     """Apply a single laser pulse at the passed coordinate pair. Does not align
     before beginning the macro
@@ -685,7 +692,11 @@ def _macro_single_pulse(
     global _cache_pol_reps_ind
 
     buffer = get_widefield_operation_buffer()
-    access_time = get_aod_access_time()
+    if aod_accees_time is not None:
+        accees_time = aod_accees_time
+    else:
+        accees_time = get_aod_access_time()
+        
 
     if convert_to_Hz:
         coords = [int(el * 10**6) for el in coords]
@@ -705,7 +716,7 @@ def _macro_single_pulse(
     qua.update_frequency(y_el, coords[1])
 
     # Pulse the laser
-    qua.wait(access_time + buffer, laser_el)
+    qua.wait(accees_time + buffer, laser_el)
     if duration is None:
         qua.play(pulse_name, laser_el)
     elif isinstance(duration, int) and duration == 0:
@@ -723,6 +734,7 @@ def _macro_pulse_series(
     amp_list: list[float] = None,
     duration_override: int = None,
     amp_override: float = None,
+    aod_accees_time_override: int = None,
     do_target_list: list[bool] = None,
 ):
     """Apply a laser pulse to each coordinate pair in the passed coords_list.
@@ -777,6 +789,12 @@ def _macro_pulse_series(
             amp = _cache_amp
         else:
             amp = None
+            
+        if aod_accees_time_override is not None:
+            aod_accees_time = aod_accees_time_override
+        else:
+            aod_accees_time= None
+            
         with qua.if_(_cache_target):
             macro_single_pulse(
                 laser_name,
@@ -784,6 +802,7 @@ def _macro_pulse_series(
                 pulse_name=pulse_name,
                 duration=duration,
                 amp=amp,
+                aod_accees_time=aod_accees_time,
                 convert_to_Hz=False,
             )
 
@@ -869,6 +888,7 @@ def _macro_scc_no_shelving(
     amp_list: list[float] = None,
     duration_override: int = None,
     amp_override: float = None,
+    aod_accees_time_override: int = None,
     do_target_list: list[bool] = None,
 ):
     """Perform spin-to-charge conversion (SCC) on NVs in series without a shelving pulse
@@ -911,6 +931,7 @@ def _macro_scc_no_shelving(
         amp_list,
         duration_override,
         amp_override,
+        aod_accees_time_override,
         do_target_list,
     )
 
