@@ -892,7 +892,7 @@ def process_and_plot_charge(raw_data, do_plot=False):
         # Replace None or out-of-range values with median
         opti_durs = [
             median_duration
-            if (d is None or (100 <= d <= 340) or (1930 <= d <= 2000))
+            if (d is None or (100 <= d <= 200) or (1500 <= d <= 2000))
             else d
             for d in opti_durs
         ]
@@ -1042,6 +1042,8 @@ if __name__ == "__main__":
     # file_id = "2025_10_30-18_37_28-johnson-nv0_2025_10_21"
     # file_id = "2025_11_01-19_02_31-johnson-nv0_2025_10_21"
     # file_id = "2025_11_22-19_58_10-johnson-nv0_2025_10_21"
+    file_id = "2026_01_21-00_42_33-johnson-nv0_2025_10_21"
+    
     
     # dm.USE_NEW_CLOUD = False
     raw_data = dm.get_raw_data(file_stem=file_id, load_npz=True)

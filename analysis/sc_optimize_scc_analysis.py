@@ -745,7 +745,7 @@ if __name__ == "__main__":
 
     #duration
     data = dm.get_raw_data(
-        file_stem="2026_01_07-19_50_37-johnson-nv0_2025_10_21", load_npz=True
+        file_stem="2026_01_21-05_05_21-johnson-nv0_2025_10_21", load_npz=True
     )
 
     results = process_and_plot_durations(data)
