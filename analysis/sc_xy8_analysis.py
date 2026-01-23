@@ -188,9 +188,7 @@ def process_and_plot_xy8(nv_list, taus, norm_counts, norm_counts_ste, seq_xy):
         #     )
         #     fit_vals = max_counts - stretched_exp(tau_fit, *popt)
         #     ax.plot(tau_fit, fit_vals, "-", label="Fit")
-        ax.set_title(
-            f"{seq_xy} : NV {nv_ind} - T2 = {T2} µs, n = {n}", fontsize=15
-        )
+        ax.set_title(f"{seq_xy} : NV {nv_ind} - T2 = {T2} µs, n = {n}", fontsize=15)
         ax.set_xlabel("τ (µs)", fontsize=15)
         ax.set_ylabel("Norm. NV⁻ Population", fontsize=15)
         ax.tick_params(axis="both", labelsize=15)
@@ -1049,9 +1047,9 @@ if __name__ == "__main__":
     ### Internal Test Plots
 
     file_stems = [
-    "2026_01_09-06_06_55-johnson-nv0_2025_10_21",
-    "2026_01_09-10_35_51-johnson-nv0_2025_10_21",
-]  # xy14
+        "2026_01_09-06_06_55-johnson-nv0_2025_10_21",
+        "2026_01_09-10_35_51-johnson-nv0_2025_10_21",
+    ]  # xy14
     # plot_T2_on_T1()
     # contrast_plot()
     # T2_ratio_xy()
