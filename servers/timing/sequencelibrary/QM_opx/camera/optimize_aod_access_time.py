@@ -75,7 +75,7 @@ if __name__ == "__main__":
                 [False, False, False, False],  # Spin flip do target list
                 [0, 1],
             ],
-            [10000, 5000, 10000, 15000],
+            [1000, 5000, 10000, 15000],
             5,
         )
 
