@@ -996,30 +996,81 @@ def build_xy8_dip_taus(
     taus = sorted(set(int(t) for t in taus))
     return taus
 
-def do_xy(nv_list, xy_seq="xy8"):
-    num_reps = 2
+# def do_xy(nv_list, xy_seq="xy8"):
+#     num_reps = 2
+#     uwave_ind_list = [0, 1]
+#     num_runs = 400
+
+#     taus = build_xy8_dip_taus(
+#         revival_2tau_us=36.0,
+#         centers=(1, 3),          # 9us and 27us
+#         include_global=True,
+#         global_step_ns=400,      # keep global light
+#         coarse_step_ns=200,
+#         coarse_margin_us=3.0,    # narrower than 6us -> fewer points
+#         fine_window_us=1.0,
+#         fine_step_ns=20,         # increase density: 20->12->8->4
+#         use_ultra=False,
+#         ultra_window_us=0.25,
+#         ultra_step_ns=20,
+#         min_tau_ns=200,
+#         max_tau_ns=33000
+#     )
+
+#     print("num_steps:", len(taus), "ns range:", taus[0], "to", taus[-1])
+
+#     for _ in range(3):
+#         xy.main(nv_list, len(taus), num_reps, num_runs, taus, uwave_ind_list, xy_seq)
+
+
+import re
+import numpy as np
+
+def _quantize_ns(x_ns, q_ns=4):
+    x = np.asarray(x_ns, dtype=float)
+    return (np.round(x / q_ns) * q_ns).astype(int)
+
+def build_log_taus(min_tau_ns=200, max_tau_ns=33000, n_points=60, q_ns=4):
+    taus = np.logspace(np.log10(min_tau_ns), np.log10(max_tau_ns), n_points)
+    taus = _quantize_ns(taus, q_ns=q_ns)
+    taus = np.unique(taus)
+    taus = taus[(taus >= min_tau_ns) & (taus <= max_tau_ns)]
+    taus.sort()
+    return taus.astype(int)
+
+def _parse_xy_seq(xy_seq: str):
+    m = re.match(r"([a-zA-Z]+\d*)(?:-(\d+))?$", xy_seq.strip().lower())
+    if not m:
+        raise ValueError(f"Bad xy_seq: {xy_seq}")
+    base = m.group(1)
+    blocks = int(m.group(2)) if m.group(2) else 1
+    return base, blocks
+
+def _tau_max_ns_for_seq(xy_seq, hahn_max_tau_ns=1_000_000):
+    # keep same max TOTAL evolution time across sequences
+    coeff = {"hahn": 2, "xy2": 4, "xy4": 8, "xy8": 16, "xy16": 32}
+    base, blocks = _parse_xy_seq(xy_seq)
+    if base not in coeff:
+        raise ValueError(f"Unknown base seq: {base}")
+
+    max_total_evol_ns = 2 * int(hahn_max_tau_ns)   # Hahn total evol ~ 2*tau
+    tau_max_ns = max_total_evol_ns / (coeff[base] * blocks)
+    return int(tau_max_ns)
+
+def do_xy(nv_list, xy_seq="xy8-1", min_tau_ns=200, hahn_max_tau_ns=1_000_000, n_points=70, q_ns=4):
+    num_reps = 4
     uwave_ind_list = [0, 1]
     num_runs = 400
 
-    taus = build_xy8_dip_taus(
-        revival_2tau_us=36.0,
-        centers=(1, 3),          # 9us and 27us
-        include_global=True,
-        global_step_ns=400,      # keep global light
-        coarse_step_ns=200,
-        coarse_margin_us=3.0,    # narrower than 6us -> fewer points
-        fine_window_us=1.0,
-        fine_step_ns=20,         # increase density: 20->12->8->4
-        use_ultra=False,
-        ultra_window_us=0.25,
-        ultra_step_ns=20,
-        min_tau_ns=200,
-        max_tau_ns=33000
-    )
+    max_tau_ns = _tau_max_ns_for_seq(xy_seq, hahn_max_tau_ns=hahn_max_tau_ns)
+    max_tau_ns = max(max_tau_ns, min_tau_ns)
 
-    print("num_steps:", len(taus), "ns range:", taus[0], "to", taus[-1])
+    taus = build_log_taus(min_tau_ns=min_tau_ns, max_tau_ns=max_tau_ns, n_points=n_points, q_ns=q_ns)
+    taus = [int(t) for t in taus]
 
+    print("xy_seq:", xy_seq, "num_steps:", len(taus), "ns range:", taus[0], "to", taus[-1])
     for _ in range(3):
+        do_widefield_image_sample(nv_sig, 50)
         xy.main(nv_list, len(taus), num_reps, num_runs, taus, uwave_ind_list, xy_seq)
 
 
@@ -1810,12 +1861,15 @@ if __name__ == "__main__":
         # do_two_block_hahn_spatial_correlation(nv_list)
 
         # AVAILABLE_XY = ["hahn-n", "xy2-n", "xy4-n", "xy8-n", "xy16-n"]
+        # run all (same style as before)
         # do_xy(nv_list, xy_seq="xy8-1")
-        
-        # do_t2_vs_pulses(nv_list)
         # do_xy_uniform_revival_scan(nv_list, xy_seq="xy4-1")
         # do_xy_revival_scan(nv_list, xy_seq="xy4-1")
-
+        # do_all_xy_log(nv_list, T2_us=600, blocks=1)
+        # same calling style as before
+        AVAILABLE_XY = ["xy8-1", "hahn-1", "xy2-1", "xy4-1", "xy16-1"]
+        for seq in AVAILABLE_XY:
+            do_xy(nv_list, xy_seq=seq, min_tau_ns=200, hahn_max_tau_ns=1_000_000)  # 1 ms max tau for Hahn
         # for nv in nv_list:
         #     nv.spin_flip = False
         # for nv in nv_list[: num_nvs // 2]:

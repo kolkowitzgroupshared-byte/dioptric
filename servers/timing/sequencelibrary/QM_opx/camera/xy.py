@@ -111,10 +111,9 @@ if __name__ == "__main__":
                 [0],
             ],
             [200, 18796],
-            "xy8-1",
+            "xy16-1",
             1,
         )
-
         sim_config = SimulationConfig(duration=int(200e3 / 4))
         sim = opx.simulate(seq, sim_config)
         samples = sim.get_simulated_samples()
