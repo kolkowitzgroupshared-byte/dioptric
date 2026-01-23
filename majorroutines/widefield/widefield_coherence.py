@@ -329,8 +329,8 @@ if __name__ == "__main__":
         # file_stem="2025_10_10-21_51_14-rubin-nv0_2025_09_08",  # xy8
         # file_stem="2025_10_11-00_03_47-rubin-nv0_2025_09_08",  # spin echo
         # file_stem="2025_10_13-14_00_31-rubin-nv0_2025_09_08",  # xy8
-        file_stem="2026_01_05-18_44_14-johnson-nv0_2025_10_21",  # xy8
-        # file_stem= "2026_01_05-21_44_23-johnson-nv0_2025_10_21",
+        # file_stem="2026_01_05-18_44_14-johnson-nv0_2025_10_21",  # xy8
+        file_stem= "2026_01_05-21_44_23-johnson-nv0_2025_10_21",
         load_npz=True,
         use_cache=True,
     )
@@ -339,13 +339,13 @@ if __name__ == "__main__":
     num_nvs = len(nv_list)
     num_steps = data["num_steps"]
     num_runs = data["num_runs"]
-    phis = data["phis"]
-    # phis = np.degrees(phis)
+    phis = data["phis_rad"]
+    phis = np.degrees(phis)
 
     counts = np.array(data["counts"])
     sig_counts = counts[0]
     ref_counts = counts[1]
-
+    
     norm_counts, norm_counts_ste = widefield.process_counts(
         nv_list, sig_counts, ref_counts, threshold=True
     )

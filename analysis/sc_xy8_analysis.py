@@ -193,7 +193,7 @@ def process_and_plot_xy8(nv_list, taus, norm_counts, norm_counts_ste, seq_xy):
         ax.set_ylabel("Norm. NV⁻ Population", fontsize=15)
         ax.tick_params(axis="both", labelsize=15)
         # ax.set_xscale("symlog", linthresh=1e5)
-        # ax.set_xscale("log")
+        ax.set_xscale("log")
         # ax.set_yscale("log")
         # ax.legend()
         # ax.grid(True)
@@ -1046,10 +1046,22 @@ if __name__ == "__main__":
     # ]  # xy8 cpdd
     ### Internal Test Plots
 
+    # file_stems = [
+    #     "2026_01_09-06_06_55-johnson-nv0_2025_10_21",
+    #     "2026_01_09-10_35_51-johnson-nv0_2025_10_21",
+    # ]  # xy4
+    
+    # file_stems = [
+    #     "2026_01_22-15_32_40-johnson-nv0_2025_10_21",
+    #     "2026_01_22-04_03_03-johnson-nv0_2025_10_21",
+    # ]  # xy8
+    
     file_stems = [
-        "2026_01_09-06_06_55-johnson-nv0_2025_10_21",
-        "2026_01_09-10_35_51-johnson-nv0_2025_10_21",
-    ]  # xy14
+        "2026_01_22-20_10_54-johnson-nv0_2025_10_21",
+        "2026_01_23-03_17_46-johnson-nv0_2025_10_21",
+        "2026_01_23-10_17_14-johnson-nv0_2025_10_21"
+    ]  # xy8
+    
     # plot_T2_on_T1()
     # contrast_plot()
     # T2_ratio_xy()

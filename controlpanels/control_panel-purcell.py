@@ -1688,7 +1688,7 @@ if __name__ == "__main__":
         # )
 
         do_compensate_for_drift(nv_sig)
-        do_widefield_image_sample(nv_sig, 50)
+        # do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list:
@@ -1748,16 +1748,16 @@ if __name__ == "__main__":
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
         # do_optimize_pol_amp(nv_list)
-        do_optimize_pol_duration(nv_list)
+        # do_optimize_pol_duration(nv_list)
         # do_optimize_readout_amp(nv_list)
         # do_optimize_readout_duration(nv_list)
         # optimize_readout_amp_and_duration(nv_list) 
         # do_optimize_spin_pol_amp(nv_list)
         # do_check_readout_fidelity(nv_list)
-        do_optimize_aod_access_time(nv_list)
+        # do_optimize_aod_access_time(nv_list)
 
-        # do_scc_snr_check(nv_list)
-        do_optimize_scc_duration(nv_list)
+        do_scc_snr_check(nv_list)
+        # do_optimize_scc_duration(nv_list)
         # do_optimize_scc_amp(nv_list)
         # optimize_scc_amp_and_duration(nv_list)
         # do_optimize_scc_readout_amp(nv_list)
@@ -1768,7 +1768,7 @@ if __name__ == "__main__":
         # do_spin_echo_phase_scan_test(nv_list)  # for iq mod test
         # evol_time_list = [18000, 19600, 21000]
 
-        # evol_time_list = [15000]  # ns
+        # evol_time_list = [16]  # ns
         # seq_types = ["hahn", "xy4", "xy8"]  # or add "ramsey", "xy16"
         # for seq_type in seq_types:
         #     for evol_time in evol_time_list:
@@ -1805,7 +1805,7 @@ if __name__ == "__main__":
         # do_two_block_hahn_spatial_correlation(nv_list)
 
         # AVAILABLE_XY = ["hahn-n", "xy2-n", "xy4-n", "xy8-n", "xy16-n"]
-        do_xy(nv_list, xy_seq="xy8-1")
+        # do_xy(nv_list, xy_seq="xy8-1")
         # do_xy_uniform_revival_scan(nv_list, xy_seq="xy4-1")
         # do_xy_revival_scan(nv_list, xy_seq="xy4-1")
 
