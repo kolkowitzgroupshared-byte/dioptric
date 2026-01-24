@@ -1070,6 +1070,13 @@ def get_rabi_period(uwave_ind=0):
     rabi_period = convert_ns_to_cc(rabi_period_ns)
     return rabi_period
 
+@cache
+def get_macro_pi_pulse_duration(uwave_ind=0):
+    virtual_sig_gen_dict = tb.get_virtual_sig_gen_dict(uwave_ind)
+    pi_pulse_ns = virtual_sig_gen_dict["pi_pulse"]
+    pi_pulse = convert_ns_to_cc(pi_pulse_ns)
+    return pi_pulse
+
 
 # endregion
 
