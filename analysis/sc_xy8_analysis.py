@@ -1061,6 +1061,17 @@ if __name__ == "__main__":
         "2026_01_23-03_17_46-johnson-nv0_2025_10_21",
         "2026_01_23-10_17_14-johnson-nv0_2025_10_21"
     ]  # xy8
+    file_stems = [
+        "2026_01_24-02_18_52-johnson-nv0_2025_10_21",
+    ]  # hahn
+    
+    file_stems = [
+        "2026_01_24-08_36_23-johnson-nv0_2025_10_21",
+    ]  # xy2
+    
+    file_stems = [
+        "2026_01_24-15_00_32-johnson-nv0_2025_10_21",
+    ]  # xy4
     
     # plot_T2_on_T1()
     # contrast_plot()

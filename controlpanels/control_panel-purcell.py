@@ -998,55 +998,77 @@ def do_xy(nv_list, xy_seq="xy8"):
 #             xy_seq,
 #         )
 
+import re
+import numpy as np
+
 def quant4_ns(x_ns):
     return (np.round(np.asarray(x_ns, float) / 4.0) * 4.0).astype(int)
 
 def logspace_int(a, b, n):
-    xs = np.logspace(np.log10(a), np.log10(b), n)
-    return xs
+    return np.logspace(np.log10(a), np.log10(b), n)
+
+def _parse_seq_and_M(xy_seq: str) -> int:
+    """
+    Returns M = total number of pi pulses used in your loop (len(xy_phases)).
+    Supports 'hahn', 'xy2', 'xy4', 'xy8', 'xy16' and optional '-<blocks>' suffix.
+    """
+    phase_len = {"hahn": 1, "xy2": 2, "xy4": 4, "xy8": 8, "xy16": 16}
+
+    m = re.match(r"([a-zA-Z]+\d*)(?:-(\d+))?$", xy_seq.lower().strip())
+    if not m:
+        raise ValueError(f"Bad xy_seq='{xy_seq}'. Examples: 'hahn', 'xy8', 'xy8-4', 'xy16-2'.")
+
+    base = m.group(1)
+    blocks = int(m.group(2)) if m.group(2) else 1
+
+    if base not in phase_len:
+        raise ValueError(f"Unknown base seq '{base}'. Options: {list(phase_len.keys())}")
+
+    return phase_len[base] * blocks
 
 def do_t2_vs_pulses(
     nv_list,
-    N_list=(0, 1, 2, 4, 8, 16),   # 0 -> spin echo, if your code supports it
-    t_min_ns=2_000,               # 2 us
-    t_max_ns=400_000,             # 400 us
+    seq_list=("hahn", "xy2", "xy4", "xy8", "xy16"),  # add "xy8-2" etc later
+    t_min_ns=2_000,       # total free-precession time grid min (ns)
+    t_max_ns=400_000,     # total free-precession time grid max (ns)
     num_steps=80,
-    min_tau_ns=200,               # hardware / pulse-overlap limit
+    min_tau_ns=200,       # MIN step_val (half-gap) in ns (hardware/pulse constraint)
     uwave_ind_list=(0, 1),
     num_reps=3,
     num_runs=500,
-    convention="8N",              # "8N" or "16N"
 ):
+    # Common total-time grid (free precession time)
     t_grid = logspace_int(t_min_ns, t_max_ns, num_steps)
 
-    for N in N_list:
-        if N == 0:
-            # Spin echo: define what xy.main expects.
-            # Sometimes it's xy_seq="echo" and taus are "tau_echo" with t=2*tau_echo
-            xy_seq = "hahn"
-            # Example: if spin-echo uses t = 2*tau_echo:
-            taus = quant4_ns(np.clip(t_grid / 2.0, min_tau_ns, None))
-        else:
-            xy_seq = "xy8"
-            denom = (8*N) if convention == "8N" else (16*N)
-            taus = t_grid / denom
-            taus = np.clip(taus, min_tau_ns, None)
-            taus = quant4_ns(taus)
+    for xy_seq in seq_list:
+        M = _parse_seq_and_M(xy_seq)      # number of pi pulses in that sequence
+        denom = 2 * M                      # because t = 2*M*step_val in your get_seq()
 
-        taus = np.unique(taus)  # avoid duplicates after quantization
+        # step_val (half-gap) values for this sequence so that total times match t_grid
+        taus = t_grid / denom
+        taus = np.clip(taus, min_tau_ns, None)
+        taus = quant4_ns(taus)
+
+        # remove duplicates after quantization; convert to Python ints
+        taus = np.unique(taus)
         taus = [int(t) for t in taus]
-        print(len(taus))
-        num_steps_eff = len(taus)
+
+        # Optional quick check: actual achieved total times (use this for fitting!)
+        t_eff = [int(2 * M * t) for t in taus]
+        print(f"{xy_seq:7s}  M={M:3d}  steps={len(taus):3d}  "
+              f"t_eff=[{t_eff[0]} .. {t_eff[-1]}] ns")
         do_widefield_image_sample(nv_sig, 50)
+        
         xy.main(
             nv_list,
-            num_steps_eff,
-            num_reps,
-            num_runs,
-            taus,
-            list(uwave_ind_list),
-            xy_seq if N != 0 else "hahn",  # adjust for your API
+            len(taus),
+            int(num_reps),
+            int(num_runs),
+            taus,                      # JSON-safe
+            [int(x) for x in uwave_ind_list],
+            xy_seq,                    # pass exactly "hahn", "xy8", "xy8-4", etc.
         )
+
 
 def do_xy_uniform_revival_scan(nv_list, xy_seq="xy8-1"):
     min_tau = 1e3
@@ -1780,7 +1802,7 @@ if __name__ == "__main__":
         # do_check_readout_fidelity(nv_list)
         # do_optimize_aod_access_time(nv_list)
 
-        # do_scc_snr_check(nv_list)
+        do_scc_snr_check(nv_list)
         # do_optimize_scc_duration(nv_list)
         # do_optimize_scc_amp(nv_list)
         # optimize_scc_amp_and_duration(nv_list)
