@@ -976,41 +976,16 @@ def do_xy(nv_list, xy_seq="xy8"):
         )
 
 # def do_xy(nv_list, xy_seq="xy8"):
-#     # min_tau = 200
-#     # max_tau = 1e6 + min_tau
-#     # # num_steps = 24
+#     min_tau = 200
+#     max_tau = 1e5 + min_tau
+#     num_steps = 100
 #     num_reps = 2
-#     uwave_ind_list = [0, 1]  # iq modulated
+#     uwave_ind_list = [0, 1]
 #     num_runs = 400
 #     # # taus calculation
-#     # # taus = widefield.generate_log_spaced_taus(min_tau, max_tau, num_steps, base=4)
-#     # taus = np.arange(200, 20000 + 1, 200)   # all divisible by 4
-#     # taus = [int(t) for t in taus]
-#     # num_steps = len(taus)
-#     revival_2tau_us=36.0,
-#     coarse_window_us=4.0,
-#     coarse_step_ns=200,
-#     fine_window_us=1.5,
-#     fine_step_ns=40,
-#     # Echo revival period is in 2τ: T_L ~ revival_2tau_us
-#     # XY8 dip fundamental near τ ~ T_L / 4
-#     tau0_us = revival_2tau_us / 4.0  # ~9 us
-
-#     # Coarse sweep around tau0
-#     t0c = (tau0_us - coarse_window_us) * 1e3
-#     t1c = (tau0_us + coarse_window_us) * 1e3
-#     taus_coarse = np.arange(t0c, t1c + coarse_step_ns, coarse_step_ns)
-
-#     # Fine sweep around tau0
-#     t0f = (tau0_us - fine_window_us) * 1e3
-#     t1f = (tau0_us + fine_window_us) * 1e3
-#     taus_fine = np.arange(t0f, t1f + fine_step_ns, fine_step_ns)
-
-#     taus = np.unique(np.concatenate([taus_coarse, taus_fine]))
-#     taus = taus[taus > 0]  # keep positive
-#     taus = [(tau/4)*4 for tau in taus]
+#     taus = widefield.generate_log_spaced_taus(min_tau, max_tau, num_steps, base=4)
 #     num_steps = len(taus)
-#     print(len(num_steps))
+#     print(num_steps)
 #     sys.exit()
 #     for _ in range(3):
 #         xy.main(
@@ -1022,6 +997,77 @@ def do_xy(nv_list, xy_seq="xy8"):
 #             uwave_ind_list,
 #             xy_seq,
 #         )
+
+import re
+import numpy as np
+
+def quant4_ns(x_ns):
+    return (np.round(np.asarray(x_ns, float) / 4.0) * 4.0).astype(int)
+
+def logspace_int(a, b, n):
+    return np.logspace(np.log10(a), np.log10(b), n)
+
+def _parse_seq_and_M(xy_seq: str) -> int:
+    """
+    Returns M = total number of pi pulses used in your loop (len(xy_phases)).
+    Supports 'hahn', 'xy2', 'xy4', 'xy8', 'xy16' and optional '-<blocks>' suffix.
+    """
+    phase_len = {"hahn": 1, "xy2": 2, "xy4": 4, "xy8": 8, "xy16": 16}
+
+    m = re.match(r"([a-zA-Z]+\d*)(?:-(\d+))?$", xy_seq.lower().strip())
+    if not m:
+        raise ValueError(f"Bad xy_seq='{xy_seq}'. Examples: 'hahn', 'xy8', 'xy8-4', 'xy16-2'.")
+
+    base = m.group(1)
+    blocks = int(m.group(2)) if m.group(2) else 1
+
+    if base not in phase_len:
+        raise ValueError(f"Unknown base seq '{base}'. Options: {list(phase_len.keys())}")
+
+    return phase_len[base] * blocks
+
+def do_t2_vs_pulses(
+    nv_list,
+    seq_list=("hahn", "xy2", "xy4", "xy8", "xy16"),  # add "xy8-2" etc later
+    t_min_ns=2_000,       # total free-precession time grid min (ns)
+    t_max_ns=400_000,     # total free-precession time grid max (ns)
+    num_steps=80,
+    min_tau_ns=200,       # MIN step_val (half-gap) in ns (hardware/pulse constraint)
+    uwave_ind_list=(0, 1),
+    num_reps=3,
+    num_runs=500,
+):
+    # Common total-time grid (free precession time)
+    t_grid = logspace_int(t_min_ns, t_max_ns, num_steps)
+
+    for xy_seq in seq_list:
+        M = _parse_seq_and_M(xy_seq)      # number of pi pulses in that sequence
+        denom = 2 * M                      # because t = 2*M*step_val in your get_seq()
+
+        # step_val (half-gap) values for this sequence so that total times match t_grid
+        taus = t_grid / denom
+        taus = np.clip(taus, min_tau_ns, None)
+        taus = quant4_ns(taus)
+
+        # remove duplicates after quantization; convert to Python ints
+        taus = np.unique(taus)
+        taus = [int(t) for t in taus]
+
+        # Optional quick check: actual achieved total times (use this for fitting!)
+        t_eff = [int(2 * M * t) for t in taus]
+        print(f"{xy_seq:7s}  M={M:3d}  steps={len(taus):3d}  "
+              f"t_eff=[{t_eff[0]} .. {t_eff[-1]}] ns")
+        do_widefield_image_sample(nv_sig, 50)
+        
+        xy.main(
+            nv_list,
+            len(taus),
+            int(num_reps),
+            int(num_runs),
+            taus,                      # JSON-safe
+            [int(x) for x in uwave_ind_list],
+            xy_seq,                    # pass exactly "hahn", "xy8", "xy8-4", etc.
+        )
 
 
 def do_xy_uniform_revival_scan(nv_list, xy_seq="xy8-1"):
@@ -1756,7 +1802,7 @@ if __name__ == "__main__":
         # do_check_readout_fidelity(nv_list)
         # do_optimize_aod_access_time(nv_list)
 
-        do_scc_snr_check(nv_list)
+        # do_scc_snr_check(nv_list)
         # do_optimize_scc_duration(nv_list)
         # do_optimize_scc_amp(nv_list)
         # optimize_scc_amp_and_duration(nv_list)
@@ -1806,6 +1852,8 @@ if __name__ == "__main__":
 
         # AVAILABLE_XY = ["hahn-n", "xy2-n", "xy4-n", "xy8-n", "xy16-n"]
         # do_xy(nv_list, xy_seq="xy8-1")
+        
+        do_t2_vs_pulses(nv_list)
         # do_xy_uniform_revival_scan(nv_list, xy_seq="xy4-1")
         # do_xy_revival_scan(nv_list, xy_seq="xy4-1")
 

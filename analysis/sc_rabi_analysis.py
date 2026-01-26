@@ -13,6 +13,7 @@ from datetime import datetime
 
 import matplotlib.pyplot as plt
 import numpy as np
+import math
 import seaborn as sns
 from joblib import Parallel, delayed
 from numpy.linalg import lstsq
@@ -158,9 +159,6 @@ def fit_rabi_data(nv_list, taus, avg_counts, avg_counts_ste, epsilon=1e-10):
     median_fit_fn, median_popt = fit_median_trace()
 
     return fit_fns, popts, median_fit_fn, median_popt
-
-
-import math
 
 
 def plot_rabi_fits(
