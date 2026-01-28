@@ -1467,3 +1467,66 @@ def plot_branch_correlation_by_orientation(
 
     fig.tight_layout()
     return fig, ax
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def set_axes_equal_3d(ax):
+    """Make 3D axes have equal scale (so spheres look like spheres)."""
+    xlim = ax.get_xlim3d()
+    ylim = ax.get_ylim3d()
+    zlim = ax.get_zlim3d()
+
+    xmid = 0.5 * (xlim[0] + xlim[1])
+    ymid = 0.5 * (ylim[0] + ylim[1])
+    zmid = 0.5 * (zlim[0] + zlim[1])
+
+    xr = abs(xlim[1] - xlim[0])
+    yr = abs(ylim[1] - ylim[0])
+    zr = abs(zlim[1] - zlim[0])
+    r = 0.5 * max(xr, yr, zr)
+
+    ax.set_xlim3d(xmid - r, xmid + r)
+    ax.set_ylim3d(ymid - r, ymid + r)
+    ax.set_zlim3d(zmid - r, zmid + r)
+
+
+def plot_c13_candidates_only(
+    aux,
+    title="¹³C candidate positions (NV frame)",
+    rmax=None,
+    s=8,
+    alpha=0.18,
+):
+    bg = aux.get("all_candidate_positions", None)
+    if bg is None or len(bg) == 0:
+        raise ValueError("aux['all_candidate_positions'] is missing or empty.")
+
+    bg = np.asarray(bg, float)
+
+    fig = plt.figure(figsize=(6.2, 5.2))
+    ax = fig.add_subplot(1, 1, 1, projection="3d")
+
+    ax.scatter(bg[:, 0], bg[:, 1], bg[:, 2], s=s, alpha=alpha, depthshade=False)
+
+    # NV at origin
+    ax.scatter([0], [0], [0], s=90, marker="*", zorder=5)
+    ax.text(0, 0, 0, "NV", fontsize=10, ha="right", va="top")
+
+    ax.set_title(title)
+    ax.set_xlabel("x (Å)")
+    ax.set_ylabel("y (Å)")
+    ax.set_zlabel("z (Å)")
+
+    if rmax is None:
+        rmax = float(np.max(np.linalg.norm(bg, axis=1)))
+    rpad = 0.05 * rmax
+    ax.set_xlim(-rmax - rpad, rmax + rpad)
+    ax.set_ylim(-rmax - rpad, rmax + rpad)
+    ax.set_zlim(-rmax - rpad, rmax + rpad)
+    set_axes_equal_3d(ax)
+
+    return fig, ax
+

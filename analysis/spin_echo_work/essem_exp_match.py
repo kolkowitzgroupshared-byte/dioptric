@@ -22,6 +22,7 @@ from analysis.spin_echo_work.echo_plot_helpers import (
     plot_branch_pairs,
     compare_two_fields,
     plot_branch_correlation_by_orientation,
+    plot_c13_candidates_only,
 )
 from multiplicity_calculation import (
     find_c3v_orbits_from_nv2,
@@ -1127,7 +1128,7 @@ def make_echo_plus_matched_site_plot(
         tau_is_half_time=use_half_time_as_tau,
         default_rev_for_plot=39.2,
     )
-
+    plot_c13_candidates_only(aux)
     return fig
 
 
@@ -3008,8 +3009,8 @@ if __name__ == "__main__":
 
     # nv_list = [0, 1, 2, 137]  # whatever NVs you care about
 
-    # nv_list = [0, 1, 2, 137, 196]  # whatever NVs you care about
-    nv_list = nv_kept
+    nv_list = [0, 1]  # whatever NVs you care about
+    # nv_list = nv_kept
     figs = make_echo_plus_matched_site_plots_batch(
         counts_file_stem=counts_file_stem,
         fit_file_stem=fit_file_stem,

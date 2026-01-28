@@ -172,7 +172,7 @@ def process_and_plot_xy8(nv_list, taus, norm_counts, norm_counts_ste, seq_xy):
         # fit_funtion = lambda x: stretched_exp(x, *popt)
         # fit_functions.append(fit_funtion)
         # plotting
-        fig, ax = plt.subplots(figsize=(6, 5))
+        fig, ax = plt.subplots(figsize=(7, 5))
         ax.errorbar(
             taus,
             nv_counts,
@@ -188,12 +188,12 @@ def process_and_plot_xy8(nv_list, taus, norm_counts, norm_counts_ste, seq_xy):
         #     )
         #     fit_vals = max_counts - stretched_exp(tau_fit, *popt)
         #     ax.plot(tau_fit, fit_vals, "-", label="Fit")
-        ax.set_title(f"{seq_xy} : NV {nv_ind} - T2 = {T2} µs, n = {n}", fontsize=15)
+        ax.set_title(f"{seq_xy} : NV {nv_ind}", fontsize=15)
         ax.set_xlabel("τ (µs)", fontsize=15)
         ax.set_ylabel("Norm. NV⁻ Population", fontsize=15)
         ax.tick_params(axis="both", labelsize=15)
         # ax.set_xscale("symlog", linthresh=1e5)
-        ax.set_xscale("log")
+        # ax.set_xscale("log")
         # ax.set_yscale("log")
         # ax.legend()
         # ax.grid(True)
@@ -1050,17 +1050,18 @@ if __name__ == "__main__":
     #     "2026_01_09-06_06_55-johnson-nv0_2025_10_21",
     #     "2026_01_09-10_35_51-johnson-nv0_2025_10_21",
     # ]  # xy4
-    
-    # file_stems = [
-    #     "2026_01_22-15_32_40-johnson-nv0_2025_10_21",
-    #     "2026_01_22-04_03_03-johnson-nv0_2025_10_21",
-    # ]  # xy8
-    
+
     file_stems = [
-        "2026_01_22-20_10_54-johnson-nv0_2025_10_21",
-        "2026_01_23-03_17_46-johnson-nv0_2025_10_21",
-        "2026_01_23-10_17_14-johnson-nv0_2025_10_21"
+        "2026_01_22-15_32_40-johnson-nv0_2025_10_21",
+        "2026_01_22-04_03_03-johnson-nv0_2025_10_21",
     ]  # xy8
+
+
+    file_stems = [
+        "2026_01_24-02_18_52-johnson-nv0_2025_10_21",
+        "2026_01_25-20_40_44-johnson-nv0_2025_10_21",
+    ]  # hahn
+
     
     
     # file_stems = [
@@ -1072,6 +1073,21 @@ if __name__ == "__main__":
         "2026_01_24-08_36_23-johnson-nv0_2025_10_21",
         "2026_01_26-02_59_06-johnson-nv0_2025_10_21",
     ]  # xy2
+
+    file_stems = [
+        "2026_01_24-15_00_32-johnson-nv0_2025_10_21",
+        "2026_01_26-02_59_06-johnson-nv0_2025_10_21",
+    ]  # xy4
+
+    file_stems = [
+        "2026_01_24-20_59_55-johnson-nv0_2025_10_21",
+        "2026_01_26-15_11_04-johnson-nv0_2025_10_21"
+    ]  # xy8
+
+    file_stems = [
+        "2026_01_25-02_20_55-johnson-nv0_2025_10_21",
+    ]  # xy16
+
     
     # file_stems = [
     #     "2026_01_24-15_00_32-johnson-nv0_2025_10_21",
