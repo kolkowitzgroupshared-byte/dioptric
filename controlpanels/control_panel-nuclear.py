@@ -20,8 +20,10 @@ import websocket
 
 from majorroutines.spectroscopy import (
     singlet_search,
+    singlet_search_1043,
     singlet_search_with_etalon,
-    singlet_serach_1043,
+    singlet_search_with_spect,
+    singlet_search_with_spect_binned,
 )
 
 # from majorroutines import targeting
@@ -152,23 +154,89 @@ def do_singlet_search_with_etalon_2():
 
 
 def do_singlet_search_1043():
-    min_wavelength = 850
-    max_wavelength = 900
-    etalon_range = 20
-    etalon_spacing = 0.5
-    num_steps = 1
+    # min_wavelength = 850
+    # max_wavelength = 860
+    # etalon_range = 2
+    # etalon_spacing = 1
+    # num_steps = 3
+    # num_runs = 2
+    # RF_on = True
+    # start_col_index = 1000
+    # end_col_index = None
+    # exposure_time = 500.0
+    # tisaph_power = 300
+
+    # min_wavelength = 768
+    # max_wavelength = 769
+    # etalon_range = 5
+    # etalon_spacing = 1
+    # num_steps = 2
+    # num_runs = 1
+    # RF_on = True
+    # start_col_index = 1000
+    # end_col_index = None
+    # exposure_time = 1000.0
+    # tisaph_power = 300
+
+    min_wavelength = 750
+    max_wavelength = 860
+    etalon_range = 90
+    etalon_spacing = 1
+    num_steps = 275
     num_runs = 1
     RF_on = True
+    start_col_index = 1000
+    end_col_index = None
+    exposure_time = 1000.0
+    tisaph_power = 298
 
-    singlet_serach_1043.main(
+    # min_wavelength = 800
+    # max_wavelength = 850
+    # etalon_range = 90
+    # etalon_spacing = 1
+    # num_steps = 125
+    # num_runs = 1
+    # RF_on = True
+    # start_col_index = None
+    # end_col_index = None
+    # exposure_time = 1000.0
+    # tisaph_power = 335
+
+    # singlet_search_with_spect.main(
+    #     min_wavelength,
+    #     max_wavelength,
+    #     num_steps,
+    #     num_runs,
+    #     RF_on,
+    #     etalon_range,
+    #     start_col_index,
+    #     end_col_index,
+    #     exposure_time,
+    #     etalon_spacing,
+    #     tisaph_power,
+    # )
+
+    singlet_search_with_spect_binned.main(
         min_wavelength,
         max_wavelength,
         num_steps,
         num_runs,
         RF_on,
         etalon_range,
+        start_col_index,
+        end_col_index,
+        exposure_time,
         etalon_spacing,
+        tisaph_power,
     )
+
+
+def test_sig_gen():
+    server_name = "sig_gen_STAN_sg394"
+    sig_gen = common.get_server_by_name(server_name)
+    # sig_gen.set_freq(2.75)
+    # sig_gen.uwave_off()
+    sig_gen.uwave_on()
 
 
 def test_shutter():
@@ -296,6 +364,12 @@ def test_multimeter_avg():
     print(f"Time elapsed: {time.time() - start_time}")
 
 
+# def test_pump():
+#     server_name = "tisapph_pump_COHE_verdi"
+#     pump = common.get_server_by_name(server_name)
+#     pump.
+
+
 if __name__ == "__main__":
     kpl.init_kplotlib()
 
@@ -306,6 +380,7 @@ if __name__ == "__main__":
         # test_multimeter()
         # test_multimeter_avg()
         # test_multimeter_stats()
+        # test_sig_gen()
         # start = time.time()
         # test_multimeter_duration()
         # print(time.time() - start)
@@ -314,10 +389,10 @@ if __name__ == "__main__":
         # test_meas_etalon_timing()
         # test_measure_shutter_timing()
         # do_singlet_search()
-        do_singlet_search_with_etalon()
-        do_singlet_search_with_etalon_1()
+        # do_singlet_search_with_etalon()
+        # do_singlet_search_with_etalon_1()
         # do_singlet_search_with_etalon_2()
-        # do_singlet_search_1043()
+        do_singlet_search_1043()
         # pass
 
     except Exception as exc:

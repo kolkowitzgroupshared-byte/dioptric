@@ -1,5 +1,5 @@
 """
-Virtual LabRAD server to monitor enclosure temps continuously.
+Virtual LabRAD server to measure power.
 
 Created on June 25, 2025
 
@@ -38,8 +38,8 @@ class PowerMonitorThorPm100D(LabradServer):
     rm = pyvisa.ResourceManager()
     pc_name = socket.gethostname()
 
-    #might be subject to change
-    instrument_name = 'USB0::0x1313::0x8078::P0051482::INSTR'
+    # might be subject to change
+    instrument_name = "USB0::0x1313::0x8078::P0051482::INSTR"
 
     # We will be running this constantly
     def initServer(self):
@@ -48,27 +48,34 @@ class PowerMonitorThorPm100D(LabradServer):
 
         """
         self.inst = self.rm.open_resource(self.instrument_name)
-        self.inst.write('INITiate[:IMMediate]')
-        self.inst.write('MEASure[:SCALar][:POWer]?')
+        # self.inst.write("INITiate[:IMMediate]")
+        # self.inst.write("MEASure[:SCALar][:POWer]?")
 
-    #@setting(0, cmd="y", val="v")
-    #def set_param(self, c, cmd, val):
-     #   self.ser.write(cmd + b"=" + bytes(str(val), "ascii") + b"\n")
-      #  time.sleep(1)
-
+    # @setting(0, cmd="y", val="v")
+    # def set_param(self, c, cmd, val):
+    #   self.ser.write(cmd + b"=" + bytes(str(val), "ascii") + b"\n")
+    #  time.sleep(1)
 
     @setting(1)
     def get_power(self, c):
-        return self.inst.query('READ?')
+        self.inst.write("MEAS:POW?")
+        power = self.inst.read()
+        return power
 
+    @setting(2)
+    def set_wavelength(self, c, wavelength):
+        return self.inst.write(f"CORR:WAV {wavelength:.0f}")
 
-   
+    @setting(3)
+    def get_wavelength(self, c):
+        self.inst.write("CORR:WAV?")
+        curr_wavelength = self.inst.read()
+        return curr_wavelength
 
     def stopServer(self):
         """Ensure all everything is closed."""
-        self.inst.write('ABORt')
+        self.inst.write("ABORt")
         self.inst.close()
-
 
 
 __server__ = PowerMonitorThorPm100D()

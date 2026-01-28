@@ -53,6 +53,9 @@ config |= {
         "tisapph_M2_solstis_ip": "192.168.0.195",
         "tisapph_pump_COHE_verdi_com": "COM6",
         "sig_gen_STAN_sg394_visa": "TCPIP::192.168.0.178::inst0::INSTR",
+        "filter_slider_THOR_ell9k_com": "",
+        "pulse_gen_SWAB_82_1_ip_1": "192.168.0.111",
+        "pulse_gen_SWAB_82_2_ip_2": "192.168.0.160",
     },
     ###
     "Microwaves": {
@@ -101,6 +104,11 @@ config |= {
         "pulse_gen": "QM_opx",
         "camera": "camera_NUVU_hnu512gamma",
         "thorslm": "slm_THOR_exulus_hd2",
+        "slider_1": "filter_slider_THOR_ell9k_4",
+        "slider_2": "filter_slider_THOR_ell9k_5",
+        "slider_3": "filter_slider_THOR_ell9k_6",
+        "power_meter": "power_meter_THOR_pm100d",
+        "rotation_mount": "rotation_mount_THOR_ell14",
     },
     ###
     "Wiring": {

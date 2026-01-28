@@ -104,4 +104,5 @@ def main():
 if __name__ == "__main__":
     kpl.init_kplotlib()
     main()
+    snr()
     kpl.show(block=True)
