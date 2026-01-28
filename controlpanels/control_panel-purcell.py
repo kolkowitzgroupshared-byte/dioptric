@@ -1028,7 +1028,8 @@ def _parse_seq_and_M(xy_seq: str) -> int:
 
 def do_t2_vs_pulses(
     nv_list,
-    seq_list=("hahn", "xy2", "xy4", "xy8", "xy16"),  # add "xy8-2" etc later
+    # seq_list=("hahn", "xy2", "xy4", "xy8", "xy16"),  # add "xy8-2" etc later
+    seq_list=("xy8", "xy16"),  # add "xy8-2" etc later
     t_min_ns=2_000,       # total free-precession time grid min (ns)
     t_max_ns=400_000,     # total free-precession time grid max (ns)
     num_steps=80,
