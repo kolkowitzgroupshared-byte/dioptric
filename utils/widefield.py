@@ -554,10 +554,14 @@ def process_multiple_files(file_ids, load_npz=True):
     )
     counts = np.array(combined_data["counts"])
     print(f"combined data shape : {counts.shape}")
+    seq_xy = combined_data.get("xy_seq", "xy8").lower()
+    print(seq_xy)
     for file_id in file_ids[1:]:
         new_data = dm.get_raw_data(
             file_stem=file_id, load_npz=load_npz, use_cache=False
         )
+        seq_xy = combined_data.get("xy_seq", "xy8").lower()
+        print(seq_xy)
         new_counts = np.array(new_data["counts"])
         print(f"new data shape : {new_counts.shape}")
         combined_data["num_runs"] += new_data["num_runs"]

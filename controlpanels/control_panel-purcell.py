@@ -1029,6 +1029,7 @@ def _parse_seq_and_M(xy_seq: str) -> int:
 def do_t2_vs_pulses(
     nv_list,
     seq_list=("hahn", "xy2", "xy4", "xy8", "xy16"),  # add "xy8-2" etc later
+    # seq_list=("xy8", "xy16"),  # add "xy8-2" etc later
     t_min_ns=2_000,       # total free-precession time grid min (ns)
     t_max_ns=400_000,     # total free-precession time grid max (ns)
     num_steps=80,
@@ -1734,7 +1735,7 @@ if __name__ == "__main__":
         # )
 
         do_compensate_for_drift(nv_sig)
-        # do_widefield_image_sample(nv_sig, 50)
+        do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list:
@@ -1820,6 +1821,8 @@ if __name__ == "__main__":
         #     for evol_time in evol_time_list:
         #         print(f"Running {seq_type} at evol_time={evol_time} ns")
         #         do_widefield_coherence_test(nv_list, evol_time, seq_type)
+        
+        do_widefield_coherence_test(nv_list, 240, "xy8")
 
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_calibrate_iq_delay(nv_list)
@@ -1853,7 +1856,7 @@ if __name__ == "__main__":
         # AVAILABLE_XY = ["hahn-n", "xy2-n", "xy4-n", "xy8-n", "xy16-n"]
         # do_xy(nv_list, xy_seq="xy8-1")
         
-        do_t2_vs_pulses(nv_list)
+        # do_t2_vs_pulses(nv_list)
         # do_xy_uniform_revival_scan(nv_list, xy_seq="xy4-1")
         # do_xy_revival_scan(nv_list, xy_seq="xy4-1")
 

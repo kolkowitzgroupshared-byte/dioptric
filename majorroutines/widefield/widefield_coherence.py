@@ -293,7 +293,7 @@ def main(
     raw_data |= {
         "timestamp": timestamp,
         "phis": phi_list,
-        "phi-units": "deg",  # <-- FIX
+        "phi-units": "deg", 
         "evol_time": evol_time,
         "evol_time-unit": "ns",
         "seq_type": seq_type,
