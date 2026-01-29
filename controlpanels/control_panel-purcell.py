@@ -1803,7 +1803,7 @@ if __name__ == "__main__":
         # do_check_readout_fidelity(nv_list)
         # do_optimize_aod_access_time(nv_list)
 
-        do_scc_snr_check(nv_list)
+        # do_scc_snr_check(nv_list)
         # do_optimize_scc_duration(nv_list)
         # do_optimize_scc_amp(nv_list)
         # optimize_scc_amp_and_duration(nv_list)
@@ -1821,6 +1821,8 @@ if __name__ == "__main__":
         #     for evol_time in evol_time_list:
         #         print(f"Running {seq_type} at evol_time={evol_time} ns")
         #         do_widefield_coherence_test(nv_list, evol_time, seq_type)
+        
+        do_widefield_coherence_test(nv_list, 240, "xy8")
 
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_calibrate_iq_delay(nv_list)
