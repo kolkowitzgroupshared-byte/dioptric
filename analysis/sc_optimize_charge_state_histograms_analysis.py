@@ -203,7 +203,7 @@ def process_and_plot(raw_data):
                 readout_fidelity_arr[nv_ind],
                 prep_fidelity_arr[nv_ind],
                 goodness_of_fit_arr[nv_ind],
-                weights=(1.0, 1.0, 1.0),
+                weights=(1.0, 0.0, 1.0),
             )
             # Manually override for the first NV
             # if nv_ind == 0:
@@ -1013,6 +1013,7 @@ if __name__ == "__main__":
     # file_id = "2025_10_23-02_24_51-johnson-nv0_2025_10_21"
     # file_id = "2025_10_26-16_36_03-johnson-nv0_2025_10_21"
     # file_id = "2025_10_30-06_21_14-johnson-nv0_2025_10_21"
+    file_id = "2026_02_01-00_09_17-johnson-nv0_2025_10_21"
 
     ### pol amp var
     # file_id = "2025_09_12-16_53_34-rubin-nv0_2025_09_08"
@@ -1040,14 +1041,14 @@ if __name__ == "__main__":
     # file_id = "2025_10_26-20_37_42-johnson-nv0_2025_10_21"
     # file_id = "2025_10_30-18_37_28-johnson-nv0_2025_10_21"
     # file_id = "2025_11_01-19_02_31-johnson-nv0_2025_10_21"
-    file_id = "2025_11_22-19_58_10-johnson-nv0_2025_10_21"
+    # file_id = "2025_11_22-19_58_10-johnson-nv0_2025_10_21"
     
     # dm.USE_NEW_CLOUD = False
     raw_data = dm.get_raw_data(file_stem=file_id, load_npz=True)
     # file_name = dm.get_file_name(file_id=file_id)
     # print(f"{file_name}_{file_id}")
-    # process_and_plot(raw_data)
+    process_and_plot(raw_data)
     # process_and_plot_green(raw_data)
-    process_and_plot_charge(raw_data, do_plot=False)
+    # process_and_plot_charge(raw_data, do_plot=False)
     # print(dm.get_file_name(1717056176426))
     plt.show(block=True)

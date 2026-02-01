@@ -564,13 +564,13 @@ def do_calibrate_iq_delay(nv_list):
 def do_resonance(nv_list):
     freq_center = 2.8785
     
-    freq_range = 0.36
-    num_steps = 65
+    # freq_range = 0.36
+    # num_steps = 65
     
-    # freq_range = 0.260
-    # num_steps = 45
-    num_reps = 2
-    num_runs = 800
+    freq_range = 0.260
+    num_steps = 45
+    num_reps = 4
+    num_runs = 400
     # num_runs = 1
     freqs = calculate_freqs(freq_center, freq_range, num_steps)
     ##
@@ -583,7 +583,7 @@ def do_resonance(nv_list):
         num_reps,
         num_runs,
         freqs=freqs,
-        uwave_ind_list=[1],
+        uwave_ind_list=[2],
     )
     # for _ in range(2):
     #     resonance.main(nv_list, num_steps, num_reps, num_runs, freqs=freqs)
@@ -1577,7 +1577,7 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_230nvs_reordered.npz",
         # file_path="slmsuite/nv_blob_detection/nv_blob_223nvs_reordered.npz",
         # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz",
-        file_path="slmsuite/nv_blob_detection/nv_blob_279nvs_reordered.npz",
+        file_path="slmsuite/nv_blob_detection/nv_blob_243nvs_reordered.npz",
     ).tolist()
     # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
     green_coords_list = [
@@ -1798,7 +1798,7 @@ if __name__ == "__main__":
 
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
-        do_optimize_readout_amp(nv_list)
+        # do_optimize_readout_amp(nv_list)
         # do_optimize_readout_duration(nv_list)
         # optimize_readout_amp_and_duration(nv_list) 
         # do_optimize_spin_pol_amp(nv_list)
@@ -1830,7 +1830,7 @@ if __name__ == "__main__":
         # do_calibrate_iq_delay(nv_list)
         # do_rabi(nv_list)
         # do_power_rabi(nv_list)
-        # do_resonance(nv_list)
+        do_resonance(nv_list)
         # do_rabi(nv_list)
         # do_deer_hahn(nv_list)
         # do_deer_hahn_rabi(nv_list)

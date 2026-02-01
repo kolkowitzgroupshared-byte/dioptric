@@ -303,7 +303,7 @@ def load_nv_coords(
     # file_path="slmsuite/nv_blob_detection/nv_blob_230nvs_reordered.npz", #johnson
     # file_path="slmsuite/nv_blob_detection/nv_blob_223nvs_reordered.npz", #johnson
     # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz",  # johnson
-    file_path="slmsuite/nv_blob_detection/nv_blob_279nvs_reordered.npz",  # johnson
+    file_path="slmsuite/nv_blob_detection/nv_blob_243nvs_reordered.npz",  # johnson
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
@@ -333,7 +333,7 @@ def compute_and_write_nvs_phase():
         shape=(4096, 2048),
         spot_vectors=thorcam_coords,
         basis="ij",
-        # spot_amp=spot_weights,
+        spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally

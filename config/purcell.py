@@ -160,10 +160,10 @@ config |= {
             2: {
                 "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 11.0,
-                "frequency": 0.158,
+                "frequency": 2.8785,
                 "rabi_period": 176,
-                "pi_pulse": 2000,
-                "pi_on_2_pulse": 100,
+                "pi_pulse": 100,
+                "pi_on_2_pulse": 52,
             },
         },
     },
@@ -961,7 +961,7 @@ opx_config = {
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2367}, #136NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2267}, #118NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.34947}, ## 312NV johnson
-        "yellow_charge_readout": {"type": "constant", "sample": 0.333148}, ## 230NV johnson
+        "yellow_charge_readout": {"type": "constant", "sample": 0.3568}, ## 230NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3084}, ## 223NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
         "yellow_spin_pol": {"type": "constant", "sample": 0.31510},
