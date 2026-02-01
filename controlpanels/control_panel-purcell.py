@@ -1335,18 +1335,18 @@ def do_opx_constant_ac():
     # print((stop - start) / num_reps)
 
     # Microwave test
-    if True:
-        sig_gen = cxn.sig_gen_STAN_sg394_3
-        amp = 0
-        chan = 3
-    else:
-        sig_gen = cxn.sig_gen_STAN_sg394_2
-        amp = 10
-        chan = 10
-    sig_gen.set_amp(amp)  # 12
-    sig_gen.set_freq(0.175)
-    sig_gen.uwave_on()
-    opx.constant_ac([chan])
+    # if True:
+    #     sig_gen = cxn.sig_gen_STAN_sg394_3
+    #     amp = 0
+    #     chan = 3
+    # else:
+    #     sig_gen = cxn.sig_gen_STAN_sg394_2
+    #     amp = 10
+    #     chan = 10
+    # sig_gen.set_amp(amp)  # 12
+    # sig_gen.set_freq(0.175)
+    # sig_gen.uwave_on()
+    # opx.constant_ac([chan])
 
     # Camera frame rate test
     # seq_args = [500]
@@ -1422,13 +1422,13 @@ def do_opx_constant_ac():
     #     [72.0, 72.0],  # Analog frequencies
     # )
 
-    # # Green + yellow
-    # opx.constant_ac(
-    #     [4],  # Digital channels
-    #     [3, 4, 7],  # Analog channels
-    #     [0.11, 0.11, 0.30],  # Analog voltages
-    #     [107, 107, 0],  # Analog frequencies
-    # )
+    # Green + yellow
+    opx.constant_ac(
+        [4],  # Digital channels
+        [3, 4, 7],  # Analog channels
+        [0.11, 0.11, 0.30],  # Analog voltages
+        [107, 107, 0],  # Analog frequencies
+    )
     # Red + green + Yellow
     # opx.constant_ac(
     #     [4, 1],  # Digital channels1
@@ -1563,8 +1563,9 @@ if __name__ == "__main__":
     sample_name = "johnson"
     # magnet_angle = 90
     date_str = "2025_10_21"
-    sample_coords = [0.4, 0.8]
-    z_coord = 0.0
+    sample_coords = [1.0, 0.8]
+    z_coord = 1.2
+    # z_coord = 0.8
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_308nvs_reordered.npz",
@@ -1575,7 +1576,8 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_312nvs_reordered.npz",
         # file_path="slmsuite/nv_blob_detection/nv_blob_230nvs_reordered.npz",
         # file_path="slmsuite/nv_blob_detection/nv_blob_223nvs_reordered.npz",
-        file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz",
+        # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz",
+        file_path="slmsuite/nv_blob_detection/nv_blob_279nvs_reordered.npz",
     ).tolist()
     # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
     green_coords_list = [
@@ -1661,9 +1663,9 @@ if __name__ == "__main__":
     indices_113_MHz = [0, 1, 3, 6, 10, 14, 16, 17, 19, 23, 24, 25, 26, 27, 32, 33, 34, 35, 37, 38, 41, 49, 50, 51, 53, 54, 55, 60, 62, 63, 64, 66, 67, 68, 70, 72, 73, 74, 75, 76, 78, 80, 81, 82, 83, 84, 86, 88, 90, 92, 93, 95, 96, 99, 100, 101, 102, 103, 105, 108, 109, 111, 113, 114]
     indices_217_MHz = [0, 2, 4, 5, 7, 8, 9, 11, 12, 13, 15, 18, 20, 21, 22, 28, 29, 30, 31, 36, 39, 40, 42, 43, 44, 45, 46, 47, 48, 52, 56, 57, 58, 59, 61, 65, 69, 71, 77, 79, 85, 87, 89, 91, 94, 97, 98, 104, 106, 107, 110, 112, 115, 116, 117]
     # scc_amp_list = [1.0] * num_nv
-    # scc_duration_list = [88] * num_nvs
+    scc_duration_list = [88] * num_nvs
     # pol_duration_list = [600] * num_nvs
-    # pol_duration_list = [1000] * num_nvs
+    pol_duration_list = [1000] * num_nvs
     # nv_list[i] will have the ith coordinates from the above lists
     nv_list: list[NVSig] = []
     for ind in range(num_nvs):
@@ -1735,7 +1737,7 @@ if __name__ == "__main__":
         # )
 
         do_compensate_for_drift(nv_sig)
-        do_widefield_image_sample(nv_sig, 50)
+        # do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list:
@@ -1748,7 +1750,7 @@ if __name__ == "__main__":
         # scan_equilateral_triangle(nv_sig, center_coord=sample_coords, radius=0.4)
         # do_image_nv_list(nv_list)
         # do_image_single_nv(nv_sig)
-        # z_range = np.linspace(1.5, 1.9, 11)
+        # z_range = np.linspace(0, 3.0, 31)
         # for z in z_range:
         #     nv_sig.coords[CoordsKey.Z] = z
         #     do_scanning_image_sample(nv_sig)
@@ -1796,7 +1798,7 @@ if __name__ == "__main__":
 
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
-        # do_optimize_readout_amp(nv_list)
+        do_optimize_readout_amp(nv_list)
         # do_optimize_readout_duration(nv_list)
         # optimize_readout_amp_and_duration(nv_list) 
         # do_optimize_spin_pol_amp(nv_list)
@@ -1822,7 +1824,7 @@ if __name__ == "__main__":
         #         print(f"Running {seq_type} at evol_time={evol_time} ns")
         #         do_widefield_coherence_test(nv_list, evol_time, seq_type)
         
-        do_widefield_coherence_test(nv_list, 240, "xy8")
+        # do_widefield_coherence_test(nv_list, 800, "xy8")
 
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_calibrate_iq_delay(nv_list)

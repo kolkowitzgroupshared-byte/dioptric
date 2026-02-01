@@ -78,6 +78,7 @@ config |= {
     "CommonDurations": {
         "default_pulse_duration": 1000,
         "aod_access_time":2.6e3,  # access time in specs is 10us
+        # "aod_access_time":8e3,  # access time in specs is 10us
         "widefield_operation_buffer": 1e3,
         "uwave_buffer": 0,
         "iq_buffer": 0,
@@ -960,9 +961,9 @@ opx_config = {
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2367}, #136NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2267}, #118NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.34947}, ## 312NV johnson
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.313148}, ## 230NV johnson
+        "yellow_charge_readout": {"type": "constant", "sample": 0.333148}, ## 230NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3084}, ## 223NV johnson
-        "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
         "yellow_spin_pol": {"type": "constant", "sample": 0.31510},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other

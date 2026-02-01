@@ -236,7 +236,7 @@ def calibration_triangle():
     cam.set_exposure(0.1)
 
     # Define parameters for the equilateral triangle
-    center = (690, 560)  # Center of the triangle
+    center = (680, 560)  # Center of the triangle
     side_length = 400  # Length of each side of the triangle\
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
@@ -277,11 +277,11 @@ def nuvu2thorcam_calibration(coords):
     to the Thorlabs camera's coordinate system using an affine transformation.
     """
     cal_coords_thorcam = np.array(
-        [[1036.410, 760.0], [343.589, 760.0], [690.0, 160.0]], dtype="float32"
+        [[1026.410, 760.0], [333.589, 760.0], [680.0, 160.0]], dtype="float32"
     )
 
     cal_coords_nuvu = np.array(
-        [[222.775, 241.598], [190.047, 21.881], [18.284, 158.754]], dtype="float32"
+        [[221.971, 238.674], [189.313, 19.02], [17.427, 156.258]], dtype="float32"
     )
     # Compute the affine transformation matrix
     M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
@@ -302,7 +302,8 @@ def load_nv_coords(
     # file_path="slmsuite/nv_blob_detection/nv_blob_312nvs_reordered.npz", #johnson
     # file_path="slmsuite/nv_blob_detection/nv_blob_230nvs_reordered.npz", #johnson
     # file_path="slmsuite/nv_blob_detection/nv_blob_223nvs_reordered.npz", #johnson
-    file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz",  # johnson
+    # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz",  # johnson
+    file_path="slmsuite/nv_blob_detection/nv_blob_279nvs_reordered.npz",  # johnson
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
@@ -332,7 +333,7 @@ def compute_and_write_nvs_phase():
         shape=(4096, 2048),
         spot_vectors=thorcam_coords,
         basis="ij",
-        spot_amp=spot_weights,
+        # spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally
@@ -367,7 +368,6 @@ def write_pre_computed_circles():
     phase = np.load("slmsuite\circles\slm_phase_circles_20250606_163346.npy")
     slm.write(phase, settle=True)
     # cam_plot()
-
 
 # Define the save function
 def save(data, path, filename):

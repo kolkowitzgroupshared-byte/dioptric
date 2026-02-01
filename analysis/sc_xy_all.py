@@ -31,26 +31,31 @@ SEQ_FILES = {
         "2026_01_24-02_18_52-johnson-nv0_2025_10_21",
         "2026_01_25-20_40_44-johnson-nv0_2025_10_21",
         "2026_01_27-03_14_34-johnson-nv0_2025_10_21",
+        "2026_01_29-07_32_29-johnson-nv0_2025_10_21",
     ],
     "xy2": [
         "2026_01_24-08_36_23-johnson-nv0_2025_10_21",
         "2026_01_26-02_59_06-johnson-nv0_2025_10_21",
         "2026_01_27-09_33_49-johnson-nv0_2025_10_21",
+        "2026_01_29-13_49_49-johnson-nv0_2025_10_21",
     ],
     "xy4": [
         "2026_01_24-15_00_32-johnson-nv0_2025_10_21",
         "2026_01_26-02_59_06-johnson-nv0_2025_10_21",
-        "2026_01_27-15_51_39-johnson-nv0_2025_10_21",
+        # "2026_01_27-15_51_39-johnson-nv0_2025_10_21",
+        "2026_01_29-20_07_42-johnson-nv0_2025_10_21",
     ],
     "xy8": [
         "2026_01_24-20_59_55-johnson-nv0_2025_10_21",
         "2026_01_26-15_11_04-johnson-nv0_2025_10_21",
-        "2026_01_28-00_19_39-johnson-nv0_2025_10_21"
+        "2026_01_28-00_19_39-johnson-nv0_2025_10_21",
+        "2026_01_30-02_01_06-johnson-nv0_2025_10_21",
     ],
     "xy16": [
         "2026_01_25-02_20_55-johnson-nv0_2025_10_21",
         "2026_01_26-20_31_48-johnson-nv0_2025_10_21",
         "2026_01_28-05_34_06-johnson-nv0_2025_10_21",
+        "2026_01_30-07_21_10-johnson-nv0_2025_10_21",
     ],
 }
 
@@ -95,166 +100,13 @@ seq_data = {name: load_seq(stems) for name, stems in SEQ_FILES.items()}
 ref_nv_list = next(iter(seq_data.values()))["nv_list"]
 
 
-# def plot_all_sequences_for_nv(nv):
-#     fig, ax = plt.subplots(figsize=(7, 5))
-#     for name, d in seq_data.items():
-#         i = nv
-#         ax.errorbar(
-#             d["t_us"],
-#             d["y"][i],
-#             yerr=d["yerr"][i],
-#             fmt="o",
-#             capsize=2,
-#             label=f"{name} (N={d['N']})",
-#         )
-
-#     ax.set_xscale("log")
-#     ax.set_xlabel(r"Total evolution time $t=2N\tau$ (µs)")
-#     ax.set_ylabel("Norm. NV⁻ population")
-#     ax.set_title(f"All sequences overlay — {nv}")
-#     ax.grid(True, which="both", ls="--", alpha=0.5)
-#     ax.legend(fontsize=9)
-#     return fig, ax
-
-
-# def plot_all_sequences_for_nv(nv, ncols=2):
-#     names = list(seq_data.keys())
-#     n = len(names)
-#     nrows = math.ceil(n / ncols)
-
-#     fig, axs = plt.subplots(
-#         nrows, ncols,
-#         figsize=(4.8 * ncols, 3.6 * nrows),
-#         sharex=True, sharey=True
-#     )
-#     axs = np.atleast_1d(axs).ravel()
-
-#     for k, name in enumerate(names):
-#         ax = axs[k]
-#         d = seq_data[name]
-#         i = nv
-
-#         ax.errorbar(
-#             d["t_us"],
-#             d["y"][i],
-#             yerr=d["yerr"][i],
-#             fmt="o",
-#             capsize=2,
-#         )
-
-#         ax.set_xscale("log")
-#         ax.grid(True, which="both", ls="--", alpha=0.5)
-#         ax.set_title(f"{name} (N={d['N']})", fontsize=10)
-
-#     # hide any unused subplot slots
-#     for k in range(n, len(axs)):
-#         axs[k].axis("off")
-
-#     fig.supxlabel(r"Total evolution time $t=2N\tau$ (µs)")
-#     fig.supylabel("Norm. NV⁻ population")
-#     fig.suptitle(f"Sequences (separate subplots) — NV {nv}", y=1.02)
-
-#     fig.tight_layout()
-#     return fig, axs
-
-# def plot_all_sequences_for_nv(nv):
-#     names = list(seq_data.keys())
-#     n = len(names)
-
-#     fig, axs = plt.subplots(
-#         nrows=n, ncols=1,
-#         figsize=(7.5, 2.6 * n),
-#         sharex=True, sharey=True
-#     )
-#     axs = np.atleast_1d(axs).ravel()
-
-#     for ax, name in zip(axs, names):
-#         d = seq_data[name]
-#         i = nv
-
-#         ax.errorbar(
-#             d["t_us"],
-#             d["y"][i],
-#             yerr=d["yerr"][i],
-#             fmt="o",
-#             capsize=2,
-#         )
-#         ax.set_xscale("log")
-#         ax.grid(True, which="both", ls="--", alpha=0.5)
-#         ax.set_title(f"{name} (N={d['N']})", fontsize=10)
-
-#     # only label bottom x-axis (since sharex=True)
-#     axs[-1].set_xlabel(r"Total evolution time $t=2N\tau$ (µs)")
-#     fig.supylabel("Norm. NV⁻ population")
-#     fig.suptitle(f"Sequences (stacked, shared x) — NV {nv}", y=1.01)
-
-#     fig.tight_layout()
-#     return fig, axs
-
-# Example: loop all NVs
-# for nv in ref_nv_list:
-# for nv in range(len(ref_nv_list)):
-#     plot_all_sequences_for_nv(nv)
-#     plt.show(block=True)
-
-# def plot_all_sequences_for_nv(nv, height_per_ax=2.0):
-#     names = list(seq_data.keys())
-#     n = len(names)
-
-#     fig, axs = plt.subplots(
-#         nrows=n, ncols=1,
-#         figsize=(7.2, height_per_ax * n),
-#         sharex=True, sharey=False,              # share x, autoscale y per subplot
-#         gridspec_kw={"hspace": 0.02}            # compact vertical spacing
-#     )
-#     axs = np.atleast_1d(axs).ravel()
-
-#     for k, (ax, name) in enumerate(zip(axs, names)):
-#         d = seq_data[name]
-#         i = nv
-#         print(name, "seq=", d["seq"], "N=", d["N"], "t_min(us)=", np.min(d["t_us"]))
-
-#         ax.errorbar(
-#             d["t_us"], d["y"][i],
-#             yerr=d["yerr"][i],
-#             fmt="o", capsize=2,
-#             label=f"{name} (N={d['N']})"
-#         )
-
-#         ax.set_xscale("log")
-#         ax.grid(True, which="both", ls="--", alpha=0.35)
-#         ax.legend(loc="best", fontsize=9, frameon=False, handlelength=1.2)
-
-#         # keep it tight visually
-#         ax.margins(x=0.02, y=0.10)
-
-#         # hide x tick labels except bottom (since sharex=True)
-#         if k < n - 1:
-#             ax.tick_params(labelbottom=False)
-
-#     axs[-1].set_xlabel(r"Total evolution time $t=2N\tau$ (µs)")
-#     fig.supylabel("Norm. NV⁻ population")
-
-#     # tighten without fighting gridspec hspace
-#     fig.subplots_adjust(top=0.98, bottom=0.06, left=0.12, right=0.98)
-
-#     return fig, axs
-
-# for nv in range(len(ref_nv_list)):
-#     plot_all_sequences_for_nv(nv)
-#     plt.show(block=True)
-
-
-# import numpy as np
-# import matplotlib.pyplot as plt
-
 def plot_all_sequences_for_nv(nv, height_per_ax=3.3):
     names = list(seq_data.keys())
     n = len(names)
 
     fig, axs = plt.subplots(
         nrows=n, ncols=1,
-        figsize=(5, height_per_ax * n),
+        figsize=(4.5, height_per_ax * n),
         sharex=True, sharey=False,
         gridspec_kw={"hspace": 0.00}
     )
