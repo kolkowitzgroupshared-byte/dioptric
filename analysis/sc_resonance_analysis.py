@@ -801,9 +801,19 @@ if __name__ == "__main__":
     
     ####### Iy=0, IZ =0
     ##312 NVs
+    # file_ids = [
+    #     "2026_01_19-10_59_31-johnson-nv0_2025_10_21",
+    # ]
+    
     file_ids = [
-        "2026_01_19-10_59_31-johnson-nv0_2025_10_21",
+        "2026_02_01-20_03_21-johnson-nv0_2025_10_21",
     ]
+    
+    ### new set ov nvs with flexible antenna
+    file_ids = [
+        "2026_02_02-03_48_49-johnson-nv0_2025_10_21",
+    ]
+    
 
     # Load the first dataset as a base
     combined_data = dm.get_raw_data(

@@ -585,6 +585,12 @@ if __name__ == "__main__":
     # file_stem = ["2025_10_28-09_07_10-johnson-nv0_2025_10_21"]
     file_stem = ["2025_11_13-05_41_07-johnson-nv0_2025_10_21"]  ## 2.91, 2.94
     
+    # ##### Testing flexible loop
+    # file_stem = ["2026_02_02-10_41_39-johnson-nv0_2025_10_21",
+    #              "2026_02_02-13_49_00-johnson-nv0_2025_10_21",
+    #              ]  ## 2.77
+    
+    
     data = dm.get_raw_data(file_stem=file_stem, load_npz=True, use_cache=False)
     nv_list = data["nv_list"]
     taus = data["taus"]
