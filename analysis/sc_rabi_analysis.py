@@ -590,7 +590,9 @@ if __name__ == "__main__":
     #              "2026_02_02-13_49_00-johnson-nv0_2025_10_21",
     #              ]  ## 2.77
     # file_stem = ["2026_02_02-17_08_15-johnson-nv0_2025_10_21"]  ## 2.91, 2.94
-    file_stem = ["2026_02_02-21_30_27-johnson-nv0_2025_10_21"]  ## 2.91, 2.94
+    file_stem = ["2026_02_02-21_30_27-johnson-nv0_2025_10_21"]
+    file_stem = ["2026_02_03-04_16_43-johnson-nv0_2025_10_21"] ## 2
+    
     
     data = dm.get_raw_data(file_stem=file_stem, load_npz=True, use_cache=False)
     nv_list = data["nv_list"]
@@ -598,7 +600,7 @@ if __name__ == "__main__":
     counts = np.array(data["counts"])
     sig_counts, ref_counts = counts[0], counts[1]
     avg_counts, avg_counts_ste = widefield.process_counts(
-        nv_list, sig_counts, ref_counts, threshold=False
+        nv_list, sig_counts, ref_counts, threshold=True
     )
     # Select only NVs in indices_113_MHz
     # nv_list   = [nv_list[i] for i in indices_113_MHz]
