@@ -597,7 +597,7 @@ def do_deer_hahn(nv_list):
     num_runs =600
     # num_runs = 2
     # freqs = calculate_freqs(freq_center, freq_range, num_steps)
-    freqs = np.arange(10, 350 + 2, 2)
+    freqs = np.arange(20, 330 + 2, 2)
     # freqs = np.arange(130, 190 + 1, 1)
     freqs = freqs / 1000 
     ##
@@ -679,15 +679,15 @@ def do_rabi(nv_list):
     max_tau = 480 + min_tau
     num_steps = 31
     num_reps = 10
-    num_runs = 200
+    num_runs = 400
     # num_runs = 5
-    # uwave_ind_list = [0, 1]
-    uwave_ind_list = [1]
-    # rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
-    for _ in range(2):
-        rabi.main(
-            nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
-        )
+    uwave_ind_list = [0, 1]
+    # uwave_ind_list = [2]
+    rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
+    # for _ in range(2):
+    #     rabi.main(
+    #         nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
+    #     )
     # uwave_ind_list = [0]
     # rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
     # uwave_ind_list = [1]
@@ -1834,7 +1834,7 @@ if __name__ == "__main__":
         # do_resonance(nv_list)
         # do_optimize_pol_duration(nv_list)
         # do_rabi(nv_list)
-        # do_deer_hahn(nv_list)
+        do_deer_hahn(nv_list)
         # do_deer_hahn_rabi(nv_list)
         # do_resonance_zoom(nv_list)
         # do_spin_echo(nv_list)
