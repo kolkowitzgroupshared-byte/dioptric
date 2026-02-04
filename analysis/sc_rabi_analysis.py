@@ -173,7 +173,7 @@ def plot_rabi_fits(
     num_cols=9,
     period_bin_width=8,  # ns, choose a multiple of 4 if you want
     period_round_to=4,  # ns
-    period_keep_range=(100, 300),  # ns, set to None to disable range filter
+    period_keep_range=(60, 600),  # ns, set to None to disable range filter
 ):
     """
     Plot fitted Rabi oscillations for each NV and summarize Rabi periods.
@@ -590,8 +590,8 @@ if __name__ == "__main__":
     #              "2026_02_02-13_49_00-johnson-nv0_2025_10_21",
     #              ]  ## 2.77
     # file_stem = ["2026_02_02-17_08_15-johnson-nv0_2025_10_21"]  ## 2.91, 2.94
-    file_stem = ["2026_02_02-21_30_27-johnson-nv0_2025_10_21"]
-    file_stem = ["2026_02_03-04_16_43-johnson-nv0_2025_10_21"] ## 2
+    # file_stem = ["2026_02_02-21_30_27-johnson-nv0_2025_10_21"]
+    file_stem = ["2026_02_03-04_16_43-johnson-nv0_2025_10_21"] ##
     
     
     data = dm.get_raw_data(file_stem=file_stem, load_npz=True, use_cache=False)

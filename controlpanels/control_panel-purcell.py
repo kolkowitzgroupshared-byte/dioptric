@@ -594,11 +594,11 @@ def do_deer_hahn(nv_list):
     # num_steps =  48
     # num_reps = 6
     num_reps =2
-    num_runs =600
+    num_runs =300
     # num_runs = 2
     # freqs = calculate_freqs(freq_center, freq_range, num_steps)
-    freqs = np.arange(20, 330 + 2, 2)
-    # freqs = np.arange(130, 190 + 1, 1)
+    # freqs = np.arange(20, 330 + 2, 2)
+    freqs = np.arange(100, 200 + 1, 1)
     freqs = freqs / 1000 
     ##
     # Remove duplicates and sort
@@ -1829,7 +1829,7 @@ if __name__ == "__main__":
 
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_calibrate_iq_delay(nv_list)
-        do_rabi(nv_list)
+        # do_rabi(nv_list)
         # do_power_rabi(nv_list)
         # do_resonance(nv_list)
         # do_optimize_pol_duration(nv_list)

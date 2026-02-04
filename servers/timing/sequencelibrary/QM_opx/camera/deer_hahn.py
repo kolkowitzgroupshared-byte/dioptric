@@ -158,8 +158,8 @@ def get_seq(
     # rf_pi_ns = seq_utils.get_common_duration_cc
     # -------- user knobs --------
     tau_ns = 200          # 15 us (C13 revival target you mentioned)
-    nv_pi_ns = 100           # your NV pi pulse length (digital gate)
-    rf_pi_ns = 48         # your RF pi pulse length (digital gate)
+    nv_pi_ns = 168           # your NV pi pulse length (digital gate)
+    rf_pi_ns = 84         # your RF pi pulse length (digital gate)
     # ----------------------------
 
     tau_cc = _ns_to_cc(tau_ns)
