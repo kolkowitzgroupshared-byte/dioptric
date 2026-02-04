@@ -185,7 +185,7 @@ def plot_nv_resonance(
             elinewidth=1,
             capsize=3,
             markersize=5,
-            label="Data"
+            label="Data",
         )
         # Fit curve
         ax.plot(freqs_dense, fit_fns[nv_ind], "-", color="red", label="Fit")
@@ -204,17 +204,19 @@ def plot_nv_resonance(
     # targets = (2.787527, 2.840802)  # GHz
     targets = (2.7733, 2.8103)  # GHz
     # targets = (2.7230, 2.7470, 2.8290, 2.8467)  # GHz
-    out = classify_nv_by_ms_minus_targets(center_freqs, targets_ghz=targets, tol_mhz=60.0)
+    out = classify_nv_by_ms_minus_targets(
+        center_freqs, targets_ghz=targets, tol_mhz=60.0
+    )
     # return
 
     # Access results:
-    orientation_bins = out['bins']          # dict: {2.76: [nv_idx,...], 2.78: [...], ...}
-    no_match = out['no_match']              # NVs with neither peak near any target
-    multi_match = out['multi_match']        # ambiguous
+    orientation_bins = out["bins"]  # dict: {2.76: [nv_idx,...], 2.78: [...], ...}
+    no_match = out["no_match"]  # NVs with neither peak near any target
+    multi_match = out["multi_match"]  # ambiguous
     print("Bin counts:", {k: len(v) for k, v in orientation_bins.items()})
     print("No match:", no_match, "Multi-match:", multi_match)
     # Print the NV indices per orientation bin
-    for t, idx_list in out['bins'].items():
+    for t, idx_list in out["bins"].items():
         print(f"Target {t:.3f} GHz -> NV indices {idx_list}")
     # return
     ### snrs
@@ -339,7 +341,7 @@ def plot_nv_resonance(
     # filtered_fitted_data = [fit_data[idx] for idx in filtered_indices]
     filtered_fitted_data = [fit_fns[idx] for idx in filtered_indices]
     filtered_avg_snr = [avg_snr[idx] for idx in filtered_indices]
-    
+
     fig_snr, ax_snr = plt.subplots(figsize=(7, 5))
     for nv_idx in range(num_nvs):
         snrs = np.reshape(filtered_avg_snr[nv_idx], len(freqs))
@@ -423,7 +425,7 @@ def plot_nv_resonance(
         sharex=True,
         sharey=False,
         # constrained_layout=True,
-        gridspec_kw={'wspace': 0.0, 'hspace': 0.0},
+        gridspec_kw={"wspace": 0.0, "hspace": 0.0},
     )
     axes_fitting = axes_fitting.flatten()
 
@@ -487,7 +489,7 @@ def plot_nv_resonance(
             ax.grid(True, which="both", linestyle="--", linewidth=0.5)
         else:
             ax.axis("off")
-    
+
     fig_fitting.tight_layout(pad=0.1, w_pad=0.0, h_pad=0.0)
     fig_fitting.text(
         -0.005,
@@ -500,7 +502,7 @@ def plot_nv_resonance(
     # Optional outer labels/title (won't add gaps between subplots)
     # file_name = dm.get_file_name(file_id=file_id)
     plt.subplots_adjust(top=0.98, wspace=0.0, hspace=0.0)
-    fig_fitting.suptitle(f"ESR {file_id}", y=0.995,fontsize=11)
+    fig_fitting.suptitle(f"ESR {file_id}", y=0.995, fontsize=11)
     # plt.tight_layout()
     # now = datetime.now()
     # date_time_str = now.strftime("%Y%m%d_%H%M%S")
@@ -511,10 +513,10 @@ def plot_nv_resonance(
     # plt.close(fig_fitting)
     # return
 
-def classify_nv_by_ms_minus_targets(center_freqs,
-                                    targets_ghz=(2.76, 2.78, 2.82, 2.84),
-                                    tol_mhz=6.0,
-                                    peak_amps=None):
+
+def classify_nv_by_ms_minus_targets(
+    center_freqs, targets_ghz=(2.76, 2.78, 2.82, 2.84), tol_mhz=6.0, peak_amps=None
+):
     """
     Classify NV indices into 4 orientation bins based on which ms=-1 target line
     (2.76, 2.78, 2.82, 2.84 GHz) their *clear* peak is closest to.
@@ -555,7 +557,7 @@ def classify_nv_by_ms_minus_targets(center_freqs,
 
     N = cf.shape[0]
     assignments = np.full(N, np.nan, dtype=float)  # target GHz or nan
-    which_peak  = np.array([None]*N, dtype=object)
+    which_peak = np.array([None] * N, dtype=object)
 
     # If amplitudes provided, use them to prefer the "clearer" peak on ties
     has_amps = peak_amps is not None
@@ -594,35 +596,35 @@ def classify_nv_by_ms_minus_targets(center_freqs,
             # only f1 matches: choose closest target
             j = cand1[np.argmin(d1[cand1])]
             picked = targets[j]
-            picked_peak = 'f1'
+            picked_peak = "f1"
         elif len(cand2) > 0 and len(cand1) == 0:
             # only f2 matches
             j = cand2[np.argmin(d2[cand2])]
             picked = targets[j]
-            picked_peak = 'f2'
+            picked_peak = "f2"
         else:
             # both peaks have matches (rare). Prefer the closest-in-frequency;
             # on tie, prefer higher amplitude if provided.
             j1 = cand1[np.argmin(d1[cand1])]
             j2 = cand2[np.argmin(d2[cand2])]
             if d1[j1] < d2[j2]:
-                picked, picked_peak = targets[j1], 'f1'
+                picked, picked_peak = targets[j1], "f1"
             elif d2[j2] < d1[j1]:
-                picked, picked_peak = targets[j2], 'f2'
+                picked, picked_peak = targets[j2], "f2"
             else:
                 # tie in proximity; use amplitude if available
                 if has_amps and pa[i, 0] != pa[i, 1]:
                     if pa[i, 0] > pa[i, 1]:
-                        picked, picked_peak = targets[j1], 'f1'
+                        picked, picked_peak = targets[j1], "f1"
                     else:
-                        picked, picked_peak = targets[j2], 'f2'
+                        picked, picked_peak = targets[j2], "f2"
                 else:
                     # still tied → mark multi and pick arbitrarily the lower-frequency peak
                     multi_match.append(i)
                     if f1 <= f2:
-                        picked, picked_peak = targets[j1], 'f1'
+                        picked, picked_peak = targets[j1], "f1"
                     else:
-                        picked, picked_peak = targets[j2], 'f2'
+                        picked, picked_peak = targets[j2], "f2"
 
         if picked is not None:
             assignments[i] = float(picked)
@@ -630,12 +632,12 @@ def classify_nv_by_ms_minus_targets(center_freqs,
             bins[float(picked)].append(i)
 
     return {
-        'bins': bins,
-        'assignments': assignments,   # in GHz
-        'which_peak': which_peak,     # 'f1'/'f2'/None
-        'no_match': no_match,
-        'multi_match': multi_match,
-        'units': units,
+        "bins": bins,
+        "assignments": assignments,  # in GHz
+        "which_peak": which_peak,  # 'f1'/'f2'/None
+        "no_match": no_match,
+        "multi_match": multi_match,
+        "units": units,
     }
 
 
@@ -685,13 +687,13 @@ if __name__ == "__main__":
     file_ids = [
         "2025_10_09-09_29_58-rubin-nv0_2025_09_08",
     ]
-    
+
     ## 118 nVs
     # file_ids = [
     #     "2025_10_17-23_28_58-rubin-nv0_2025_09_08",
     # ]
-    
-    #====================johnson sample mounts=========================
+
+    # ====================johnson sample mounts=========================
     ## 312 nVs
     # file_ids = [
     #     "2025_10_23-08_33_06-johnson-nv0_2025_10_21",
@@ -756,7 +758,7 @@ if __name__ == "__main__":
     # file_ids = [
     #     "2025_11_09-10_40_49-johnson-nv0_2025_10_21",
     # ]
-    
+
     ####### Iy=3A, IZ = -3A
     # ## 312 nVs
     # file_ids = [
@@ -766,13 +768,13 @@ if __name__ == "__main__":
     # file_ids = [
     #     "2025_11_21-06_06_26-johnson-nv0_2025_10_21",
     # ]
-    
+
     ####### Iy=3A, IZ =3A
     ## 312 nVs
     # file_ids = [
     #     "2025_11_27-11_18_26-johnson-nv0_2025_10_21",
     # ]
-    
+
     ####### Iy=3A, IZ =0
     ## 312 nVs
     # file_ids = [
@@ -782,7 +784,7 @@ if __name__ == "__main__":
     # file_ids = [
     #     "2025_11_29-04_02_02-johnson-nv0_2025_10_21",
     # ]
-    
+
     ####### Iy=0, IZ =-3A
     ## 312 nVs
     # file_ids = [
@@ -792,23 +794,22 @@ if __name__ == "__main__":
     # file_ids = [
     #     "2025_12_20-06_01_33-johnson-nv0_2025_10_21",
     # ]
-    
+
     ####### Iy=0, IZ =0
     ##204 NVs
     # file_ids = [
     #     "2026_01_14-08_06_55-johnson-nv0_2025_10_21",
     # ]
-    
+
     ####### Iy=0, IZ =0
     ##312 NVs
     # file_ids = [
     #     "2026_01_19-10_59_31-johnson-nv0_2025_10_21",
     # ]
-    
-    file_ids = [
-        "2026_02_01-20_03_21-johnson-nv0_2025_10_21",
-    ]
-    
+    # file_ids = [
+    #     "2026_02_01-20_03_21-johnson-nv0_2025_10_21",
+    # ]
+
     ### new set ov nvs with flexible antenna
     file_ids = [
         "2026_02_02-03_48_49-johnson-nv0_2025_10_21",
@@ -871,7 +872,7 @@ if __name__ == "__main__":
                 new_ref_counts[:, :, :, 0::2] = new_ref_counts_0
                 new_ref_counts[:, :, :, 1::2] = new_ref_counts_1
 
-                # Append new data 
+                # Append new data
                 combined_sig_counts = np.append(
                     combined_sig_counts, new_sig_counts, axis=1
                 )
@@ -901,6 +902,5 @@ if __name__ == "__main__":
         )
     else:
         print("No valid data available for plotting.")
- 
-    
+
     kpl.show(block=True)

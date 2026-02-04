@@ -474,6 +474,7 @@ def fit_bimodal_histogram(
 import numpy as np
 import warnings
 
+
 def determine_threshold(
     popt,
     prob_dist: "ProbDist",
@@ -534,7 +535,9 @@ def determine_threshold(
 
     # If means are extremely close (or weird), ensure at least one option
     if thresh_options.size == 0:
-        thresh_options = np.array([(mean_counts_dark + mean_counts_bright) / 2.0], dtype=float)
+        thresh_options = np.array(
+            [(mean_counts_dark + mean_counts_bright) / 2.0], dtype=float
+        )
 
     # ---------- Search for best threshold ----------
     best_fid = -np.inf
@@ -542,8 +545,12 @@ def determine_threshold(
 
     for val in thresh_options:
         try:
-            dark_left_prob = float(single_mode_cdf(val, *popt[1 : 1 + num_single_mode_params]))
-            bright_left_prob = float(single_mode_cdf(val, *popt[1 + num_single_mode_params :]))
+            dark_left_prob = float(
+                single_mode_cdf(val, *popt[1 : 1 + num_single_mode_params])
+            )
+            bright_left_prob = float(
+                single_mode_cdf(val, *popt[1 + num_single_mode_params :])
+            )
         except Exception:
             continue
 
@@ -572,7 +579,9 @@ def determine_threshold(
 
     if do_print:
         if np.isfinite(best_fid):
-            print(f"Optimum readout fidelity {round(best_fid, 3)} achieved at threshold {best_thresh}")
+            print(
+                f"Optimum readout fidelity {round(best_fid, 3)} achieved at threshold {best_thresh}"
+            )
         else:
             print(f"Using fallback threshold {best_thresh} (fidelity unavailable)")
 
