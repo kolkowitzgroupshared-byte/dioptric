@@ -616,18 +616,17 @@ def do_deer_hahn(nv_list):
         )
 
 def do_deer_hahn_rabi(nv_list):
-    min_tau = 200
-    max_tau = 8000 + min_tau
-    num_steps = 51
+    min_tau = 16
+    max_tau = 996 
+    num_steps = 50
     num_reps = 5
-    num_runs = 800
-    # num_runs = 5
+    num_runs = 200
     uwave_ind_list = [0, 1, 2]    
     deer_hahn_rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
-    # for _ in range(2):
-    #     rabi.main(
-    #         nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
-    #     )
+    for _ in range(3):
+        rabi.main(
+            nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
+        )
     # uwave_ind_list = [0]
     # rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
     # uwave_ind_list = [1]
@@ -1834,8 +1833,8 @@ if __name__ == "__main__":
         # do_resonance(nv_list)
         # do_optimize_pol_duration(nv_list)
         # do_rabi(nv_list)
-        do_deer_hahn(nv_list)
-        # do_deer_hahn_rabi(nv_list)
+        # do_deer_hahn(nv_list)
+        do_deer_hahn_rabi(nv_list)
         # do_resonance_zoom(nv_list)
         # do_spin_echo(nv_list)
         # do_spin_echo_1(nv_list)

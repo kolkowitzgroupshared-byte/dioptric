@@ -431,6 +431,10 @@ if __name__ == "__main__":
     # file_id = ["2026_01_15-04_02_02-johnson-nv0_2025_10_21"]
 
     file_id = ["2026_01_18-04_57_43-johnson-nv0_2025_10_21"]
+    
+    
+    file_id = ["2026_02_03-21_20_51-johnson-nv0_2025_10_21",
+               "2026_02_04-02_20_43-johnson-nv0_2025_10_21"]
 
     data = dm.get_raw_data(file_stem=file_id, load_npz=True, use_cache=True)
 
@@ -469,29 +473,26 @@ if __name__ == "__main__":
     # Loop through NVs one by one
     # indices_113_MHz = [0, 1, 3, 6, 10, 14, 16, 17, 19, 23, 24, 25, 26, 27, 32, 33, 34, 35, 37, 38, 41, 49, 50, 51, 53, 54, 55, 60, 62, 63, 64, 66, 67, 68, 70, 72, 73, 74, 75, 76, 78, 80, 81, 82, 83, 84, 86, 88, 90, 92, 93, 95, 96, 99, 100, 101, 102, 103, 105, 108, 109, 111, 113, 114]
     selected_indices = list(range(num_nvs))
-    # for nv_i in selected_indices:
-    #     fig, ax = plt.subplots()
-    #     ax.errorbar(
-    #         freqs_on,
-    #         avg_contrast[nv_i],
-    #         yerr=avg_contrast_ste[nv_i],
-    #         marker="o",
-    #         ms=4,
-    #         lw=1,
-    #         color="C0",
-    #     )
-    #     ax.set_title(f"NV {nv_i} DEER Contrast")
-    #     ax.set_xlabel("RF frequency (GHz)")
-    #     ax.set_ylabel("Contrast")
+    for nv_i in selected_indices:
+        fig, ax = plt.subplots()
+        ax.errorbar(
+            freqs_on,
+            avg_contrast[nv_i],
+            yerr=avg_contrast_ste[nv_i],
+            marker="o",
+            ms=4,
+            lw=1,
+            color="C0",
+        )
+        ax.set_title(f"NV {nv_i} DEER Contrast")
+        ax.set_xlabel("RF frequency (GHz)")
+        ax.set_ylabel("Contrast")
 
-    #     plt.show(block=True)
+        plt.show(block=True)
 
     # ----- Aggregate + plot for multiple metrics in a loop -----
     metrics = {
         "contrast": avg_contrast,  # (NV, Nf)
-        # "sig_counts": avg_sig_counts,      # (NV, Nf)
-        # "ref_counts": avg_ref_counts,      # (NV, Nf)
-        # "snr":        avg_snr              # (NV, Nf)
     }
 
     def robust_stack(arr_2d, idx_list):

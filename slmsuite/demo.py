@@ -238,7 +238,7 @@ else:
     # print("Corresponding red coordinates:", new_red_coord)
 # sys.exit()
 
-min_tau = 200  # ns
+min_tau = 16  # ns
 max_tau = 100e3  # fallback if no revival_period given
 taus = []
 
@@ -275,8 +275,8 @@ def generate_divisible_by_4(min_val, max_val, num_steps):
 
 # Example Usage
 min_duration = 16
-max_duration = 210
-num_steps = 18
+max_duration = 1000
+num_steps = 51
 
 step_values = generate_divisible_by_4(min_duration, max_duration, num_steps)
 print(step_values)
