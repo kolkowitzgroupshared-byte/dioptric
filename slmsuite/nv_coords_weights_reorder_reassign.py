@@ -394,7 +394,7 @@ if __name__ == "__main__":
     remove_outliers_flag = False  # Set this flag to enable/disable outlier removal
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
-        file_stem="2026_01_31-19_25_16-johnson-nv0_2025_10_21", load_npz=True
+        file_stem="2026_02_07-11_52_34-johnson-nv0_2025_10_21", load_npz=True
         # file_stem="2026_01_31-18_06_49-combined_image_array", load_npz=True
     )
     img_array = np.array(data["ref_img_array"])
@@ -409,7 +409,7 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_230nvs_reordered.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_223nvs_reordered.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz"
-        file_path="slmsuite/nv_blob_detection/nv_blob_292nvs.npz"
+        file_path="slmsuite/nv_blob_detection/nv_blob_243nvs_reordered.npz"
     )
     # Convert coordinates to a standard format (lists of lists)
     # nv_coordinates = [[coord[0] - 3, coord[1] + 3] for coord in nv_coordinates]
@@ -555,9 +555,14 @@ if __name__ == "__main__":
     #     i for i, val in enumerate(prep_fidelity_list)
     #     if (val is None) or (isinstance(val, (int, float)) and not math.isnan(val) and val >= 0.5)
     # ]
+    
+    indices_212_MHz = [0, 1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 15, 17, 19, 24, 27, 29, 30, 31, 32, 34, 35, 37, 40, 43, 45, 46, 47, 49, 50, 57, 59, 62, 65, 72, 73, 77, 78, 84, 85, 86, 88, 91, 96, 97, 98, 105, 106, 107, 109, 111, 113, 115, 117, 119, 120, 121, 122, 124, 128, 129, 133, 135, 136, 139, 141, 148, 156, 157, 158, 159, 161, 165, 167, 169, 171, 172, 178, 179, 181, 183, 187, 190, 191, 193, 202, 203, 204, 206, 207, 208, 209, 213, 218, 219, 221, 222, 224, 225, 227, 228, 230, 231, 232, 234, 235, 237, 238, 240, 241]
+    indices_135_MHz = [7, 12, 16, 18, 20, 21, 22, 23, 25, 26, 28, 33, 36, 38, 39, 41, 44, 48, 51, 53, 54, 55, 56, 58, 60, 61, 63, 64, 66, 67, 68, 70, 71, 74, 75, 76, 79, 82, 89, 90, 92, 94, 99, 100, 101, 104, 108, 110, 114, 116, 123, 126, 127, 132, 134, 137, 138, 140, 142, 143, 146, 147, 149, 150, 151, 153, 154, 155, 160, 162, 163, 164, 166, 168, 173, 174, 175, 176, 177, 182, 192, 194, 196, 197, 199, 201, 205, 210, 211, 212, 215, 216, 217, 220, 226, 233, 236, 239, 242]
+    include_indices = np.sort(indices_212_MHz + indices_135_MHz)
+   
 
     print(np.sort(list(include_indices)))
-
+    # sys.exit()
     indices = np.sort(list(include_indices))
     print(", ".join(str(i) for i in indices))
     # print("[" + ", ".join(map(str, np.sort(list(include_indices)))) + "]")
@@ -566,12 +571,12 @@ if __name__ == "__main__":
     # nv_powers = [val for ind, val in enumerate(nv_powers) if ind not in drop_indices]
     # print(len(include_indices))
     # fmt: on
-    filtered_reordered_coords = [filtered_reordered_coords[i] for i in include_indices]
-    print(f"len filtered_reordered_coords: {len(filtered_reordered_coords)}")
+    # filtered_reordered_coords = [filtered_reordered_coords[i] for i in include_indices]
+    # print(f"len filtered_reordered_coords: {len(filtered_reordered_coords)}")
     # # # select_half_left_side_nvs_and_plot(nv_coordinates_filtered)
-    spot_weights = np.array(
-        [weight for i, weight in enumerate(spot_weights) if i in include_indices]
-    )
+    # spot_weights = np.array(
+    #     [weight for i, weight in enumerate(spot_weights) if i in include_indices]
+    # )
     # print(f"len spot_weights: {len(spot_weights)}")
     # filtered_pol_durs = [pol_duration_list[i] for i in include_indices]
     # filtered_scc_durs = [scc_duration_list[i] for i in include_indices]
@@ -586,7 +591,8 @@ if __name__ == "__main__":
     # aom_voltage = 0.2861
     # aom_voltage = 0.3084 ### 223NVs
     # aom_voltage = 0.299064 ###204NVs
-    aom_voltage = 0.3707 ### 279NVs
+    # aom_voltage = 0.3707 ### 279NVs
+    aom_voltage = 0.3568 ### 279NVs
     # a, b, c = [3.7e5, 6.97, 8e-14]
     # a, b, c = 161266.751, 6.617, -19.492
     a, b, c = 1.5133e04, 2.6976, -38.63  # UPDATED 2025-09-17
@@ -696,11 +702,11 @@ if __name__ == "__main__":
     # spot_weights = non_linear_weights(filtered_intensities, alpha=0.9)
 
     # # Save the filtered results
-    save_results(
-        filtered_reordered_coords,
-        filtered_reordered_spot_weights,
-        filename="slmsuite/nv_blob_detection/nv_blob_243nvs_reordered.npz",
-    )
+    # save_results(
+    #     filtered_reordered_coords,
+    #     filtered_reordered_spot_weights,
+    #     filename="slmsuite/nv_blob_detection/nv_blob_210nvs_reordered.npz",
+    # )
 
     # # Plot the original image with circles around each NV
     fig, ax = plt.subplots()

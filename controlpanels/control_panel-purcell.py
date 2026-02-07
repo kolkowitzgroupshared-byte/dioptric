@@ -583,51 +583,76 @@ def do_resonance(nv_list):
         num_reps,
         num_runs,
         freqs=freqs,
-        uwave_ind_list=[1],
+        uwave_ind_list=[2],
     )
     # for _ in range(2):
     #     resonance.main(nv_list, num_steps, num_reps, num_runs, freqs=freqs)
 
+# def do_deer_hahn(nv_list):
+#     # freq_center = 0.174
+#     # freq_range = 0.024
+#     # num_steps =  48
+#     # num_reps = 6
+#     num_reps =2
+#     num_runs =300
+#     # num_runs = 2
+#     # freqs = calculate_freqs(freq_center, freq_range, num_steps)
+#     # freqs = np.arange(20, 330 + 2, 2)
+#     freqs = np.arange(40, 300 + 1, 1)
+#     freqs = freqs / 1000 
+#     # Remove duplicates and sort
+#     freqs = sorted(set(freqs))
+#     num_steps = len(freqs)
+#     for _ in range(2):
+#         do_widefield_image_sample(nv_sig, 50)
+#         deer_hahn.main(
+#             nv_list, 
+#             num_steps,
+#             num_reps,
+#             num_runs,
+#             freqs=freqs,
+#             uwave_ind_list=[0,1,2],
+#         )
+        
 def do_deer_hahn(nv_list):
-    freq_center = 0.174
-    freq_range = 0.024
-    # num_steps =  48
-    # num_reps = 6
-    num_reps =2
-    num_runs =300
-    # num_runs = 2
-    # freqs = calculate_freqs(freq_center, freq_range, num_steps)
-    # freqs = np.arange(20, 330 + 2, 2)
-    freqs = np.arange(100, 200 + 1, 1)
-    freqs = freqs / 1000 
-    ##
-    # Remove duplicates and sort
-    freqs = sorted(set(freqs))
-    num_steps = len(freqs)
+    num_reps = 1
+    num_runs = 600
+    bands_mhz = [
+        (76, 94, 0.2),  
+        (154, 176, 0.2),
+        (188, 210, 0.2),
+        (248, 276, 0.2),
+    ]
     for _ in range(2):
         do_widefield_image_sample(nv_sig, 50)
-        deer_hahn.main(
-            nv_list, 
-            num_steps,
-            num_reps,
-            num_runs,
-            freqs=freqs,
-            uwave_ind_list=[0,1,2],
-        )
+
+        for f0, f1, df in bands_mhz:
+            freqs = np.arange(f0, f1 + df, df) / 1000  # MHz -> GHz
+            freqs = sorted(set(freqs))
+            num_steps = len(freqs)
+
+            deer_hahn.main(
+                nv_list,
+                num_steps,
+                num_reps,
+                num_runs,
+                freqs=freqs,
+                uwave_ind_list=[0, 1, 2],
+            )
+
 
 def do_deer_hahn_rabi(nv_list):
-    min_tau = 200
-    max_tau = 8000 + min_tau
-    num_steps = 51
+    min_tau = 16
+    max_tau = 996 
+    num_steps = 50
     num_reps = 5
-    num_runs = 800
-    # num_runs = 5
+    num_runs = 200
     uwave_ind_list = [0, 1, 2]    
     deer_hahn_rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
-    # for _ in range(2):
-    #     rabi.main(
-    #         nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
-    #     )
+    for _ in range(3):
+        rabi.main(
+            nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
+        )
     # uwave_ind_list = [0]
     # rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
     # uwave_ind_list = [1]
@@ -1580,7 +1605,7 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz",
         file_path="slmsuite/nv_blob_detection/nv_blob_243nvs_reordered.npz",
     ).tolist()
-    # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
+    # pixel_coords_list = [[124.195, 127.341],[16.501, 46.951],[146.942, 239.125],[206.995, 41.423]]
     green_coords_list = [
         [
             round(coord, 3)
@@ -1612,8 +1637,11 @@ if __name__ == "__main__":
 
     # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
     # green_coords_list = [[107.871, 108.068],[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
-    # red_coords_list = [    [73.256, 72.339],[82.15, 82.282],[76.463, 62.52],[63.114, 80.587]]
-
+    # red_coords_list = [[73.256, 72.339],[82.15, 82.282],[76.463, 62.52],[63.114, 80.587]]
+    
+    # pixel_coords_list = [[124.195, 127.341],[16.501, 46.951],[146.942, 239.125],[206.995, 41.423]]
+    # green_coords_list = [[107.852, 108.146], [119.095, 118.486],[106.576, 95.231],[97.387, 116.969]]
+    # red_coords_list = [[73.238, 72.401],[82.064, 81.382],[72.649, 61.838],[64.373, 79.036]]
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
     # fmt: off
@@ -1738,7 +1766,7 @@ if __name__ == "__main__":
         # )
 
         do_compensate_for_drift(nv_sig)
-        do_widefield_image_sample(nv_sig, 50)
+        # do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list:
@@ -1799,7 +1827,9 @@ if __name__ == "__main__":
 
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
-        # do_optimize_readout_amp(nv_list)
+        do_optimize_readout_amp(nv_list)
+        do_optimize_pol_amp(nv_list)
+        
         # do_optimize_readout_duration(nv_list)
         # optimize_readout_amp_and_duration(nv_list) 
         # do_optimize_spin_pol_amp(nv_list)
@@ -1834,7 +1864,7 @@ if __name__ == "__main__":
         # do_resonance(nv_list)
         # do_optimize_pol_duration(nv_list)
         # do_rabi(nv_list)
-        do_deer_hahn(nv_list)
+        # do_deer_hahn(nv_list)
         # do_deer_hahn_rabi(nv_list)
         # do_resonance_zoom(nv_list)
         # do_spin_echo(nv_list)

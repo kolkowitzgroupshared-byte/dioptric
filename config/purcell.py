@@ -33,9 +33,9 @@ green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
 
-calibration_coords_pixel = [[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
-calibration_coords_green = [[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
-calibration_coords_red = [[82.15, 82.282],[76.463, 62.52],[63.114, 80.587]]
+calibration_coords_pixel = [[16.501, 46.951],[146.942, 239.125],[206.995, 41.423]]
+calibration_coords_green = [[119.095, 118.486],[106.576, 95.231],[97.387, 116.969]]
+calibration_coords_red = [[82.064, 81.382],[72.649, 61.838],[64.373, 79.036]]
 
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -161,8 +161,8 @@ config |= {
             2: {
                 "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 11.0,
-                # "frequency": 2.7700,
-                "frequency": 0.145,
+                "frequency": 2.7700,
+                # "frequency": 0.145,
                 "rabi_period": 100,
                 "pi_pulse": 48,
                 "pi_on_2_pulse": 24,
@@ -963,7 +963,7 @@ opx_config = {
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2367}, #136NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2267}, #118NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.34947}, ## 312NV johnson
-        "yellow_charge_readout": {"type": "constant", "sample": 0.3568}, ## 230NV johnson
+        "yellow_charge_readout": {"type": "constant", "sample": 0.3300}, ## 230NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3084}, ## 223NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
         "yellow_spin_pol": {"type": "constant", "sample": 0.31510},

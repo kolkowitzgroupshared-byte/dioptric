@@ -87,14 +87,12 @@ def create_mean_figure(data):
 
     ax.legend()
 
-
 def create_raw_data_figure(nv_list, taus, counts, counts_ste):
     fig, ax = plt.subplots()
     widefield.plot_raw_data(ax, nv_list, taus, counts, counts_ste)
     ax.set_xlabel("Pulse duration (ns)")
     ax.set_ylabel("Fraction in NV$^{-}$")
     return fig
-
 
 def create_fit_figure(nv_list, taus, counts, counts_ste, norms):
     ### Do the fitting

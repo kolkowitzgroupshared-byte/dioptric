@@ -172,37 +172,37 @@ def plot_nv_resonance(
     ax_snr.tick_params(axis="both", labelsize=14)
     plt.show(block=True)
     # # # Set plot style
-    for nv_ind in range(num_nvs):
-        fig, ax = plt.subplots(figsize=(8, 5))
-        # Data points with error bars
-        ax.errorbar(
-            freqs,
-            avg_counts[nv_ind],
-            yerr=avg_counts_ste[nv_ind],
-            fmt="o",
-            color="steelblue",
-            ecolor="gray",
-            elinewidth=1,
-            capsize=3,
-            markersize=5,
-            label="Data",
-        )
-        # Fit curve
-        ax.plot(freqs_dense, fit_fns[nv_ind], "-", color="red", label="Fit")
-        # Labels and style
-        ax.set_xlabel("Frequency (GHz)")
-        ax.set_ylabel("Normalized NV Population")
-        ax.set_title(f"NV Index: {nv_ind}")
-        ax.grid(True, linestyle="--", alpha=0.6)
-        ax.legend()
-        plt.show(block=True)
+    # for nv_ind in range(num_nvs):
+    #     fig, ax = plt.subplots(figsize=(8, 5))
+    #     # Data points with error bars
+    #     ax.errorbar(
+    #         freqs,
+    #         avg_counts[nv_ind],
+    #         yerr=avg_counts_ste[nv_ind],
+    #         fmt="o",
+    #         color="steelblue",
+    #         ecolor="gray",
+    #         elinewidth=1,
+    #         capsize=3,
+    #         markersize=5,
+    #         label="Data",
+    #     )
+    #     # Fit curve
+    #     ax.plot(freqs_dense, fit_fns[nv_ind], "-", color="red", label="Fit")
+    #     # Labels and style
+    #     ax.set_xlabel("Frequency (GHz)")
+    #     ax.set_ylabel("Normalized NV Population")
+    #     ax.set_title(f"NV Index: {nv_ind}")
+    #     ax.grid(True, linestyle="--", alpha=0.6)
+    #     ax.legend()
+    #     plt.show(block=True)
 
     # ----------------- Example of use in your pipeline -----------------
     # center_freqs is your list of (f1, f2) from the fit_results
     # If you can also return (amp1, amp2) per NV from the fit, pass as peak_amps=...
     # targets = (2.766, 2.786, 2.82, 2.840)  # GHz
     # targets = (2.787527, 2.840802)  # GHz
-    targets = (2.7733, 2.8103)  # GHz
+    targets = (2.7700, 2.8103)  # GHz
     # targets = (2.7230, 2.7470, 2.8290, 2.8467)  # GHz
     out = classify_nv_by_ms_minus_targets(
         center_freqs, targets_ghz=targets, tol_mhz=60.0
@@ -258,11 +258,11 @@ def plot_nv_resonance(
     # filter_nvs = False
     if filter_nvs:
         # target_peak_values = [0.113, 0.217]
-        target_peak_values = [0.077, 0.176]
+        # target_peak_values = [0.077, 0.176]
         # target_peak_values = [0.113, 0.264]
         # target_peak_values = [0.134, 0.326]
-        target_peak_values = [0.138, 0.207]
-        tolerance = 0.01
+        target_peak_values = [0.135, 0.212]
+        tolerance = 0.015
         # Filter indices based on proximity to target peak differences
         filtered_indices = [
             idx
@@ -801,7 +801,7 @@ if __name__ == "__main__":
     #     "2026_01_14-08_06_55-johnson-nv0_2025_10_21",
     # ]
 
-    ####### Iy=0, IZ =0
+    
     ##312 NVs
     # file_ids = [
     #     "2026_01_19-10_59_31-johnson-nv0_2025_10_21",
@@ -809,11 +809,17 @@ if __name__ == "__main__":
     # file_ids = [
     #     "2026_02_01-20_03_21-johnson-nv0_2025_10_21",
     # ]
-
+    
+    ####### Iy=0, IZ =0
     ### new set ov nvs with flexible antenna
+    # file_ids = [
+    #     "2026_02_02-03_48_49-johnson-nv0_2025_10_21",
+    # ]
+    
     file_ids = [
-        "2026_02_02-03_48_49-johnson-nv0_2025_10_21",
+        "2026_02_07-04_26_34-johnson-nv0_2025_10_21",
     ]
+
 
     # Load the first dataset as a base
     combined_data = dm.get_raw_data(
