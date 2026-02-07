@@ -20,16 +20,27 @@ import websocket
 
 from majorroutines.spectroscopy import (
     singlet_search,
-    singlet_search_1043,
+    # singlet_search_1043,
     singlet_search_with_etalon,
-    singlet_search_with_spect,
+    # singlet_search_with_spect,
     singlet_search_with_spect_binned,
+    th_stationary_count,
 )
 
 # from majorroutines import targeting
 from utils import common
 from utils import kplotlib as kpl
 from utils import tool_belt as tb
+from utils.constants import Axes, CoordsKey, NVSig, VirtualLaserKey
+
+
+def do_stationary_count(nv_sig, disable_opt=None):
+    run_time = 3 * 60 * 10**9  # ns
+    th_stationary_count.main(
+        nv_sig,
+        run_time,
+        disable_opt=disable_opt,
+    )
 
 
 def do_singlet_search():
@@ -370,12 +381,53 @@ def test_multimeter_avg():
 #     pump.
 
 
+def do_pulse_streamer_constant(digital_channels=(2,), analog0=None, analog1=None):
+    pulse_streamer = tb.get_server_pulse_streamer()
+    # Build args for the LabRAD setting
+    digital_channels = [int(ch) for ch in digital_channels]
+
+    analog_channels = []
+    analog_voltages = []
+    if analog0 is not None:
+        analog_channels.append(0)
+        analog_voltages.append(float(analog0))
+    if analog1 is not None:
+        analog_channels.append(1)
+        analog_voltages.append(float(analog1))
+
+    # Turn on constant outputs
+    pulse_streamer.constant(digital_channels, analog_channels, analog_voltages)
+
+    try:
+        input("Constant state applied. Press Enter to stop...")
+    finally:
+        # Safest cleanup: forces final + sets everything off
+        pulse_streamer.reset()
+
+
 if __name__ == "__main__":
-    kpl.init_kplotlib()
+    # 5kpl.init_kplotlib()
 
     email_recipient = ["mccambria@berkeley.edu", "jennychen42@berkeley.edu"]
     do_email = False
+
+    # return
+    th_sig = NVSig(
+        name="Th_Sample_1",
+        disable_opt=False,
+        disable_z_opt=True,
+        expected_counts=13,
+        pulse_durations={
+            VirtualLaserKey.IMAGING: int(10e6),  # readout is in ns (5e6 = 5ms)
+        },
+    )
+
+    th_sig.expected_counts = None  # raw counts, none when unknown
+
     try:
+        # do_pulse_streamer_constant(digital_channels=(0,))
+        # ^leave the comma at the end or it will complain
+        do_stationary_count(th_sig, disable_opt=True)
         # test_shutter()
         # test_multimeter()
         # test_multimeter_avg()
@@ -392,7 +444,7 @@ if __name__ == "__main__":
         # do_singlet_search_with_etalon()
         # do_singlet_search_with_etalon_1()
         # do_singlet_search_with_etalon_2()
-        do_singlet_search_1043()
+        # do_singlet_search_1043()
         # pass
 
     except Exception as exc:

@@ -863,7 +863,7 @@ if __name__ == "__main__":
 
         # region Stationary count
         # do_stationary_count(nv_sig, disable_opt=True) #Note there is a slow response time w/ the APD
-        # do_stationary_count(nv_sig, disable_opt=True, nv_minus_initialization=True)
+        do_stationary_count(nv_sig, disable_opt=True, nv_minus_initialization=True)
         # do_stationary_count(nv_sig, disable_opt=True, nv_zero_initialization=True)
         # endregion Stationary count
  

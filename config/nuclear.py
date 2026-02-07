@@ -23,13 +23,20 @@ from utils.constants import (
 
 home = Path.home()
 
+
+green_laser = "laser_COBO_515"  # make labrad server for COBOLT green laser
+tisapph_laser = ""  # fill this in later (labrad server for Tisapph)
+thor_galvos = "pos_xy_THOR_gvs212"
+cryo_piezo = "pos_xyz_ATTO_piezos"
+
 # region Base config
 # Add on to the default config
 config |= {
     ###
     "apd_indices": [0],  # APD indices for the tagger
     "count_format": CountFormat.RAW,
-    "collection_mode": CollectionMode.CAMERA,
+    # "collection_mode": CollectionMode.CAMERA,
+    "collection_mode": CollectionMode.COUNTER,
     # "charge_state_estimation_mode": ChargeStateEstimationMode.MLE,
     "charge_state_estimation_mode": ChargeStateEstimationMode.THRESHOLDING,
     "disable_z_drift_compensation": False,
@@ -56,6 +63,7 @@ config |= {
         "filter_slider_THOR_ell9k_com": "",
         "pulse_gen_SWAB_82_1_ip_1": "192.168.0.111",
         "pulse_gen_SWAB_82_2_ip_2": "192.168.0.160",
+        "tagger_SWAB_20_1_serial": "1740000JEH",
     },
     ###
     "Microwaves": {
@@ -70,10 +78,7 @@ config |= {
         "VirtualSigGens": {
             0: {
                 "physical_name": "sig_gen_STAN_sg394",
-                # "uwave_power": 2.3,
                 "uwave_power": 8.7,
-                # "frequency": 2.779138,  # rubin shallow NVs O1 ms=-1
-                # "frequency": 2.909381,  # rubin shallow NV O3 ms=+1
                 "frequency": 2.730700,
                 "rabi_period": 128,
             },
@@ -81,23 +86,61 @@ config |= {
             1: {
                 "physical_name": "sig_gen_STAN_sg394_2",
                 "uwave_power": 8.7,
-                # "uwave_power": 9.6,
-                # "frequency": 2.779138,   # rubin shallow NVs O1 ms=-1
-                # "frequency": 2.964545,  # rubin shallow NV O1 ms=+1
-                # "frequency": 2.842478,  # rubin shallow NV O3 ms=-1
                 "frequency": 2.730700,  # lower esr peak for both orientation
                 "rabi_period": 208,
                 "pi_pulse": 104,
                 "pi_on_2_pulse": 56,
-                # "rabi_period": 52,
             },
         },
     },
     ###
-    ###
     "Optics": {
-        "PhysicalLasers": {},
-        "VirtualLasers": {},
+        "PhysicalLasers": {
+            green_laser: {
+                "delay": 0,
+                "mod_mode": ModMode.DIGITAL,
+                "positioner": CoordsKey.PIXEL,
+            },
+            tisapph_laser: {
+                "delay": 0,
+                "mod_mode": ModMode.DIGITAL,
+                "positioner": CoordsKey.PIXEL,
+            },
+        },
+        "VirtualLasers": {
+            # LaserKey.IMAGING: {"physical_name": green_laser, "duration": 50e6},
+            VirtualLaserKey.IMAGING: {
+                # "physical_name": green_laser,
+                "physical_name": green_laser,  # this is the laser that appears on the imaging APD scan
+                "duration": 12e6,  # this duration appears on the imaging APD scan, this value is overwritten?
+            },
+            VirtualLaserKey.SINGLET_DRIVE: {
+                "physical_name": tisapph_laser,
+                "duration": 300,  # this is a placeholder
+            },
+            VirtualLaserKey.SPIN_READOUT: {
+                "physical_name": green_laser,
+                "duration": 300,
+            },
+            # LaserKey.CHARGE_POL: {"physical_name": green_laser, "duration": 10e3},
+            VirtualLaserKey.CHARGE_POL: {
+                "physical_name": green_laser,
+                "duration": 1e3,  # Works better for Deep NVs (Johnson)
+            },
+            # LaserKey.CHARGE_POL: {"physical_name": green_laser, "duration": 60},
+            VirtualLaserKey.SPIN_POL: {
+                "physical_name": green_laser,
+                "duration": 10e3,
+            },
+            VirtualLaserKey.SHELVING: {
+                "physical_name": green_laser,
+                "duration": 60,
+            },
+        },
+        #
+        "PulseSettings": {
+            "scc_shelving_pulse": False,  # Example setting
+        },  # Whether or not to include a shelving pulse in SCC
     },
     ###
     "Servers": {  # Bucket for miscellaneous servers not otherwise listed above
@@ -109,6 +152,8 @@ config |= {
         "slider_3": "filter_slider_THOR_ell9k_6",
         "power_meter": "power_meter_THOR_pm100d",
         "rotation_mount": "rotation_mount_THOR_ell14",
+        "pulse_streamer": "pulse_gen_SWAB_82_1",
+        "counter": "tagger_SWAB_20_1",
     },
     ###
     "Wiring": {
