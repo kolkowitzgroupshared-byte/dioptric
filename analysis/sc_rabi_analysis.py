@@ -587,8 +587,7 @@ if __name__ == "__main__":
     #              ]  ## 2.77
     # file_stem = ["2026_02_02-17_08_15-johnson-nv0_2025_10_21"]  ## 2.91, 2.94
     # file_stem = ["2026_02_02-21_30_27-johnson-nv0_2025_10_21"]
-    file_stem = ["2026_02_03-04_16_43-johnson-nv0_2025_10_21"] ##
-
+    file_stem = ["2026_02_03-04_16_43-johnson-nv0_2025_10_21"]  ##
 
     data = dm.get_raw_data(file_stem=file_stem, load_npz=True, use_cache=False)
     nv_list = data["nv_list"]
@@ -620,6 +619,5 @@ if __name__ == "__main__":
         median_fit_fn,
         median_popt,
     )
-
 
 kpl.show(block=True)
