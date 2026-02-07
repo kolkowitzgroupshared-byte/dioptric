@@ -281,7 +281,7 @@ def nuvu2thorcam_calibration(coords):
     )
 
     cal_coords_nuvu = np.array(
-        [[221.971, 238.674], [189.313, 19.02], [17.427, 156.258]], dtype="float32"
+        [[221.625, 238.492], [189.263, 18.556], [17.278, 155.856]], dtype="float32"
     )
     # Compute the affine transformation matrix
     M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
@@ -303,7 +303,7 @@ def load_nv_coords(
     # file_path="slmsuite/nv_blob_detection/nv_blob_230nvs_reordered.npz", #johnson
     # file_path="slmsuite/nv_blob_detection/nv_blob_223nvs_reordered.npz", #johnson
     # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz",  # johnson
-    file_path="slmsuite/nv_blob_detection/nv_blob_243nvs_reordered.npz",  # johnson
+    file_path="slmsuite/nv_blob_detection/nv_blob_210nvs_reordered.npz",  # johnson
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
@@ -327,13 +327,12 @@ print(f"Total NV coordinates: {len(nuvu_pixel_coords)}")
 thorcam_coords = nuvu2thorcam_calibration(nuvu_pixel_coords).T
 # sys.exit()
 
-
 def compute_and_write_nvs_phase():
     hologram = SpotHologram(
         shape=(4096, 2048),
         spot_vectors=thorcam_coords,
         basis="ij",
-        spot_amp=spot_weights,
+        # spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally

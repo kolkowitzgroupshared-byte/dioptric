@@ -97,7 +97,7 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
     # Load the image array (replace this with your own method for loading image data)
     data = dm.get_raw_data(
-        file_stem="2026_01_31-20_06_23-johnson-nv0_2025_10_21", load_npz=True
+        file_stem="2026_02_07-12_19_33-johnson-nv0_2025_10_21", load_npz=True
     )
     img_array = np.array(data["img_array"])
     fig, ax = plt.subplots()
