@@ -8,6 +8,7 @@ Created August 5th, 2025
 
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from config.default import config
