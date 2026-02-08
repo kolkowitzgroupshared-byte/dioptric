@@ -56,13 +56,14 @@ class TisapphPumpCoheVerdi(LabradServer):
             del self.laser
         logging.debug("Init complete")
 
-    def send(self, cmd):
+    @setting(0)
+    def send(self, c, cmd):
         self.laser.write(f"{cmd}\r\n".encode("ascii"))
 
-    @setting(0, wavelength_nm="v[]")
-    def set_wavelength_nm(self, c, wavelength_nm):
-        wavelength = wavelength_nm * 1e-9
-        self.tisapph.coarse_tune_wavelength(wavelength=wavelength)
+    # @setting(0, wavelength_nm="v[]")
+    # def set_wavelength_nm(self, c, wavelength_nm):
+    #     wavelength = wavelength_nm * 1e-9
+    #     self.tisapph.coarse_tune_wavelength(wavelength=wavelength)
 
     @setting(6)
     def reset(self, c):

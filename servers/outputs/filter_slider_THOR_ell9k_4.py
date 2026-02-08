@@ -2,13 +2,13 @@
 """
 Output server for the Thorlabs ELL9K filter slider.
 
-Created on Thu Apr  4 15:58:30 2019
+Created on Wed Oct 29 2025
 
-@author: mccambria
+@author: Alyssa Matthews
 
 ### BEGIN NODE INFO
 [info]
-name = filter_slider_THOR_ell9k
+name = filter_slider_THOR_ell9k_4
 version = 1.0
 description =
 
@@ -31,39 +31,16 @@ from labrad.server import LabradServer, setting
 from twisted.internet.defer import ensureDeferred
 
 from utils import common
-from utils import tool_belt as tb
 
 
 class FilterSliderThorEll9k(LabradServer):
-    name = "filter_slider_THOR_ell9k"
+    name = "filter_slider_THOR_ell9k_4"
     pc_name = socket.gethostname()
+    port = "COM8"
+    baudrate = 9600
 
     def initServer(self):
-        # filename = (
-        #     "E:/Shared drives/Kolkowitz Lab Group/nvdata/pc_{}/labrad_logging/{}.log"
-        # )
-        # filename = filename.format(self.pc_name, self.name)
-        # logging.basicConfig(
-        #     level=logging.INFO,
-        #     format="%(asctime)s %(levelname)-8s %(message)s",
-        #     datefmt="%y-%m-%d_%H-%M-%S",
-        #     filename=filename,
-        # )
-        config = common.get_config_dict()
-        device_id = config["DeviceIDs"][f"{self.name}_com"]
-        try:
-            logging.info("here")
-            self.slider = serial.Serial(
-                device_id,
-                9600,
-                serial.EIGHTBITS,
-                serial.PARITY_NONE,
-                serial.STOPBITS_ONE,
-            )
-        except Exception as e:
-            logging.debug(e)
-            del self.slider
-
+        self.slider = serial.Serial(self.port, baudrate=self.baudrate)
         time.sleep(0.1)
         self.slider.flush()
         time.sleep(0.1)
@@ -79,6 +56,35 @@ class FilterSliderThorEll9k(LabradServer):
             3: "0ma00000060".encode(),
         }
         logging.info("Init complete")
+        # port = "COM8"
+        # try:
+        #     logging.info("here")
+        #     self.slider = serial.Serial(
+        #         port,
+        #         9600,
+        #         # serial.EIGHTBITS,
+        #         # serial.PARITY_NONE,
+        #         # serial.STOPBITS_ONE,
+        #     )
+        # except Exception as e:
+        #     logging.debug(e)
+        #     del self.slider
+
+        # time.sleep(0.1)
+        # self.slider.flush()
+        # time.sleep(0.1)
+        # # Find the resonant frequencies of the motor
+        # cmd = "0s1".encode()
+        # self.slider.write(cmd)
+        # time.sleep(0.1)
+        # # Set up the mapping from filter position to move command
+        # self.move_commands = {
+        #     0: "0ma00000000".encode(),
+        #     1: "0ma00000020".encode(),
+        #     2: "0ma00000040".encode(),
+        #     3: "0ma00000060".encode(),
+        # }
+        # logging.info("Init complete")
 
     @setting(0, pos="i")
     def set_filter(self, c, pos):
@@ -95,7 +101,15 @@ class FilterSliderThorEll9k(LabradServer):
             # if incomplete:
             #     logging.info("huh")
 
+    # @setting(1)
+    # def get_filter_loc(self, c):
+    #     self.slider.write()
+    #     loc = self.slider.read()
+    #     return loc
 
+
+# make a way to shut off serial connection when we choose to
+# restarting labrat connection without closing serial is bad
 __server__ = FilterSliderThorEll9k()
 
 if __name__ == "__main__":

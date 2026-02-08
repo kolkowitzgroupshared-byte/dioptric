@@ -80,8 +80,8 @@ config |= {
     # Common durations are in ns
     "CommonDurations": {
         "default_pulse_duration": 1000,
-        "aod_access_time":2.6e3,  # access time in specs is 10us
-        # "aod_access_time":8e3,  # access time in specs is 10us
+        # "aod_access_time":2.6e3,  # access time in specs is 10us
+        "aod_access_time":8e3,  # access time in specs is 10us
         "widefield_operation_buffer": 1e3,
         "uwave_buffer": 0,
         "iq_buffer": 0,

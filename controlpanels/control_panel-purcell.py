@@ -923,178 +923,155 @@ def do_ramsey(nv_list):
     ramsey.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, detuning)
 
 
-
 def _quant4_ns(x):
     x = np.asarray(x, dtype=float)
     return (np.round(x / 4.0) * 4.0).astype(int)
 
+def _arange_int(start_ns, stop_ns, step_ns):
+    """Inclusive integer arange (like np.arange) but robust."""
+    start_ns = int(start_ns)
+    stop_ns  = int(stop_ns)
+    step_ns  = int(step_ns)
+    if step_ns <= 0:
+        raise ValueError("step_ns must be > 0")
+    if stop_ns < start_ns:
+        return np.array([], dtype=int)
+    # include endpoint
+    n = (stop_ns - start_ns) // step_ns
+    return start_ns + step_ns * np.arange(n + 1, dtype=int)
+
 def build_xy8_dip_taus(
     revival_2tau_us=36.0,
-    centers=(1, 3),              # 1 -> TL/4, 3 -> 3TL/4
+    centers=(1, 3),
+    include_global=True,
+    global_step_ns=400,       # coarser than 200 to keep point count down
     coarse_step_ns=200,
-    coarse_margin_us=6.0,        # coarse window around each center
-    fine_window_us=1.5,          # tight zoom window
-    fine_step_ns=40,
+    coarse_margin_us=3.0,     # 6.0 is usually overkill if you already know centers
+    fine_window_us=1.0,
+    fine_step_ns=20,          # denser -> reduce to 12/8/4 if you want
+    ultra_window_us=0.25,     # optional extra density near the dip
+    ultra_step_ns=8,          # must be multiple of 4
+    use_ultra=True,
     min_tau_ns=200,
-    max_tau_ns=60000             # must include 27 us => 27000 ns
+    max_tau_ns=40000
 ):
-    TL_us = float(revival_2tau_us)          # echo revival period in 2τ
-    base_center_us = TL_us / 4.0            # ~9 us
+    # sanity: enforce multiples of 4 ns for steps
+    for s in (global_step_ns, coarse_step_ns, fine_step_ns, ultra_step_ns):
+        if s % 4 != 0:
+            raise ValueError(f"step {s} ns must be multiple of 4 ns")
+
+    TL_us = float(revival_2tau_us)      # echo revival in 2τ
+    base_center_us = TL_us / 4.0        # XY8 dip fundamental near τ ~ TL/4
 
     taus_all = []
 
-    # (A) coarse global sweep (optional but helpful to catch surprises)
-    taus_global = np.arange(min_tau_ns, max_tau_ns + 1, coarse_step_ns)
-    taus_all.append(taus_global)
+    # (A) optional global sweep
+    if include_global:
+        taus_all.append(_arange_int(min_tau_ns, max_tau_ns, global_step_ns))
 
-    # (B) add coarse + fine zoom windows around each requested center
+    # (B) windows around each dip
     for k in centers:
         tau_c_us = k * base_center_us
+        tau_c_ns = int(round(tau_c_us * 1e3))
+
         # coarse around center
-        t0c = max(min_tau_ns, (tau_c_us - coarse_margin_us) * 1e3)
-        t1c = min(max_tau_ns, (tau_c_us + coarse_margin_us) * 1e3)
-        taus_all.append(np.arange(t0c, t1c + coarse_step_ns, coarse_step_ns))
+        t0c = max(min_tau_ns, int(round(tau_c_ns - coarse_margin_us * 1e3)))
+        t1c = min(max_tau_ns, int(round(tau_c_ns + coarse_margin_us * 1e3)))
+        taus_all.append(_arange_int(t0c, t1c, coarse_step_ns))
 
         # fine around center
-        t0f = max(min_tau_ns, (tau_c_us - fine_window_us) * 1e3)
-        t1f = min(max_tau_ns, (tau_c_us + fine_window_us) * 1e3)
-        taus_all.append(np.arange(t0f, t1f + fine_step_ns, fine_step_ns))
+        t0f = max(min_tau_ns, int(round(tau_c_ns - fine_window_us * 1e3)))
+        t1f = min(max_tau_ns, int(round(tau_c_ns + fine_window_us * 1e3)))
+        taus_all.append(_arange_int(t0f, t1f, fine_step_ns))
 
-    taus = np.unique(np.concatenate(taus_all))
+        # ultra-fine micro-window (optional)
+        if use_ultra and ultra_window_us is not None and ultra_window_us > 0:
+            t0u = max(min_tau_ns, int(round(tau_c_ns - ultra_window_us * 1e3)))
+            t1u = min(max_tau_ns, int(round(tau_c_ns + ultra_window_us * 1e3)))
+            taus_all.append(_arange_int(t0u, t1u, ultra_step_ns))
+
+    taus = np.unique(np.concatenate(taus_all)) if taus_all else np.array([], dtype=int)
     taus = taus[(taus >= min_tau_ns) & (taus <= max_tau_ns)]
     taus = _quant4_ns(taus)
-    taus = sorted(set(taus.tolist()))
+    taus = sorted(set(int(t) for t in taus))
     return taus
 
-def do_xy(nv_list, xy_seq="xy8"):
-    num_reps = 2
-    uwave_ind_list = [0, 1]
-    num_runs = 400
-
-    # include both 9 us and 27 us dips -> need max_tau >= 27000 ns
-    taus = build_xy8_dip_taus(
-        revival_2tau_us=36.0,
-        centers=(1, 3),           # 9us and 27us
-        coarse_step_ns=200,
-        coarse_margin_us=6.0,
-        fine_window_us=1.5,
-        fine_step_ns=40,
-        min_tau_ns=200,
-        max_tau_ns=3000          # cover up to ~35 us (safe for 27us)
-    )
-
-    num_steps = len(taus)
-    print("num_steps:", num_steps, "tau range (ns):", taus[0], "to", taus[-1])
-
-    # drift-robust: randomize tau order each run block
-    rng = np.random.default_rng(0)
-
-    for _ in range(3):
-        taus_shuf = list(rng.permutation(taus))
-        xy.main(
-            nv_list,
-            num_steps,
-            num_reps,
-            num_runs,
-            taus_shuf,
-            uwave_ind_list,
-            xy_seq,
-        )
-
 # def do_xy(nv_list, xy_seq="xy8"):
-#     min_tau = 200
-#     max_tau = 1e5 + min_tau
-#     num_steps = 100
 #     num_reps = 2
 #     uwave_ind_list = [0, 1]
 #     num_runs = 400
-#     # # taus calculation
-#     taus = widefield.generate_log_spaced_taus(min_tau, max_tau, num_steps, base=4)
-#     num_steps = len(taus)
-#     print(num_steps)
-#     sys.exit()
+
+#     taus = build_xy8_dip_taus(
+#         revival_2tau_us=36.0,
+#         centers=(1, 3),          # 9us and 27us
+#         include_global=True,
+#         global_step_ns=400,      # keep global light
+#         coarse_step_ns=200,
+#         coarse_margin_us=3.0,    # narrower than 6us -> fewer points
+#         fine_window_us=1.0,
+#         fine_step_ns=20,         # increase density: 20->12->8->4
+#         use_ultra=False,
+#         ultra_window_us=0.25,
+#         ultra_step_ns=20,
+#         min_tau_ns=200,
+#         max_tau_ns=33000
+#     )
+
+#     print("num_steps:", len(taus), "ns range:", taus[0], "to", taus[-1])
+
 #     for _ in range(3):
-#         xy.main(
-#             nv_list,
-#             num_steps,
-#             num_reps,
-#             num_runs,
-#             taus,
-#             uwave_ind_list,
-#             xy_seq,
-#         )
+#         xy.main(nv_list, len(taus), num_reps, num_runs, taus, uwave_ind_list, xy_seq)
+
 
 import re
 import numpy as np
 
-def quant4_ns(x_ns):
-    return (np.round(np.asarray(x_ns, float) / 4.0) * 4.0).astype(int)
+def _quantize_ns(x_ns, q_ns=4):
+    x = np.asarray(x_ns, dtype=float)
+    return (np.round(x / q_ns) * q_ns).astype(int)
 
-def logspace_int(a, b, n):
-    return np.logspace(np.log10(a), np.log10(b), n)
+def build_log_taus(min_tau_ns=200, max_tau_ns=33000, n_points=60, q_ns=4):
+    taus = np.logspace(np.log10(min_tau_ns), np.log10(max_tau_ns), n_points)
+    taus = _quantize_ns(taus, q_ns=q_ns)
+    taus = np.unique(taus)
+    taus = taus[(taus >= min_tau_ns) & (taus <= max_tau_ns)]
+    taus.sort()
+    return taus.astype(int)
 
-def _parse_seq_and_M(xy_seq: str) -> int:
-    """
-    Returns M = total number of pi pulses used in your loop (len(xy_phases)).
-    Supports 'hahn', 'xy2', 'xy4', 'xy8', 'xy16' and optional '-<blocks>' suffix.
-    """
-    phase_len = {"hahn": 1, "xy2": 2, "xy4": 4, "xy8": 8, "xy16": 16}
-
-    m = re.match(r"([a-zA-Z]+\d*)(?:-(\d+))?$", xy_seq.lower().strip())
+def _parse_xy_seq(xy_seq: str):
+    m = re.match(r"([a-zA-Z]+\d*)(?:-(\d+))?$", xy_seq.strip().lower())
     if not m:
-        raise ValueError(f"Bad xy_seq='{xy_seq}'. Examples: 'hahn', 'xy8', 'xy8-4', 'xy16-2'.")
-
+        raise ValueError(f"Bad xy_seq: {xy_seq}")
     base = m.group(1)
     blocks = int(m.group(2)) if m.group(2) else 1
+    return base, blocks
 
-    if base not in phase_len:
-        raise ValueError(f"Unknown base seq '{base}'. Options: {list(phase_len.keys())}")
+def _tau_max_ns_for_seq(xy_seq, hahn_max_tau_ns=1_000_000):
+    # keep same max TOTAL evolution time across sequences
+    coeff = {"hahn": 2, "xy2": 4, "xy4": 8, "xy8": 16, "xy16": 32}
+    base, blocks = _parse_xy_seq(xy_seq)
+    if base not in coeff:
+        raise ValueError(f"Unknown base seq: {base}")
 
-    return phase_len[base] * blocks
+    max_total_evol_ns = 2 * int(hahn_max_tau_ns)   # Hahn total evol ~ 2*tau
+    tau_max_ns = max_total_evol_ns / (coeff[base] * blocks)
+    return int(tau_max_ns)
 
-def do_t2_vs_pulses(
-    nv_list,
-    seq_list=("hahn", "xy2", "xy4", "xy8", "xy16"),  # add "xy8-2" etc later
-    # seq_list=("xy8", "xy16"),  # add "xy8-2" etc later
-    t_min_ns=2_000,       # total free-precession time grid min (ns)
-    t_max_ns=400_000,     # total free-precession time grid max (ns)
-    num_steps=80,
-    min_tau_ns=200,       # MIN step_val (half-gap) in ns (hardware/pulse constraint)
-    uwave_ind_list=(0, 1),
-    num_reps=3,
-    num_runs=500,
-):
-    # Common total-time grid (free precession time)
-    t_grid = logspace_int(t_min_ns, t_max_ns, num_steps)
+def do_xy(nv_list, xy_seq="xy8-1", min_tau_ns=200, hahn_max_tau_ns=1_000_000, n_points=70, q_ns=4):
+    num_reps = 4
+    uwave_ind_list = [0, 1]
+    num_runs = 400
 
-    for xy_seq in seq_list:
-        M = _parse_seq_and_M(xy_seq)      # number of pi pulses in that sequence
-        denom = 2 * M                      # because t = 2*M*step_val in your get_seq()
+    max_tau_ns = _tau_max_ns_for_seq(xy_seq, hahn_max_tau_ns=hahn_max_tau_ns)
+    max_tau_ns = max(max_tau_ns, min_tau_ns)
 
-        # step_val (half-gap) values for this sequence so that total times match t_grid
-        taus = t_grid / denom
-        taus = np.clip(taus, min_tau_ns, None)
-        taus = quant4_ns(taus)
+    taus = build_log_taus(min_tau_ns=min_tau_ns, max_tau_ns=max_tau_ns, n_points=n_points, q_ns=q_ns)
+    taus = [int(t) for t in taus]
 
-        # remove duplicates after quantization; convert to Python ints
-        taus = np.unique(taus)
-        taus = [int(t) for t in taus]
-
-        # Optional quick check: actual achieved total times (use this for fitting!)
-        t_eff = [int(2 * M * t) for t in taus]
-        print(f"{xy_seq:7s}  M={M:3d}  steps={len(taus):3d}  "
-              f"t_eff=[{t_eff[0]} .. {t_eff[-1]}] ns")
+    print("xy_seq:", xy_seq, "num_steps:", len(taus), "ns range:", taus[0], "to", taus[-1])
+    for _ in range(3):
         do_widefield_image_sample(nv_sig, 50)
-        
-        xy.main(
-            nv_list,
-            len(taus),
-            int(num_reps),
-            int(num_runs),
-            taus,                      # JSON-safe
-            [int(x) for x in uwave_ind_list],
-            xy_seq,                    # pass exactly "hahn", "xy8", "xy8-4", etc.
-        )
+        xy.main(nv_list, len(taus), num_reps, num_runs, taus, uwave_ind_list, xy_seq)
 
 
 def do_xy_uniform_revival_scan(nv_list, xy_seq="xy8-1"):
@@ -1114,8 +1091,8 @@ def do_xy_uniform_revival_scan(nv_list, xy_seq="xy8-1"):
     taus.extend(second_dip[1:-1].tolist())
     second_dip = np.linspace(3*dip + dip_width, 5*dip + dip_width, 21)
     # Round τ to 4 ns resolution
-    taus = [round(tau / 4) * 4 for tau in taus]
-    taus = sorted(set(taus))  # remove duplicates
+    # taus = [round(tau / 4) * 4 for tau in taus]
+    # taus = sorted(set(taus))  # remove duplicates
     num_reps = 2
     num_runs = 600
     num_steps = len(taus)
@@ -1124,7 +1101,6 @@ def do_xy_uniform_revival_scan(nv_list, xy_seq="xy8-1"):
     print(
         f"[XY8 Uniform] Scanning {num_steps} τ values from {taus[0]} to {taus[-1]} ns"
     )
-
     for _ in range(4):
         xy.main(
             nv_list,
@@ -1636,12 +1612,9 @@ if __name__ == "__main__":
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
 
     # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
-    # green_coords_list = [[107.871, 108.068],[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
-    # red_coords_list = [[73.256, 72.339],[82.15, 82.282],[76.463, 62.52],[63.114, 80.587]]
-    
-    # pixel_coords_list = [[124.195, 127.341],[16.501, 46.951],[146.942, 239.125],[206.995, 41.423]]
-    # green_coords_list = [[107.852, 108.146], [119.095, 118.486],[106.576, 95.231],[97.387, 116.969]]
-    # red_coords_list = [[73.238, 72.401],[82.064, 81.382],[72.649, 61.838],[64.373, 79.036]]
+    # green_coords_list = [[107.85, 108.084],[119.238, 119.6],[111.232, 95.81],[95.925, 118.974]]
+    # red_coords_list = [[73.238, 72.351],[82.142, 82.295],[76.435, 62.548],[63.107, 80.591]]
+
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
     # fmt: off
@@ -1893,12 +1866,15 @@ if __name__ == "__main__":
         # do_two_block_hahn_spatial_correlation(nv_list)
 
         # AVAILABLE_XY = ["hahn-n", "xy2-n", "xy4-n", "xy8-n", "xy16-n"]
+        # run all (same style as before)
         # do_xy(nv_list, xy_seq="xy8-1")
-        
-        # do_t2_vs_pulses(nv_list)
         # do_xy_uniform_revival_scan(nv_list, xy_seq="xy4-1")
         # do_xy_revival_scan(nv_list, xy_seq="xy4-1")
-
+        # do_all_xy_log(nv_list, T2_us=600, blocks=1)
+        # same calling style as before
+        AVAILABLE_XY = ["xy8-1", "hahn-1", "xy2-1", "xy4-1", "xy16-1"]
+        for seq in AVAILABLE_XY:
+            do_xy(nv_list, xy_seq=seq, min_tau_ns=200, hahn_max_tau_ns=1_000_000)  # 1 ms max tau for Hahn
         # for nv in nv_list:
         #     nv.spin_flip = False
         # for nv in nv_list[: num_nvs // 2]:

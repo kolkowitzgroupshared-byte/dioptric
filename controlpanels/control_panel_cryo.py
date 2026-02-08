@@ -17,24 +17,19 @@ Created on Oct 7th, 2025
 
 import copy
 import time
+
 import labrad
 import sys
 import numpy as np
-from utils import positioning as pos
-from utils import kplotlib as kpl
-from utils import common
-from utils import tool_belt as tb
 
 # import majorroutines.confocal.determine_standard_readout_params as determine_standard_readout_params
 # import majorroutines.confocal.g2_measurement as g2_measurement
 import majorroutines.confocal.confocal_image_sample as image_sample
 
 # import majorroutines.confocal.image_sample as image_sample
-
 # import majorroutines.confocal.optimize_magnet_angle as optimize_magnet_angle
 # import majorroutines.confocal.pulsed_resonance as pulsed_resonance
-import majorroutines.confocal.confocal_rabi as rabi
-
+# import majorroutines.confocal.confocal_rabi as rabi
 # import majorroutines.confocal.ramsey as ramsey
 # import majorroutines.confocal.resonance as resonance
 # import majorroutines.confocal.spin_echo as spin_echo
@@ -49,6 +44,8 @@ from majorroutines.calibration import approach_surface
 # import majorroutines.confocal.t1_dq_main as t1_dq_main
 import majorroutines.targeting as targeting
 import utils.tool_belt as tool_belt
+from utils import kplotlib as kpl
+from utils import positioning as pos
 from utils.constants import Axes, CoordsKey, NVSig, VirtualLaserKey
 from majorroutines.confocal.confocal_2D_scan import confocal_scan_2D_xz
 from majorroutines.confocal.z_scan_1d import main as scan_1D
@@ -64,21 +61,7 @@ def do_image_sample(nv_sig):
     A 2D galvo scan while the piezo holds a fixed z position. The output figure shows
     photon counts at defined x,y galvo positions. Photon count is displayed as a color map.
 
-    This routine:
-    1. Starts at the defined Galvo position
-    2. Sweeps the galvo in X over the defined range (scan_range)
-    3. Reads out photon counts at that position
-    4. Plots the data in real-time for a position z set by the piezo
-    5. When an x-axis row is complete (definded by num_steps), the galvo moves to the next y position
-    6. The proccesss repeats until the full xy grid is scanned.
-
-    This function is compatable with piezo z-axis scan and will create a new figure for each z position.
-
-    """
-    # scan_range = 0.2
-    # num_steps = 90
-
-    scan_range = 0.2 #voltage #cryo image conversion: 37um/V; step size: x,y,z=30V
+    scan_range = 1.0  # voltage
     num_steps = 90
 
     # For now we only support square scans so pass scan_range twice
@@ -142,17 +125,8 @@ def do_2D_xz_scan(nv_sig):
     return counts, x_positions
 
 def do_image_sample_zoom(nv_sig):
-    """
-    A 2D galvo scan while the piezo holds a fixed z position. The output figure shows
-    photon counts at defined x,y galvo positions. Photon count is displayed as a color map.
-
-    This is a zoomed in version of the standard image sample routine. See do_sample_image for details.
-
-    This function is compatable with piezo z-axis scan and will create a new figure for each z position.
-
-    """
-    scan_range = 0.1 
-    num_steps = 45
+    scan_range = 0.05  # cryo iimage conversion: 37um/V; step size: x,y,z=30,30,40V
+    num_steps = 30
 
     image_sample.confocal_scan(
         nv_sig,
@@ -768,11 +742,11 @@ def do_pulse_gen_constant(digital_channels=(2,), analog0=None, analog1=None):
 
 
 
+
 def get_sample_name() -> str:
-    sample = "Wu" #Rubin
+    sample = "lovelace"  # lovelace
     return sample
 
-# region main
 
 if __name__ == "__main__":
     ### Shared parameters
@@ -803,13 +777,15 @@ if __name__ == "__main__":
     #     }
     # fmt: on
 
-    # coords: SAMPLE (piezo) xyz 
-    # current step rate: 30.0V XYZ
-    # region Postion and Time Control
-    sample_xy = [0.0,0.0] # piezo XY voltage input (1.0=1V) (not coordinates, relative)
-    coord_z = 0  # piezo z voltage (negative is closer to smaple)
-    pixel_xy = [0,0]  # galvo XY 
-    # pixel_xy = [0.053, 0.045]  # NV canidate
+    # coords: SAMPLE (piezo) xyz
+    # current step rate: 30.0V XY
+    # current step rate: 40.0V Z
+    sample_xy = [
+        0.0,
+        0.0,
+    ]  # piezo XY voltage input (1.0=1V) (not coordinates, relative)
+    coord_z = 0  # piezo z voltage (0 is the set midpoint, absolute) (negative is closer to smaple, move unit steps in sample; 37 is good surface focus with bs for Lovelace; 20 is good for dye)
+    pixel_xy = [0.0, 0.0]  # galvo ref
 
 # return 
     nv_sig = NVSig(
@@ -856,26 +832,14 @@ if __name__ == "__main__":
         # # print(piezo.get_z_position())
         # piezo.set_z_reference()
 
-        #region 1D scan + Calibrate
-        # do_calibrate_z_axis(nv_sig)
-        # do_z_scan_1d(nv_sig)
-        # endregion 1D scan + Calibrate
-
-        # region 2D scan (x galvo, z piezo)
-        # # do_2D_xz_scan(nv_sig)
-        # z_range = np.linspace(20, 20, 11)
-        # for z in z_range:
-        #     nv_sig.coords[CoordsKey.Z] = z
-        #     pos.set_xyz_on_nv(nv_sig)
-        #     do_image_sample(nv_sig)
-            # do_2D_xz_scan(nv_sig)
- 
-        # endregion 2D scan
-
-        # region Image / 3D scan    
-
-        # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
-        do_image_sample(nv_sig)
+        # region Image sample
+        # do_image_sample(nv_sig)
+        # ## Z AXIS PIEZO SCAN
+        z_range = np.linspace(0, -400, 61)  # 37 is roughly the surface of Lovelace
+        for z in z_range:
+            nv_sig.coords[CoordsKey.Z] = z
+            pos.set_xyz_on_nv(nv_sig)
+            do_image_sample(nv_sig)
         # do_image_sample_zoom(nv_sig)
 
         # Quick NV area scans
@@ -899,7 +863,7 @@ if __name__ == "__main__":
 
         # region Stationary count
         # do_stationary_count(nv_sig, disable_opt=True) #Note there is a slow response time w/ the APD
-        # do_stationary_count(nv_sig, disable_opt=True, nv_minus_initialization=True)
+        do_stationary_count(nv_sig, disable_opt=True, nv_minus_initialization=True)
         # do_stationary_count(nv_sig, disable_opt=True, nv_zero_initialization=True)
         # endregion Stationary count
  
