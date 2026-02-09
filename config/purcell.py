@@ -80,8 +80,8 @@ config |= {
     # Common durations are in ns
     "CommonDurations": {
         "default_pulse_duration": 1000,
-        # "aod_access_time":2.6e3,  # access time in specs is 10us
-        "aod_access_time":8e3,  # access time in specs is 10us
+        "aod_access_time":2.6e3,  # access time in specs is 10us
+        # "aod_access_time":8e3,  # access time in specs is 10us
         "widefield_operation_buffer": 1e3,
         "uwave_buffer": 0,
         "iq_buffer": 0,
@@ -139,9 +139,8 @@ config |= {
                 # "frequency": 2.917151,
                 # "frequency": 2.8082,
                 "rabi_period": 356,
-                "pi_pulse": 192,
-                # "pi_pulse": 240,
-                "pi_on_2_pulse": 96,
+                "pi_pulse": 176,
+                "pi_on_2_pulse": 88,
                 # "frequency": 2.935030,
                 # "rabi_period": 112,
                 # "pi_pulse": 56,
@@ -151,15 +150,15 @@ config |= {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
                 # "frequency": 2.917151,
-                "frequency": 2.8093,#49G
+                "frequency": 2.8101,#49G
                 # "frequency": 2.77000,#49G
                 # "frequency": 2.982049,
                 # "frequency": 2.828210, 
                 # "frequency": 2.816912, #62G
                 # "frequency": 2.8252,
                 "rabi_period": 288,
-                "pi_pulse": 144,
-                "pi_on_2_pulse": 72,
+                "pi_pulse": 168,
+                "pi_on_2_pulse": 84,
             },
             2: {
                 "physical_name": "sig_gen_STAN_sg394_3",
@@ -966,7 +965,7 @@ opx_config = {
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2367}, #136NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2267}, #118NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.34947}, ## 312NV johnson
-        "yellow_charge_readout": {"type": "constant", "sample": 0.33}, ## 230NV johnson
+        "yellow_charge_readout": {"type": "constant", "sample": 0.35}, ## 230NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3084}, ## 223NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
         "yellow_spin_pol": {"type": "constant", "sample": 0.31510},
