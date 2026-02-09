@@ -39,6 +39,7 @@ def do_stationary_count(nv_sig, disable_opt=None):
     th_stationary_count.main(
         nv_sig,
         run_time,
+        pulse_time=10e6,
         disable_opt=disable_opt,
     )
 
