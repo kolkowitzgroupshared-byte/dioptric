@@ -583,7 +583,7 @@ def do_resonance(nv_list):
         num_reps,
         num_runs,
         freqs=freqs,
-        uwave_ind_list=[2],
+        uwave_ind_list=[1],
     )
     # for _ in range(2):
     #     resonance.main(nv_list, num_steps, num_reps, num_runs, freqs=freqs)
@@ -1745,7 +1745,7 @@ if __name__ == "__main__":
         # )
 
         do_compensate_for_drift(nv_sig)
-        do_widefield_image_sample(nv_sig, 50)
+        # do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list:
@@ -1814,7 +1814,7 @@ if __name__ == "__main__":
         # do_check_readout_fidelity(nv_list)
         # do_optimize_aod_access_time(nv_list)
 
-        # do_scc_snr_check(nv_list)
+        do_scc_snr_check(nv_list)
         # do_optimize_scc_duration(nv_list)
         # do_optimize_scc_amp(nv_list)
         # optimize_scc_amp_and_duration(nv_list)
@@ -1837,7 +1837,7 @@ if __name__ == "__main__":
 
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_calibrate_iq_delay(nv_list)
-        do_rabi(nv_list)
+        # do_rabi(nv_list)
         # do_power_rabi(nv_list)
         # do_resonance(nv_list)
         # do_optimize_pol_duration(nv_list)
@@ -1872,9 +1872,9 @@ if __name__ == "__main__":
         # do_xy_revival_scan(nv_list, xy_seq="xy4-1")
         # do_all_xy_log(nv_list, T2_us=600, blocks=1)
         # same calling style as before
-        AVAILABLE_XY = ["xy8-1", "hahn-1", "xy2-1", "xy4-1", "xy16-1"]
-        for seq in AVAILABLE_XY:
-            do_xy(nv_list, xy_seq=seq, min_tau_ns=200, hahn_max_tau_ns=1_000_000)  # 1 ms max tau for Hahn
+        # AVAILABLE_XY = ["xy8-1", "hahn-1", "xy2-1", "xy4-1", "xy16-1"]
+        # for seq in AVAILABLE_XY:
+        #     do_xy(nv_list, xy_seq=seq, min_tau_ns=200, hahn_max_tau_ns=1_000_000)  # 1 ms max tau for Hahn
         # for nv in nv_list:
         #     nv.spin_flip = False
         # for nv in nv_list[: num_nvs // 2]:

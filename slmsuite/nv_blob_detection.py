@@ -313,7 +313,7 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
     # Load the image data
     data = dm.get_raw_data(
-        file_stem="2026_01_31-19_25_16-johnson-nv0_2025_10_21", load_npz=True
+        file_stem="2026_02_07-11_52_34-johnson-nv0_2025_10_21", load_npz=True
     )
     img_array = np.array(data["ref_img_array"])
     # img_array = np.array(data["img_array"])
