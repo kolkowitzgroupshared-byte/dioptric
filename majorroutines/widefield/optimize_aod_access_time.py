@@ -1,12 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Optimize SCC parameters
-
-Created on December 6th, 2023
-
-@author: mccambria
-updated by @Saroj Chand on Marrch 21st 2025
-@author: mccambria
+Optimize aod parameters
+Created by @Saroj Chand on Jan 21st 2026
+@author: sbchand
 """
 
 import traceback
