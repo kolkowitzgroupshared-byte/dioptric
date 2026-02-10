@@ -388,7 +388,7 @@ if __name__ == "__main__":
         filtered_nv_coords,
         filtered_counts,
         path="slmsuite/nv_blob_detection",
-        filename="nv_blob_292nvs.npz",
+        filename="nv_blob_206nvs.npz",
     )
 
     # full ROI -- multiple images save in the same file
