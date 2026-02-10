@@ -172,36 +172,34 @@ def process_and_plot_xy8(nv_list, taus, norm_counts, norm_counts_ste, seq_xy):
         # fit_funtion = lambda x: stretched_exp(x, *popt)
         # fit_functions.append(fit_funtion)
         # plotting
-        # fig, ax = plt.subplots(figsize=(6, 5))
-        # ax.errorbar(
-        #     taus,
-        #     max_counts - nv_counts,
-        #     yerr=np.abs(nv_counts_ste),
-        #     fmt="o",
-        #     capsize=3,
-        #     label=f"NV {nv_ind}",
-        # )
-        # # fit funtions
+        fig, ax = plt.subplots(figsize=(7, 5))
+        ax.errorbar(
+            taus,
+            nv_counts,
+            yerr=np.abs(nv_counts_ste),
+            fmt="o",
+            capsize=3,
+            label=f"NV {nv_ind}",
+        )
+        # fit funtions
         # if popt is not None:
         #     tau_fit = tau_fit = np.logspace(
         #         np.log10(min(taus)), np.log10(max(taus)), 200
         #     )
         #     fit_vals = max_counts - stretched_exp(tau_fit, *popt)
         #     ax.plot(tau_fit, fit_vals, "-", label="Fit")
-        # ax.set_title(
-        #     f"{seq_xy} : NV {nv_ind} - T₂ = {T2} µs, n = {n}", fontsize=15
-        # )
-        # ax.set_xlabel("τ (µs)", fontsize=15)
-        # ax.set_ylabel("Norm. NV⁻ Population", fontsize=15)
-        # ax.tick_params(axis="both", labelsize=15)
-        # # ax.set_xscale("symlog", linthresh=1e5)
+        ax.set_title(f"{seq_xy} : NV {nv_ind}", fontsize=15)
+        ax.set_xlabel("τ (µs)", fontsize=15)
+        ax.set_ylabel("Norm. NV⁻ Population", fontsize=15)
+        ax.tick_params(axis="both", labelsize=15)
+        # ax.set_xscale("symlog", linthresh=1e5)
         # ax.set_xscale("log")
-        # # ax.set_yscale("log")
-        # # ax.legend()
-        # # ax.grid(True)
-        # # ax.spines["right"].set_visible(False)
-        # # ax.spines["top"].set_visible(False)
-        # plt.show(block=True)
+        # ax.set_yscale("log")
+        # ax.legend()
+        # ax.grid(True)
+        # ax.spines["right"].set_visible(False)
+        # ax.spines["top"].set_visible(False)
+        plt.show(block=True)
     ## plot contrast
 
     print(f"list_T2 = {T2_list}")
@@ -314,127 +312,127 @@ def process_and_plot_xy8(nv_list, taus, norm_counts, norm_counts_ste, seq_xy):
     plt.show()
     # sys.exit()
     ### plot all
-    sns.set(style="whitegrid")
-    num_cols = 8
-    num_nvs = len(nv_list)
-    num_rows = int(np.ceil(num_nvs / num_cols))
-    # Full plot
-    fig, axes = plt.subplots(
-        num_rows,
-        num_cols,
-        figsize=(num_cols * 1.8, num_rows * 3),
-        sharex=True,
-        sharey=False,
-        constrained_layout=True,
-        gridspec_kw={"wspace": 0.0, "hspace": 0.0},
-    )
-    axes = axes.flatten()
-    # axes = axes[::-1]
-    taus_fit = np.logspace(np.log10(min(taus)), np.log10(max(taus)), 200)
-    for nv_idx, ax in enumerate(axes):
-        if nv_idx >= len(norm_counts):  # Safe bound check
-            ax.axis("off")
-            continue
+    # sns.set(style="whitegrid")
+    # num_cols = 8
+    # num_nvs = len(nv_list)
+    # num_rows = int(np.ceil(num_nvs / num_cols))
+    # # Full plot
+    # fig, axes = plt.subplots(
+    #     num_rows,
+    #     num_cols,
+    #     figsize=(num_cols * 1.8, num_rows * 3),
+    #     sharex=True,
+    #     sharey=False,
+    #     constrained_layout=True,
+    #     gridspec_kw={"wspace": 0.0, "hspace": 0.0},
+    # )
+    # axes = axes.flatten()
+    # # axes = axes[::-1]
+    # taus_fit = np.logspace(np.log10(min(taus)), np.log10(max(taus)), 200)
+    # for nv_idx, ax in enumerate(axes):
+    #     if nv_idx >= len(norm_counts):  # Safe bound check
+    #         ax.axis("off")
+    #         continue
 
-        nv_counts = norm_counts[nv_idx]
-        max_counts = np.max(nv_counts)
+    #     nv_counts = norm_counts[nv_idx]
+    #     max_counts = np.max(nv_counts)
 
-        sns.scatterplot(
-            x=taus,
-            y=max_counts - nv_counts + b_list[nv_idx],
-            ax=ax,
-            color="blue",
-            # label=f"NV {nv_idx}(T2 = {T2_list[nv_idx]:.2f} ± {T2_errs[nv_idx]:.2f} us)",
-            label=f"NV {nv_idx}(T2 = {T2_list[nv_idx]:.2f} us)",
-            s=10,
-            alpha=0.7,
-        )
-        # Plot error bars separately for clarity
-        ax.errorbar(
-            taus,
-            max_counts - nv_counts + b_list[nv_idx],
-            yerr=norm_counts_ste[nv_idx],
-            fmt="o",
-            alpha=0.9,
-            ecolor="gray",
-            markersize=0.1,
-        )
-        # Plot fitted curve if available
-        popt = fit_params[nv_idx]
-        if popt is not None:
-            fit_vals = max_counts - stretched_exp(taus_fit, *popt) + b_list[nv_idx]
-            sns.lineplot(
-                x=taus_fit,
-                y=fit_vals,
-                ax=ax,
-                # color="blue",
-                # label='Fit',
-                lw=1,
-            )
-        ax.legend(fontsize="xx-small")
-        ax.grid(True, which="both", linestyle="--", linewidth=0.5)
-        # ax.tick_params(labelleft=False)
-        # Set yticks to min and max of current y-data
-        y_min, y_max = np.min(max_counts - nv_counts + b_list[nv_idx]), np.max(
-            max_counts - nv_counts + b_list[nv_idx]
-        )
-        # y_min, y_max = b_list[nv_idx], a_list[nv_idx] + b_list[nv_idx]
-        # ax.set_yticks([round(y_min, 1), round(y_max, 1)])
-        # ax.set_yticklabels([f"{y_min:.1f}", f"{y_max:.1f}"])
-        # ax.tick_params(labelleft=True, labelsize=8, color="blue", pad=0)
-        # Move tick labels inside the plot
-        # Adjust label position and alignment
+    #     sns.scatterplot(
+    #         x=taus,
+    #         y=max_counts - nv_counts + b_list[nv_idx],
+    #         ax=ax,
+    #         color="blue",
+    #         # label=f"NV {nv_idx}(T2 = {T2_list[nv_idx]:.2f} ± {T2_errs[nv_idx]:.2f} us)",
+    #         label=f"NV {nv_idx}(T2 = {T2_list[nv_idx]:.2f} us)",
+    #         s=10,
+    #         alpha=0.7,
+    #     )
+    #     # Plot error bars separately for clarity
+    #     ax.errorbar(
+    #         taus,
+    #         max_counts - nv_counts + b_list[nv_idx],
+    #         yerr=norm_counts_ste[nv_idx],
+    #         fmt="o",
+    #         alpha=0.9,
+    #         ecolor="gray",
+    #         markersize=0.1,
+    #     )
+    #     # Plot fitted curve if available
+    #     popt = fit_params[nv_idx]
+    #     if popt is not None:
+    #         fit_vals = max_counts - stretched_exp(taus_fit, *popt) + b_list[nv_idx]
+    #         sns.lineplot(
+    #             x=taus_fit,
+    #             y=fit_vals,
+    #             ax=ax,
+    #             # color="blue",
+    #             # label='Fit',
+    #             lw=1,
+    #         )
+    #     ax.legend(fontsize="xx-small")
+    #     ax.grid(True, which="both", linestyle="--", linewidth=0.5)
+    #     # ax.tick_params(labelleft=False)
+    #     # Set yticks to min and max of current y-data
+    #     y_min, y_max = np.min(max_counts - nv_counts + b_list[nv_idx]), np.max(
+    #         max_counts - nv_counts + b_list[nv_idx]
+    #     )
+    #     # y_min, y_max = b_list[nv_idx], a_list[nv_idx] + b_list[nv_idx]
+    #     # ax.set_yticks([round(y_min, 1), round(y_max, 1)])
+    #     # ax.set_yticklabels([f"{y_min:.1f}", f"{y_max:.1f}"])
+    #     # ax.tick_params(labelleft=True, labelsize=8, color="blue", pad=0)
+    #     # Move tick labels inside the plot
+    #     # Adjust label position and alignment
 
-        # Set y-tick formatter to 2 decimal places
-        ax.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
-        ax.tick_params(axis="y", labelsize=8, direction="in", pad=-10)
-        for label in ax.get_yticklabels():
-            label.set_horizontalalignment("right")
-            label.set_x(0.01)  # Fine-tune this as needed
-            label.set_zorder(100)
-        # Set y-tick formatter to 2 decimal places
-        # ax.yaxis.set_major_formatter(FormatStrFormatter("%.2f"))
-        # # Adjust label position and alignment
-        # for label in ax.get_yticklabels():
-        #     label.set_horizontalalignment("right")
-        #     label.set_x(0.15)  # Fine-tune this as needed
-        # for label in ax.get_yticklabels():
-        #     label.set_horizontalalignment("right")
-        #     label.set_x(0.15)
-        # Optional: adjust tick line size and font
-        ax.set_xscale("log")
-        # # Add NV index within the plot at the center
-        axes_grid = np.array(axes).reshape((num_rows, num_cols))
-        # Loop over each column
-        for col in range(num_cols):
-            # Go from bottom row upwards
-            for row in reversed(range(num_rows)):
-                if row * num_cols + col < len(axes):  # Check if subplot exists
-                    ax = axes_grid[row, col]
-                    # Apply ticks
-                    # tick_positions = np.logspace(
-                    #     np.log10(taus[0]), np.log10(taus[-1] ), 4
-                    # )
-                    # ax.set_xticks(tick_positions)
-                    # ax.set_xticklabels(
-                    #     [f"{tick:.0f}" for tick in tick_positions],
-                    #     rotation=45,
-                    #     fontsize=9,
-                    # )
-                    for label in ax.get_xticklabels():
-                        label.set_y(0.01)
-                    ax.set_xlim(
-                        4,
-                    )
-                    ax.tick_params(axis="x", labelsize=9, pad=0)
-                    ax.set_xlabel("Time (μs)", fontsize=11, labelpad=1)
-                    break  # Done for this column
+    #     # Set y-tick formatter to 2 decimal places
+    #     ax.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
+    #     ax.tick_params(axis="y", labelsize=8, direction="in", pad=-10)
+    #     for label in ax.get_yticklabels():
+    #         label.set_horizontalalignment("right")
+    #         label.set_x(0.01)  # Fine-tune this as needed
+    #         label.set_zorder(100)
+    #     # Set y-tick formatter to 2 decimal places
+    #     # ax.yaxis.set_major_formatter(FormatStrFormatter("%.2f"))
+    #     # # Adjust label position and alignment
+    #     # for label in ax.get_yticklabels():
+    #     #     label.set_horizontalalignment("right")
+    #     #     label.set_x(0.15)  # Fine-tune this as needed
+    #     # for label in ax.get_yticklabels():
+    #     #     label.set_horizontalalignment("right")
+    #     #     label.set_x(0.15)
+    #     # Optional: adjust tick line size and font
+    #     ax.set_xscale("log")
+    #     # # Add NV index within the plot at the center
+    #     axes_grid = np.array(axes).reshape((num_rows, num_cols))
+    #     # Loop over each column
+    #     for col in range(num_cols):
+    #         # Go from bottom row upwards
+    #         for row in reversed(range(num_rows)):
+    #             if row * num_cols + col < len(axes):  # Check if subplot exists
+    #                 ax = axes_grid[row, col]
+    #                 # Apply ticks
+    #                 # tick_positions = np.logspace(
+    #                 #     np.log10(taus[0]), np.log10(taus[-1] ), 4
+    #                 # )
+    #                 # ax.set_xticks(tick_positions)
+    #                 # ax.set_xticklabels(
+    #                 #     [f"{tick:.0f}" for tick in tick_positions],
+    #                 #     rotation=45,
+    #                 #     fontsize=9,
+    #                 # )
+    #                 for label in ax.get_xticklabels():
+    #                     label.set_y(0.01)
+    #                 ax.set_xlim(
+    #                     4,
+    #                 )
+    #                 ax.tick_params(axis="x", labelsize=9, pad=0)
+    #                 ax.set_xlabel("Time (μs)", fontsize=11, labelpad=1)
+    #                 break  # Done for this column
 
-    fig.text(
-        0.005, 0.5, "NV$^{-}$ Population", va="center", rotation="vertical", fontsize=11
-    )
-    fig.suptitle(f"{seq_xy}-1 Fits ({all_file_ids_str})", fontsize=12)
-    fig.tight_layout(pad=0.4, rect=[0.01, 0.01, 0.99, 0.99])
+    # fig.text(
+    #     0.005, 0.5, "NV$^{-}$ Population", va="center", rotation="vertical", fontsize=11
+    # )
+    # fig.suptitle(f"{seq_xy}-1 Fits ({all_file_ids_str})", fontsize=12)
+    # fig.tight_layout(pad=0.4, rect=[0.01, 0.01, 0.99, 0.99])
     plt.show(block=True)
 
 
@@ -1047,6 +1045,14 @@ if __name__ == "__main__":
     #     "2025_05_04-19_00_22-rubin-nv0_2025_02_26",
     # ]  # xy8 cpdd
     ### Internal Test Plots
+
+    # file_stems = [
+    # "2026_01_09-06_06_55-johnson-nv0_2025_10_21",
+    # "2026_01_09-10_35_51-johnson-nv0_2025_10_21",]  # xy4
+    file_stems = [
+    "2026_01_22-04_03_03-johnson-nv0_2025_10_21",
+    ]
+    
     # plot_T2_on_T1()
     # contrast_plot()
     # T2_ratio_xy()

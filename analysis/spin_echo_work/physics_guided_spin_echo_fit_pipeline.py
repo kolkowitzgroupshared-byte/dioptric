@@ -389,8 +389,10 @@ if __name__ == "__main__":
     # file_stem = "2025_11_15-14_11_49-johnson_204nv_s9-17d44b"  # dataset2 + dataset3 (more data and orientain)
     # file_stem = "2025_11_28-16_39_32-johnson_204nv_s6-902522"  # new B 65G field
     # file_stem = "2025_12_04-19_50_15-johnson_204nv_s9-2c83ab"  # new B 59G field
-    file_stem = "2025_12_24-19_56_03-johnson_204nv_s6-ff5e17"  # new B 62G field
-    
+    # file_stem = "2025_12_24-19_56_03-johnson_204nv_s6-ff5e17"  # new B 62G field
+    # file_stem = "2026_01_07-17_30_14-johnson_204nv_s12-06bcdd"  # new B 62G field
+    file_stem = "2026_01_07-17_48_21-johnson_204nv_s10-34f8b7"  # new B 65G field
+
     data = dm.get_raw_data(file_stem=file_stem)
     nv_list = data["nv_list"]
     norm_counts = np.asarray(data["norm_counts"], float)
@@ -404,7 +406,7 @@ if __name__ == "__main__":
         (-1, 1, 1),
     ]
     # NOTE: raw string for Windows backslashes
-    catalog_path = r"analysis\spin_echo_work\essem_freq_kappa_catalog_22A_62G.json"
+    catalog_path = r"analysis\spin_echo_work\essem_freq_kappa_catalog_22A_65G.json"
     with open(catalog_path, "r") as f:
         catalog_json = json.load(f)
 

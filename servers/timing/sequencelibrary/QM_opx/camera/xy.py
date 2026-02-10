@@ -24,13 +24,11 @@ from servers.timing.sequencelibrary.QM_opx.camera import base_scc_sequence
 def get_seq(base_scc_seq_args, step_vals, xy_seq, num_reps=1):
     buffer = seq_utils.get_widefield_operation_buffer()
     uwave_ind_list = base_scc_seq_args[-1]
-    # macro_pi_pulse_duration = seq_utils.get_macro_pi_pulse_duration(uwave_ind_list)
-    macro_pi_pulse_duration = seq_utils.convert_ns_to_cc(88)
-    # Adjust step values to compensate for internal delays
-    step_vals = [
-        seq_utils.convert_ns_to_cc(el) - macro_pi_pulse_duration for el in step_vals
-    ]
-    # Choose pulse phase pattern
+
+    # Prefer using your library helper (not hard-coded 88 ns)
+    t_pi_cc  = seq_utils.get_macro_pi_pulse_duration(uwave_ind_list[0])  # if available
+    t_pi2_cc = t_pi_cc // 2  # if pi/2 is exactly half; otherwise get explicitly
+
     phase_dict = {
         "hahn": [0],
         "xy2": [0, 90],
@@ -39,44 +37,55 @@ def get_seq(base_scc_seq_args, step_vals, xy_seq, num_reps=1):
         "xy16": [0, 90, 0, 90, 90, 0, 90, 0, 180, 270, 180, 270, 270, 180, 270, 180],
     }
 
-    # Parse xy_seq, e.g. "xy8-4" → base="xy8", reps=4
     match = re.match(r"([a-zA-Z]+\d*)(?:-(\d+))?", xy_seq.lower())
+    if not match:
+        raise ValueError(f"Bad xy_seq: {xy_seq}")
     base_seq = match.group(1)
     num_blocks = int(match.group(2)) if match.group(2) else 1
-    # Fetch and repeat the base phase pattern
+
     base_phases = phase_dict.get(base_seq)
+    if base_phases is None:
+        raise ValueError(f"Unknown base seq: {base_seq}")
     xy_phases = base_phases * num_blocks
+
+    # Pre-filter taus that would produce negative waits (important for short taus)
+    step_vals_cc = []
+    for tau_ns in step_vals:
+        tau_cc = seq_utils.convert_ns_to_cc(tau_ns)
+
+        # center-to-center timing:
+        w_edge = tau_cc - (t_pi2_cc // 2) - (t_pi_cc // 2)
+        w_mid  = 2 * tau_cc - t_pi_cc
+
+        if w_edge < 0 or w_mid < 0:
+            continue
+        step_vals_cc.append(tau_cc)
 
     with qua.program() as seq:
         seq_utils.init()
         seq_utils.macro_run_aods()
-        step_val = qua.declare(int)
+        tau_cc = qua.declare(int)
 
-        def uwave_macro_sig(uwave_ind_list, step_val):
+        def uwave_macro_sig(uwave_ind_list, tau_cc):
             qua.align()
+
+            w_edge = tau_cc - (t_pi2_cc // 2) - (t_pi_cc // 2)
+            w_mid  = 2 * tau_cc - t_pi_cc
+
             seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=0)
-            qua.wait(step_val)
+            qua.wait(w_edge)
+
             for i, phase in enumerate(xy_phases):
                 seq_utils.macro_pi_pulse(uwave_ind_list, phase=phase)
-                if i < len(xy_phases) - 1:
-                    qua.wait(2 * step_val)  # 2τ between pis
-                else:
-                    qua.wait(step_val)  # τ after last pi
+                qua.wait(w_mid if i < len(xy_phases) - 1 else w_edge)
 
-            seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=180)
+            seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=0)
             qua.wait(buffer)
 
-        with qua.for_each_(step_val, step_vals):
-            base_scc_sequence.macro(
-                base_scc_seq_args,
-                [uwave_macro_sig],
-                step_val,
-                num_reps,
-            )
+        with qua.for_each_(tau_cc, step_vals_cc):
+            base_scc_sequence.macro(base_scc_seq_args, [uwave_macro_sig], tau_cc, num_reps)
 
-    seq_ret_vals = []
-    return seq, seq_ret_vals
-
+    return seq, []
 
 if __name__ == "__main__":
     config_module = common.get_config_module()
@@ -99,20 +108,12 @@ if __name__ == "__main__":
                 [88, 80],
                 [1.0, 1.0],
                 [False, False],
-                [0, 1],
+                [0],
             ],
-            [
-                200,
-                18796,
-                312752,
-                42920,
-                1000,
-                147776,
-            ],
-            "xy8-1",
+            [200, 18796],
+            "xy16-1",
             1,
         )
-
         sim_config = SimulationConfig(duration=int(200e3 / 4))
         sim = opx.simulate(seq, sim_config)
         samples = sim.get_simulated_samples()

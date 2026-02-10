@@ -27,8 +27,8 @@ home = Path.home()
 
 # region Widefield calibration coords
 
-green_laser = "laser_COBO_520" # make labrad server for COBOLT green laser
-tisapph_laser = "" #fill this in later (labrad server for Tisapph)
+green_laser = "laser_COBO_520"  # make labrad server for COBOLT green laser
+tisapph_laser = ""  # fill this in later (labrad server for Tisapph)
 thor_galvos = "pos_xy_THOR_gvs212"
 cryo_piezo = "pos_xyz_ATTO_piezos"
 
@@ -93,7 +93,7 @@ config |= {
     "DeviceIDs": {
         "arb_wave_gen_visa_address": "TCPIP0::128.104.ramp_to_zero_duration.119::5025::SOCKET",
         "daq0_name": "Dev1",
-        "filter_slider_THOR_ell9k_com": "COM13",
+        "filter_slider_THOR_ell9k_com": "COM8",
         "gcs_dll_path": home
         / "GitHub/dioptric/servers/outputs/GCSTranslator/PI_GCS2_DLL_x64.dll",
         "objective_piezo_model": "E709",
@@ -154,7 +154,7 @@ config |= {
         "server_name": "camera_NUVU_hnu512gamma",
         "resolution": (512, 512),
         "spot_radius": 2.5,
-          # Radius for integrating NV counts in a camera image
+        # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
         "em_gain": 5000,
         # "em_gain": 1000,
@@ -188,12 +188,12 @@ config |= {
             # LaserKey.IMAGING: {"physical_name": green_laser, "duration": 50e6},
             VirtualLaserKey.IMAGING: {
                 # "physical_name": green_laser,
-                "physical_name": green_laser, #this is the laser that appears on the imaging APD scan
-                "duration": 12e6, #this duration appears on the imaging APD scan, this value is overwritten?
+                "physical_name": green_laser,  # this is the laser that appears on the imaging APD scan
+                "duration": 12e6,  # this duration appears on the imaging APD scan
             },
             VirtualLaserKey.SINGLET_DRIVE: {
                 "physical_name": tisapph_laser,
-                "duration": 300, #this is a placeholder
+                "duration": 300,  # this is a placeholder
             },
 
             VirtualLaserKey.SPIN_READOUT: {
@@ -225,7 +225,7 @@ config |= {
     "Positioning": {
         "drift_xy_coords_key": CoordsKey.PIXEL,
         "Positioners": {
-            #update with correct piezos for cryo
+            # update with correct piezos for cryo
             CoordsKey.SAMPLE: {
                 "physical_name": "pos_xyz_ATTO_piezos", #xy atto
                 "control_mode": PosControlMode.STREAM,
@@ -260,26 +260,8 @@ config |= {
         # "calibration_coords_nv2": calibration_coords_nv2,
         # "calibration_coords_nv3": calibration_coords_nv3,
         "pixel_to_sample_affine_transformation_matrix": pixel_to_sample_affine_transformation_matrix,
-        "cryo_piezos_voltage": 30,  
+        "cryo_piezos_voltage": 33,
         "z_bias_adjust": 0.0,
-        "z_calibration": {
-            "max_position_steps": 20000,       # Steps to move up (1mm @ 50nm/step) - clears 0.5mm sample + margin
-            "scan_step_size": 10,              # Step increment during downward scan
-            "min_peak_prominence_ratio": 0.15, # Peak must be 15% higher than surrounding baseline
-            "scan_past_peak_steps": 200,       # Continue scanning past peak for profile mapping
-            "safety_min_counts": 150,          # Abort if counts drop below this (collision protection)
-            "verification_passes": 2,          # Number of approach/retract cycles for hysteresis
-            "verification_retract_steps": 500, # Steps to move away for verification
-            "settling_time_ms": 50,            # Wait time after each step
-            "max_scan_timeout_s": 300,         # Maximum scan duration before abort
-            "min_scan_points": 50,             # Minimum points needed before peak detection
-            # Asymmetry measurement parameters
-            "measure_asymmetry": True,         # Measure up/down step asymmetry before calibration
-            "asymmetry_test_steps": 100,       # Steps for each asymmetry test movement (start small!)
-            "asymmetry_test_cycles": 3,        # Number of up/down cycles to average
-            "asymmetry_count_tolerance": 50,   # Acceptable count difference for "return to start"
-            "asymmetry_safety_drop": 0.30,     # Abort if counts drop more than 30% during test
-        },
     },
     ###
     "Servers": {  # Bucket for miscellaneous servers not otherwise listed above
@@ -340,7 +322,6 @@ config |= {
 }
 
 # endregion
-
 
 
 if __name__ == "__main__":

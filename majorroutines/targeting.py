@@ -445,7 +445,7 @@ def _read_counts(
     # How we conduct the scan depends on the config
     config = common.get_config_dict()
     collection_mode = config["collection_mode"]
-    print(f"positioner: {positioner}, axis_ind: {axis_ind}")
+    # print(f"positioner: {positioner}, axis_ind: {axis_ind}")
     # Assume the lasers are sequence controlled if using camera
     if collection_mode == CollectionMode.CAMERA:
         pulse_gen = tb.get_server_pulse_gen()  # not actually used

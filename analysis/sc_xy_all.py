@@ -1,0 +1,163 @@
+# -*- coding: utf-8 -*-
+"""
+Widefield xy experiment
+Created on November 29th, 2023
+@author: Saroj Chand
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.optimize import least_squares
+from utils import widefield
+
+import time
+import sys
+import numpy as np
+import math
+import matplotlib.ticker as ticker
+from matplotlib.ticker import FormatStrFormatter
+import seaborn as sns
+from scipy.optimize import curve_fit, least_squares
+import utils.tool_belt as tb
+from utils import data_manager as dm
+from utils import kplotlib as kpl
+import matplotlib.pyplot as plt
+
+kpl.init_kplotlib()
+
+
+SEQ_FILES = {
+    "hahn": [
+        "2026_01_24-02_18_52-johnson-nv0_2025_10_21",
+        "2026_01_25-20_40_44-johnson-nv0_2025_10_21",
+        "2026_01_27-03_14_34-johnson-nv0_2025_10_21",
+        "2026_01_29-07_32_29-johnson-nv0_2025_10_21",
+    ],
+    "xy2": [
+        "2026_01_24-08_36_23-johnson-nv0_2025_10_21",
+        "2026_01_26-02_59_06-johnson-nv0_2025_10_21",
+        "2026_01_27-09_33_49-johnson-nv0_2025_10_21",
+        "2026_01_29-13_49_49-johnson-nv0_2025_10_21",
+    ],
+    "xy4": [
+        "2026_01_24-15_00_32-johnson-nv0_2025_10_21",
+        "2026_01_26-02_59_06-johnson-nv0_2025_10_21",
+        # "2026_01_27-15_51_39-johnson-nv0_2025_10_21",
+        "2026_01_29-20_07_42-johnson-nv0_2025_10_21",
+    ],
+    "xy8": [
+        "2026_01_24-20_59_55-johnson-nv0_2025_10_21",
+        "2026_01_26-15_11_04-johnson-nv0_2025_10_21",
+        "2026_01_28-00_19_39-johnson-nv0_2025_10_21",
+        "2026_01_30-02_01_06-johnson-nv0_2025_10_21",
+    ],
+    "xy16": [
+        "2026_01_25-02_20_55-johnson-nv0_2025_10_21",
+        "2026_01_26-20_31_48-johnson-nv0_2025_10_21",
+        "2026_01_28-05_34_06-johnson-nv0_2025_10_21",
+        "2026_01_30-07_21_10-johnson-nv0_2025_10_21",
+    ],
+}
+
+
+def load_seq(file_stems):
+    raw = widefield.process_multiple_files(file_stems, load_npz=True)
+    nv_list = raw["nv_list"]
+
+    tau_us = np.asarray(raw["taus"], float) / 1e3  # your code assumes taus in ns
+    taus_ns = np.asarray(raw["taus"], float)
+    seq_xy = raw.get("xy_seq", "xy8").lower()
+    _, N = widefield.parse_xy_sequence(seq_xy)
+    print(N, "taus_ns min=", taus_ns.min(), "first5=", taus_ns[:5])
+
+    # total evolution time (standard for CPMG/XY family): t = 2N * tau
+    t_us = 2.0 * N * tau_us
+
+    counts = np.asarray(raw["counts"], float)  # (2, num_nvs, num_steps)
+    sig, ref = counts[0], counts[1]
+    y, yerr = widefield.process_counts(nv_list, sig, ref, threshold=True)
+    yerr = np.abs(np.asarray(yerr, float))
+    yerr[yerr == 0] = np.nanmedian(yerr[yerr > 0])  # guard against zero σ
+
+    # build an index map in case nv_list objects are hashable/unique
+    # nv_to_i = {nv: i for i, nv in enumerate(nv_list)}
+    nv_to_i = {i: i for i in range(len(nv_list))}
+
+    return dict(
+        seq=seq_xy,
+        N=int(N),
+        t_us=t_us,
+        y=y,
+        yerr=yerr,
+        nv_list=nv_list,
+        nv_to_i=nv_to_i,
+    )
+
+
+seq_data = {name: load_seq(stems) for name, stems in SEQ_FILES.items()}
+
+# Choose a reference nv_list (assumes all runs used same NV ordering/objects)
+ref_nv_list = next(iter(seq_data.values()))["nv_list"]
+
+
+def plot_all_sequences_for_nv(nv, height_per_ax=3.3):
+    names = list(seq_data.keys())
+    n = len(names)
+
+    fig, axs = plt.subplots(
+        nrows=n, ncols=1,
+        figsize=(4.5, height_per_ax * n),
+        sharex=True, sharey=False,
+        gridspec_kw={"hspace": 0.00}
+    )
+    axs = np.atleast_1d(axs).ravel()
+
+    # ---- compute global x-limits from data (shared x-axis) ----
+    all_x = np.concatenate([seq_data[name]["t_us"] for name in names])
+    all_x = all_x[np.isfinite(all_x) & (all_x > 0)]
+    xmin, xmax = float(np.min(all_x)), float(np.max(all_x))
+
+    for k, (ax, name) in enumerate(zip(axs, names)):
+        d = seq_data[name]
+        i = nv
+
+        # debug print
+        print(name, "seq=", d["seq"], "N=", d["N"], "t_min(us)=", np.min(d["t_us"]))
+
+        ax.errorbar(
+            d["t_us"],
+            d["y"][i],
+            yerr=d["yerr"][i],
+            fmt="o",
+            capsize=2,
+            label=f"{name} (N={d['N']})",
+        )
+
+        ax.set_xscale("log")
+        ax.grid(True, which="both", ls="--", alpha=0.35)
+        ax.legend(loc="best", frameon=False, handlelength=1.2)
+
+        # compact look (no extra whitespace)
+        ax.margins(x=0.0, y=0.10)
+
+        # hide x tick labels except bottom
+        if k < n - 1:
+            ax.tick_params(labelbottom=False)
+
+        # optional: reduce tick label size a bit
+        ax.tick_params(axis="both")
+
+    # ---- force the shared x-axis to exactly match data range ----
+    axs[0].set_xlim(1.5, 500)
+
+    axs[-1].set_xlabel(r"Total evolution time $t=2N\tau$ (µs)")
+    fig.supylabel("Norm. NV- population")
+    fig.suptitle(f"Sequences (stacked, shared x) — NV {nv}", y=1.00, fontsize=15)
+    fig.subplots_adjust(top=0.98, bottom=0.06, left=0.12, right=0.98)
+    return fig, axs
+
+
+# Plot all NVs
+for nv in range(len(ref_nv_list)):
+    plot_all_sequences_for_nv(nv, height_per_ax=1.8)  # tweak height_per_ax to taste
+    plt.show(block=True)

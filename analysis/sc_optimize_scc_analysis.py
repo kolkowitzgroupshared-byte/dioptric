@@ -663,7 +663,7 @@ def process_and_plot_durations(data):
         if optimal_durations.get(nv_index) is None:
             optimal_durations[nv_index] = median_duration
 
-    # Plot individual NV fits
+    # # Plot individual NV fits
     # for nv_index in selected_indices:
     #     plt.figure(figsize=(6, 4))
     #     plt.errorbar(
@@ -702,9 +702,8 @@ def process_and_plot_durations(data):
     print(optimal_durations)
     optimal_snrs = [optimal_snrs[nv] for nv in selected_indices]
     print(optimal_snrs)
-    # median = np.median(optimal_durations)
-    # optimal_durations = [int(median) if (val < 24 or val > 200) else val for val in optimal_durations]
-  
+    median = np.median(optimal_durations)
+    optimal_durations = [int(median) if (val < 24 or val > 200) else val for val in optimal_durations]
     plt.figure(figsize=(6, 5))
     plt.scatter(
         optimal_durations,
@@ -746,7 +745,7 @@ if __name__ == "__main__":
 
     #duration
     data = dm.get_raw_data(
-        file_stem="2025_11_22-12_50_55-johnson-nv0_2025_10_21", load_npz=True
+        file_stem="2026_02_08-10_44_27-johnson-nv0_2025_10_21", load_npz=True
     )
 
     results = process_and_plot_durations(data)

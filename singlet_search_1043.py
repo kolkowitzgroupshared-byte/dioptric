@@ -203,6 +203,6 @@ def main(
 
 
 if __name__ == "__main__":
-    kpl.init_kplotlib()
+    # kpl.init_kplotlib()
 
     kpl.show(block=True)

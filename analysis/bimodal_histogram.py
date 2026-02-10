@@ -383,94 +383,209 @@ def fit_bimodal_histogram(
         return None, None, None
 
 
+# def determine_threshold(
+#     popt, prob_dist: ProbDist, dark_mode_weight=None, do_print=False, ret_fidelity=False
+# ):
+#     """Determine the optimal threshold for assigning a state based on a measured number of counts
+
+#     Parameters
+#     ----------
+#     popt : np.ndarray
+#         Optimized fit parameters
+#     prob_dist : ProbDist
+#         Probability distribution uses in the fit
+#     dark_mode_weight : float, optional
+#         Portion of measurements that project into the dark mode, by default popt[0],
+#         the dark mode weight parameter from the fit
+#     no_print : bool, optional
+#         Whether to skip printing out the results of the determination, by default False
+#     ret_fidelity : bool, optional
+#         Whether to return the readout fidelity expected under the optimal threshold, by default False
+
+#     Returns
+#     -------
+#     float | list(float)
+#         The threshold or the threshold and the expected readout fidelity
+#     """
+#     if popt is None:
+#         if ret_fidelity:
+#             return None, None
+#         else:
+#             return None
+
+#     if dark_mode_weight is None:
+#         dark_mode_weight = popt[0]
+#     bright_mode_weight = 1 - dark_mode_weight
+
+#     num_single_mode_params = get_single_mode_num_params(prob_dist)
+
+#     # Calculate fidelity (probability of calling state correctly) for given threshold
+#     # mean_counts_dark, mean_counts_bright = popt[1], popt[1 + num_single_mode_params]
+#     # MCC hack for including ionization
+#     mean_counts_dark, mean_counts_bright = popt[1], popt[2]
+#     mean_counts_dark = round(mean_counts_dark)
+#     mean_counts_bright = round(mean_counts_bright)
+#     thresh_options = np.arange(mean_counts_dark - 0.5, mean_counts_bright + 0.5, 1)
+#     fidelities = []
+#     left_fidelities = []
+#     right_fidelities = []
+#     single_mode_cdf = get_single_mode_cdf(prob_dist)
+#     for val in thresh_options:
+#         dark_left_prob = single_mode_cdf(val, *popt[1 : 1 + num_single_mode_params])
+#         bright_left_prob = single_mode_cdf(val, *popt[1 + num_single_mode_params :])
+#         # MCC hack for including ionization
+#         # dark_mode_cdf = get_single_mode_cdf(ProbDist.COMPOUND_POISSON)
+#         # dark_left_prob = dark_mode_cdf(val, popt[1])
+#         # bright_mode_cdf = get_single_mode_cdf(ProbDist.COMPOUND_POISSON_WITH_IONIZATION)
+#         # bright_left_prob = bright_mode_cdf(val, *popt[1:])
+#         # bright_left_prob = bright_mode_cdf(
+#         #     val, popt[1], popt[2], popt[3]
+#         # )  # Pass lambda_0, lambda_m, ion
+
+#         dark_right_prob = 1 - dark_left_prob
+#         bright_right_prob = 1 - bright_left_prob
+
+#         fidelity = (
+#             dark_mode_weight * dark_left_prob + bright_mode_weight * bright_right_prob
+#         )
+#         fidelities.append(fidelity)
+
+#         # Two-sided
+#         # left_fidelity = (dark_ratio * dark_left_prob) / (
+#         #     dark_ratio * dark_left_prob + bright_ratio * bright_left_prob
+#         # )
+#         # right_fidelity = (bright_ratio * bright_right_prob) / (
+#         #     bright_ratio * bright_right_prob + dark_ratio * dark_right_prob
+#         # )
+#         # left_fidelities.append(left_fidelity)
+#         # right_fidelities.append(right_fidelity)
+#     fidelity = np.max(fidelities)
+#     threshold = thresh_options[np.argmax(fidelities)]
+
+#     if do_print:
+#         print(
+#             f"Optimum readout fidelity {round(fidelity, 3)} achieved at threshold {threshold}"
+#         )
+
+#     if ret_fidelity:
+#         return threshold, fidelity
+#     else:
+#         return threshold
+import numpy as np
+import warnings
+
+
 def determine_threshold(
-    popt, prob_dist: ProbDist, dark_mode_weight=None, do_print=False, ret_fidelity=False
+    popt,
+    prob_dist: "ProbDist",
+    dark_mode_weight=None,
+    do_print=False,
+    ret_fidelity=False,
 ):
-    """Determine the optimal threshold for assigning a state based on a measured number of counts
-
-    Parameters
-    ----------
-    popt : np.ndarray
-        Optimized fit parameters
-    prob_dist : ProbDist
-        Probability distribution uses in the fit
-    dark_mode_weight : float, optional
-        Portion of measurements that project into the dark mode, by default popt[0],
-        the dark mode weight parameter from the fit
-    no_print : bool, optional
-        Whether to skip printing out the results of the determination, by default False
-    ret_fidelity : bool, optional
-        Whether to return the readout fidelity expected under the optimal threshold, by default False
-
-    Returns
-    -------
-    float | list(float)
-        The threshold or the threshold and the expected readout fidelity
+    """Determine the optimal threshold for assigning a state based on measured counts.
+    Returns None (and None fidelity) gracefully if thresholding can't be determined.
     """
-    if popt is None:
-        if ret_fidelity:
-            return None, None
-        else:
-            return None
 
+    # ---------- Basic validation ----------
+    if popt is None:
+        return (None, None) if ret_fidelity else None
+
+    popt = np.asarray(popt, dtype=float)
+    if popt.size < 3 or np.any(~np.isfinite(popt)):
+        warnings.warn(
+            f"determine_threshold: invalid popt (size={popt.size}, finite={np.all(np.isfinite(popt))}). Returning None."
+        )
+        return (None, None) if ret_fidelity else None
+
+    # ---------- Weights ----------
     if dark_mode_weight is None:
         dark_mode_weight = popt[0]
-    bright_mode_weight = 1 - dark_mode_weight
+    try:
+        dark_mode_weight = float(dark_mode_weight)
+    except Exception:
+        dark_mode_weight = 0.5
 
+    if not np.isfinite(dark_mode_weight):
+        dark_mode_weight = 0.5
+    dark_mode_weight = float(np.clip(dark_mode_weight, 0.0, 1.0))
+    bright_mode_weight = 1.0 - dark_mode_weight
+
+    # ---------- Params / means ----------
     num_single_mode_params = get_single_mode_num_params(prob_dist)
-
-    # Calculate fidelity (probability of calling state correctly) for given threshold
-    # mean_counts_dark, mean_counts_bright = popt[1], popt[1 + num_single_mode_params]
-    # MCC hack for including ionization
-    mean_counts_dark, mean_counts_bright = popt[1], popt[2]
-    mean_counts_dark = round(mean_counts_dark)
-    mean_counts_bright = round(mean_counts_bright)
-    thresh_options = np.arange(mean_counts_dark - 0.5, mean_counts_bright + 0.5, 1)
-    fidelities = []
-    left_fidelities = []
-    right_fidelities = []
     single_mode_cdf = get_single_mode_cdf(prob_dist)
-    for val in thresh_options:
-        dark_left_prob = single_mode_cdf(val, *popt[1 : 1 + num_single_mode_params])
-        bright_left_prob = single_mode_cdf(val, *popt[1 + num_single_mode_params :])
-        # MCC hack for including ionization
-        # dark_mode_cdf = get_single_mode_cdf(ProbDist.COMPOUND_POISSON)
-        # dark_left_prob = dark_mode_cdf(val, popt[1])
-        # bright_mode_cdf = get_single_mode_cdf(ProbDist.COMPOUND_POISSON_WITH_IONIZATION)
-        # bright_left_prob = bright_mode_cdf(val, *popt[1:])
-        # bright_left_prob = bright_mode_cdf(
-        #     val, popt[1], popt[2], popt[3]
-        # )  # Pass lambda_0, lambda_m, ion
 
-        dark_right_prob = 1 - dark_left_prob
-        bright_right_prob = 1 - bright_left_prob
+    # NOTE: You currently use a "hack" mean definition:
+    # mean_counts_dark = popt[1], mean_counts_bright = popt[2]
+    # Keep it, but guard it.
+    mean_counts_dark = popt[1]
+    mean_counts_bright = popt[2]
 
-        fidelity = (
-            dark_mode_weight * dark_left_prob + bright_mode_weight * bright_right_prob
+    if not (np.isfinite(mean_counts_dark) and np.isfinite(mean_counts_bright)):
+        warnings.warn("determine_threshold: non-finite mean counts. Returning None.")
+        return (None, None) if ret_fidelity else None
+
+    # Build threshold candidates robustly (never empty)
+    lo = min(mean_counts_dark, mean_counts_bright)
+    hi = max(mean_counts_dark, mean_counts_bright)
+
+    # Candidate thresholds are half-integers spanning the region between modes
+    start = np.floor(lo) - 0.5
+    stop = np.ceil(hi) + 0.5 + 1e-12  # +eps to avoid arange edge emptiness
+    thresh_options = np.arange(start, stop, 1.0, dtype=float)
+
+    # If means are extremely close (or weird), ensure at least one option
+    if thresh_options.size == 0:
+        thresh_options = np.array(
+            [(mean_counts_dark + mean_counts_bright) / 2.0], dtype=float
         )
-        fidelities.append(fidelity)
 
-        # Two-sided
-        # left_fidelity = (dark_ratio * dark_left_prob) / (
-        #     dark_ratio * dark_left_prob + bright_ratio * bright_left_prob
-        # )
-        # right_fidelity = (bright_ratio * bright_right_prob) / (
-        #     bright_ratio * bright_right_prob + dark_ratio * dark_right_prob
-        # )
-        # left_fidelities.append(left_fidelity)
-        # right_fidelities.append(right_fidelity)
-    fidelity = np.max(fidelities)
-    threshold = thresh_options[np.argmax(fidelities)]
+    # ---------- Search for best threshold ----------
+    best_fid = -np.inf
+    best_thresh = None
+
+    for val in thresh_options:
+        try:
+            dark_left_prob = float(
+                single_mode_cdf(val, *popt[1 : 1 + num_single_mode_params])
+            )
+            bright_left_prob = float(
+                single_mode_cdf(val, *popt[1 + num_single_mode_params :])
+            )
+        except Exception:
+            continue
+
+        if not (np.isfinite(dark_left_prob) and np.isfinite(bright_left_prob)):
+            continue
+
+        # Keep probabilities in [0, 1] in case numerical routines drift slightly
+        dark_left_prob = float(np.clip(dark_left_prob, 0.0, 1.0))
+        bright_left_prob = float(np.clip(bright_left_prob, 0.0, 1.0))
+
+        bright_right_prob = 1.0 - bright_left_prob
+
+        fid = dark_mode_weight * dark_left_prob + bright_mode_weight * bright_right_prob
+        if np.isfinite(fid) and fid > best_fid:
+            best_fid = fid
+            best_thresh = val
+
+    # ---------- Fallback if everything failed ----------
+    if best_thresh is None:
+        best_thresh = (mean_counts_dark + mean_counts_bright) / 2.0
+        best_fid = np.nan
+        warnings.warn(
+            "determine_threshold: could not evaluate any candidate thresholds (CDF failures / bad params). "
+            f"Falling back to midpoint threshold={best_thresh} with fidelity=nan."
+        )
 
     if do_print:
-        print(
-            f"Optimum readout fidelity {round(fidelity, 3)} achieved at threshold {threshold}"
-        )
+        if np.isfinite(best_fid):
+            print(
+                f"Optimum readout fidelity {round(best_fid, 3)} achieved at threshold {best_thresh}"
+            )
+        else:
+            print(f"Using fallback threshold {best_thresh} (fidelity unavailable)")
 
-    if ret_fidelity:
-        return threshold, fidelity
-    else:
-        return threshold
+    return (best_thresh, best_fid) if ret_fidelity else best_thresh
 
 
 def determine_dual_threshold(

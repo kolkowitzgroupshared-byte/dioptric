@@ -25,8 +25,10 @@ from utils import tool_belt as tb
 from utils import widefield as widefield
 from utils.constants import NVSig
 
+
 def create_fit_figure(nv_list, phis, norm_counts, norm_counts_ste):
     num_nvs = len(nv_list)
+
     def cos_func(phi, amp, phase_offset):
         return 0.5 * amp * np.cos(phi - phase_offset) + 0.5
 
@@ -244,6 +246,7 @@ def simulate_pulse_errors():
 def cos_func(phi_deg, amp, phase_offset_deg, offset):
     return amp * np.cos(np.radians(phi_deg) - np.radians(phase_offset_deg)) + offset
 
+
 def fit_phase_fringe(phis_deg, norm_counts, norm_counts_ste):
     """
     Fit all NV phase fringes to cos_func and return a DataFrame with per-NV params.
@@ -253,17 +256,33 @@ def fit_phase_fringe(phis_deg, norm_counts, norm_counts_ste):
       med_counts, med_counts_ste: median normalized counts (+ STE) over NVs
     """
     num_nvs = norm_counts.shape[0]
-    results = {"nv_index": [], "amplitude": [], "phase_offset": [], "offset": [], "chi_sq": []}
+    results = {
+        "nv_index": [],
+        "amplitude": [],
+        "phase_offset": [],
+        "offset": [],
+        "chi_sq": [],
+    }
 
     for i in range(num_nvs):
         y = norm_counts[i]
         yerr = np.asarray(norm_counts_ste[i])
         # Safe uncertainties (avoid zeros)
-        yerr = np.where(np.asarray(yerr) <= 0, np.nanmedian(np.abs(y - np.nanmedian(y))) or 1.0, yerr)
+        yerr = np.where(
+            np.asarray(yerr) <= 0,
+            np.nanmedian(np.abs(y - np.nanmedian(y))) or 1.0,
+            yerr,
+        )
 
         try:
             popt, pcov = curve_fit(
-                cos_func, phis_deg, y, p0=[0.25, 0.0, 0.5], sigma=yerr, absolute_sigma=True, maxfev=20000
+                cos_func,
+                phis_deg,
+                y,
+                p0=[0.25, 0.0, 0.5],
+                sigma=yerr,
+                absolute_sigma=True,
+                maxfev=20000,
             )
             residuals = cos_func(phis_deg, *popt) - y
             dof = max(len(y) - len(popt), 1)
@@ -276,7 +295,7 @@ def fit_phase_fringe(phis_deg, norm_counts, norm_counts_ste):
         results["phase_offset"].append(popt[1])
         results["offset"].append(popt[2])
         results["chi_sq"].append(chi_sq_red)
-        results["nv_index"].append(i) 
+        results["nv_index"].append(i)
 
     fit_df = pd.DataFrame(results)
     fit_df["contrast"] = 2.0 * fit_df["amplitude"]  # peak-to-trough
@@ -287,17 +306,30 @@ def fit_phase_fringe(phis_deg, norm_counts, norm_counts_ste):
 
     try:
         popt_med, _ = curve_fit(
-            cos_func, phis_deg, med_counts, p0=[0.25, 0.0, 0.5],
-            sigma=np.where(med_counts_ste<=0, np.nanmedian(np.abs(med_counts - np.nanmedian(med_counts))) or 1.0, med_counts_ste),
-            absolute_sigma=True, maxfev=20000
+            cos_func,
+            phis_deg,
+            med_counts,
+            p0=[0.25, 0.0, 0.5],
+            sigma=np.where(
+                med_counts_ste <= 0,
+                np.nanmedian(np.abs(med_counts - np.nanmedian(med_counts))) or 1.0,
+                med_counts_ste,
+            ),
+            absolute_sigma=True,
+            maxfev=20000,
         )
         phi_fit = np.linspace(np.min(phis_deg), np.max(phis_deg), 300)
         vals_fit = cos_func(phi_fit, *popt_med)
         median_fit = {"popt": popt_med, "phi_fit": phi_fit, "vals_fit": vals_fit}
     except Exception:
-        median_fit = {"popt": [np.nan, np.nan, np.nan], "phi_fit": None, "vals_fit": None}
+        median_fit = {
+            "popt": [np.nan, np.nan, np.nan],
+            "phi_fit": None,
+            "vals_fit": None,
+        }
 
     return fit_df, median_fit, med_counts, med_counts_ste
+
 
 def load_and_process(file_stem):
     """
@@ -317,6 +349,7 @@ def load_and_process(file_stem):
     # Your fitting uses degrees:
     phis_deg = phis  # if already in degrees; otherwise: np.degrees(phis)
     return phis_deg, np.array(norm_counts), np.array(norm_counts_ste)
+
 
 def compare_two_runs(file_stem_A, label_A, file_stem_B, label_B, show_individual=False):
     # Load
@@ -357,38 +390,55 @@ def compare_two_runs(file_stem_A, label_A, file_stem_B, label_B, show_individual
     # --- Plots ---
     # (1) Overlay median fringes
     fig1, ax1 = plt.subplots(figsize=(6, 5))
-    ax1.errorbar(phis_A, medc_A, yerr=medste_A, fmt="o", alpha=0.6, label=f"{label_A} median")
+    ax1.errorbar(
+        phis_A, medc_A, yerr=medste_A, fmt="o", alpha=0.6, label=f"{label_A} median"
+    )
     if med_A["phi_fit"] is not None:
         ax1.plot(med_A["phi_fit"], med_A["vals_fit"], "--", alpha=0.9)
 
-    ax1.errorbar(phis_B, medc_B, yerr=medste_B, fmt="s", alpha=0.6, label=f"{label_B} median")
+    ax1.errorbar(
+        phis_B, medc_B, yerr=medste_B, fmt="s", alpha=0.6, label=f"{label_B} median"
+    )
     if med_B["phi_fit"] is not None:
         ax1.plot(med_B["phi_fit"], med_B["vals_fit"], "-.", alpha=0.9)
 
     ax1.set_xlabel("Phase, φ (degrees)")
     ax1.set_ylabel("Median normalized counts")
     ax1.set_title("Median fringes: overlay")
-    ax1.grid(True); ax1.spines["right"].set_visible(False); ax1.spines["top"].set_visible(False)
+    ax1.grid(True)
+    ax1.spines["right"].set_visible(False)
+    ax1.spines["top"].set_visible(False)
     ax1.legend()
 
     # (2) Side-by-side contrast distributions
     fig2, ax2 = plt.subplots(figsize=(6, 5))
-    data_to_plot = [fit_A["contrast"].dropna().values, fit_B["contrast"].dropna().values]
+    data_to_plot = [
+        fit_A["contrast"].dropna().values,
+        fit_B["contrast"].dropna().values,
+    ]
     ax2.violinplot(data_to_plot, showmeans=True, showextrema=True)
-    ax2.set_xticks([1, 2]); ax2.set_xticklabels([label_A, label_B])
+    ax2.set_xticks([1, 2])
+    ax2.set_xticklabels([label_A, label_B])
     ax2.set_ylabel("Per-NV fringe contrast (peak–to–trough)")
     ax2.set_title("Per-NV contrast distributions")
-    ax2.grid(True); ax2.spines["right"].set_visible(False); ax2.spines["top"].set_visible(False)
+    ax2.grid(True)
+    ax2.spines["right"].set_visible(False)
+    ax2.spines["top"].set_visible(False)
 
     # (3) Optional: plot individual NV fits for each run
     if show_individual:
+
         def plot_individual(phis, norm, ste, label):
             fig, ax = plt.subplots(figsize=(6, 5))
             for i in range(norm.shape[0]):
                 ax.errorbar(phis, norm[i], yerr=np.abs(ste[i]), fmt="o", alpha=0.25)
-            ax.set_xlabel("Phase (deg)"); ax.set_ylabel("Normalized counts")
-            ax.set_title(f"All NVs: {label}"); ax.grid(True)
-            ax.spines["right"].set_visible(False); ax.spines["top"].set_visible(False)
+            ax.set_xlabel("Phase (deg)")
+            ax.set_ylabel("Normalized counts")
+            ax.set_title(f"All NVs: {label}")
+            ax.grid(True)
+            ax.spines["right"].set_visible(False)
+            ax.spines["top"].set_visible(False)
+
         plot_individual(phis_A, norm_A, ste_A, label_A)
         plot_individual(phis_B, norm_B, ste_B, label_B)
 
@@ -396,19 +446,20 @@ def compare_two_runs(file_stem_A, label_A, file_stem_B, label_B, show_individual
 
     return fit_A, fit_B, Cmed_A, Cmed_B
 
+
 def plot_contrast_scatter(fit_A, label_A, fit_B=None, label_B=None):
     """
     Scatter plot of per-NV contrast magnitudes (|2*amp|).
     If fit_B is provided, overlays both runs.
     """
-    C_A = np.abs(2*np.array(fit_A["amplitude"], dtype=float))
+    C_A = np.abs(2 * np.array(fit_A["amplitude"], dtype=float))
     x_A = np.arange(len(C_A))
 
     fig, ax = plt.subplots(figsize=(7, 4.5))
     ax.scatter(x_A, C_A, marker="o", alpha=0.8, label=label_A)
 
     if fit_B is not None:
-        C_B = np.abs(2*np.array(fit_B["amplitude"], dtype=float))
+        C_B = np.abs(2 * np.array(fit_B["amplitude"], dtype=float))
         # Align x by index; if lengths differ, trim to min length
         n = min(len(C_A), len(C_B))
         x_B = np.arange(n) + 0.15  # tiny offset so points don’t fully overlap
@@ -423,6 +474,7 @@ def plot_contrast_scatter(fit_A, label_A, fit_B=None, label_B=None):
     ax.legend()
     plt.tight_layout()
     plt.show()
+
 
 # ---------- NEW HELPERS (append to your file) ----------
 def process_one_file_degrees(file_stem):
@@ -439,12 +491,13 @@ def process_one_file_degrees(file_stem):
     # Reuse your pipeline for phis/normalized counts
     phis_deg, norm_counts, norm_counts_ste = load_and_process(file_stem)
     fit_df, _, _, _ = fit_phase_fringe(phis_deg, norm_counts, norm_counts_ste)
-    
+
     fit_df["evol_time_ns"] = evol_time_ns
     fit_df["file_stem"] = file_stem
     # Ensure contrast is positive peak-to-trough
     fit_df["contrast"] = 2.0 * np.abs(fit_df["amplitude"])
     return evol_time_ns, fit_df
+
 
 def gather_contrast_across_files(file_stems):
     """
@@ -457,7 +510,10 @@ def gather_contrast_across_files(file_stems):
     big = pd.concat(all_dfs, ignore_index=True)
     return big.sort_values("evol_time_ns")
 
-def plot_per_nv_contrast_vs_tau(df_all, nv_indices=None, title="Per-NV Contrast vs Evolution Time"):
+
+def plot_per_nv_contrast_vs_tau(
+    df_all, nv_indices=None, title="Per-NV Contrast vs Evolution Time"
+):
     """
     Light spaghetti plot: contrast vs τ for each NV (or a chosen subset).
     """
@@ -465,7 +521,7 @@ def plot_per_nv_contrast_vs_tau(df_all, nv_indices=None, title="Per-NV Contrast 
     if nv_indices is None:
         nv_indices = sorted(df_all["nv_index"].unique())
 
-    plt.figure(figsize=(7,5))
+    plt.figure(figsize=(7, 5))
     for nv in nv_indices:
         sub = df_all[df_all["nv_index"] == nv].set_index("evol_time_ns").reindex(taus)
         plt.plot(taus, sub["contrast"].values, "-o", alpha=0.35, linewidth=1)
@@ -474,14 +530,20 @@ def plot_per_nv_contrast_vs_tau(df_all, nv_indices=None, title="Per-NV Contrast 
     plt.ylabel("Per-NV contrast (peak-to-trough)")
     plt.title(title)
     plt.grid(True)
-    ax = plt.gca(); ax.spines["right"].set_visible(False); ax.spines["top"].set_visible(False)
+    ax = plt.gca()
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
     plt.tight_layout()
     plt.show()
 
 
-def plot_median_contrast_vs_tau(df_all, revival_tau_us=19.6, title="Median NV Contrast vs Evolution Time"):
+def plot_median_contrast_vs_tau(
+    df_all, revival_tau_us=19.6, title="Median NV Contrast vs Evolution Time"
+):
     # Clean bad values
-    df = df_all.replace([np.inf, -np.inf], np.nan).dropna(subset=["contrast", "evol_time_ns"])
+    df = df_all.replace([np.inf, -np.inf], np.nan).dropna(
+        subset=["contrast", "evol_time_ns"]
+    )
 
     taus_ns = np.sort(df_all["evol_time_ns"].unique())
     taus_us = taus_ns / 1000.0
@@ -494,30 +556,42 @@ def plot_median_contrast_vs_tau(df_all, revival_tau_us=19.6, title="Median NV Co
         q1.append(np.percentile(vals, 25) if len(vals) else np.nan)
         q3.append(np.percentile(vals, 75) if len(vals) else np.nan)
 
-    med = np.array(med); q1 = np.array(q1); q3 = np.array(q3)
+    med = np.array(med)
+    q1 = np.array(q1)
+    q3 = np.array(q3)
 
-    plt.figure(figsize=(7,5))
+    plt.figure(figsize=(7, 5))
     plt.plot(taus_us, med, "-o", linewidth=2, label="Median")
     plt.fill_between(taus_us, q1, q3, alpha=0.25, label="IQR (25–75%)")
 
     # Mark the revival (input given in µs); pick the closest τ
     if len(taus_us):
         idx = int(np.argmin(np.abs(taus_us - revival_tau_us)))
-        plt.scatter([taus_us[idx]], [med[idx]], color="red", s=20, zorder=5, label=f"Revival ≈ {taus_us[idx]:.3g} µs")
+        plt.scatter(
+            [taus_us[idx]],
+            [med[idx]],
+            color="red",
+            s=20,
+            zorder=5,
+            label=f"Revival ≈ {taus_us[idx]:.3g} µs",
+        )
 
     plt.xlabel("Evolution time τ (µs)")
-    plt.ylabel("Contrast (peak-to-trough)") 
+    plt.ylabel("Contrast (peak-to-trough)")
     plt.xscale("log")
-    plt.title(title)    
+    plt.title(title)
     plt.grid(True)
     ax = plt.gca()
-    ax.spines["right"].set_visible(False); ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
     plt.legend()
     plt.tight_layout()
     plt.show()
 
-def plot_contrast_vs_nv_selected_taus(df_all, taus_to_plot_ns,
-                                      title="Per-NV Contrast vs NV Index"):
+
+def plot_contrast_vs_nv_selected_taus(
+    df_all, taus_to_plot_ns, title="Per-NV Contrast vs NV Index"
+):
     """
     Scatter per-NV contrast vs NV index, but only for selected evolution times.
     Use circle marker for first tau, square for second tau.
@@ -537,10 +611,14 @@ def plot_contrast_vs_nv_selected_taus(df_all, taus_to_plot_ns,
     for i, t_ns in enumerate(taus_ns):
         sub = df[df["evol_time_ns"] == t_ns].sort_values("nv_index")
         if not sub.empty:
-            plt.scatter(sub["nv_index"], sub["contrast"],
-                        alpha=0.7, s=35,
-                        marker=markers[i % len(markers)],
-                        label=f"τ={t_ns/1000:g} µs")  # ns→µs
+            plt.scatter(
+                sub["nv_index"],
+                sub["contrast"],
+                alpha=0.7,
+                s=35,
+                marker=markers[i % len(markers)],
+                label=f"τ={t_ns/1000:g} µs",
+            )  # ns→µs
 
     plt.xlabel("NV index")
     plt.ylabel("Contrast (peak-to-trough)")
@@ -559,7 +637,9 @@ def contrast_ratio_rev_vs_min(df_all, revival_tau_ns=19600, base_tau_ns=16):
     Compute ratio and difference of median contrast:
       contrast(revival_tau) vs contrast(base_tau == 16 ns).
     """
-    df = df_all.replace([np.inf, -np.inf], np.nan).dropna(subset=["contrast", "evol_time_ns"])
+    df = df_all.replace([np.inf, -np.inf], np.nan).dropna(
+        subset=["contrast", "evol_time_ns"]
+    )
     taus = df["evol_time_ns"].unique()
     if revival_tau_ns not in taus:
         print(f"Revival τ={revival_tau_ns} ns not found in data.")
@@ -568,8 +648,12 @@ def contrast_ratio_rev_vs_min(df_all, revival_tau_ns=19600, base_tau_ns=16):
         print(f"Base τ=16 ns not found in data.")
         return None
 
-    med_rev = np.median(df.loc[df["evol_time_ns"] == revival_tau_ns, "contrast"].to_numpy())
-    med_base = np.median(df.loc[df["evol_time_ns"] == base_tau_ns, "contrast"].to_numpy())
+    med_rev = np.median(
+        df.loc[df["evol_time_ns"] == revival_tau_ns, "contrast"].to_numpy()
+    )
+    med_base = np.median(
+        df.loc[df["evol_time_ns"] == base_tau_ns, "contrast"].to_numpy()
+    )
 
     ratio = med_rev / med_base if med_base != 0 else np.nan
     diff = med_rev - med_base
@@ -583,8 +667,9 @@ def contrast_ratio_rev_vs_min(df_all, revival_tau_ns=19600, base_tau_ns=16):
         "med_rev": med_rev,
         "med_base": med_base,
         "ratio": ratio,
-        "difference": diff
+        "difference": diff,
     }
+
 
 # # ------------------ EXAMPLE CALL ------------------
 # if __name__ == "__main__":
@@ -614,7 +699,7 @@ def contrast_ratio_rev_vs_min(df_all, revival_tau_ns=19600, base_tau_ns=16):
 #     "2025_10_14-14_10_50-rubin-nv0_2025_09_08",
 #     "2025_10_14-15_20_59-rubin-nv0_2025_09_08",
 #     ]
-    
+
 #     file_list = [
 #     "2026_01_05-21_44_23-johnson-nv0_2025_10_21",
 #     "2026_01_05-22_23_17-johnson-nv0_2025_10_21",
@@ -646,6 +731,7 @@ def contrast_ratio_rev_vs_min(df_all, revival_tau_ns=19600, base_tau_ns=16):
 #     # fit_spin.to_csv("spin_echo_perNV_contrast.csv", index=False)
 #     # fit_xy8.to_csv("xy8_perNV_contrast.csv", index=False)
 
+
 # -----------------------------
 # Core fit: y = c + A cosφ + B sinφ
 # -----------------------------
@@ -666,7 +752,11 @@ def fit_fringe_wls(phis_deg, y, yerr=None):
     else:
         yerr = np.asarray(yerr, float)
         # avoid zero/neg uncertainties
-        yerr = np.where(~np.isfinite(yerr) | (yerr <= 0), np.nanmedian(np.abs(y - np.nanmedian(y))) + 1e-12, yerr)
+        yerr = np.where(
+            ~np.isfinite(yerr) | (yerr <= 0),
+            np.nanmedian(np.abs(y - np.nanmedian(y))) + 1e-12,
+            yerr,
+        )
         w = 1.0 / (yerr**2)
 
     # Weighted least squares via sqrt(W)
@@ -678,8 +768,8 @@ def fit_fringe_wls(phis_deg, y, yerr=None):
     beta, *_ = np.linalg.lstsq(Xw, yw, rcond=None)
     A, B, c = beta
 
-    amp = float(np.sqrt(A*A + B*B))          # R
-    phase0 = float(np.arctan2(B, A))         # radians, for cos(φ - phase0)
+    amp = float(np.sqrt(A * A + B * B))  # R
+    phase0 = float(np.arctan2(B, A))  # radians, for cos(φ - phase0)
     phase0_deg = float(np.rad2deg(phase0) % 360.0)
 
     # Goodness (reduced chi^2)
@@ -689,7 +779,9 @@ def fit_fringe_wls(phis_deg, y, yerr=None):
     chi2_red = float(np.nansum(w * resid**2) / dof)
 
     return dict(
-        A=float(A), B=float(B), c=float(c),
+        A=float(A),
+        B=float(B),
+        c=float(c),
         amp=amp,
         phase0_deg=phase0_deg,
         contrast_ptp=float(2.0 * amp),
@@ -710,16 +802,16 @@ def analyze_fringe_file(file_stem, threshold=False):
     raw = dm.get_raw_data(file_stem=file_stem, load_npz=True, use_cache=True)
 
     nv_list = raw["nv_list"]
-    counts = np.asarray(raw["counts"])          # (2, nv, ..., step, ...)
+    counts = np.asarray(raw["counts"])  # (2, nv, ..., step, ...)
     sig_counts = counts[0]
     ref_counts = counts[1]
-    
+
     # normalized counts vs phi (your standard pipeline)
     norm_counts, norm_counts_ste = widefield.process_counts(
         nv_list, sig_counts, ref_counts, threshold=threshold
     )
-    norm_counts = np.asarray(norm_counts, float)         # (M, nphi)
-    norm_counts_ste = np.asarray(norm_counts_ste, float) # (M, nphi)
+    norm_counts = np.asarray(norm_counts, float)  # (M, nphi)
+    norm_counts_ste = np.asarray(norm_counts_ste, float)  # (M, nphi)
 
     phis = np.asarray(raw["phis"])
     phi_units = raw.get("phi-units", "deg")
@@ -735,13 +827,15 @@ def analyze_fringe_file(file_stem, threshold=False):
     rows = []
     for i in range(norm_counts.shape[0]):
         fit = fit_fringe_wls(phis_deg, norm_counts[i], yerr=norm_counts_ste[i])
-        rows.append({
-            "file_stem": file_stem,
-            "seq_type": seq_type,
-            "evol_time_ns": evol_time_ns,
-            "nv_index": i,
-            **fit
-        })
+        rows.append(
+            {
+                "file_stem": file_stem,
+                "seq_type": seq_type,
+                "evol_time_ns": evol_time_ns,
+                "nv_index": i,
+                **fit,
+            }
+        )
     per_nv_df = pd.DataFrame(rows)
 
     # median fringe across NVs + its fit
@@ -783,16 +877,18 @@ def analyze_many_files(file_stems, threshold=True):
 
         # run-level summaries
         c = per_nv_df["contrast_ptp"].to_numpy()
-        run_rows.append({
-            "file_stem": fs,
-            "seq_type": meta["seq_type"],
-            "evol_time_ns": meta["evol_time_ns"],
-            "evol_time_us": meta["evol_time_ns"] / 1000.0,
-            "median_contrast_perNV": float(np.nanmedian(c)),
-            "q25_contrast_perNV": float(np.nanpercentile(c, 25)),
-            "q75_contrast_perNV": float(np.nanpercentile(c, 75)),
-            "contrast_medfit": float(med["contrast_medfit"]),
-        })
+        run_rows.append(
+            {
+                "file_stem": fs,
+                "seq_type": meta["seq_type"],
+                "evol_time_ns": meta["evol_time_ns"],
+                "evol_time_us": meta["evol_time_ns"] / 1000.0,
+                "median_contrast_perNV": float(np.nanmedian(c)),
+                "q25_contrast_perNV": float(np.nanpercentile(c, 25)),
+                "q75_contrast_perNV": float(np.nanpercentile(c, 75)),
+                "contrast_medfit": float(med["contrast_medfit"]),
+            }
+        )
 
     per_nv_all = pd.concat(per_nv_list, ignore_index=True)
     run_summary = pd.DataFrame(run_rows).sort_values(["seq_type", "evol_time_ns"])
@@ -834,21 +930,29 @@ def plot_median_contrast_vs_time(run_summary, use="median_contrast_perNV", logx=
 
 
 def plot_contrast_hist(per_nv_all, seq_type, evol_time_ns, bins=30):
-    sub = per_nv_all[(per_nv_all["seq_type"] == seq_type) & (per_nv_all["evol_time_ns"] == evol_time_ns)]
+    sub = per_nv_all[
+        (per_nv_all["seq_type"] == seq_type)
+        & (per_nv_all["evol_time_ns"] == evol_time_ns)
+    ]
     c = sub["contrast_ptp"].dropna().to_numpy()
 
     plt.figure(figsize=(6.5, 4.5))
     plt.hist(c, bins=bins)
     plt.xlabel("contrast (peak-to-trough)")
     plt.ylabel("count")
-    plt.title(f"Per-NV contrast histogram: {seq_type}, τ={evol_time_ns/1000:g} µs (N={len(c)})")
+    plt.title(
+        f"Per-NV contrast histogram: {seq_type}, τ={evol_time_ns/1000:g} µs (N={len(c)})"
+    )
     plt.grid(True, ls="--", lw=0.5)
     plt.tight_layout()
     plt.show()
 
 
 def plot_contrast_vs_nv(per_nv_all, seq_type, evol_time_ns):
-    sub = per_nv_all[(per_nv_all["seq_type"] == seq_type) & (per_nv_all["evol_time_ns"] == evol_time_ns)]
+    sub = per_nv_all[
+        (per_nv_all["seq_type"] == seq_type)
+        & (per_nv_all["evol_time_ns"] == evol_time_ns)
+    ]
     sub = sub.sort_values("nv_index")
 
     plt.figure(figsize=(7.5, 4.5))
@@ -871,7 +975,13 @@ def plot_median_fringe_overlay(file_stems, threshold=True):
         _, meta, med = analyze_fringe_file(fs, threshold=threshold)
         ph = med["phis_deg"]
         y = med["median_fringe"]
-        plt.plot(ph, y, "-o", ms=3, label=f"{meta['seq_type']} τ={meta['evol_time_ns']/1000:g}µs")
+        plt.plot(
+            ph,
+            y,
+            "-o",
+            ms=3,
+            label=f"{meta['seq_type']} τ={meta['evol_time_ns']/1000:g}µs",
+        )
 
     plt.xlabel("phase φ (deg)")
     plt.ylabel("median normalized counts")
@@ -881,31 +991,455 @@ def plot_median_fringe_overlay(file_stems, threshold=True):
     plt.tight_layout()
     plt.show()
 
-if __name__ == "__main__":
-    kpl.init_kplotlib()
-    file_list = [
-    "2026_01_05-21_44_23-johnson-nv0_2025_10_21",
-    "2026_01_05-22_23_17-johnson-nv0_2025_10_21",
-    "2026_01_05-22_23_18-johnson-nv0_2025_10_21",
-    "2026_01_06-01_24_06-johnson-nv0_2025_10_21",
-    "2026_01_06-01_24_06-johnson-nv0_2025_10_21",
-    "2026_01_06-03_42_20-johnson-nv0_2025_10_21",
-    "2026_01_06-06_01_17-johnson-nv0_2025_10_21",
-    "2026_01_06-08_19_20-johnson-nv0_2025_10_21",
-    "2026_01_06-13_03_27-johnson-nv0_2025_10_21",
-    "2026_01_06-10_43_38-johnson-nv0_2025_10_21",
+
+# if __name__ == "__main__":
+#     kpl.init_kplotlib()
+#     file_list = [
+#     "2026_01_05-21_44_23-johnson-nv0_2025_10_21",
+#     "2026_01_05-22_23_17-johnson-nv0_2025_10_21",
+#     "2026_01_05-22_23_18-johnson-nv0_2025_10_21",
+#     "2026_01_06-01_24_06-johnson-nv0_2025_10_21",
+#     "2026_01_06-01_24_06-johnson-nv0_2025_10_21",
+#     "2026_01_06-03_42_20-johnson-nv0_2025_10_21",
+#     "2026_01_06-06_01_17-johnson-nv0_2025_10_21",
+#     "2026_01_06-08_19_20-johnson-nv0_2025_10_21",
+#     "2026_01_06-13_03_27-johnson-nv0_2025_10_21",
+#     "2026_01_06-10_43_38-johnson-nv0_2025_10_21",
+#     ]
+#     per_nv_all, run_summary = analyze_many_files(file_list, threshold=True)
+
+#     print(run_summary[["seq_type","evol_time_ns","median_contrast_perNV","contrast_medfit"]])
+
+#     # 1) Median contrast vs evolution time, separated by seq_type
+#     plot_median_contrast_vs_time(run_summary, use="median_contrast_perNV", logx=True)
+#     plot_median_contrast_vs_time(run_summary, use="contrast_medfit", logx=True)
+
+#     # 2) Histogram / NV scatter for specific conditions
+#     plot_contrast_hist(per_nv_all, seq_type="xy8", evol_time_ns=15000)
+#     plot_contrast_vs_nv(per_nv_all, seq_type="xy8", evol_time_ns=15000)
+
+#     # 3) Overlay median fringes (sanity check)
+#     plot_median_fringe_overlay(file_list[:6], threshold=True)
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+
+from utils import widefield
+from utils import data_manager as dm
+
+
+kpl.init_kplotlib()
+
+
+# ----------------------------
+# Helpers
+# ----------------------------
+def _phi_to_degrees(phis):
+    """If phis look like radians (<= ~2π), convert to degrees; else assume degrees."""
+    phis = np.asarray(phis, float)
+    mx = np.nanmax(phis)
+    if mx <= 2 * np.pi + 1e-6:
+        return np.degrees(phis)
+    return phis
+
+
+def _cos_func_deg(phi_deg, amp, phase_offset_deg, offset):
+    return amp * np.cos(np.radians(phi_deg - phase_offset_deg)) + offset
+
+
+def _fit_cosine_deg(phi_deg, y, yerr):
+    """Weighted cosine fit. Returns (amp, phase_deg, offset, red_chi2, success)."""
+    phi_deg = np.asarray(phi_deg, float)
+    y = np.asarray(y, float)
+    yerr = np.asarray(yerr, float)
+
+    m = np.isfinite(phi_deg) & np.isfinite(y) & np.isfinite(yerr) & (yerr > 0)
+    if np.count_nonzero(m) < 6:
+        return np.nan, np.nan, np.nan, np.nan, False
+
+    x = phi_deg[m]
+    yy = y[m]
+    ee = yerr[m]
+
+    off0 = float(np.nanmedian(yy))
+    amp0 = float(0.5 * (np.nanpercentile(yy, 95) - np.nanpercentile(yy, 5)))
+    phase0 = float(x[np.nanargmax(yy)]) if np.all(np.isfinite(x)) else 0.0
+    p0 = [
+        amp0 if np.isfinite(amp0) else 0.1,
+        phase0,
+        off0 if np.isfinite(off0) else 0.5,
     ]
-    per_nv_all, run_summary = analyze_many_files(file_list, threshold=True)
 
-    print(run_summary[["seq_type","evol_time_ns","median_contrast_perNV","contrast_medfit"]])
+    try:
+        popt, _ = curve_fit(
+            _cos_func_deg,
+            x,
+            yy,
+            p0=p0,
+            sigma=ee,
+            absolute_sigma=True,
+            maxfev=20000,
+        )
+        amp, ph, off = map(float, popt)
 
-    # 1) Median contrast vs evolution time, separated by seq_type
-    plot_median_contrast_vs_time(run_summary, use="median_contrast_perNV", logx=True)
-    plot_median_contrast_vs_time(run_summary, use="contrast_medfit", logx=True)
+        # normalize sign convention: keep amp >= 0
+        if np.isfinite(amp) and amp < 0:
+            amp = -amp
+            ph = (ph + 180.0) % 360.0
+        if np.isfinite(ph):
+            ph = ph % 360.0
 
-    # 2) Histogram / NV scatter for specific conditions
-    plot_contrast_hist(per_nv_all, seq_type="xy8", evol_time_ns=15000)
-    plot_contrast_vs_nv(per_nv_all, seq_type="xy8", evol_time_ns=15000)
+        resid = _cos_func_deg(x, amp, ph, off) - yy
+        dof = max(1, len(yy) - 3)
+        red_chi2 = float(np.nansum((resid / ee) ** 2) / dof)
+        return amp, ph, off, red_chi2, True
+    except Exception:
+        return np.nan, np.nan, np.nan, np.nan, False
 
-    # 3) Overlay median fringes (sanity check)
-    plot_median_fringe_overlay(file_list[:6], threshold=True)
+
+def _parse_N_from_seq_type(seq_type, default=8):
+    s = (seq_type or "").lower()
+    if "hahn" in s or "echo" in s:
+        return 1
+    for n in (2, 4, 8, 16):
+        if f"xy{n}" in s:
+            return n
+    return default
+
+
+def _evol_to_us(evol, unit):
+    unit = (unit or "ns").lower()
+    if unit in ("ns", "nanosecond", "nanoseconds"):
+        return float(evol) / 1e3
+    if unit in ("us", "µs", "microsecond", "microseconds"):
+        return float(evol)
+    if unit in ("s", "sec", "seconds"):
+        return float(evol) * 1e6
+    # default assume ns
+    return float(evol) / 1e3
+
+
+# ----------------------------
+# Load one phase-scan file
+# ----------------------------
+def load_phase_scan(file_stem):
+    data = dm.get_raw_data(file_stem=file_stem, load_npz=True, use_cache=True)
+
+    nv_list = data["nv_list"]
+    phis_deg = _phi_to_degrees(data["phis"])
+
+    counts = np.asarray(data["counts"], float)
+    sig_counts = counts[0]
+    ref_counts = counts[1]
+
+    norm_counts, norm_counts_ste = widefield.process_counts(
+        nv_list, sig_counts, ref_counts, threshold=True
+    )
+    norm_counts = np.asarray(norm_counts, float)
+    norm_counts_ste = np.abs(np.asarray(norm_counts_ste, float))
+
+    # guard zeros/NaNs in sigma
+    good = np.isfinite(norm_counts_ste) & (norm_counts_ste > 0)
+    if np.any(good):
+        norm_counts_ste[~good] = np.nanmedian(norm_counts_ste[good])
+
+    evol = float(data.get("evol_time", np.nan))
+    evol_unit = data.get("evol_time-unit") or data.get("evol_time_unit") or "ns"
+    evol_us = _evol_to_us(evol, evol_unit)
+
+    seq_type = data.get("seq_type", "")
+    N = _parse_N_from_seq_type(seq_type, default=8)
+
+    # In your QUA code, evol_time sets tau_ticks -> evol_time is τ
+    # Total evolution time (matches your other plots): t_total = 2 N τ
+    t_total_us = 2.0 * N * evol_us
+
+    # Median across NVs at each phi + fit
+    median_counts = np.nanmedian(norm_counts, axis=0)
+    median_ste = np.nanmedian(norm_counts_ste, axis=0)
+    amp_medfit, ph_medfit, off_medfit, chi_medfit, ok_medfit = _fit_cosine_deg(
+        phis_deg, median_counts, median_ste
+    )
+
+    # Per-NV amplitudes (for robust stats)
+    num_nvs = len(nv_list)
+    amps = np.full(num_nvs, np.nan)
+    offs = np.full(num_nvs, np.nan)
+    chis = np.full(num_nvs, np.nan)
+    for nv_ind in range(num_nvs):
+        amp, ph, off, chi, ok = _fit_cosine_deg(
+            phis_deg, norm_counts[nv_ind], norm_counts_ste[nv_ind]
+        )
+        amps[nv_ind] = amp
+        offs[nv_ind] = off
+        chis[nv_ind] = chi
+
+    amp_med = float(np.nanmedian(amps))
+    amp_p16, amp_p84 = [float(x) for x in np.nanpercentile(amps, [16, 84])]
+
+    return dict(
+        file_stem=file_stem,
+        seq_type=seq_type,
+        N=N,
+        phis_deg=phis_deg,
+        norm_counts=norm_counts,
+        norm_counts_ste=norm_counts_ste,
+        evol_us=evol_us,
+        t_total_us=t_total_us,
+        median_counts=median_counts,
+        median_ste=median_ste,
+        amp_med=amp_med,
+        amp_p16=amp_p16,
+        amp_p84=amp_p84,
+        amp_medfit=amp_medfit,
+        ph_medfit=ph_medfit,
+        off_medfit=off_medfit,
+        chi_medfit=chi_medfit,
+        ok_medfit=ok_medfit,
+    )
+
+
+# ----------------------------
+# Plot 1: Contrast (amplitude) decay vs evolution time
+# ----------------------------
+def plot_contrast_decay(phase_scans, x_axis="t_total", use_logx=False):
+    """
+    phase_scans: list of dicts returned by load_phase_scan
+    x_axis: "t_total" (µs, recommended) or "tau" (evol_us)
+    """
+    phase_scans = list(phase_scans)
+    phase_scans.sort(
+        key=lambda r: r["t_total_us"] if x_axis == "t_total" else r["evol_us"]
+    )
+
+    # title seq label
+    seqs = sorted({(r.get("seq_type") or "").lower() for r in phase_scans})
+    seq_label = seqs[0] if len(seqs) == 1 else "mixed seq"
+
+    x = np.array(
+        [r["t_total_us"] if x_axis == "t_total" else r["evol_us"] for r in phase_scans],
+        float,
+    )
+
+    # robust: median amplitude across NVs + 16–84 band
+    y = np.array([r["amp_med"] for r in phase_scans], float)
+    ylo = np.array([r["amp_med"] - r["amp_p16"] for r in phase_scans], float)
+    yhi = np.array([r["amp_p84"] - r["amp_med"] for r in phase_scans], float)
+
+    # median-fringe fit amplitude (single number per file)
+    y_medfit = np.array([r["amp_medfit"] for r in phase_scans], float)
+
+    fig, ax = plt.subplots(figsize=(6.8, 4.4))
+
+    ax.errorbar(
+        x,
+        y,
+        yerr=np.vstack([ylo, yhi]),
+        fmt="o",
+        markersize=4,
+        capsize=2,
+        label="Median(A) across NVs (16–84%)",
+    )
+    ax.plot(
+        x,
+        y_medfit,
+        "o",
+        markersize=4,
+        label="A from fit to median fringe",
+    )
+
+    if use_logx:
+        ax.set_xscale("log")
+
+    if x_axis == "t_total":
+        ax.set_xlabel(r"Total evolution time $t = 2N\tau$ (µs)")
+    else:
+        ax.set_xlabel(r"Interpulse spacing $\tau$ (µs)")
+
+    ax.set_ylabel("Fringe amplitude A")
+    ax.set_title(f"{seq_label}: fringe amplitude vs evolution time", fontsize=15)
+    ax.grid(True, which="both", ls="--", alpha=0.35)
+    ax.legend(frameon=False)
+
+    # tighten x-lims exactly to data
+    # finite = np.isfinite(x) & (x > 0)
+    # if np.any(finite):
+    #     ax.set_xlim(np.min(x[finite]), np.max(x[finite]))
+
+    fig.tight_layout()
+    return fig, ax
+
+
+# ----------------------------
+# Plot 2: Overlay the MEDIAN fringes for each evol_time (data + fit)
+# ----------------------------
+def plot_median_fringes_overlay(phase_scans, label_by="t_total"):
+    """
+    label_by: "t_total" or "tau"
+    """
+    phase_scans = list(phase_scans)
+    phase_scans.sort(key=lambda r: r["t_total_us"])
+
+    seqs = sorted({(r.get("seq_type") or "").lower() for r in phase_scans})
+    seq_label = seqs[0] if len(seqs) == 1 else "mixed seq"
+
+    fig, ax = plt.subplots(figsize=(6.2, 4.8))
+
+    for r in phase_scans:
+        ph = r["phis_deg"]
+        med = r["median_counts"]
+        ste = r["median_ste"]
+
+        if label_by == "tau":
+            lab = rf"$\tau$={r['evol_us']:.3g} µs"
+        else:
+            lab = rf"$t$={r['t_total_us']:.3g} µs"
+
+        ax.errorbar(
+            ph,
+            med,
+            yerr=ste,
+            fmt="o",
+            markersize=3,
+            capsize=2,
+            alpha=0.9,
+            label=lab,
+        )
+
+        # fit line (median fringe fit)
+        if r["ok_medfit"] and np.isfinite(r["amp_medfit"]):
+            phi_fit = np.linspace(np.min(ph), np.max(ph), 400)
+            ax.plot(
+                phi_fit,
+                _cos_func_deg(
+                    phi_fit, r["amp_medfit"], r["ph_medfit"], r["off_medfit"]
+                ),
+                "--",
+                alpha=0.8,
+            )
+
+    ax.set_xlabel(r"Phase $\phi$ (deg)")
+    ax.set_ylabel("Median normalized counts")
+    ax.set_title(
+        f"{seq_label}: median fringe (data + fit) for each evol_time", fontsize=15
+    )
+    ax.grid(True, ls="--", alpha=0.35)
+    ax.legend(frameon=False, fontsize=9)
+    fig.tight_layout()
+    return fig, ax
+
+
+# ----------------------------
+# Plot 3: For each evol_time, show faint per-NV data + bold median (stacked)
+# ----------------------------
+def plot_data_and_median_stacked(phase_scans, nv_subset=30, height_per_ax=3.2):
+    phase_scans = list(phase_scans)
+    phase_scans.sort(key=lambda r: r["t_total_us"])
+
+    seqs = sorted({(r.get("seq_type") or "").lower() for r in phase_scans})
+    seq_label = seqs[0] if len(seqs) == 1 else "mixed seq"
+
+    n = len(phase_scans)
+    fig, axs = plt.subplots(
+        nrows=n,
+        ncols=1,
+        figsize=(6.4, height_per_ax * n),
+        sharex=True,
+        sharey=False,
+        gridspec_kw={"hspace": 0.00},
+    )
+    axs = np.atleast_1d(axs).ravel()
+
+    rng = np.random.default_rng(0)
+
+    for k, (ax, r) in enumerate(zip(axs, phase_scans)):
+        ph = r["phis_deg"]
+        y = r["norm_counts"]
+        ye = r["norm_counts_ste"]
+
+        # plot a subset of NVs faint (so it stays fast/legible)
+        num_nvs = y.shape[0]
+        if nv_subset is None or nv_subset >= num_nvs:
+            inds = np.arange(num_nvs)
+        else:
+            inds = rng.choice(num_nvs, size=nv_subset, replace=False)
+
+        for j in inds:
+            ax.errorbar(
+                ph,
+                y[j],
+                yerr=ye[j],
+                fmt="o",
+                markersize=2,
+                capsize=1,
+                alpha=0.08,
+            )
+
+        # median bold
+        ax.errorbar(
+            ph,
+            r["median_counts"],
+            yerr=r["median_ste"],
+            fmt="o",
+            markersize=3,
+            capsize=2,
+            label="Median",
+        )
+        if r["ok_medfit"] and np.isfinite(r["amp_medfit"]):
+            phi_fit = np.linspace(np.min(ph), np.max(ph), 400)
+            ax.plot(
+                phi_fit,
+                _cos_func_deg(
+                    phi_fit, r["amp_medfit"], r["ph_medfit"], r["off_medfit"]
+                ),
+                "--",
+                label="Fit",
+            )
+
+        ax.grid(True, ls="--", alpha=0.35)
+
+        # small legend showing time
+        ax.legend(
+            frameon=False,
+            fontsize=9,
+            loc="best",
+        )
+
+        if k < n - 1:
+            ax.tick_params(labelbottom=False)
+
+    axs[-1].set_xlabel(r"Phase $\phi$ (deg)")
+    fig.supylabel("Normalized counts")
+    fig.suptitle(
+        f"{seq_label}: per-NV (faint) + median (bold) phase fringes",
+        y=0.995,
+        fontsize=15,
+    )
+    fig.tight_layout()
+    return fig, axs
+
+
+# ----------------------------
+# Example usage
+# ----------------------------
+PHASE_SCAN_FILES = [
+    "2026_01_28-20_06_27-johnson-nv0_2025_10_21",
+    "2026_01_28-22_36_03-johnson-nv0_2025_10_21",
+    "2026_01_29-01_18_18-johnson-nv0_2025_10_21",
+]
+
+phase_scans = [load_phase_scan(st) for st in PHASE_SCAN_FILES]
+
+# 1) Contrast decay (amplitude vs time)
+plot_contrast_decay(phase_scans, x_axis="t_total", use_logx=False)
+plt.show()
+
+# 2) Overlay median fringes (data + fit) for each evol_time
+plot_median_fringes_overlay(phase_scans, label_by="t_total")
+plt.show()
+
+# 3) Stacked: per-NV faint data + median bold, one panel per evol_time
+plot_data_and_median_stacked(phase_scans, nv_subset=30, height_per_ax=2.0)
+plt.show(block=True)

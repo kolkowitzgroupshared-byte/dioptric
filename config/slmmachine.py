@@ -6,7 +6,6 @@ Created June 21st, 2024
 
 @author: sbchand
 """
-
 from pathlib import Path
 
 # Set home directory path

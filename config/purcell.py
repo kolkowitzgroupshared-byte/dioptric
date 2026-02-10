@@ -32,10 +32,13 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
+# calibration_coords_pixel = [[16.501, 46.951],[146.942, 239.125],[206.995, 41.423]]
+# calibration_coords_green = [[119.095, 118.486],[106.576, 95.231],[97.387, 116.969]]
+# calibration_coords_red = [[82.064, 81.382],[72.649, 61.838],[64.373, 79.036]]
 
 calibration_coords_pixel = [[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
-calibration_coords_green = [[119.419, 119.481],[111.434, 95.675],[96.084, 118.836]]
-calibration_coords_red = [[82.294, 82.207],[76.605, 62.448],[63.242, 80.487]]
+calibration_coords_green = [[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
+calibration_coords_red = [[82.15, 82.282],[76.463, 62.52],[63.114, 80.587]]
 
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -77,7 +80,8 @@ config |= {
     # Common durations are in ns
     "CommonDurations": {
         "default_pulse_duration": 1000,
-        "aod_access_time": 11e3,  # access time in specs is 10us
+        "aod_access_time":2.6e3,  # access time in specs is 10us
+        # "aod_access_time":8e3,  # access time in specs is 10us
         "widefield_operation_buffer": 1e3,
         "uwave_buffer": 0,
         "iq_buffer": 0,
@@ -102,6 +106,7 @@ config |= {
         "sig_gen_STAN_sg394_0_visa": "TCPIP::192.168.0.120::inst0::INSTR",
         "sig_gen_STAN_sg394_1_visa": "TCPIP::192.168.0.121::inst0::INSTR",
         "sig_gen_STAN_sg394_2_visa": "TCPIP::192.168.0.178::inst0::INSTR",
+        "sig_gen_STAN_sg394_3_visa": "TCPIP::192.168.0.177::inst0::INSTR",
         "sig_gen_TEKT_tsg4104a_visa": "TCPIP0::128.104.ramp_to_zero_duration.112::5025::SOCKET",
         "tagger_SWAB_20_1_serial": "1740000JEH",
         "tagger_SWAB_20_2_serial": "1948000SIP",
@@ -118,7 +123,7 @@ config |= {
             "sig_gen_BERK_bnc835": {"delay": 151, "fm_mod_bandwidth": 100000.0},
             "sig_gen_STAN_sg394_0": {"delay": 104, "fm_mod_bandwidth": 100000.0},
             "sig_gen_STAN_sg394_1": {"delay": 151, "fm_mod_bandwidth": 100000.0},
-            "sig_gen_STAN_sg394_2": {"delay": 151, "fm_mod_bandwidth": 100000.0}, ## need a work
+            "sig_gen_STAN_sg394_3": {"delay": 151, "fm_mod_bandwidth": 100000.0},
             "sig_gen_TEKT_tsg4104a": {"delay": 57},
         },
         "iq_comp_amp": 0.5,
@@ -127,16 +132,15 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_0",
                 "uwave_power": 11.0,
-                # "frequency": 2.7878,
+                "frequency": 2.7700, #49G
                 # "frequency": 2.747151,
-                "frequency": 2.709799,
+                # "frequency": 2.709799,  #62G
                 # "frequency":2.963189,
                 # "frequency": 2.917151,
                 # "frequency": 2.8082,
-                "rabi_period": 256,
-                "pi_pulse": 128,
-                # "pi_pulse": 240,
-                "pi_on_2_pulse": 64,
+                "rabi_period": 356,
+                "pi_pulse": 176,
+                "pi_on_2_pulse": 88,
                 # "frequency": 2.935030,
                 # "rabi_period": 112,
                 # "pi_pulse": 56,
@@ -146,22 +150,24 @@ config |= {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
                 # "frequency": 2.917151,
-                # "frequency": 2.8408,
+                "frequency": 2.8101,#49G
+                # "frequency": 2.77000,#49G
                 # "frequency": 2.982049,
-                # "frequency": 2.828210,
-                "frequency": 2.816912,
+                # "frequency": 2.828210, 
+                # "frequency": 2.816912, #62G
                 # "frequency": 2.8252,
-                "rabi_period": 192,
-                "pi_pulse": 88,
-                "pi_on_2_pulse": 44,
+                "rabi_period": 288,
+                "pi_pulse": 168,
+                "pi_on_2_pulse": 84,
             },
             2: {
-                "physical_name": "sig_gen_STAN_sg394_2",
+                "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 11.0,
-                "frequency": 0.173,
-                "rabi_period": 176,
-                "pi_pulse": 88,
-                "pi_on_2_pulse": 44,
+                "frequency": 2.7700,
+                # "frequency": 0.145,
+                "rabi_period": 100,
+                "pi_pulse": 48,
+                "pi_on_2_pulse": 24,
             },
         },
     },
@@ -216,7 +222,7 @@ config |= {
             },
             VirtualLaserKey.SPIN_READOUT: {
                 "physical_name": green_laser,
-                "duration": 300,
+                "duration": 200,
             },
             # LaserKey.CHARGE_POL: {"physical_name": green_laser, "duration": 10e3},
             VirtualLaserKey.CHARGE_POL: {
@@ -573,7 +579,6 @@ opx_config = {
             },
         },
         "do_sig_gen_STAN_sg394_0_dm": {
-            # "digitalInputs": {"chan": {"port": ("con1", 9), "delay": 0, "buffer": 0}},
             "digitalInputs": {"chan": {"port": ("con1", 9), "delay": iq_delay, "buffer": 0}},
             "operations": {
                 "on": "do_on",
@@ -583,7 +588,6 @@ opx_config = {
             },
         },
         "do_sig_gen_STAN_sg394_1_dm": {
-            # 230 ns I channel latency measured 3/26/25 MCC and Saroj using oscilloscope
             "digitalInputs": {
                 # "chan": {"port": ("con1", 10), "delay": 0, "buffer": 0}
                 "chan": {"port": ("con1", 10), "delay": iq_delay, "buffer": 0}
@@ -596,8 +600,8 @@ opx_config = {
                 "pi_on_2_pulse": "do_pi_on_2_pulse_1",
             },
         },
-        "do_sig_gen_STAN_sg394_2_dm": {
-            "digitalInputs": {"chan": {"port": ("con1", 3), "delay": 0, "buffer": 0}},
+        "do_sig_gen_STAN_sg394_3_dm": {
+            "digitalInputs": {"chan": {"port": ("con1", 3), "delay": iq_delay, "buffer": 0}},
             "operations": {
                 "on": "do_on",
                 "off": "do_off",
@@ -656,7 +660,7 @@ opx_config = {
         ### (con1,9) and (con1,10) already used by sg394_1.
         ### That means sg394_1 and sg394_2 cannot be active simultaneously.
         ### If you intend to use them independently, assign new AO ports.
-        "ao_sig_gen_STAN_sg394_2_i": {
+        "ao_sig_gen_STAN_sg394_3_i": {
             "singleInput": {"port": ("con1", 9)},
             "intermediate_frequency": 0,
             "operations": {
@@ -667,7 +671,7 @@ opx_config = {
                 "pi_on_2_pulse": "ao_iq_pi_on_2_pulse_2",
             },
         },
-        "ao_sig_gen_STAN_sg394_2_q": {
+        "ao_sig_gen_STAN_sg394_3_q": {
             "singleInput": {"port": ("con1", 10)},
             "intermediate_frequency": 0,
             "operations": {
@@ -961,9 +965,9 @@ opx_config = {
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2367}, #136NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2267}, #118NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.34947}, ## 312NV johnson
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.313148}, ## 230NV johnson
+        "yellow_charge_readout": {"type": "constant", "sample": 0.35}, ## 230NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3084}, ## 223NV johnson
-        "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
         "yellow_spin_pol": {"type": "constant", "sample": 0.31510},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other
