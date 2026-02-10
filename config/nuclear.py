@@ -27,8 +27,6 @@ home = Path.home()
 
 green_laser = "laser_COBO_515"  # make labrad server for COBOLT green laser
 tisapph_laser = ""  # fill this in later (labrad server for Tisapph)
-thor_galvos = "pos_xy_THOR_gvs212"
-cryo_piezo = "pos_xyz_ATTO_piezos"
 
 # region Base config
 # Add on to the default config
@@ -113,29 +111,7 @@ config |= {
             VirtualLaserKey.IMAGING: {
                 # "physical_name": green_laser,
                 "physical_name": green_laser,  # this is the laser that appears on the imaging APD scan
-                "duration": 12e6,  # this duration appears on the imaging APD scan, this value is overwritten?
-            },
-            VirtualLaserKey.SINGLET_DRIVE: {
-                "physical_name": tisapph_laser,
-                "duration": 300,  # this is a placeholder
-            },
-            VirtualLaserKey.SPIN_READOUT: {
-                "physical_name": green_laser,
-                "duration": 300,
-            },
-            # LaserKey.CHARGE_POL: {"physical_name": green_laser, "duration": 10e3},
-            VirtualLaserKey.CHARGE_POL: {
-                "physical_name": green_laser,
-                "duration": 1e3,  # Works better for Deep NVs (Johnson)
-            },
-            # LaserKey.CHARGE_POL: {"physical_name": green_laser, "duration": 60},
-            VirtualLaserKey.SPIN_POL: {
-                "physical_name": green_laser,
-                "duration": 10e3,
-            },
-            VirtualLaserKey.SHELVING: {
-                "physical_name": green_laser,
-                "duration": 60,
+                "duration": 100e6,  # this duration appears on the imaging APD scan, this value is overwritten?
             },
         },
         #
@@ -145,7 +121,6 @@ config |= {
     },
     ###
     "Servers": {  # Bucket for miscellaneous servers not otherwise listed above
-        "pulse_gen": "QM_opx",
         "camera": "camera_NUVU_hnu512gamma",
         "thorslm": "slm_THOR_exulus_hd2",
         "slider_1": "filter_slider_THOR_ell9k_4",
@@ -159,35 +134,13 @@ config |= {
     ###
     "Wiring": {
         # https://docs-be.ni.com/bundle/ni-67xx-scb-68a-labels/raw/resource/enus/371806a.pdf
-        "Daq": {
-            "ao_galvo_x": "dev1/AO31",
-            "ao_galvo_y": "dev1/AO22",
-            "ao_piezo_stage_P616_3c_x": "dev1/AO25",
-            "ao_piezo_stage_P616_3c_y": "dev1/AO27",
-            "ao_piezo_stage_P616_3c_z": "dev1/AO29",
-            "ao_objective_piezo": "dev1/AO21",
-            "voltage_range_factor": 10.0,
-            "di_clock": "PFI12",
-        },
-        "Piezo_Controller_E727": {
-            "piezo_controller_channel_x": 4,
-            "piezo_controller_channel_y": 5,
-            "piezo_controller_channel_z": 6,
-            "voltage_range_factor": 10.0,
-            "scaling_offset": 50.0,
-            "scaling_gain": 0.5,
-        },
         "PulseGen": {
-            "do_apd_gate": 5,
-            "do_laser_INTE_520_dm": 3,
-            "do_laser_OPTO_589_dm": 3,
-            "do_laser_COBO_638_dm": 7,
-            "do_sample_clock": 0,
-            "do_sig_gen_BERK_bnc835_gate": 1,
-            "do_sig_gen_STAN_sg394_gate": 10,
-            "do_camera_trigger": 5,
+            "do_apd_gate": 4,
+            "do_laser_COBO_515_dm": 0,
+            "do_laser_COBO_532_dm": 1,
+            "do_laser_COBO_638_dm": 2,
         },
-        "Tagger": {"di_apd_0": 2, "di_apd_1": 4, "di_apd_gate": 3, "di_clock": 1},
+        "Tagger": {"di_apd_0": 1, "di_apd_gate": 2},
     },
 }
 

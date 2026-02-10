@@ -32,13 +32,13 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
-# calibration_coords_pixel = [[16.501, 46.951],[146.942, 239.125],[206.995, 41.423]]
-# calibration_coords_green = [[119.095, 118.486],[106.576, 95.231],[97.387, 116.969]]
-# calibration_coords_red = [[82.064, 81.382],[72.649, 61.838],[64.373, 79.036]]
+calibration_coords_pixel = [[16.469, 47.014],[147.124, 239.353],[215.515, 60.949]]
+calibration_coords_green = [[119.04, 118.505],[106.545, 95.253],[96.696, 114.696]]
+calibration_coords_red = [[82.018, 81.394],[72.623, 61.855],[63.888, 77.153]]
 
-calibration_coords_pixel = [[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
-calibration_coords_green = [[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
-calibration_coords_red = [[82.15, 82.282],[76.463, 62.52],[63.114, 80.587]]
+# calibration_coords_pixel = [[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
+# calibration_coords_green = [[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
+# calibration_coords_red = [[82.15, 82.282],[76.463, 62.52],[63.114, 80.587]]
 
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -80,8 +80,8 @@ config |= {
     # Common durations are in ns
     "CommonDurations": {
         "default_pulse_duration": 1000,
-        # "aod_access_time":2.6e3,  # access time in specs is 10us
-        "aod_access_time":8e3,  # access time in specs is 10us
+        "aod_access_time":2.6e3,  # access time in specs is 10us
+        # "aod_access_time":8e3,  # access time in specs is 10us
         "widefield_operation_buffer": 1e3,
         "uwave_buffer": 0,
         "iq_buffer": 0,
@@ -139,9 +139,8 @@ config |= {
                 # "frequency": 2.917151,
                 # "frequency": 2.8082,
                 "rabi_period": 356,
-                "pi_pulse": 192,
-                # "pi_pulse": 240,
-                "pi_on_2_pulse": 96,
+                "pi_pulse": 176,
+                "pi_on_2_pulse": 88,
                 # "frequency": 2.935030,
                 # "rabi_period": 112,
                 # "pi_pulse": 56,
@@ -151,15 +150,15 @@ config |= {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
                 # "frequency": 2.917151,
-                "frequency": 2.8093,#49G
+                "frequency": 2.8101,#49G
                 # "frequency": 2.77000,#49G
                 # "frequency": 2.982049,
                 # "frequency": 2.828210, 
                 # "frequency": 2.816912, #62G
                 # "frequency": 2.8252,
                 "rabi_period": 288,
-                "pi_pulse": 144,
-                "pi_on_2_pulse": 72,
+                "pi_pulse": 168,
+                "pi_on_2_pulse": 84,
             },
             2: {
                 "physical_name": "sig_gen_STAN_sg394_3",
