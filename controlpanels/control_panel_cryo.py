@@ -112,8 +112,6 @@ def do_image_sample(nv_sig):
 #         cmax=cbarmax,
 #     )
 
-
-
 def do_2D_xz_scan(nv_sig):
     """
     A 2D z-scan of the piezo that sweeps the x-axis of the galvo.
@@ -659,21 +657,24 @@ def do_z_scan_3d(nv_sig):
 
 
 def do_rabi(nv_sig):
-    num_steps = 51
+    num_steps = 31
     num_reps = 2e4
-    num_runs = 16
+    num_runs = 30
     min_tau = 8
     max_tau = 400
-    uwave_ind_list = [0, 1]
+    uwave_ind_list = [0]
 # endregion
+    # rabi.main(
+    #     nv_sig,
+    #     num_steps,
+    #     num_reps,
+    #     num_runs,
+    #     min_tau,
+    #     max_tau,
+    #     uwave_ind_list,
+    # )
     rabi.main(
         nv_sig,
-        num_steps,
-        num_reps,
-        num_runs,
-        min_tau,
-        max_tau,
-        uwave_ind_list,
     )
     # nv_sig["rabi_{}".format(state.name)] = period
 
@@ -766,7 +767,14 @@ def do_pulse_gen_constant(digital_channels=(2,), analog0=None, analog1=None):
         pulse_gen.reset()
 
 
-
+def piezo_pest():
+    cxn = labrad.connect()
+    s = cxn.pos_z_PI_pifoc
+    voltages_to_write = np.linspace(1, 4, 5)
+    for v in voltages_to_write:
+        s.write_z(v)
+        time.sleep(2)
+    
 
 def get_sample_name() -> str:
     sample = "Wu" #Rubin
@@ -833,12 +841,12 @@ if __name__ == "__main__":
     nv_sig.expected_counts = None # raw counts, none when unknown
     
     # cxn = labrad.connect()
-    # s = cxn.pos_xy_THOR_gvs212
+    # s = cxn.pos_z_PI_pifoc
     # print(sorted(s.settings.keys()))
     # sys.exit()
     # endregion
     ### Routines to execute
-
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
     try:
         tool_belt.init_safe_stop()
         # tool_belt.set_drift([0.0, 0.0, 0.0])  # Totally rneset
@@ -846,10 +854,12 @@ if __name__ == "__main__":
         # tool_belt.set_drift([0.0, 0.0, drift[2]])  # Keep z
         # tool_belt.set_drifts([drift[0], drift[1], 0.0])  # Keep xy
         
-        pos.set_xyz_on_nv(nv_sig) # Leave this line out when calibrating z
-        
+        # pos.set_xyz_on_nv(nv_sig) # Leave this line out when calibrating z
+
+
         # do_pulse_gen_constant()
         # do_pulse_gen_constant(digital_channels=(2,))
+        # do_pulse_gen_constant(digital_channels=(3,))
 
         # # # Manually set Z reference to current position
         # piezo = pos.get_positioner_server(CoordsKey.Z)
@@ -875,7 +885,7 @@ if __name__ == "__main__":
         # region Image / 3D scan    
 
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
-        do_image_sample(nv_sig)
+        # do_image_sample(nv_sig)
         # do_image_sample_zoom(nv_sig)
 
         # Quick NV area scans
@@ -898,7 +908,7 @@ if __name__ == "__main__":
         # endregion Optimize
 
         # region Stationary count
-        # do_stationary_count(nv_sig, disable_opt=True) #Note there is a slow response time w/ the APD
+        do_stationary_count(nv_sig, disable_opt=True) #Note there is a slow response time w/ the APD
         # do_stationary_count(nv_sig, disable_opt=True, nv_minus_initialization=True)
         # do_stationary_count(nv_sig, disable_opt=True, nv_zero_initialization=True)
         # endregion Stationary count
