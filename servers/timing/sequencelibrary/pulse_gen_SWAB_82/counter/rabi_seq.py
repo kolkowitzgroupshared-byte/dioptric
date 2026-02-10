@@ -133,14 +133,28 @@ Author: Saroj Chand
 #     plt.show()
 
 
-# rabi_seq.py
+# -*- coding: utf-8 -*-
+"""
+Confocal Rabi pulse-streamer sequence (SWAB_82 counter path)
+
+Contract:
+  args = [base_args, tau] or [base_args, tau, num_reps_ignored]
+  base_args = [pol_ns, readout_ns, uwave_ind_list, readout_vkey, readout_power, max_tau_ns]
+
+Sequence produces EXACTLY 2 APD gates per repetition:
+  gate0 = signal readout
+  gate1 = reference readout
+
+Local preview:
+  python rabi_seq.py  (will plot)
+"""
+
 import numpy as np
 from pulsestreamer import OutputState, Sequence
 
 from utils import common
 from utils import tool_belt as tb
 from utils.constants import Digital, ModMode, VirtualLaserKey
-
 
 LOW = Digital.LOW
 HIGH = Digital.HIGH
@@ -162,197 +176,208 @@ def _vkey_from_arg(x):
       - VirtualLaserKey member
       - "SPIN_READOUT"
       - "VirtualLaserKey.SPIN_READOUT"
+      - value string (if VirtualLaserKey is str-enum)
     Returns VirtualLaserKey
     """
     if isinstance(x, VirtualLaserKey):
         return x
     if isinstance(x, str):
         name = x.split(".")[-1]
-        return VirtualLaserKey[name]
+        # try by Enum name
+        try:
+            return VirtualLaserKey[name]
+        except Exception:
+            # try by Enum value
+            return VirtualLaserKey(x)
     raise TypeError(f"Bad virtual laser key: {x!r}")
 
 
-def _train_len(train):
-    return np.int64(sum(int(d) for d, _ in train))
+def _set_laser_train(seq: Sequence, cfg: dict, readout_vkey: VirtualLaserKey, train, readout_power=None):
+    """Handle DIGITAL vs ANALOG modulation for the selected virtual laser."""
+    wiring = cfg["Wiring"]["PulseGen"]
+
+    vld = cfg["Optics"]["VirtualLasers"][readout_vkey]
+    laser_name = vld["physical_name"]
+    pld = cfg["Optics"]["PhysicalLasers"][laser_name]
+    mod_mode = pld["mod_mode"]
+
+    if mod_mode is ModMode.DIGITAL:
+        do_chan = wiring[f"do_{laser_name}_dm"]
+        seq.setDigital(do_chan, train)
+        return
+
+    if mod_mode is ModMode.ANALOG:
+        ao_chan = wiring[f"ao_{laser_name}_am"]
+        # Choose power: explicit arg wins; else use virtual laser config.
+        if readout_power is None:
+            if "laser_power" not in vld:
+                raise ValueError(
+                    f"{readout_vkey} is ANALOG but no readout_power provided and no "
+                    f"'laser_power' in config Optics->VirtualLasers->{readout_vkey}."
+                )
+            readout_power = vld["laser_power"]
+
+        power = float(readout_power)
+        power_dict = {LOW: 0.0, HIGH: power}
+        processed = [(int(d), power_dict[val]) for (d, val) in train]
+        seq.setAnalog(ao_chan, processed)
+        return
+
+    raise ValueError(f"Unknown mod_mode for {laser_name}: {mod_mode!r}")
 
 
 def get_seq(pulse_streamer, config, args):
-    """
-    Args formats supported:
-      - [base_args, tau]
-      - [base_args, tau, num_reps]   (num_reps ignored; base routine handles repetitions)
-    where:
-      base_args = [pol_ns, readout_ns, uwave_ind_list, readout_vkey, readout_power, max_tau]
-    """
     # -------- parse args --------
-    if len(args) >= 2 and isinstance(args[0], (list, tuple)):
-        base_args = args[0]
-        tau = args[1]
+    if len(args) == 3 and isinstance(args[0], (list, tuple)):
+        base_args, tau, _num_reps_ignored = args
+    elif len(args) == 2 and isinstance(args[0], (list, tuple)):
+        base_args, tau = args
     else:
         raise ValueError(
             "Expected args as [base_args, tau] or [base_args, tau, num_reps]. "
             f"Got: {args!r}"
         )
 
-    if len(base_args) != 6:
-        raise ValueError(
-            "base_args must be [pol_ns, readout_ns, uwave_ind_list, readout_vkey, "
-            "readout_power, max_tau]. Got: "
-            f"{base_args!r}"
-        )
+    # base_args = [pol_ns, readout_ns, uwave_ind_list, readout_vkey, readout_power, max_tau_ns]
+    # if len(base_args) != 6:
+    #     raise ValueError(f"base_args must have length 6; got {len(base_args)}: {base_args!r}")
 
-    pol_ns, readout_ns, uwave_ind_list, readout_vkey_arg, readout_power, max_tau = base_args
+    pol_ns, readout_ns, uwave_ind_list, readout_vkey_arg, readout_power, max_tau_ns = base_args
 
     pol_ns = _as_int64("pol_ns", pol_ns)
     readout_ns = _as_int64("readout_ns", readout_ns)
     tau = _as_int64("tau", tau)
-    max_tau = _as_int64("max_tau", max_tau)
+    max_tau_ns = _as_int64("max_tau_ns", max_tau_ns)
 
-    if readout_ns > pol_ns:
-        raise ValueError(f"readout_ns ({readout_ns}) must be <= pol_ns ({pol_ns}).")
-    if tau > max_tau:
-        raise ValueError(f"tau ({tau}) must be <= max_tau ({max_tau}).")
+    # inside rabi_seq.py
+    if tau > max_tau_ns:
+        max_tau_ns = tau  
 
-    pad_ns = max_tau - tau
-    pre_post = pol_ns - readout_ns
 
-    # normalize uwave_ind_list (Rabi: enforce exactly 1 channel for correct timing)
+    pad_ns = _as_int64("pad_ns", (max_tau_ns - tau))
+
+    # normalize uwave_ind_list
     if isinstance(uwave_ind_list, (int, np.integer)):
         uwave_ind_list = [int(uwave_ind_list)]
     else:
         uwave_ind_list = [int(x) for x in uwave_ind_list]
 
-    if len(uwave_ind_list) != 1:
-        raise ValueError("This rabi_seq expects exactly one uwave channel (uwave_ind_list length == 1).")
-
-    uwave_ind = uwave_ind_list[0]
-
-    # laser key
     readout_vkey = _vkey_from_arg(readout_vkey_arg)
-    laser_name = tb.get_physical_laser_name(readout_vkey)
 
     # -------- wiring & delays --------
-    pulser_wiring = config["Wiring"]["PulseGen"]
-    do_apd_gate = pulser_wiring["do_apd_gate"]
-    do_sample_clock = pulser_wiring["do_sample_clock"]
+    wiring = config["Wiring"]["PulseGen"]
+    do_apd_gate = wiring["do_apd_gate"]
+    do_sample_clock = wiring["do_sample_clock"]
 
-    # MW channel wiring
-    vsg = tb.get_virtual_sig_gen_dict(uwave_ind)
-    sig_gen_name = vsg["physical_name"]
-    do_sig_gen_dm = pulser_wiring[f"do_{sig_gen_name}_dm"]
+    # delays
+    laser_name = config["Optics"]["VirtualLasers"][readout_vkey]["physical_name"]
+    laser_delay = _as_int64("laser_delay", config["Optics"]["PhysicalLasers"][laser_name]["delay"])
 
-    laser_delay = _as_int64(
-        "laser_delay", config["Optics"]["PhysicalLasers"][laser_name]["delay"]
-    )
-    uwave_delay = _as_int64(
-        "uwave_delay", config["Microwaves"]["PhysicalSigGens"][sig_gen_name]["delay"]
-    )
+    uwave_delays = []
+    do_sig_gen_dm_list = []
+    for uwave_ind in uwave_ind_list:
+        vsg = tb.get_virtual_sig_gen_dict(uwave_ind)
+        sig_gen_name = vsg["physical_name"]
+        do_sig_gen_dm_list.append(wiring[f"do_{sig_gen_name}_dm"])
+        uwave_delays.append(config["Microwaves"]["PhysicalSigGens"][sig_gen_name]["delay"])
+
+    uwave_delay = _as_int64("uwave_delay", max(uwave_delays) if uwave_delays else 0)
     common_delay = np.int64(max(laser_delay, uwave_delay))
 
     uwave_buffer = _as_int64("uwave_buffer", config["CommonDurations"]["uwave_buffer"])
 
-    # -------- trains (common timebase) --------
-    # Two APD gates per repetition: signal then reference
+    # -------- timeline per repetition --------
+    # 0) common_delay
+    # 1) polarization (laser ON) pol_ns
+    # 2) buffer
+    # 3) signal evolution max_tau_ns: mw ON for tau then OFF for pad
+    # 4) buffer
+    # 5) readout (laser ON, APD ON) readout_ns
+    # 6) buffer
+    # 7) reference evolution max_tau_ns: mw OFF
+    # 8) buffer
+    # 9) readout2 (laser ON, APD ON) readout_ns
+    # 10) buffer (small dead time)
+
+    # APD gate: only during the two readouts
     apd_train = [
         (common_delay, LOW),
-        (pre_post, LOW),
+        (pol_ns, LOW),
         (uwave_buffer, LOW),
-        (max_tau, LOW),
-        (uwave_buffer, LOW),
-        (readout_ns, HIGH),
-        (pre_post, LOW),
-        (uwave_buffer, LOW),
-        (max_tau, LOW),
+        (max_tau_ns, LOW),
         (uwave_buffer, LOW),
         (readout_ns, HIGH),
-        (pre_post, LOW),
+        (uwave_buffer, LOW),
+        (max_tau_ns, LOW),
+        (uwave_buffer, LOW),
+        (readout_ns, HIGH),
+        (uwave_buffer, LOW),
     ]
 
-    # Laser starts early by (common_delay - laser_delay)
+    # Laser: shift earlier by laser_delay (start with LOW for common_delay-laser_delay)
     laser_train = [
-        (common_delay - laser_delay, HIGH),
-        (pre_post, HIGH),
+        (common_delay - laser_delay, LOW),
+        (pol_ns, HIGH),
         (uwave_buffer, LOW),
-        (max_tau, LOW),
-        (uwave_buffer, LOW),
-        (readout_ns, HIGH),
-        (pre_post, HIGH),
-        (uwave_buffer, LOW),
-        (max_tau, LOW),
+        (max_tau_ns, LOW),
         (uwave_buffer, LOW),
         (readout_ns, HIGH),
-        (pre_post + laser_delay, HIGH),
+        (uwave_buffer, LOW),
+        (max_tau_ns, LOW),
+        (uwave_buffer, LOW),
+        (readout_ns, HIGH),
+        (uwave_buffer + laser_delay, LOW),
     ]
 
-    # MW starts early by (common_delay - uwave_delay)
-    # Only ON in the signal evolution window: tau HIGH then pad LOW
+    # MW: shift earlier by uwave_delay
     mw_train = [
         (common_delay - uwave_delay, LOW),
-        (pre_post, LOW),
+        (pol_ns, LOW),
         (uwave_buffer, LOW),
         (tau, HIGH),
         (pad_ns, LOW),
         (uwave_buffer, LOW),
         (readout_ns, LOW),
-        (pre_post, LOW),
         (uwave_buffer, LOW),
-        (max_tau, LOW),  # reference window: always OFF
+        (max_tau_ns, LOW),   # reference: OFF
         (uwave_buffer, LOW),
         (readout_ns, LOW),
-        (pre_post + uwave_delay, LOW),
+        (uwave_buffer + uwave_delay, LOW),
     ]
 
     # -------- assemble --------
     seq = Sequence()
     seq.setDigital(do_apd_gate, apd_train)
-    seq.setDigital(do_sig_gen_dm, mw_train)
+    _set_laser_train(seq, config, readout_vkey, laser_train, readout_power=readout_power)
 
-    # Laser: support optional power override for analog modulation
-    mod_mode = config["Optics"]["PhysicalLasers"][laser_name]["mod_mode"]
-    if mod_mode is ModMode.DIGITAL:
-        tb.process_laser_seq(seq, readout_vkey, laser_train)
-    elif mod_mode is ModMode.ANALOG:
-        if readout_power is None:
-            # fall back to config virtual laser "laser_power"
-            vld = tb.get_virtual_laser_dict(readout_vkey)
-            readout_power = vld.get("laser_power", None)
-        if readout_power is None:
-            raise ValueError(
-                f"{laser_name} is ANALOG modulated but readout_power is None and config "
-                f"VirtualLasers[{readout_vkey}] has no 'laser_power'."
-            )
-        ao_chan = pulser_wiring[f"ao_{laser_name}_am"]
-        processed = [(dur, 0.0 if val is LOW else float(readout_power)) for dur, val in laser_train]
-        seq.setAnalog(ao_chan, processed)
+    for do_sig_gen_dm in do_sig_gen_dm_list:
+        seq.setDigital(do_sig_gen_dm, mw_train)
+
+    period_ns = np.int64(sum(int(d) for d, _ in apd_train))
+
+    # sample clock: 100 ns pulse near end (if long enough)
+    if period_ns >= 300:
+        clk_train = [(int(period_ns - 200), LOW), (100, HIGH), (100, LOW)]
     else:
-        raise ValueError(f"Unknown mod_mode for {laser_name}: {mod_mode}")
-
-    period = _train_len(apd_train)
-
-    # Sample clock: 100 ns HIGH near end with 100 ns buffers (if long enough)
-    if period >= 300:
-        clk_train = [(period - 200, LOW), (100, HIGH), (100, LOW)]
-    else:
-        clk_train = [(period, LOW)]
+        clk_train = [(int(period_ns), LOW)]
     seq.setDigital(do_sample_clock, clk_train)
 
     final = OutputState([], 0.0, 0.0)
-    return seq, final, [period]
+    return seq, final, [int(period_ns)]
 
 
 if __name__ == "__main__":
     cfg = common.get_config_dict()
-    # tb.set_delays_to_zero(cfg)  # uncomment for cleaner timing debug plots
 
-    pol_ns = 5000
+    pol_ns = 10_000
     readout_ns = 300
     uwave_ind_list = [0]
-    readout_vkey = VirtualLaserKey.SPIN_READOUT.name  # e.g. "SPIN_READOUT"
-    readout_power = None  # set float if ANALOG and you want override
-    max_tau = 1000
-    tau = 100
+    readout_vkey = "SPIN_READOUT"
+    readout_power = None
+    max_tau_ns = 400
+    tau = 235
 
-    base_args = [pol_ns, readout_ns, uwave_ind_list, readout_vkey, readout_power, max_tau]
+    base_args = [pol_ns, readout_ns, uwave_ind_list, readout_vkey, readout_power, max_tau_ns]
     seq, final, ret = get_seq(None, cfg, [base_args, tau])
 
     print("Period (ns):", int(ret[0]))

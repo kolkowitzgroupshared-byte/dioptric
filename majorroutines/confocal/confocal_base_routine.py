@@ -1,16 +1,35 @@
 # -*- coding: utf-8 -*-
+"""
+majorroutines/confocal/confocal_base_routine.py
+
+Unified confocal “step-sweep” runner for SWAB pulse streamer + SWAB tagger counter.
+
+Assumptions / contract:
+- step_fn(step_ind) returns (seq_file, seq_args_string)
+- Pulse streamer server supports: stream_load(seq_file, seq_args_string) -> [period_ns, ...]
+                              and: stream_start(num_reps)
+- Counter server supports:
+    start_tag_stream(apd_indices?) / stop_tag_stream()
+    clear_buffer()
+    read_counter_modulo_gates(num_gates_per_rep, num_to_read)
+  where read_counter_modulo_gates(num_exps, 1) returns ONE aggregated vector of length num_exps:
+    [gate0_sum_over_all_reps, gate1_sum_over_all_reps, ...]
+"""
+
+import time
 import traceback
 from math import isclose
 from random import shuffle
 
 import numpy as np
 
-from majorroutines import targeting
 from utils import positioning as pos
 from utils import tool_belt as tb
-from utils.constants import CoordsKey
 
 
+# -------------------------
+# basic type hygiene
+# -------------------------
 def _as_pos_int(name, val):
     try:
         iv = int(val)
@@ -24,161 +43,264 @@ def _as_pos_int(name, val):
 
 
 def _to_int_list(name, x):
-    if isinstance(x, (list, tuple)):
+    if isinstance(x, (list, tuple, np.ndarray)):
         return [_as_pos_int(name, v) for v in x]
     return [_as_pos_int(name, x)]
 
 
-def _extract_gate_counts(read_counter_complete_ret):
+# -------------------------
+# tagger compatibility
+# -------------------------
+def _start_tag_stream_compat(counter, apd_indices):
+    # Some servers require apd_indices, some ignore it.
+    try:
+        counter.start_tag_stream(apd_indices)
+    except TypeError:
+        counter.start_tag_stream()
+
+
+def _stop_tag_stream_compat(counter):
+    try:
+        counter.stop_tag_stream()
+    except Exception:
+        # Some variants use stop_stream / stop; keep broad to avoid masking root cause.
+        try:
+            counter.stop_stream()
+        except Exception:
+            pass
+
+
+def _normalize_modulo_return(raw, num_exps: int) -> np.ndarray:
     """
-    Accepts whatever your counter returns and produces 1D gate counts:
-      (num_gates_total,)
-    Typical case: ret = [array(num_apds, num_gates_total)]
+    Expect ONE sample with num_exps counts.
+    Typical shapes:
+      - [[sig, ref]]
+      - [sig, ref]
+      - np.array variants
+    Returns shape: (num_exps,)
     """
-    raw = read_counter_complete_ret
     if isinstance(raw, (list, tuple)) and len(raw) == 1:
         raw = raw[0]
     arr = np.array(raw)
 
     if arr.ndim == 2:
-        # (num_apds, num_gates) -> sum APDs
-        return arr.sum(axis=0)
-    if arr.ndim == 1:
-        return arr
-    raise RuntimeError(f"Unexpected counter return shape: {arr.shape}")
+        # keep first row (we asked for num_to_read=1)
+        arr = arr[0]
+    elif arr.ndim != 1:
+        raise RuntimeError(f"Unexpected modulo_gates return shape: {arr.shape}")
+
+    if arr.size != num_exps:
+        raise RuntimeError(f"Expected {num_exps} counts, got size={arr.size}, shape={arr.shape}")
+    return arr.astype(np.int64, copy=False)
 
 
+# -------------------------
+# pulse streamer helper
+# -------------------------
+def _run_seq_blocking_swab(pulsegen, seq_file: str, seq_args_string: str, num_reps: int) -> int:
+    """
+    SWAB pattern: stream_load -> stream_start -> wait.
+    Returns period_ns.
+    """
+    period_ns = int(pulsegen.stream_load(seq_file, seq_args_string)[0])
+    pulsegen.stream_start(int(num_reps))
+
+    # wait for completion so the tagger isn't mid-flight
+    wait_s = (period_ns * 1e-9) * int(num_reps) + 0.05  # +margin
+    # cap safety (prevents infinite sleeps if period is nonsense)
+    wait_s = min(max(wait_s, 0.0), 60.0)
+    time.sleep(wait_s)
+    return period_ns
+
+
+# -------------------------
+# main routine
+# -------------------------
 def main(
     nv_sig,
     num_steps,
     num_reps,
     num_runs,
-    run_fn=None,
-    step_fn=None,
+    *,
+    step_fn,                   # (step_ind) -> (seq_file, seq_args_string)
     uwave_ind_list=(0,),
     uwave_freq_list=None,
     num_exps=2,
     apd_indices=(0,),
     load_iq=False,
-    stream_load_in_run_fn=True,  # kept for compatibility; not enforced here
     charge_prep_fn=None,
+    shuffle_steps=True,
+    per_step_pause_s=0.0,
+    # allow future compatibility with older call sites:
+    run_fn=None,               # optional: if you want to do something once per run
+    stream_load_in_run_fn=False,
+    **_ignored_kwargs,
 ) -> dict:
-    # ---------- validate ints ----------
+    """
+    Returns dict with:
+      counts shape: (num_exps, num_runs, num_steps) aggregated over num_reps
+      step_ind_master_list: the (possibly shuffled) step order per run
+    """
+
     num_steps = _as_pos_int("num_steps", num_steps)
-    num_reps = _as_pos_int("num_reps", num_reps)
-    num_runs = _as_pos_int("num_runs", num_runs)
-    num_exps = _as_pos_int("num_exps", num_exps)
+    num_reps  = _as_pos_int("num_reps",  num_reps)
+    num_runs  = _as_pos_int("num_runs",  num_runs)
+    num_exps  = _as_pos_int("num_exps",  num_exps)
 
     uwave_ind_list = _to_int_list("uwave_ind", uwave_ind_list)
-    apd_indices = _to_int_list("apd_index", apd_indices)
+    apd_indices    = _to_int_list("apd_index", apd_indices)
 
-    # ---------- NV positioning ----------
+    # ---------- init & positioning ----------
     tb.reset_cfm()
     pos.set_xyz_on_nv(nv_sig)
 
     pulsegen = tb.get_server_pulse_streamer()
-    counter = tb.get_server_counter()
+    counter  = tb.get_server_counter()
 
-    # ---------- Microwave setup ----------
+    # ---------- microwave setup ----------
+    sig_gens = []
     for uwave_ind in uwave_ind_list:
         vsg = tb.get_virtual_sig_gen_dict(uwave_ind)
         uwave_power = vsg["uwave_power"]
         freq = uwave_freq_list[uwave_ind] if uwave_freq_list else vsg["frequency"]
 
-        sig_gen = tb.get_server_sig_gen(uwave_ind)
+        sg = tb.get_server_sig_gen(uwave_ind)
         if load_iq:
-            sig_gen.load_iq()
-        sig_gen.set_amp(uwave_power)
-        sig_gen.set_freq(freq)
+            sg.load_iq()
+        sg.set_amp(uwave_power)
+        sg.set_freq(freq)
         print(f"MW[{uwave_ind}]  freq: {freq} GHz,  power: {uwave_power} dBm")
+        sig_gens.append(sg)
 
-    # ---------- containers ----------
-    counts = np.zeros((num_exps, num_runs, num_steps, num_reps), dtype=np.int32)
+    # counts[exp, run, step] aggregated over num_reps
+    counts = np.zeros((num_exps, num_runs, num_steps), dtype=np.int64)
+
     step_ind_master_list = [None] * num_runs
-    crash_counter = [None] * num_runs
+    crash_counter = [0] * num_runs
+    crash_log = [[] for _ in range(num_runs)]  # list of (step_ind, error_str)
+
     step_ind_list = list(range(num_steps))
 
     tb.init_safe_stop()
 
+    # ---------- run ----------
     try:
         for run_ind in range(num_runs):
             print(f"\n[Run {run_ind + 1}/{num_runs}]")
-
             if tb.safe_stop():
                 break
 
+            # optional: user charge prep
             if charge_prep_fn:
-                charge_prep_fn(nv_sig)
+                try:
+                    charge_prep_fn(nv_sig)
+                except Exception:
+                    crash_counter[run_ind] += 1
+                    crash_log[run_ind].append(("charge_prep_fn", traceback.format_exc()))
 
-            # MW on
-            for uwave_ind in uwave_ind_list:
-                tb.get_server_sig_gen(uwave_ind).uwave_on()
+            # optional: hook for older patterns (do nothing by default)
+            if run_fn is not None:
+                try:
+                    run_fn(run_ind)
+                except Exception:
+                    crash_counter[run_ind] += 1
+                    crash_log[run_ind].append(("run_fn", traceback.format_exc()))
 
-            # randomize step order
-            shuffle(step_ind_list)
+            # turn microwaves on
+            for sg in sig_gens:
+                try:
+                    sg.uwave_on()
+                except Exception:
+                    crash_counter[run_ind] += 1
+                    crash_log[run_ind].append(("uwave_on", traceback.format_exc()))
+
+            # choose step order
+            if shuffle_steps:
+                shuffle(step_ind_list)
+            else:
+                step_ind_list = list(range(num_steps))
             step_ind_master_list[run_ind] = step_ind_list.copy()
 
-            # optional per-run hook (e.g. preload something)
-            if run_fn:
-                run_fn(step_ind_list)
+            # start tag stream once per run
+            _start_tag_stream_compat(counter, apd_indices)
 
-            # start counter stream
-            counter.start_tag_stream(apd_indices, True, True)
+            try:
+                for step_ind in step_ind_list:
+                    if tb.safe_stop():
+                        break
 
-            for step_ind in step_ind_list:
-                if tb.safe_stop():
-                    break
+                    try:
+                        seq_file, seq_args_string = step_fn(int(step_ind))
+                        # print("SEQ ARGS STRING:", seq_args_string)
 
-                if step_fn:
-                    step_fn(step_ind)
+                        # IMPORTANT: clear buffer before each step
+                        counter.clear_buffer()
 
-                # clear and run
-                counter.clear_buffer()
-                pulsegen.stream_start(num_reps)
+                        if stream_load_in_run_fn:
+                            # if some caller already did stream_load elsewhere, just start
+                            pulsegen.stream_start(int(num_reps))
+                            # still need a period estimate to sleep — safest: do a load anyway
+                            # (but if you truly want to skip, you must provide your own wait)
+                            period_ns = int(pulsegen.stream_load(seq_file, seq_args_string)[0])
+                            time.sleep(min((period_ns * 1e-9) * int(num_reps) + 0.05, 60.0))
+                        else:
+                            _run_seq_blocking_swab(pulsegen, seq_file, seq_args_string, int(num_reps))
 
-                gate_counts = _extract_gate_counts(counter.read_counter_complete(1))
-                expected = num_exps * num_reps
-                if gate_counts.size != expected:
-                    raise RuntimeError(
-                        f"Got {gate_counts.size} gated counts; expected {expected} "
-                        f"(num_exps={num_exps} × num_reps={num_reps}). "
-                        f"Sequence must produce exactly {num_exps} APD gates per repetition."
-                    )
+                        # Read ONE aggregated [gate0, gate1, ...] sample
+                        raw = counter.read_counter_modulo_gates(int(num_exps), 1)
+                        vec = _normalize_modulo_return(raw, int(num_exps))
+                        counts[:, run_ind, step_ind] = vec
 
-                # De-interleave: [exp0_rep0, exp1_rep0, exp0_rep1, exp1_rep1, ...]
-                for exp_ind in range(num_exps):
-                    counts[exp_ind, run_ind, step_ind, :] = gate_counts[exp_ind::num_exps]
+                        if per_step_pause_s > 0:
+                            time.sleep(float(per_step_pause_s))
 
-            # # MW off
-            for uwave_ind in uwave_ind_list:
-                tb.get_server_sig_gen(uwave_ind).uwave_off()
+                    except Exception:
+                        crash_counter[run_ind] += 1
+                        crash_log[run_ind].append((int(step_ind), traceback.format_exc()))
+                        # keep going to next step
+                        continue
 
-            counter.stop_tag_stream()
+            finally:
+                # always stop the tag stream for this run
+                _stop_tag_stream_compat(counter)
 
-            #TODO drift compensate (best-effort)
-            # try:
-            #     targeting.compensate_for_drift(nv_sig, no_crash=True)
-            # except Exception:
-            #     pass
-
-            crash_counter[run_ind] = 0
+            # microwaves off after each run
+            for sg in sig_gens:
+                try:
+                    sg.uwave_off()
+                except Exception:
+                    crash_counter[run_ind] += 1
+                    crash_log[run_ind].append(("uwave_off", traceback.format_exc()))
 
     except Exception:
+        # catch unexpected outer failures
         print(traceback.format_exc())
+
+    finally:
+        # ensure MW is off even on crash
+        for sg in sig_gens:
+            try:
+                sg.uwave_off()
+            except Exception:
+                pass
+        try:
+            _stop_tag_stream_compat(counter)
+        except Exception:
+            pass
 
     return {
         "nv_sig": nv_sig,
         "num_steps": num_steps,
         "num_reps": num_reps,
         "num_runs": num_runs,
-        "num_exps_per_rep": num_exps,
-        "load_iq": load_iq,
+        "num_exps": num_exps,
         "uwave_ind_list": uwave_ind_list,
         "uwave_freq_list": uwave_freq_list,
-        "counts": counts,
+        "apd_indices": apd_indices,
+        "counts": counts,  # (num_exps, num_runs, num_steps), aggregated over num_reps
         "counts-units": "photons",
         "step_ind_master_list": step_ind_master_list,
         "crash_counter": crash_counter,
+        "crash_log": crash_log,
+        "note": "counts are aggregated over num_reps via read_counter_modulo_gates(num_exps, 1)",
     }
-if __name__ == "__main__":
-    pass

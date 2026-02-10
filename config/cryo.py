@@ -124,15 +124,15 @@ config |= {
         "PhysicalSigGens": {
             "sig_gen_BERK_bnc835": {"delay": 151, "fm_mod_bandwidth": 100000.0},
             "sig_gen_STAN_sg394": {"delay": 104, "fm_mod_bandwidth": 100000.0},
-            "sig_gen_STAN_sg394_2": {"delay": 151, "fm_mod_bandwidth": 100000.0},
+            "sig_gen_STAN_sg394_3": {"delay": 151, "fm_mod_bandwidth": 100000.0},
             "sig_gen_TEKT_tsg4104a": {"delay": 57},
         },
         "iq_comp_amp": 0.5,
         "iq_delay": 140,
         "VirtualSigGens": {
             0: {
-                "physical_name": "sig_gen_STAN_sg394",
-                "uwave_power": 9.6,
+                "physical_name": "sig_gen_STAN_sg394_3",
+                "uwave_power": 6.0,
                 "frequency": 2.800,
                 "rabi_period": 144,
                 "pi_pulse": 72,
@@ -140,8 +140,8 @@ config |= {
             },
             # sig gen 1 is iq molulated
             1: {
-                "physical_name": "sig_gen_STAN_sg394_2",
-                "uwave_power": 9.6,
+                "physical_name": "sig_gen_STAN_sg394_4",
+                "uwave_power": 6.0,
                 "frequency": 2.8360,
                 "rabi_period": 144,
                 "pi_pulse": 72,
@@ -195,6 +195,7 @@ config |= {
                 "physical_name": tisapph_laser,
                 "duration": 300,  # this is a placeholder
             },
+
             VirtualLaserKey.SPIN_READOUT: {
                 "physical_name": green_laser,
                 "duration": 300,
@@ -213,6 +214,7 @@ config |= {
                 "physical_name": green_laser,
                 "duration": 60,
             },
+
         },
         #
         "PulseSettings": {
@@ -234,9 +236,11 @@ config |= {
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
             CoordsKey.Z: {
-                "physical_name": "pos_xyz_ATTO_piezos", #z atto
+                # "physical_name": "pos_xyz_ATTO_piezos", #z atto
+                "physical_name": "pos_z_PI_pifoc", #z atto
                 "control_mode": PosControlMode.STREAM,
-                "delay": int(1e6),  # 5 ms for PIFOC xyz
+                # "delay": int(1e6),  # 1 ms for ATTO
+                "delay": int(5e6),  # 5 ms for PIFOC xyz
                 "nm_per_unit": 1000,
                 "optimize_range": 0.09,
                 "units": "Voltage (V)",
@@ -261,9 +265,6 @@ config |= {
     },
     ###
     "Servers": {  # Bucket for miscellaneous servers not otherwise listed above
-        "pulse_gen": "QM_opx",
-        "camera": "camera_NUVU_hnu512gamma",
-        "thorslm": "slm_THOR_exulus_hd2",
         "pulse_streamer": "pulse_gen_SWAB_82",
         "counter": "tagger_SWAB_20",
     },
@@ -306,8 +307,8 @@ config |= {
             "do_laser_COBO_638_dm": 3,  # red TTL
             # microwaves (TTL gate to SGs)
             # "do_sig_gen_BERK_bnc835_gate": 4,
-            "do_sig_gen_STAN_sg394_2_dm": 4,
-            "do_sig_gen_STAN_sg394_dm": 5,
+            "do_sig_gen_STAN_sg394_3_dm": 4,
+            # "do_sig_gen_STAN_sg394_dm": 5,
             # analog (for the yellow AOM amplitude)
             "ao_laser_OPTO_589_am": 0,  # yellow analog modulation
         },
