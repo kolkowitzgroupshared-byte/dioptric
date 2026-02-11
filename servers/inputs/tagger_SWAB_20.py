@@ -38,7 +38,7 @@ class TaggerSwab20(Tagger, LabradServer):
         ### Configure
         config = common.get_config_dict()
         self.config_apd_indices = config["apd_indices"]
-        tagger_serial = config["DeviceIDs"][f"{self.name}_2_serial"]
+        tagger_serial = config["DeviceIDs"][f"{self.name}_1_serial"]
         try:
             self.tagger = TimeTagger.createTimeTagger(tagger_serial)
         except Exception as e:

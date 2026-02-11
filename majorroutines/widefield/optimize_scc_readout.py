@@ -4,8 +4,9 @@ Illuminate an area, collecting onto the camera. Interleave a signal and control 
 and plot the difference
 
 Created on Fall 2023
-
 @author: mccambria
+Updated on Fall 2024
+@author: schand
 """
 
 import os

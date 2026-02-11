@@ -3,10 +3,9 @@
 Optimize SCC parameters
 
 Created on December 6th, 2023
-
 @author: mccambria
-updated by @Saroj Chand on August 6th, 2025
-@author: mccambria
+updated by @SarojChand on August 6th, 2025
+@author: schand
 """
 
 import traceback

@@ -5,6 +5,7 @@ Lighweight check of the SCC SNR
 Created on December 6th, 2023
 
 @author: mccambria
+@author: schand
 """
 
 import sys
@@ -161,11 +162,10 @@ def main(nv_list, num_reps, num_runs, uwave_ind_list=[0, 1]):
         for ind in range(num_figs):
             file_path = dm.get_file_path(__file__, timestamp, repr_nv_name + f"-{ind}")
             dm.save_figure(figs[ind], file_path)
-    
+
     ### Clean up and return
     tb.reset_cfm()
     kpl.show()
-
 
 
 if __name__ == "__main__":
