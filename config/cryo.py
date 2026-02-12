@@ -108,8 +108,8 @@ config |= {
         "sig_gen_STAN_sg394_2_visa": "TCPIP::192.168.0.121::inst0::INSTR",
         "sig_gen_STAN_sg394_3_visa": "TCPIP::192.168.0.177::inst0::INSTR",
         "sig_gen_TEKT_tsg4104a_visa": "TCPIP0::128.104.ramp_to_zero_duration.112::5025::SOCKET",
-        "tagger_SWAB_20_1_serial": "1740000JEH",
-        "tagger_SWAB_20_2_serial": "1948000SIP",
+        "tagger_SWAB_20_1_serial": "1948000SIP", # cryo
+        # "tagger_SWAB_20_1_serial": "1740000JEH", # nuclear
         "QM_opx_args": {
             "host": "192.168.0.117",
             "port": 9510,
