@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Widefield Rabi experiment
+Widefield coherence experiment
 
-Created on November 29th, 2023
+Created on November 29th, 2024
 
-@author: mccambria
 @author: sbchand
 """
 
@@ -24,6 +23,7 @@ from utils import kplotlib as kpl
 from utils import tool_belt as tb
 from utils import widefield as widefield
 from utils.constants import NVSig
+
 
 def create_fit_figure(nv_list, phis, norm_counts, norm_counts_ste):
     # Define cosine fitting function
@@ -156,6 +156,7 @@ def create_fit_figure(nv_list, phis, norm_counts, norm_counts_ste):
     plt.tight_layout()
     plt.show()
 
+
 def main(
     nv_list,
     num_steps,
@@ -199,7 +200,7 @@ def main(
     raw_data |= {
         "timestamp": timestamp,
         "phis": phi_list,
-        "phi-units": "deg", 
+        "phi-units": "deg",
         "evol_time": evol_time,
         "evol_time-unit": "ns",
         "seq_type": seq_type,
@@ -238,7 +239,7 @@ if __name__ == "__main__":
         # file_stem="2026_01_05-18_44_14-johnson-nv0_2025_10_21",  # xy8
         # file_stem= "2026_01_28-20_06_27-johnson-nv0_2025_10_21", #xy8
         # file_stem= "2026_01_28-22_36_03-johnson-nv0_2025_10_21",
-        file_stem= "2026_01_29-01_18_18-johnson-nv0_2025_10_21",
+        file_stem="2026_01_29-01_18_18-johnson-nv0_2025_10_21",
         load_npz=True,
         use_cache=True,
     )
@@ -253,7 +254,7 @@ if __name__ == "__main__":
     counts = np.array(data["counts"])
     sig_counts = counts[0]
     ref_counts = counts[1]
-    
+
     norm_counts, norm_counts_ste = widefield.process_counts(
         nv_list, sig_counts, ref_counts, threshold=True
     )

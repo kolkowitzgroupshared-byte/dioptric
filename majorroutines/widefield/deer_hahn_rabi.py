@@ -7,7 +7,7 @@ microwaves, saves raw data, and provides optional analysis/plots:
   - mean Rabi across all NVs (and by orientation groups)
   - per-NV Rabi fits and correlation plots (optional)
 
-Updated: Jan 6, 2025 (Saroj Chand)
+Created and Updated: Jan 6, 2025 (Saroj Chand)
 """
 
 

@@ -45,7 +45,7 @@ colors = [cmap(i / (len(concentrations) - 1)) for i in range(len(concentrations)
 # =================================================================
 # FIGURE: Phase (in units of π) vs τ
 # =================================================================
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 10), sharex=True)
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
 
 # --- Top: continuous phase vs time ---
 for c, col in zip(concentrations, colors):
@@ -163,9 +163,9 @@ ax.set_xlabel("[P1] concentration (ppb)", fontsize=12)
 ax.set_ylabel("τ needed (µs)", fontsize=12)
 ax.set_title(
     f"Time to Reach Phase Milestone vs P1 Concentration\n"
-    f"T₂ = {T2_us:.0f} µs,  revival = {tau_rev_us:.1f} µs",
+    f"(T₂ = {T2_us:.0f} µs,  revival = {tau_rev_us:.1f} µs)",
     fontsize=13,
-    fontweight="bold",
+    # fontweight="bold",
 )
 ax.legend(fontsize=9, loc="upper right")
 ax.set_xlim(5, 5000)

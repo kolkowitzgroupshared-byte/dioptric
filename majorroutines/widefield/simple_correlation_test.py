@@ -3,8 +3,8 @@
 Optimize SCC parameters
 
 Created on December 6th, 2023
-
 @author: mccambria
+updated by @SarojChand on August 6th, 2025
 """
 
 import random
@@ -237,7 +237,8 @@ def process_and_plot_experimental(data):
 
     def fit_fn(offset, amp1, amp2, d1, d2):
         return (
-            amp1 * np.exp(-offset / d1) + amp2 * np.exp(-offset / d2)
+            amp1 * np.exp(-offset / d1)
+            + amp2 * np.exp(-offset / d2)
             # + amp3 * np.exp(offset / d3)
         )
 

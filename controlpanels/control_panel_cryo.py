@@ -63,7 +63,7 @@ def do_image_sample(nv_sig):
     photon counts at defined x,y galvo positions. Photon count is displayed as a color map.
     """
 
-    scan_range = 1.0  # voltage
+    scan_range = 0.2  # voltage
     num_steps = 90
 
     # For now we only support square scans so pass scan_range twice
@@ -872,7 +872,7 @@ if __name__ == "__main__":
         # region Image / 3D scan    
 
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
-        # do_image_sample(nv_sig)
+        do_image_sample(nv_sig)
         # do_image_sample_zoom(nv_sig)
 
         # Quick NV area scans
