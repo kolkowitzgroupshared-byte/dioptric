@@ -232,7 +232,7 @@ def process_and_plot(raw_data):
             optimal_values.append((nv_ind, np.nan, np.nan))
             continue
 
-        # # # # Plotting
+        # # # Plotting
         # fig, ax1 = plt.subplots(figsize=(7, 5))
         # # Plot readout fidelity
         # ax1.plot(
@@ -845,6 +845,7 @@ if __name__ == "__main__":
     # file_id = "2025_10_30-06_21_14-johnson-nv0_2025_10_21"
     # file_id = "2026_02_01-00_09_17-johnson-nv0_2025_10_21"
     # file_id = "2026_02_07-16_42_58-johnson-nv0_2025_10_21"
+    # file_id = "2026_02_09-21_28_39-johnson-nv0_2025_10_21"
     
 
     ### pol amp var
@@ -856,6 +857,8 @@ if __name__ == "__main__":
     # file_id = "2025_09_20-14_18_23-rubin-nv0_2025_09_08"  # 1us
     # file_id = "2025_09_28-20_18_06-rubin-nv0_2025_09_08"  # 1us
     # file_id = "2025_10_22-18_10_57-johnson-nv0_2025_10_21"
+    file_id = "2026_02_10-00_47_07-johnson-nv0_2025_10_21"
+
 
     ### pol dur var
     # file_id = "2025_09_12-04_47_45-rubin-nv0_2025_09_08"
@@ -874,14 +877,14 @@ if __name__ == "__main__":
     # file_id = "2025_10_30-18_37_28-johnson-nv0_2025_10_21"
     # file_id = "2025_11_01-19_02_31-johnson-nv0_2025_10_21"
     # file_id = "2025_11_22-19_58_10-johnson-nv0_2025_10_21"
-    file_id = "2026_02_07-20_07_20-johnson-nv0_2025_10_21"
-    
+    # file_id = "2026_02_07-20_07_20-johnson-nv0_2025_10_21"
+    file_id = "2026_02_10-03_18_17-johnson-nv0_2025_10_21"
     
     # dm.USE_NEW_CLOUD = False
     raw_data = dm.get_raw_data(file_stem=file_id, load_npz=True)
     # file_name = dm.get_file_name(file_id=file_id)
     # print(f"{file_name}_{file_id}")
     # process_and_plot(raw_data)
-    process_and_plot_charge(raw_data, do_plot=False)
+    process_and_plot_charge(raw_data, do_plot=True)
     # print(dm.get_file_name(1717056176426))
     plt.show(block=True)

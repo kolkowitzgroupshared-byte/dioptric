@@ -166,7 +166,8 @@ config |= {
                 "frequency": 2.7700,
                 # "frequency": 0.145,
                 "rabi_period": 100,
-                "pi_pulse": 48,
+                # "pi_pulse": 48,
+                "pi_pulse": 1000,
                 "pi_on_2_pulse": 24,
             },
         },
@@ -965,7 +966,7 @@ opx_config = {
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2367}, #136NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2267}, #118NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.34947}, ## 312NV johnson
-        "yellow_charge_readout": {"type": "constant", "sample": 0.33}, ## 230NV johnson
+        "yellow_charge_readout": {"type": "constant", "sample": 0.3257}, ## 205NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3084}, ## 223NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
         "yellow_spin_pol": {"type": "constant", "sample": 0.31510},
