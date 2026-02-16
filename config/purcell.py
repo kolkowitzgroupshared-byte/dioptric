@@ -32,9 +32,9 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
-calibration_coords_pixel = [[16.469, 47.014],[147.124, 239.353],[215.515, 60.949]]
-calibration_coords_green = [[119.04, 118.505],[106.545, 95.253],[96.696, 114.696]]
-calibration_coords_red = [[82.018, 81.394],[72.623, 61.855],[63.888, 77.153]]
+calibration_coords_pixel = [[23.53, 23.794], [106.927, 228.008],[225.41, 28.953]]
+calibration_coords_green = [[118.009, 120.966], [111.153, 96.931], [95.242, 118.175],]
+calibration_coords_red = [[81.089, 83.342], [76.331, 63.455], [62.577, 79.907]]
 
 # calibration_coords_pixel = [[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
 # calibration_coords_green = [[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
@@ -138,13 +138,13 @@ config |= {
                 # "frequency":2.963189,
                 # "frequency": 2.917151,
                 # "frequency": 2.8082,
-                "rabi_period": 356,
-                "pi_pulse": 176,
-                "pi_on_2_pulse": 88,
+                # "rabi_period": 356,
+                # "pi_pulse": 176,
+                # "pi_on_2_pulse": 88,
                 # "frequency": 2.935030,
-                # "rabi_period": 112,
-                # "pi_pulse": 56,
-                # "pi_on_2_pulse": 28,
+                "rabi_period": 100,
+                "pi_pulse": 88,
+                "pi_on_2_pulse": 24,
             },
             1: {
                 "physical_name": "sig_gen_STAN_sg394_1",
@@ -156,9 +156,14 @@ config |= {
                 # "frequency": 2.828210, 
                 # "frequency": 2.816912, #62G
                 # "frequency": 2.8252,
-                "rabi_period": 288,
-                "pi_pulse": 168,
-                "pi_on_2_pulse": 84,
+                # "rabi_period": 288,
+                # "pi_pulse": 168,
+                # "pi_on_2_pulse": 84,
+                "rabi_period": 100,
+                "pi_pulse": 48,
+                "pi_on_2_pulse": 24,
+                
+                
             },
             2: {
                 "physical_name": "sig_gen_STAN_sg394_3",
@@ -966,7 +971,8 @@ opx_config = {
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2367}, #136NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2267}, #118NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.34947}, ## 312NV johnson
-        "yellow_charge_readout": {"type": "constant", "sample": 0.3257}, ## 205NV johnson
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.3257}, ## 205NV johnson
+        "yellow_charge_readout": {"type": "constant", "sample": 0.36}, ## 195NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3084}, ## 223NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
         "yellow_spin_pol": {"type": "constant", "sample": 0.31510},

@@ -823,8 +823,11 @@ if __name__ == "__main__":
     file_ids = [
         "2026_02_09-05_33_54-johnson-nv0_2025_10_21",
     ]
-
-
+    ########## Rubin with beads
+    file_ids = [
+        "2026_02_16-08_20_17-rubin-nv0_2026_02_15",
+    ]
+    
     # Load the first dataset as a base
     combined_data = dm.get_raw_data(
         file_stem=file_ids[0], load_npz=True, use_cache=True

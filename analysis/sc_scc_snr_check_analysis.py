@@ -238,7 +238,7 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
 
     data = dm.get_raw_data(
-        file_stem="2026_01_21-15_45_04-johnson-nv0_2025_10_21", load_npz=True
+        file_stem="2026_02_12-17_34_21-johnson-nv0_2025_10_21", load_npz=True
     )
     # data = dm.get_raw_data(
     #     file_stem="2026_01_21-13_45_53-johnson-nv0_2025_10_21", load_npz=True
