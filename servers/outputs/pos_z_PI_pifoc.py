@@ -234,7 +234,7 @@ class PosZPiPifoc(LabradServer):
         with nidaqmx.Task() as task:
             # Set up the output channels
             task.ao_channels.add_ao_voltage_chan(
-                self.daq_ao_objective_piezo, min_val=1.0, max_val=9.0
+                self.daq_ao_objective_piezo, min_val=0.0, max_val=9.0
             )
             task.write(compensated_voltage)
 
