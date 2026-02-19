@@ -394,11 +394,11 @@ if __name__ == "__main__":
     remove_outliers_flag = False  # Set this flag to enable/disable outlier removal
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
-        file_stem="2026_02_15-19_25_07-johnson-nv0_2025_10_21", load_npz=True
+        file_stem="2026_02_18-15_16_44-rubin-nv0_2026_02_15", load_npz=True
         # file_stem="2026_01_31-18_06_49-combined_image_array", load_npz=True
     )
-    img_array = np.array(data["ref_img_array"])
-    # img_array = data["img_array"]
+    # img_array = np.array(data["ref_img_array"])
+    img_array = data["img_array"]
     nv_coordinates, spot_weights = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_327nvs.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_308nvs_reordered.npz"
@@ -410,7 +410,7 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_223nvs_reordered.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_205nvs_reordered.npz"
-        file_path="slmsuite/nv_blob_detection/nv_blob_406nvs.npz"
+        file_path="slmsuite/nv_blob_detection/nv_blob_92nvs.npz"
     )
     # Convert coordinates to a standard format (lists of lists)
     # nv_coordinates = [[coord[0] - 3, coord[1] + 3] for coord in nv_coordinates]
@@ -421,7 +421,7 @@ if __name__ == "__main__":
         for coord in nv_coordinates
         if isinstance(coord, (list, tuple))
         and len(coord) == 2
-        and all(2 <= x <= 248 for x in coord)
+        and all(3 <= x <= 247 for x in coord)
     ]
 
     # Ensure spot weights are filtered accordingly
@@ -721,7 +721,7 @@ if __name__ == "__main__":
     # save_results(
     #     filtered_reordered_coords,
     #     filtered_reordered_spot_weights,
-    #     filename="slmsuite/nv_blob_detection/nv_blob_397nvs_reordered.npz",
+    #     filename="slmsuite/nv_blob_detection/nv_blob_82nvs_reordered.npz",
     # )
 
     # # Plot the original image with circles around each NV

@@ -32,9 +32,9 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
-calibration_coords_pixel = [[23.53, 23.794], [106.927, 228.008],[225.41, 28.953]]
-calibration_coords_green = [[118.009, 120.966], [111.153, 96.931], [95.242, 118.175],]
-calibration_coords_red = [[81.089, 83.342], [76.331, 63.455], [62.577, 79.907]]
+calibration_coords_pixel = [[3.896, 34.475], [138.401, 235.041],[245.444, 3.833]]
+calibration_coords_green = [[120.321, 120.102],[107.524, 95.815],[92.466, 120.98]]
+calibration_coords_red = [[83.009, 82.758],[73.404, 62.362],[60.209, 82.044]]
 
 # calibration_coords_pixel = [[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
 # calibration_coords_green = [[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
@@ -181,7 +181,7 @@ config |= {
     "Camera": {
         "server_name": "camera_NUVU_hnu512gamma",
         "resolution": (512, 512),
-        "spot_radius": 2.5,  # Radius for integrating NV counts in a camera image
+        "spot_radius": 6.0,  # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
         "em_gain": 5000,
         # "em_gain": 10,
@@ -310,7 +310,7 @@ config |= {
                 "control_mode": PosControlMode.SEQUENCE,
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
-                "optimize_range": 1.2,
+                "optimize_range": 2.2,
                 "units": "MHz",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
                 "aod": True,
@@ -956,7 +956,7 @@ opx_config = {
     ### Analog
     "waveforms": {
         # Green AOD
-        "green_aod_cw-opti": {"type": "constant", "sample": 0.11},
+        "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
         "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
@@ -966,16 +966,16 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.13},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.13},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.45},
+        "yellow_imaging": {"type": "constant", "sample": 0.35},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2675},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2367}, #136NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2267}, #118NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.34947}, ## 312NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3257}, ## 205NV johnson
-        "yellow_charge_readout": {"type": "constant", "sample": 0.36}, ## 195NV johnson
+        "yellow_charge_readout": {"type": "constant", "sample": 0.20}, ## 195NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3084}, ## 223NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
-        "yellow_spin_pol": {"type": "constant", "sample": 0.31510},
+        "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other
         "aod_cw": {"type": "constant", "sample": 0.35},

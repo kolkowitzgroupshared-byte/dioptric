@@ -81,8 +81,8 @@ def do_widefield_image_sample(nv_sig, num_reps=1):
 
 
 def do_scanning_image_sample(nv_sig):
-    scan_range = 15
-    num_steps = 15
+    scan_range = 30
+    num_steps = 30
     image_sample.scanning(nv_sig, scan_range, scan_range, num_steps)
 
 
@@ -1565,8 +1565,8 @@ if __name__ == "__main__":
     # magnet_angle = 90
     date_str = "2026_02_15"
     sample_coords = [-0.4, 0.6]
+    # z_coord = -1.2
     z_coord = 1.0
-    # z_coord = 0.8
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_308nvs_reordered.npz",
@@ -1578,10 +1578,12 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_230nvs_reordered.npz",
         # file_path="slmsuite/nv_blob_detection/nv_blob_223nvs_reordered.npz",
         # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz",
-        file_path="slmsuite/nv_blob_detection/nv_blob_397nvs_reordered.npz",
+        file_path="slmsuite/nv_blob_detection/nv_blob_82nvs_reordered.npz",
     ).tolist()
     # pixel_coords_list = [[124.195, 127.341],[16.501, 46.951],[146.942, 239.125],[206.995, 41.423]]
     # pixel_coords_list = [[124.195, 127.341],[23.53, 23.794], [106.927, 228.008],[225.41, 28.953]]
+    pixel_coords_list = [[124.195, 127.341],[3.896, 34.475], [138.401, 235.041],[245.444, 3.833]]
+    
     green_coords_list = [
         [
             round(coord, 3)
@@ -1611,18 +1613,9 @@ if __name__ == "__main__":
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
 
-#     pixel_coords_list = [[124.195, 127.341],[23.53, 23.794], [106.927, 228.008],[225.41, 28.953]]
-#     green_coords_list =  [[107.895, 108.109],
-# [118.009, 120.966],
-# [111.153, 96.931],
-# [95.242, 118.175],
-# ]
-#     red_coords_list = [
-#     [73.274, 72.373],
-#     [81.089, 83.342],
-#     [76.331, 63.455],
-#     [62.577, 79.907],
-# ]
+    pixel_coords_list = [[124.195, 127.341],[3.896, 34.475], [138.401, 235.041],[245.444, 3.833]]
+    green_coords_list =  [[107.65, 108.154],[120.321, 120.102],[107.524, 95.815],[92.466, 120.98]]
+    red_coords_list = [[73.072, 72.397],[83.009, 82.758],[73.404, 62.362],[60.209, 82.044]]
 
     # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
     # green_coords_list = [[107.85, 108.084],[119.238, 119.6],[111.232, 95.81],[95.925, 118.974]]
@@ -1687,7 +1680,7 @@ if __name__ == "__main__":
     indices_217_MHz = [0, 2, 4, 5, 7, 8, 9, 11, 12, 13, 15, 18, 20, 21, 22, 28, 29, 30, 31, 36, 39, 40, 42, 43, 44, 45, 46, 47, 48, 52, 56, 57, 58, 59, 61, 65, 69, 71, 77, 79, 85, 87, 89, 91, 94, 97, 98, 104, 106, 107, 110, 112, 115, 116, 117]
     # scc_amp_list = [1.0] * num_nv
     scc_duration_list = [88] * num_nvs
-    pol_duration_list = [1000] * num_nvs
+    pol_duration_list = [200] * num_nvs
     # nv_list[i] will have the ith coordinates from the above lists
     nv_list: list[NVSig] = []
     for ind in range(num_nvs):
@@ -1721,8 +1714,8 @@ if __name__ == "__main__":
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
-    # nv_sig.expected_counts = 900
-    nv_sig.expected_counts = 1600
+    nv_sig.expected_counts = 7500
+    # nv_sig.expected_counts = 1500
     # nv_sig.expected_counts = 1300
     # nv_sig.expected_counts = 1250
     # nv_sig.expected_counts = 1800
@@ -1759,11 +1752,11 @@ if __name__ == "__main__":
         # )
 
         do_compensate_for_drift(nv_sig)
-        do_widefield_image_sample(nv_sig, 50)
+        # do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list:
-            # do_scanning_image_sample_zoom(nv)
+        #     do_scanning_image_sample_zoom(nv)
 
         # do_scanning_image_sample(nv_sig)
         # do_scanning_image_sample_zoom(nv_sig)
@@ -1805,7 +1798,7 @@ if __name__ == "__main__":
         # do_optimize_green(nv_sig)
         # repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
         # do_optimize_red(nv_sig, repr_nv_sig)
-        # do_optimize_z(nv_sig).
+        # do_optimize_z(nv_sig)
 
         # do_optimize_sample(nv_sig)
         # optimize.optimize_pixel_and_z(nv_sig, do_plot=True)
