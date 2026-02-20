@@ -132,7 +132,7 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_0",
                 "uwave_power": 11.0,
-                "frequency": 2.7700, #49G
+                "frequency": 2.7752, #49G
                 # "frequency": 2.747151,
                 # "frequency": 2.709799,  #62G
                 # "frequency":2.963189,
@@ -142,7 +142,7 @@ config |= {
                 # "pi_pulse": 176,
                 # "pi_on_2_pulse": 88,
                 # "frequency": 2.935030,
-                "rabi_period": 100,
+                "rabi_period": 176,
                 "pi_pulse": 88,
                 "pi_on_2_pulse": 24,
             },
@@ -150,7 +150,7 @@ config |= {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
                 # "frequency": 2.917151,
-                "frequency": 2.8101,#49G
+                "frequency": 2.8137,#49G
                 # "frequency": 2.77000,#49G
                 # "frequency": 2.982049,
                 # "frequency": 2.828210, 
@@ -159,8 +159,8 @@ config |= {
                 # "rabi_period": 288,
                 # "pi_pulse": 168,
                 # "pi_on_2_pulse": 84,
-                "rabi_period": 100,
-                "pi_pulse": 48,
+                "rabi_period": 176,
+                "pi_pulse": 88,
                 "pi_on_2_pulse": 24,
                 
                 
@@ -972,7 +972,7 @@ opx_config = {
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2267}, #118NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.34947}, ## 312NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3257}, ## 205NV johnson
-        "yellow_charge_readout": {"type": "constant", "sample": 0.20}, ## 195NV johnson
+        "yellow_charge_readout": {"type": "constant", "sample": 0.15}, ## 195NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3084}, ## 223NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},

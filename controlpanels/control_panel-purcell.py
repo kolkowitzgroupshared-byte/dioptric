@@ -570,21 +570,22 @@ def do_resonance(nv_list):
     freq_range = 0.260
     num_steps = 45
     num_reps = 4
-    num_runs = 400
+    num_runs = 200
     # num_runs = 1
     freqs = calculate_freqs(freq_center, freq_range, num_steps)
     ##
     # Remove duplicates and sort
     freqs = sorted(set(freqs))
     num_steps = len(freqs)
-    resonance.main(
-        nv_list,
-        num_steps,
-        num_reps,
-        num_runs,
-        freqs=freqs,
-        uwave_ind_list=[1],
-    )
+    for _ in range(2):
+        resonance.main(
+            nv_list,
+            num_steps,
+            num_reps,
+            num_runs,
+            freqs=freqs,
+            uwave_ind_list=[1],
+        )
     # for _ in range(2):
     #     resonance.main(nv_list, num_steps, num_reps, num_runs, freqs=freqs)
 
@@ -1582,7 +1583,7 @@ if __name__ == "__main__":
     ).tolist()
     # pixel_coords_list = [[124.195, 127.341],[16.501, 46.951],[146.942, 239.125],[206.995, 41.423]]
     # pixel_coords_list = [[124.195, 127.341],[23.53, 23.794], [106.927, 228.008],[225.41, 28.953]]
-    pixel_coords_list = [[124.195, 127.341],[3.896, 34.475], [138.401, 235.041],[245.444, 3.833]]
+    # pixel_coords_list = [[124.195, 127.341],[3.896, 34.475], [138.401, 235.041],[245.444, 3.833]]
     
     green_coords_list = [
         [
@@ -1613,9 +1614,9 @@ if __name__ == "__main__":
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
 
-    pixel_coords_list = [[124.195, 127.341],[3.896, 34.475], [138.401, 235.041],[245.444, 3.833]]
-    green_coords_list =  [[107.65, 108.154],[120.321, 120.102],[107.524, 95.815],[92.466, 120.98]]
-    red_coords_list = [[73.072, 72.397],[83.009, 82.758],[73.404, 62.362],[60.209, 82.044]]
+    # pixel_coords_list = [[124.195, 127.341],[3.896, 34.475], [138.401, 235.041],[245.444, 3.833]]
+    # green_coords_list =  [[107.65, 108.154],[120.321, 120.102],[107.524, 95.815],[92.466, 120.98]]
+    # red_coords_list = [[73.072, 72.397],[83.009, 82.758],[73.404, 62.362],[60.209, 82.044]]
 
     # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
     # green_coords_list = [[107.85, 108.084],[119.238, 119.6],[111.232, 95.81],[95.925, 118.974]]
@@ -1680,7 +1681,7 @@ if __name__ == "__main__":
     indices_217_MHz = [0, 2, 4, 5, 7, 8, 9, 11, 12, 13, 15, 18, 20, 21, 22, 28, 29, 30, 31, 36, 39, 40, 42, 43, 44, 45, 46, 47, 48, 52, 56, 57, 58, 59, 61, 65, 69, 71, 77, 79, 85, 87, 89, 91, 94, 97, 98, 104, 106, 107, 110, 112, 115, 116, 117]
     # scc_amp_list = [1.0] * num_nv
     scc_duration_list = [88] * num_nvs
-    pol_duration_list = [200] * num_nvs
+    pol_duration_list = [1000] * num_nvs
     # nv_list[i] will have the ith coordinates from the above lists
     nv_list: list[NVSig] = []
     for ind in range(num_nvs):
@@ -1752,7 +1753,7 @@ if __name__ == "__main__":
         # )
 
         do_compensate_for_drift(nv_sig)
-        # do_widefield_image_sample(nv_sig, 50)
+        do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list:
@@ -1762,7 +1763,7 @@ if __name__ == "__main__":
         # do_scanning_image_sample_zoom(nv_sig)
         # do_scanning_image_full_roi(nv_sig)
 
-        # scan_equilateral_triangle(nv_sig, center_coord=sample_coords, radius=0.4)
+        # scan_equilateral_triangle(nv_sig, center_co1ord=sample_coords, radius=0.4)
         # do_image_nv_list(nv_list)
         # do_image_single_nv(nv_sig)
         # z_range = np.linspace(0, 3.0, 31)
@@ -1807,7 +1808,7 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
 
-        do_charge_state_histograms(nv_list)
+        # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
@@ -1844,7 +1845,7 @@ if __name__ == "__main__":
 
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_calibrate_iq_delay(nv_list)
-        # do_rabi(nv_list)
+        do_rabi(nv_list)
         # do_power_rabi(nv_list)
         # do_resonance(nv_list)
         # do_optimize_pol_duration(nv_list)
