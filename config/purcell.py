@@ -32,9 +32,9 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
-calibration_coords_pixel = [[3.896, 34.475], [138.401, 235.041],[245.444, 3.833]]
-calibration_coords_green = [[120.321, 120.102],[107.524, 95.815],[92.466, 120.98]]
-calibration_coords_red = [[83.009, 82.758],[73.404, 62.362],[60.209, 82.044]]
+calibration_coords_pixel = [[25.311, 49.9], [137.357, 231.095], [216.571, 26.493]]
+calibration_coords_green = [[126.409, 125.638],[107.067, 86.08],[86.092, 126.768]]
+calibration_coords_red = [[87.791, 87.57],[73.373, 54.425],[54.795, 86.422],]
 
 # calibration_coords_pixel = [[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
 # calibration_coords_green = [[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
@@ -181,7 +181,7 @@ config |= {
     "Camera": {
         "server_name": "camera_NUVU_hnu512gamma",
         "resolution": (512, 512),
-        "spot_radius": 6.0,  # Radius for integrating NV counts in a camera image
+        "spot_radius": 4.0,  # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
         "em_gain": 5000,
         # "em_gain": 10,
@@ -218,8 +218,8 @@ config |= {
             # LaserKey.IMAGING: {"physical_name": green_laser, "duration": 50e6},
             VirtualLaserKey.IMAGING: {
                 "physical_name": green_laser,
-                # "duration": 12e6,
                 "duration": 12e6,
+                # "duration": 12e6,
             },
             # SBC: created for calibration only
             VirtualLaserKey.RED_IMAGING: {
@@ -302,7 +302,7 @@ config |= {
                 "delay": int(1e6),  # 5 ms for PIFOC xyz
                 "nm_per_unit": 1000,
                 # "optimize_range": 0.09,
-                "optimize_range": 0.24,
+                "optimize_range": 0.4,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
@@ -957,14 +957,14 @@ opx_config = {
     "waveforms": {
         # Green AOD
         "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
-        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
+        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.08},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.15},
         # Red AOD
-        "red_aod_cw-opti": {"type": "constant", "sample": 0.13},
-        "red_aod_cw-ion": {"type": "constant", "sample": 0.13},
-        "red_aod_cw-scc": {"type": "constant", "sample": 0.13},
+        "red_aod_cw-opti": {"type": "constant", "sample": 0.11},
+        "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
+        "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.35},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2675},

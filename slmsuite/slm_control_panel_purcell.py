@@ -237,7 +237,7 @@ def calibration_triangle():
 
     # Define parameters for the equilateral triangle
     center = (680, 560)  # Center of the triangle
-    side_length = 400  # Length of each side of the triangle\
+    side_length = 550  # Length of each side of the triangle\
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
     theta = np.linspace(0, 2 * np.pi, 4)[:-1]  # Exclude the last point to avoid overlap
@@ -277,11 +277,11 @@ def nuvu2thorcam_calibration(coords):
     to the Thorlabs camera's coordinate system using an affine transformation.
     """
     cal_coords_thorcam = np.array(
-        [[1026.410, 760.0], [333.589, 760.0], [680.0, 160.0]], dtype="float32"
+        [[1156.313,  835.0], [203.686,  835.], [680.0, 10]], dtype="float32"
     )
 
     cal_coords_nuvu = np.array(
-        [[221.634, 239.89], [189.542, 18.167], [17.682, 155.858]], dtype="float32"
+        [[191.517, 208.257], [168.193, 41.369], [37.152, 144.425]], dtype="float32"
     )
     # Compute the affine transformation matrix
     M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
@@ -305,7 +305,8 @@ def load_nv_coords(
     # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz",  # johnson
     # file_path="slmsuite/nv_blob_detection/nv_blob_205nvs_reordered.npz",  # johnson
     # file_path="slmsuite/nv_blob_detection/nv_blob_195nvs_reordered.npz",  # johnson
-    file_path="slmsuite/nv_blob_detection/nv_blob_82nvs_reordered.npz",  # johnson
+    # file_path="slmsuite/nv_blob_detection/nv_blob_276nvs_reordered.npz",  # johnson
+    file_path="slmsuite/nv_blob_detection/nv_blob_41nvs_reordered.npz",  # cL
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]

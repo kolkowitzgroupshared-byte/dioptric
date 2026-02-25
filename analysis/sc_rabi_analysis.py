@@ -593,6 +593,11 @@ if __name__ == "__main__":
     # file_stem =  ["2026_02_04-14_02_35-johnson-nv0_2025_10_21"]
     
     file_stem = ["2026_02_02-21_30_27-johnson-nv0_2025_10_21"] 
+    
+    ##qnami array sample
+    file_stem = ["2026_02_20-04_26_28-rubin-nv0_2026_02_15"]  ### loop 
+    # file_stem = ["2026_02_22-00_11_44-rubin-nv0_2026_02_15"]  ### resonator 
+    
 
     data = dm.get_raw_data(file_stem=file_stem, load_npz=True, use_cache=False)
     nv_list = data["nv_list"]

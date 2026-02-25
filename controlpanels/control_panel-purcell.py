@@ -81,7 +81,7 @@ def do_widefield_image_sample(nv_sig, num_reps=1):
 
 
 def do_scanning_image_sample(nv_sig):
-    scan_range = 30
+    scan_range = 60
     num_steps = 30
     image_sample.scanning(nv_sig, scan_range, scan_range, num_steps)
 
@@ -105,7 +105,7 @@ def do_scanning_image_full_roi(nv_sig):
 
 def do_scanning_image_sample_zoom(nv_sig):
     scan_range = 0.001
-    num_steps = 5
+    num_steps = 4
     image_sample.scanning(nv_sig, scan_range, scan_range, num_steps)
 
 
@@ -1562,12 +1562,12 @@ if __name__ == "__main__":
     green_coords_key = f"coords-{green_laser}"
     red_coords_key = f"coords-{red_laser}"
     pixel_coords_key = "pixel_coords"
-    sample_name = "rubin"
+    sample_name = "qnami"
     # magnet_angle = 90
-    date_str = "2026_02_15"
-    sample_coords = [-0.4, 0.6]
-    # z_coord = -1.2
-    z_coord = 1.0
+    date_str = "2026_02_20"
+    sample_coords = [0.0, 0.2]
+    z_coord = -0.8
+    # z_coord = 1.1
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_308nvs_reordered.npz",
@@ -1579,12 +1579,13 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_230nvs_reordered.npz",
         # file_path="slmsuite/nv_blob_detection/nv_blob_223nvs_reordered.npz",
         # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz",
-        file_path="slmsuite/nv_blob_detection/nv_blob_82nvs_reordered.npz",
+        # file_path="slmsuite/nv_blob_detection/nv_blob_82nvs_reordered.npz",
+        file_path="slmsuite/nv_blob_detection/nv_blob_41nvs_reordered.npz",
     ).tolist()
     # pixel_coords_list = [[124.195, 127.341],[16.501, 46.951],[146.942, 239.125],[206.995, 41.423]]
     # pixel_coords_list = [[124.195, 127.341],[23.53, 23.794], [106.927, 228.008],[225.41, 28.953]]
     # pixel_coords_list = [[124.195, 127.341],[3.896, 34.475], [138.401, 235.041],[245.444, 3.833]]
-    
+
     green_coords_list = [
         [
             round(coord, 3)
@@ -1614,14 +1615,22 @@ if __name__ == "__main__":
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
 
-    # pixel_coords_list = [[124.195, 127.341],[3.896, 34.475], [138.401, 235.041],[245.444, 3.833]]
-    # green_coords_list =  [[107.65, 108.154],[120.321, 120.102],[107.524, 95.815],[92.466, 120.98]]
-    # red_coords_list = [[73.072, 72.397],[83.009, 82.758],[73.404, 62.362],[60.209, 82.044]]
+#     pixel_coords_list = [[124.195, 127.341],[25.311, 49.9], [137.357, 231.095], [216.571, 26.493]]
+#     green_coords_list = [[107.42, 107.472],
+# [126.409, 125.638],
+# [107.067, 86.08],
+# [86.092, 126.768]]
+#     red_coords_list = [    [72.908, 71.831],
+#     [87.791, 87.57],
+#     [73.373, 54.425],
+#     [54.795, 86.422],]
 
     # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
     # green_coords_list = [[107.85, 108.084],[119.238, 119.6],[111.232, 95.81],[95.925, 118.974]]
     # red_coords_list = [[73.238, 72.351],[82.142, 82.295],[76.435, 62.548],[63.107, 80.591]]
 
+
+    ###
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
     # fmt: off
@@ -1715,8 +1724,8 @@ if __name__ == "__main__":
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
-    nv_sig.expected_counts = 7500
-    # nv_sig.expected_counts = 1500
+    # nv_sig.expected_counts = 7500
+    nv_sig.expected_counts = 18000.0
     # nv_sig.expected_counts = 1300
     # nv_sig.expected_counts = 1250
     # nv_sig.expected_counts = 1800
@@ -1749,11 +1758,18 @@ if __name__ == "__main__":
         # do_red_calibration_image(
         #     nv_sig,
         #     red_coords_list,
-        #     force_laser_key=VirtualLaserKey.RED_IMAGING,
+        #     force_laser_key=VirtualLaserKey.RED_IMAGIN,
+        # )
+        # do_compensate_for_drift(nv_sig)
+        
+        # do_red_calibration_image(
+        #     nv_sig,
+        #     green_coords_list,
+        #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
         do_compensate_for_drift(nv_sig)
-        do_widefield_image_sample(nv_sig, 50)
+        # do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list:
@@ -1845,7 +1861,7 @@ if __name__ == "__main__":
 
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_calibrate_iq_delay(nv_list)
-        do_rabi(nv_list)
+        # do_rabi(nv_list)
         # do_power_rabi(nv_list)
         # do_resonance(nv_list)
         # do_optimize_pol_duration(nv_list)
