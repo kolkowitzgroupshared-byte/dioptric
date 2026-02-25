@@ -410,7 +410,8 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_223nvs_reordered.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_205nvs_reordered.npz"
-        file_path="slmsuite/nv_blob_detection/nv_blob_294nvs.npz"
+        # file_path="slmsuite/nv_blob_detection/nv_blob_294nvs.npz"
+        file_path="slmsuite/nv_blob_detection/nv_blob_41nvs_reordered.npz"
     )
     # Convert coordinates to a standard format (lists of lists)
     # nv_coordinates = [[coord[0] - 3, coord[1] + 3] for coord in nv_coordinates]
@@ -439,49 +440,6 @@ if __name__ == "__main__":
 
     print(f"After filtering: {len(spot_weights)} NVs")
 
-    nv_coordinates = [
-    [59.479, 90.515],
-    [44.597, 92.409],
-    [30.018, 94.126],
-    [17.056, 110.932],
-    [18.769, 125.514],
-    [20.598, 140.553],
-    [22.385, 155.28],
-    [24.133, 169.852],
-    [26.088, 184.77] ,
-    [42.612, 197.72],
-    [57.405, 196.096],
-    [72.277, 193.902],
-    [101.891, 190.315],
-    [100.139, 175.539],
-    [97.966, 160.76],
-    [96.099, 145.854],
-    [94.532, 130.997],
-    [92.421, 116.36], 
-    [90.758, 101.753],
-    [103.856, 84.936],
-    [118.567, 83.021],
-    [135.295, 95.897],
-    [136.995, 110.628],
-    [139.122, 125.519],
-    [140.765, 140.387],
-    [142.53, 155.273],
-    [144.171, 170.201],
-    [146.219, 184.876],
-    [125.948, 142.238],
-    [111.204, 144.168],
-    [163.036, 77.639],
-    [164.894, 92.531],
-    [166.601, 107.007],
-    [168.603, 121.94],
-    [170.316, 136.752],
-    [172.339, 151.712],
-    [174.014, 166.293],
-    [175.845, 181.058],
-    [190.582, 179.29],
-    [205.26, 177.127],
-    [220.255, 175.747],
-    ]
     # Filter and reorder NV coordinates based on reference NV
     # integrated_intensities = []
     sigma = 3.0
@@ -774,20 +732,20 @@ if __name__ == "__main__":
 
     # # Plot the original image with circles around each NV
     fig, ax = plt.subplots()
-    title = "LASER_589_Ref, 50ms"
-    kpl.imshow(ax, img_array, title=title, cbar_label="Photons")
+    title = "LASER_520, 12ms"
+    kpl.imshow(ax, img_array, title=title, cbar_label="ADUs")
     # Draw circles and index numbers
     for idx, coord in enumerate(filtered_reordered_coords):
         circ = plt.Circle(coord, sigma, color="lightblue", fill=False, linewidth=0.5)
         ax.add_patch(circ)
         # Place text just above the circle
-        ax.text(
-            coord[0],
-            coord[1] - sigma - 1,
-            str(idx),
-            color="white",
-            fontsize=8,
-            ha="center",
-        )
+        # ax.text(
+        #     coord[0],
+        #     coord[1] - sigma - 1,
+        #     str(idx),
+        #     color="white",
+        #     fontsize=8,
+        #     ha="center",
+        # )
 
     plt.show(block=True)

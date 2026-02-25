@@ -1357,12 +1357,12 @@ def do_opx_constant_ac():
     # opx.stream_start()
 
     # Yellow
-    # opx.constant_ac(
-    #     [],  # Digital channels
-    #     [7],  # Analog channels
-    #     [0.35],  # Analog voltages
-    #     [0],  # Analog frequencies
-    # )
+    opx.constant_ac(
+        [],  # Digital channels
+        [7],  # Analog channels
+        [0.30],  # Analog voltages
+        [0],  # Analog frequencies
+    )
     # opx.constant_ac([4])  # Just laser
     # Red
     # freqs = [65, 75, 85]
@@ -1425,12 +1425,12 @@ def do_opx_constant_ac():
     # )
 
     # Green + yellow
-    opx.constant_ac(
-        [4],  # Digital channels
-        [3, 4, 7],  # Analog channels
-        [0.11, 0.11, 0.30],  # Analog voltages
-        [107, 107, 0],  # Analog frequencies
-    )
+    # opx.constant_ac(
+    #     [4],  # Digital channels
+    #     [3, 4, 7],  # Analog channels
+    #     [0.11, 0.11, 0.30],  # Analog voltages
+    #     [107, 107, 0],  # Analog frequencies
+    # )
     # Red + green + Yellow
     # opx.constant_ac(
     #     [4, 1],  # Digital channels1
@@ -1566,8 +1566,8 @@ if __name__ == "__main__":
     # magnet_angle = 90
     date_str = "2026_02_20"
     sample_coords = [0.0, 0.2]
-    z_coord = -0.8
-    # z_coord = 1.1
+    # z_coord = -0.6
+    z_coord = 1.4
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_308nvs_reordered.npz",
@@ -1724,8 +1724,8 @@ if __name__ == "__main__":
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
-    # nv_sig.expected_counts = 7500
-    nv_sig.expected_counts = 18000.0
+    nv_sig.expected_counts = 6000
+    # nv_sig.expected_counts = 18000.0
     # nv_sig.expected_counts = 1300
     # nv_sig.expected_counts = 1250
     # nv_sig.expected_counts = 1800
@@ -1824,7 +1824,7 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
 
-        # do_charge_state_histograms(nv_list)
+        do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 

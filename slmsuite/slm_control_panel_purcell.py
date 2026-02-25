@@ -94,8 +94,9 @@ def blaze(vector_deg=(0.2, 0.2)):
 def fourier_calibration():
     cam.set_exposure(0.002)  # Increase exposure because power will be split many ways
     fs.fourier_calibrate(
-        array_shape=[20, 12],  # Size of the calibration grid (Nx, Ny) [knm]
-        array_pitch=[30, 40],  # Pitch of the calibration grid (x, y) [knm]
+        array_shape=[30, 18],  # Size of the calibration grid (Nx, Ny) [knm]
+        # array_pitch=[30, 40],  # Pitch of the calibration grid (x, y) [knm]
+        array_pitch=[45, 60],  # Pitch of the calibration grid (x, y) [knm]
         plot=True,
     )
     # cam.set_exposure(0.01)
@@ -138,7 +139,8 @@ def wavefront_calibration():
 def load_fourier_calibration():
     calibration_file_path = (
         # "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00003.h5"
-        "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00006.h5"
+        # "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00006.h5"
+        "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00008.h5"
     )
     fs.load_fourier_calibration(calibration_file_path)
     print("Fourier calibration loaded from:", calibration_file_path)
@@ -236,8 +238,8 @@ def calibration_triangle():
     cam.set_exposure(0.1)
 
     # Define parameters for the equilateral triangle
-    center = (680, 560)  # Center of the triangle
-    side_length = 550  # Length of each side of the triangle\
+    center = (720, 600)  # Center of the triangle
+    side_length = 440  # Length of each side of the triangle\
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
     theta = np.linspace(0, 2 * np.pi, 4)[:-1]  # Exclude the last point to avoid overlap
@@ -277,11 +279,11 @@ def nuvu2thorcam_calibration(coords):
     to the Thorlabs camera's coordinate system using an affine transformation.
     """
     cal_coords_thorcam = np.array(
-        [[1156.313,  835.0], [203.686,  835.], [680.0, 10]], dtype="float32"
+        [[1101.0511,   820.0], [338.948,  820.0], [720.0, 160.0]], dtype="float32"
     )
 
     cal_coords_nuvu = np.array(
-        [[191.517, 208.257], [168.193, 41.369], [37.152, 144.425]], dtype="float32"
+        [[211.599, 234.526], [197.31, 17.781], [17.46, 136.514]], dtype="float32"
     )
     # Compute the affine transformation matrix
     M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)

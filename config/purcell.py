@@ -218,7 +218,7 @@ config |= {
             # LaserKey.IMAGING: {"physical_name": green_laser, "duration": 50e6},
             VirtualLaserKey.IMAGING: {
                 "physical_name": green_laser,
-                "duration": 12e6,
+                "duration": 60e6,
                 # "duration": 12e6,
             },
             # SBC: created for calibration only
@@ -956,7 +956,7 @@ opx_config = {
     ### Analog
     "waveforms": {
         # Green AOD
-        "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
+        "green_aod_cw-opti": {"type": "constant", "sample": 0.06},
         "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.08},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
