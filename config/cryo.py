@@ -118,6 +118,8 @@ config |= {
         "power_supply_RNS_ngc103_visa": "TCPIP::192.168.0.130::INSTR",
         "pos_xyz_ATTO_piezos_ip": "192.168.0.199",
         "filter_slider_THOR_ell9k_com": "COM5",
+        "multimeter_KEIT_daq6510_visa": "TCPIP0::192.168.0.122::inst0::INSTR",
+
     },
     ###
     "Microwaves": {
