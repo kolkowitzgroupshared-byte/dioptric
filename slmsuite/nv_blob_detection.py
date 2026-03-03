@@ -380,14 +380,14 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
     # Load the image data
     data = dm.get_raw_data(
-        file_stem="2026_02_24-13_03_21-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_03_02-16_52_17-qnami-nv0_2026_02_20", load_npz=True
     )
     # img_array = np.array(data["ref_img_array"])
     img_array = np.array(data["img_array"])
 
     # Apply the blob detection and Gaussian fitting
     sigma = 4.0
-    lower_threshold = 1.0
+    lower_threshold = 10.0
     upper_threshold = 5000000
     smoothing_sigma = 1.0
     integration_radius= 4
@@ -457,7 +457,7 @@ if __name__ == "__main__":
     #     filtered_nv_coords,
     #     filtered_counts,
     #     path="slmsuite/nv_blob_detection",
-    #     filename="nv_blob_294nvs.npz",
+    #     filename="nv_blob_237nvs.npz",
     # )
 
     # full ROI -- multiple images save in the same file

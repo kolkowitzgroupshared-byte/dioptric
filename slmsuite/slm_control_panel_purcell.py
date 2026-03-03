@@ -239,7 +239,7 @@ def calibration_triangle():
 
     # Define parameters for the equilateral triangle
     center = (720, 600)  # Center of the triangle
-    side_length = 440  # Length of each side of the triangle\
+    side_length = 420  # Length of each side of the triangle\
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
     theta = np.linspace(0, 2 * np.pi, 4)[:-1]  # Exclude the last point to avoid overlap
@@ -279,11 +279,11 @@ def nuvu2thorcam_calibration(coords):
     to the Thorlabs camera's coordinate system using an affine transformation.
     """
     cal_coords_thorcam = np.array(
-        [[1101.0511,   820.0], [338.948,  820.0], [720.0, 160.0]], dtype="float32"
+        [[1083.730,   810.0], [356.269,  810.0], [720.0, 180.0]], dtype="float32"
     )
 
     cal_coords_nuvu = np.array(
-        [[211.599, 234.526], [197.31, 17.781], [17.46, 136.514]], dtype="float32"
+        [[221.653, 245.996], [205.716, 10.727], [9.537, 141.33]], dtype="float32"
     )
     # Compute the affine transformation matrix
     M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
@@ -308,7 +308,8 @@ def load_nv_coords(
     # file_path="slmsuite/nv_blob_detection/nv_blob_205nvs_reordered.npz",  # johnson
     # file_path="slmsuite/nv_blob_detection/nv_blob_195nvs_reordered.npz",  # johnson
     # file_path="slmsuite/nv_blob_detection/nv_blob_276nvs_reordered.npz",  # johnson
-    file_path="slmsuite/nv_blob_detection/nv_blob_41nvs_reordered.npz",  # cL
+    # file_path="slmsuite/nv_blob_detection/nv_blob_41nvs_reordered.npz",  # cL
+    file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
@@ -336,7 +337,7 @@ def compute_and_write_nvs_phase():
         shape=(4096, 2048),
         spot_vectors=thorcam_coords,
         basis="ij",
-        # spot_amp=spot_weights,
+        spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally

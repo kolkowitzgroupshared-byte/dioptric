@@ -172,8 +172,8 @@ def plot_fov_vs_f2_multi_bandwidth(
 
     # overlay limits
     plt.axhline(fn_limit_um, linestyle="--", label=f"Objective FN limit (~{fn_limit_um:.0f} µm diameter)")
-    plt.axhline(cam_x_um, linestyle="--", label=f"Camera limit X (~{cam_x_um:.0f} µm)")
-    plt.axhline(cam_y_um, linestyle=":",  label=f"Camera limit Y (~{cam_y_um:.0f} µm)")
+    # plt.axhline(cam_x_um, linestyle="--", label=f"Camera limit X (~{cam_x_um:.0f} µm)")
+    # plt.axhline(cam_y_um, linestyle=":",  label=f"Camera limit Y (~{cam_y_um:.0f} µm)")
 
     plt.xlabel("Second lens focal length f2 (cm) with f1=30cm")
     plt.ylabel("Predicted sample scan range (µm)")
