@@ -309,7 +309,8 @@ def load_nv_coords(
     # file_path="slmsuite/nv_blob_detection/nv_blob_195nvs_reordered.npz",  # johnson
     # file_path="slmsuite/nv_blob_detection/nv_blob_276nvs_reordered.npz",  # johnson
     # file_path="slmsuite/nv_blob_detection/nv_blob_41nvs_reordered.npz",  # cL
-    file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
+    file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",  # cal
+    # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
@@ -332,6 +333,7 @@ print(f"Total NV coordinates: {len(nuvu_pixel_coords)}")
 thorcam_coords = nuvu2thorcam_calibration(nuvu_pixel_coords).T
 # sys.exit()
 
+{}
 def compute_and_write_nvs_phase():
     hologram = SpotHologram(
         shape=(4096, 2048),
@@ -347,7 +349,7 @@ def compute_and_write_nvs_phase():
         feedback="computational_spot",
         stat_groups=["computational_spot"],
     )
-
+# 
     initial_phase = hologram.extract_phase()
     # Define the path to save the phase data1
     file_path = r"slmsuite\computed_phase"

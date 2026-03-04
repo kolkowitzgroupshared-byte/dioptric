@@ -603,11 +603,11 @@ if __name__ == "__main__":
     remove_outliers_flag = False  # Set this flag to enable/disable outlier removal
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
-        file_stem="2026_03_02-16_52_17-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_03_03-18_28_53-qnami-nv0_2026_02_20", load_npz=True
         # file_stem="2026_01_31-18_06_49-combined_image_array", load_npz=True
     )
-    # img_array = np.array(data["ref_img_array"])
-    img_array = data["img_array"]
+    img_array = np.array(data["ref_img_array"])
+    # img_array = data["img_array"]
     nv_coordinates, spot_weights = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_327nvs.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_308nvs_reordered.npz"
@@ -620,9 +620,11 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_205nvs_reordered.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_294nvs.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_41nvs_reordered.npz" ##CAL
-        file_path="slmsuite/nv_blob_detection/nv_blob_237nvs.npz"
+        file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz" ##CAL
+        # file_path="slmsuite/nv_blob_detection/nv_blob_237nvs.npz"
     )
+    
+    
     # Convert coordinates to a standard format (lists of lists)
     # nv_coordinates = [[coord[0] - 3, coord[1] + 3] for coord in nv_coordinates]
     nv_coordinates = [list(coord) for coord in nv_coordinates]
@@ -652,13 +654,14 @@ if __name__ == "__main__":
 
     # Filter and reorder NV coordinates based on reference NV
     # integrated_intensities = []
-    sigma = 3.0
-    reference_nv = [119.278, 122.061]
+    sigma = 6.0
+    # reference_nv = [119.278, 122.061]
+    reference_nv = nv_coordinates[0]
     # reference_nv =  [125.948, 142.238] ## CAl 
     
     filtered_reordered_coords, filtered_reordered_spot_weights, include_indices = (
         filter_and_reorder_nv_coords(
-            nv_coordinates, spot_weights, reference_nv, min_distance=3
+            nv_coordinates, spot_weights, reference_nv, min_distance=10
         )
     )
     print(len(filtered_reordered_coords))
@@ -908,7 +911,7 @@ if __name__ == "__main__":
     spot_weights, scaling_factor=1.1
     )
     # updated_spot_weights = 1/fitted_amplitudes
-    updated_spot_weights = curve_inverse_counts(fitted_amplitudes, scaling_factor=0.4)
+    updated_spot_weights = curve_inverse_counts(fitted_amplitudes, scaling_factor=1.0)
     
     # Update weights for the specified indices using the calculated weights
     # fmt: off
@@ -965,11 +968,11 @@ if __name__ == "__main__":
     # Calculate the spot weights based on the integrated intensities
     # spot_weights = non_linear_weights(filtered_intensities, alpha=0.9)
 
-    # Save the filtered results
+    # # Save the filtered results
     # save_results(
     #     filtered_reordered_coords,
     #     filtered_reordered_spot_weights,
-    #     filename="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",
+    #     filename="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",
     # )
 
     # # Plot the original image with circles around each NV

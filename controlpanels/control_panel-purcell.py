@@ -122,8 +122,8 @@ def do_image_single_nv(nv_sig):
 
 def do_charge_state_histograms(nv_list):
     # 50 ms
-    num_reps = 200
-    num_runs = 10
+    num_reps = 600
+    num_runs = 1
 
     # 100 ms
     # num_reps = 100
@@ -1581,7 +1581,8 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz",
         # file_path="slmsuite/nv_blob_detection/nv_blob_82nvs_reordered.npz",
         # file_path="slmsuite/nv_blob_detection/nv_blob_41nvs_reordered.npz",
-        file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",
+        # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",
+        file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",
     ).tolist()
     # pixel_coords_list = [[124.195, 127.341],[16.501, 46.951],[146.942, 239.125],[206.995, 41.423]]
     # pixel_coords_list = [[124.195, 127.341],[23.53, 23.794], [106.927, 228.008],[225.41, 28.953]]
@@ -1722,7 +1723,7 @@ if __name__ == "__main__":
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
-    nv_sig.expected_counts = 4900
+    # nv_sig.expected_counts = 4500
     # nv_sig.expected_counts = 13000
     # nv_sig.expected_counts = 1300
     # nv_sig.expected_counts = 1250
@@ -1765,9 +1766,9 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_compensate_for_drift(nv_sig)
+        # do_compensate_for_drift(nv_sig)
         # do_widefield_image_sample(nv_sig, 50)
-        # do_widefield_image_sample(nv_sig, 400)
+        # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list:
         #     do_scanning_image_sample_zoom(nv)
@@ -1821,12 +1822,12 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
 
-        # do_charge_state_histograms(nv_list)
+        do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
         # do_optimize_pol_amp(nv_list)
-        do_optimize_pol_duration(nv_list)
+        # do_optimize_pol_duration(nv_list)
         # do_optimize_readout_amp(nv_list)
 
         # do_optimize_readout_duration(nv_list)

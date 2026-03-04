@@ -462,4 +462,4 @@ if __name__ == "__main__":
 
     # full ROI -- multiple images save in the same file
     # process_scan_file(file_stem="2025_10_22-01_29_02-rubin-nv0_2025_09_08")
-    # process_scan_file(file_stem="2026_02_14-12_00_21-johnson-nv0_2025_10_21")
+    process_scan_file(file_stem="2026_02_14-12_00_21-johnson-nv0_2025_10_21")
