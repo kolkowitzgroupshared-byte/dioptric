@@ -1813,7 +1813,7 @@ if __name__ == "__main__":
         # do_optimize_green(nv_sig)
         # repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
         # do_optimize_red(nv_sig, repr_nv_sig)
-        # do_optimize_z(nv_sig)
+        do_optimize_z(nv_sig)
 
         # do_optimize_sample(nv_sig)
         # optimize.optimize_pixel_and_z(nv_sig, do_plot=True)
