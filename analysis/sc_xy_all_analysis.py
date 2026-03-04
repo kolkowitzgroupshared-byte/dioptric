@@ -1052,7 +1052,7 @@ if __name__ == "__main__":
     file_stems = [
     "2026_01_22-04_03_03-johnson-nv0_2025_10_21",
     ]
-    
+
     # plot_T2_on_T1()
     # contrast_plot()
     # T2_ratio_xy()
@@ -1097,3 +1097,4 @@ if __name__ == "__main__":
     # )
     # plot_xy8(nv_list, taus, norm_counts, norm_counts_ste, T2_list, n_list, fit_params)
     plt.show(block=True)
+

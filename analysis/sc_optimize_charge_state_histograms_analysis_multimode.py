@@ -13,13 +13,12 @@ from scipy.optimize import curve_fit
 
 from analysis.bimodal_histogram import (
     ProbDist,
-    analyze_charge_histogram_multinv_binomial,          # estimate N once per NV
-    fit_binomial_multinv_histogram,                     # per-step fit (p, rate0, delta)
-    determine_threshold_any_minus_binomial_multinv,     # per-step binary threshold + fidelity
+    fit_binomial_multinv_histogram,  # per-step fit (p, rate0, delta)
+    analyze_charge_histogram_multinv_binomial,  # estimate N once per NV
+    determine_threshold_any_minus_binomial_multinv,  # per-step binary threshold + fidelity
 )
 from utils import data_manager as dm
 from utils import kplotlib as kpl
-
 
 
 def find_optimal_value_geom_mean(
@@ -112,7 +111,7 @@ def process_and_plot(raw_data, do_plot=False):
     condensed_counts = np.array(condensed_counts)
 
     prob_dist = ProbDist.COMPOUND_POISSON
-    
+
     prob_dist = ProbDist.COMPOUND_POISSON
     max_nvs_per_position = 3  # allow 1/2/3 NVs
 
@@ -124,7 +123,7 @@ def process_and_plot(raw_data, do_plot=False):
             pooled,
             prob_dist=prob_dist,
             max_nvs=max_nvs_per_position,
-            force_nvs=None,          # or set 1/2/3 if you know from imaging
+            force_nvs=None,  # or set 1/2/3 if you know from imaging
             seed=nv_ind,
         )
     n_est_by_nv[nv_ind] = int(fitN["n_nvs"]) if fitN.get("ok", False) else 1
@@ -150,12 +149,14 @@ def process_and_plot(raw_data, do_plot=False):
                 return np.nan, np.nan, np.nan
 
             x_max = int(round(np.max(counts_data)))
-            threshold, readout_fidelity = determine_threshold_any_minus_binomial_multinv(
-                popt,
-                prob_dist,
-                N,
-                x_max=x_max,
-                ret_fidelity=True,
+            threshold, readout_fidelity = (
+                determine_threshold_any_minus_binomial_multinv(
+                    popt,
+                    prob_dist,
+                    N,
+                    x_max=x_max,
+                    ret_fidelity=True,
+                )
             )
 
             # popt[0] = p_minus (per-NV). Convert to your “prep fidelity”:
@@ -263,8 +264,8 @@ def process_and_plot(raw_data, do_plot=False):
             print(f"Failed to process NV{nv_ind}: {e}")
             optimal_values.append((nv_ind, np.nan, np.nan))
             continue
-        
-        if do_plot:  
+
+        if do_plot:
             # # Plotting
             fig, ax1 = plt.subplots(figsize=(7, 5))
             # Plot readout fidelity
@@ -513,7 +514,9 @@ def process_and_plot(raw_data, do_plot=False):
     plt.show(block=False)
 
 
-def process_nv_step(nv_ind, step_ind, condensed_counts, n_est_by_nv, prob_dist=ProbDist.COMPOUND_POISSON):
+def process_nv_step(
+    nv_ind, step_ind, condensed_counts, n_est_by_nv, prob_dist=ProbDist.COMPOUND_POISSON
+):
     counts_data = condensed_counts[nv_ind, step_ind]
 
     try:
@@ -534,12 +537,14 @@ def process_nv_step(nv_ind, step_ind, condensed_counts, n_est_by_nv, prob_dist=P
         x_max = int(np.max(counts_data)) if len(counts_data) else 0
 
         # binary threshold: k=0 vs k>=1 ("any NV-")
-        threshold_any, readout_fidelity = determine_threshold_any_minus_binomial_multinv(
-            popt,
-            prob_dist,
-            N,
-            x_max=x_max,
-            ret_fidelity=True,
+        threshold_any, readout_fidelity = (
+            determine_threshold_any_minus_binomial_multinv(
+                popt,
+                prob_dist,
+                N,
+                x_max=x_max,
+                ret_fidelity=True,
+            )
         )
 
         # popt[0] = p_minus (per-NV). Convert to "any NV-" probability:
@@ -593,8 +598,7 @@ def process_and_plot_charge(raw_data, do_plot=False):
 
     # --- Saturation models (with offset) ---
     def sat_decay_fit_fn(t, F0, A, t0, tau_r, tau_d):
-        t = np.asarray(t, dtype=float
-                       )
+        t = np.asarray(t, dtype=float)
         x = np.maximum(t - t0, 0.0)  # gate before t0
         tau_r = np.maximum(tau_r, 1e-12)
         tau_d = np.maximum(tau_d, 1e-12)
@@ -689,7 +693,10 @@ def process_and_plot_charge(raw_data, do_plot=False):
             plt.scatter(x_f, y_f, label="Measured")
             plt.plot(results["grid_t"], results["grid_y"], label="Sat-Decay Fit")
             plt.axvline(
-                opti_dur, color="green", linestyle="--", label=f"Peak ≈ {opti_dur:.0f} ns"
+                opti_dur,
+                color="green",
+                linestyle="--",
+                label=f"Peak ≈ {opti_dur:.0f} ns",
             )
             plt.scatter([opti_dur], [opti_fid], color="green", zorder=5)
             plt.xlabel("Duration (ns)")
@@ -707,9 +714,11 @@ def process_and_plot_charge(raw_data, do_plot=False):
         median_duration = int(np.nanmedian(numeric_durations))
         # Replace None or out-of-range values with median
         opti_durs = [
-            median_duration
-            if (d is None or (100 <= d <= 200) or (1930 <= d <= 2000))
-            else d
+            (
+                median_duration
+                if (d is None or (100 <= d <= 200) or (1930 <= d <= 2000))
+                else d
+            )
             for d in opti_durs
         ]
 
@@ -735,13 +744,13 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
     ### readout amp
     file_id = "2026_03_03-02_22_47-qnami-nv0_2026_02_20"
-    
+
     ### pol amp var
     # file_id = "2026_02_10-00_47_07-johnson-nv0_2025_10_21"
 
     ### pol dur var
     # file_id = "2026_02_10-03_18_17-johnson-nv0_2025_10_21"
-    
+
     # dm.USE_NEW_CLOUD = False
     raw_data = dm.get_raw_data(file_stem=file_id, load_npz=True)
     # file_name = dm.get_file_name(file_id=file_id)

@@ -120,11 +120,18 @@ class MultimeterKeitDaq6510(LabradServer):
     def turn_off_averaging(self, c):
         self.multimeter.write("VOLT:AVER OFF")
 
-    @setting(14, channel = "i", returns="v[]")
+    @setting(14, returns="v[]", channel="i")
     def read_temperature(self, c, channel):
-        value = self.multimeter.query(f":MEASure:TEMPerature? (@{channel})")
-        return value
-
+        multimeter = self.multimeter
+        multimeter.write("*RST")
+        multimeter.write(":FUNCtion 'TEMPerature', (@{})".format(channel))
+        multimeter.write(":SENSe:TEMPerature:TRANsducer TCouple, (@{})".format(channel))
+        multimeter.write(":SENSe:TEMPerature:TCouple:TYPE K,(@{})".format(channel))
+        multimeter.write(":SENSe:TEMPerature:TCouple:RJUNction:RSELect INTernal,(@{})".format(channel))
+        multimeter.write(":SENSe:TEMPerature:ODETector ON,(@{})".format(channel))
+        multimeter.write(":ROUT:CLOS (@{})".format(channel))
+        output = float(multimeter.query(":READ?".format(channel)))
+        return output
 
 __server__ = MultimeterKeitDaq6510()
 

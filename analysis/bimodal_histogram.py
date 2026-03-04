@@ -16,6 +16,7 @@ from functools import cache
 from inspect import signature
 import warnings
 import numpy as np
+import math
 from matplotlib import pyplot as plt
 from scipy.integrate import quad
 from scipy.special import factorial, gammainc, gammaincc, gammaln, xlogy
@@ -694,27 +695,28 @@ def determine_dual_threshold(
 
     return threshold
 
-import math
-import numpy as np
 
 # -----------------------------
 # Structured N-NV binomial model
 # -----------------------------
 
+
 def _binom_coeffs(n: int) -> np.ndarray:
     return np.array([math.comb(n, k) for k in range(n + 1)], dtype=float)
+
 
 def _binom_weights(n: int, p: float) -> np.ndarray:
     p = float(np.clip(p, 0.0, 1.0))
     ks = np.arange(n + 1, dtype=float)
     coeff = _binom_coeffs(n)
-    w = coeff * (p ** ks) * ((1.0 - p) ** (n - ks))
+    w = coeff * (p**ks) * ((1.0 - p) ** (n - ks))
     s = float(np.sum(w))
     if s <= 0 or not np.isfinite(s):
         w = np.zeros(n + 1, dtype=float)
         w[0] = 1.0
         return w
     return w / s
+
 
 def get_binomial_multinv_pdf(prob_dist: ProbDist, n_nvs: int):
     """
@@ -726,7 +728,9 @@ def get_binomial_multinv_pdf(prob_dist: ProbDist, n_nvs: int):
     Works best for ProbDist.COMPOUND_POISSON or ProbDist.POISSON.
     """
     if prob_dist is ProbDist.COMPOUND_POISSON_WITH_IONIZATION:
-        raise ValueError("Binomial multinv model is for *reference* histograms (no ionization).")
+        raise ValueError(
+            "Binomial multinv model is for *reference* histograms (no ionization)."
+        )
 
     single_pdf = get_single_mode_pdf(prob_dist)
     coeff = _binom_coeffs(n_nvs)
@@ -738,7 +742,7 @@ def get_binomial_multinv_pdf(prob_dist: ProbDist, n_nvs: int):
         delta = float(max(delta, 0.0))
 
         ks = np.arange(K, dtype=float)
-        w = coeff * (p_minus ** ks) * ((1.0 - p_minus) ** (n_nvs - ks))
+        w = coeff * (p_minus**ks) * ((1.0 - p_minus) ** (n_nvs - ks))
         s = float(np.sum(w))
         if s <= 0 or not np.isfinite(s):
             w = np.zeros(K, dtype=float)
@@ -756,6 +760,7 @@ def get_binomial_multinv_pdf(prob_dist: ProbDist, n_nvs: int):
         return y
 
     return fn
+
 
 def fit_binomial_multinv_histogram(
     counts_list,
@@ -831,8 +836,16 @@ def fit_binomial_multinv_histogram(
         p0 = np.array([p_guess, rate0_guess, delta_guess], dtype=float)
         if r > 0:
             p0[0] = float(np.clip(p0[0] + 0.10 * rng.standard_normal(), 0.05, 0.95))
-            p0[1] = float(np.clip(p0[1] * (1.0 + 0.20 * rng.standard_normal()), bounds[0][1], bounds[1][1]))
-            p0[2] = float(np.clip(p0[2] * (1.0 + 0.20 * rng.standard_normal()), 0.0, bounds[1][2]))
+            p0[1] = float(
+                np.clip(
+                    p0[1] * (1.0 + 0.20 * rng.standard_normal()),
+                    bounds[0][1],
+                    bounds[1][1],
+                )
+            )
+            p0[2] = float(
+                np.clip(p0[2] * (1.0 + 0.20 * rng.standard_normal()), 0.0, bounds[1][2])
+            )
 
         try:
             popt, pcov, red_chi_sq = curve_fit(
@@ -1017,7 +1030,13 @@ def analyze_charge_histogram_multinv_binomial(
 
     for N in Ns:
         popt, pcov, red = fit_binomial_multinv_histogram(
-            x, prob_dist, N, no_print=True, no_plot=True, n_restarts=5, seed=seed + 19 * N
+            x,
+            prob_dist,
+            N,
+            no_print=True,
+            no_plot=True,
+            n_restarts=5,
+            seed=seed + 19 * N,
         )
         if popt is None:
             continue
@@ -1031,7 +1050,11 @@ def analyze_charge_histogram_multinv_binomial(
 
         # parameter count: 3 + (N-1) "structural" penalty
         k_free = 3 + (N - 1)
-        bic = float(k_free * np.log(max(n_samp, 1.0)) - 2.0 * ll + bic_extra_nv_penalty * (N - 1))
+        bic = float(
+            k_free * np.log(max(n_samp, 1.0))
+            - 2.0 * ll
+            + bic_extra_nv_penalty * (N - 1)
+        )
 
         # thresholds + fidelities
         thresholds, fid_multi = determine_multithreshold_binomial_multinv(
@@ -1051,8 +1074,8 @@ def analyze_charge_histogram_multinv_binomial(
             ll=ll,
             bic=bic,
             weights=_binom_weights(N, float(popt[0])),
-            thresholds=thresholds,          # length N (multi-class)
-            threshold_any=thr_any,          # legacy binary (k=0 vs >=1)
+            thresholds=thresholds,  # length N (multi-class)
+            threshold_any=thr_any,  # legacy binary (k=0 vs >=1)
             fidelity_any=fid_any,
             fidelity_multiclass=fid_multi,
             x_max=max_count,
@@ -1064,6 +1087,8 @@ def analyze_charge_histogram_multinv_binomial(
     if best is None:
         return {"ok": False, "reason": "fit_failed"}
     return best
+
+
 if __name__ == "__main__":
     kpl.init_kplotlib()
     # (z, lambda_0, lambda_m, ion)

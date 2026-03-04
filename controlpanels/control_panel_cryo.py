@@ -47,7 +47,7 @@ import utils.tool_belt as tool_belt
 from majorroutines.calibration import approach_surface, diagnose_z_direction
 from majorroutines.confocal.confocal_2D_scan import confocal_scan_2D_xz
 from majorroutines.confocal.z_scan_1d import main as scan_1D
-from utils import kplotlib as kpl
+from utils import common, kplotlib as kpl
 from utils import positioning as pos
 from utils.constants import Axes, CoordsKey, NVSig, VirtualLaserKey
 
@@ -64,7 +64,7 @@ def do_image_sample(nv_sig):
     """
 
     scan_range = 0.2  # voltage
-    num_steps = 90
+    num_steps = 60
 
     # For now we only support square scans so pass scan_range twice
     image_sample.confocal_scan(
@@ -74,6 +74,16 @@ def do_image_sample(nv_sig):
         num_steps,
     )
 
+def do_image_sample_zoom(nv_sig):
+    scan_range = 0.05  # cryo iimage conversion: 37um/V; step size: x,y,z=30,30,40V
+    num_steps = 30
+
+    image_sample.confocal_scan(
+        nv_sig,
+        scan_range,
+        scan_range,
+        num_steps,
+    )
 
 # def do_image_sample_Hahn( # From Hahn control panel, should not work with current version of image_sample
 #     nv_sig,
@@ -125,17 +135,6 @@ def do_2D_xz_scan(nv_sig):
 
     return counts, x_positions
 
-
-def do_image_sample_zoom(nv_sig):
-    scan_range = 0.05  # cryo iimage conversion: 37um/V; step size: x,y,z=30,30,40V
-    num_steps = 30
-
-    image_sample.confocal_scan(
-        nv_sig,
-        scan_range,
-        scan_range,
-        num_steps,
-    )
 
 
 def do_optimize_z(nv_sig, num_steps=20, step_size=1, scan_direction="down"):
@@ -784,6 +783,37 @@ def get_sample_name() -> str:
     sample = "lovelace"  # lovelace
     return sample
 
+def do_constant_ac(digital_channels=(4,), analog0=None, analog1=None):
+    cxn = common.labrad_connect()
+    sig_gen = cxn.sig_gen_STAN_sg394_3
+    pulse_gen = tool_belt.get_server_pulse_streamer()
+    # Build args for the LabRAD setting
+    digital_channels = [int(ch) for ch in digital_channels]
+
+    analog_channels = []
+    analog_voltages = []
+    if analog0 is not None:
+        analog_channels.append(0)
+        analog_voltages.append(float(analog0))
+    if analog1 is not None:
+        analog_channels.append(1)
+        analog_voltages.append(float(analog1))
+
+    # Microwave test
+    amp = 2
+    sig_gen.set_amp(amp)  # 12
+    sig_gen.set_freq(1.0) #Ghz
+    sig_gen.uwave_on()
+    # Turn on constant outputs
+    pulse_gen.constant(digital_channels, analog_channels, analog_voltages)
+    try:
+        input("Constant state applied. Press Enter to stop...")
+    finally:
+        # Safest cleanup: forces final + sets everything off
+        pulse_gen.reset()
+    # input("Press enter to stop...")
+    # pulse_gen.reset()
+
 
 if __name__ == "__main__":
     ### Shared parameters
@@ -818,8 +848,13 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z
     sample_xy = [0,0]  # piezo XY voltage input (1.0=1V) (not coordinates, relative)
-    coord_z = 0  # piezo z voltage (0 is the set midpoint, absolute) (negative is closer to smaple, move unit steps in sample; 37 is good surface focus with bs for Lovelace; 20 is good for dye)
-    pixel_xy = [0,0]  # galvo ref
+    coord_z = 0.000  # piezo z voltage (0 is the set midpoint, absolute) (negative is closer to smaple, move unit steps in sample; 37 is good surface focus with bs for Lovelace; 20 is good for dye)
+    # pixel_xy = [0,0]  # galvo ref
+    # pixel_xy = [-0.031,-0.023]  # other
+    # pixel_xy = [-0.055, -0.018]  # other
+    # pixel_xy = [0.053, -0.093]  # Lovelace image center
+    # pixel_xy = [-0.022, -0.014]  # other
+    pixel_xy = [0,0]  # weird black spot
 
     # return
     nv_sig = NVSig(
@@ -875,28 +910,33 @@ if __name__ == "__main__":
 
         # region 2D scan (x galvo, z piezo)
         # # do_2D_xz_scan(nv_sig)
-        # z_range = np.linspace(1, 3, 2)
+        # z_range = np.linspace(0, 3, 31)
         # for z in z_range:
         #     nv_sig.coords[CoordsKey.Z] = z
         #     pos.set_xyz_on_nv(nv_sig)
-        #     do_image_sample(nv_sig)
+        #     # do_image_sample_zoom(nv_sig)
+            # do_image_sample(nv_sig)
             # do_2D_xz_scan(nv_sig)
  
         # endregion 2D scan
 
         # region Image / 3D scan    
-
+        do_constant_ac()
+        # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None)
+        # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None):
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
         # do_image_sample(nv_sig)
         # do_image_sample_zoom(nv_sig)
 
-        # Quick NV area scans
-        # for i in range(27):
-        # do_image_sample_zoom(nv_sig)
-        #     nv_sig.coords[CoordsKey.Z] = z
-        #     # pos.set_xyz_on_nv(nv_sig)
-        #     # do_image_sample_zoom(nv_sig)
-        #     do_image_sample(nv_sig)
+        # # Quick NV area scans
+        # for i in range(10):
+            # do_image_sample_zoom(nv_sig)
+            # do_image_sample(nv_sig)
+            # coord_z = 0.00 + i * 0.005  # Start at 0.05V and increment by 0.02V for each scan
+            # nv_sig.coords[CoordsKey.Z] = coord_z
+            # pos.set_xyz_on_nv(nv_sig)
+            # do_image_sample_zoom(nv_sig)
+            # do_image_sample(nv_sig)
 
         # do_image_sample(nv_sig, nv_minus_initialization=True)
         # do_image_sample_zoom(nv_sig, nv_minus_initialization=True)
@@ -910,7 +950,7 @@ if __name__ == "__main__":
         # endregion Optimize
 
         # region Stationary count
-        do_stationary_count(nv_sig, disable_opt=True) #Note there is a slow response time w/ the APD
+        # do_stationary_count(nv_sig, disable_opt=True) #Note there is a slow response time w/ the APD
         # do_stationary_count(nv_sig, disable_opt=True, nv_minus_initialization=True)
         # do_stationary_count(nv_sig, disable_opt=True, nv_zero_initialization=True)
         # endregion Stationary count
