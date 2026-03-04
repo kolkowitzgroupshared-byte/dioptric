@@ -32,9 +32,9 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
-calibration_coords_pixel = [[25.311, 49.9], [137.357, 231.095], [216.571, 26.493]]
-calibration_coords_green = [[126.409, 125.638],[107.067, 86.08],[86.092, 126.768]]
-calibration_coords_red = [[87.791, 87.57],[73.373, 54.425],[54.795, 86.422],]
+calibration_coords_pixel = [[225.135, 23.577], [134.176, 239.977],[21.814, 31.9]]
+calibration_coords_green = [[86.88, 125.371], [107.788, 87.997], [124.058, 127.528]]
+calibration_coords_red = [[55.488, 85.327],[73.895, 56.021], [85.802, 88.986]]
 
 # calibration_coords_pixel = [[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
 # calibration_coords_green = [[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
@@ -192,7 +192,8 @@ config |= {
         # See camera server file for details
         "readout_mode": 1,  # 16 for double horizontal readout rate (em mode)
         # "readout_mode": 6,  # Fast conventional
-        "roi": (122, 126, 250, 250),  # offsetX, offsetY, width, height
+        # "roi": (122, 126, 250, 250),  # offsetX, offsetY, width, height
+        "roi": (142, 122, 256, 256),  # offsetX, offsetY, width, height
         # "roi": None,  # offsetX, offsetY, width, height
         "scale": 5 / 0.6,  # pixels / micron
     },
@@ -218,8 +219,8 @@ config |= {
             # LaserKey.IMAGING: {"physical_name": green_laser, "duration": 50e6},
             VirtualLaserKey.IMAGING: {
                 "physical_name": green_laser,
-                "duration": 60e6,
-                # "duration": 12e6,
+                # "duration": 60e6,
+                "duration": 12e6,
             },
             # SBC: created for calibration only
             VirtualLaserKey.RED_IMAGING: {
@@ -261,7 +262,7 @@ config |= {
             },
             VirtualLaserKey.WIDEFIELD_IMAGING: {
                 "physical_name": yellow_laser,
-                "duration": 12e6,
+                "duration": 60e6,
                 # "duration": 24e6,
             },
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 10e3},
@@ -957,7 +958,7 @@ opx_config = {
     "waveforms": {
         # Green AOD
         "green_aod_cw-opti": {"type": "constant", "sample": 0.06},
-        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.08},
+        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.15},
@@ -966,13 +967,13 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.35},
+        "yellow_imaging": {"type": "constant", "sample": 0.20},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2675},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2367}, #136NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2267}, #118NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.34947}, ## 312NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3257}, ## 205NV johnson
-        "yellow_charge_readout": {"type": "constant", "sample": 0.15}, ## 195NV johnson
+        "yellow_charge_readout": {"type": "constant", "sample": 0.20}, ## 195NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3084}, ## 223NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},

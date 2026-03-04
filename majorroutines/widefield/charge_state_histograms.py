@@ -443,7 +443,7 @@ if __name__ == "__main__":
     # )
     # process_and_plot(data, do_plot_histograms=True)
     data = dm.get_raw_data(
-        file_stem="2026_02_18-20_16_01-rubin-nv0_2026_02_15", load_npz=True
+        file_stem="2026_03_02-17_30_11-qnami-nv0_2026_02_20", load_npz=True
     )
     process_and_plot(data, do_plot_histograms=True)
     kpl.show(block=True)

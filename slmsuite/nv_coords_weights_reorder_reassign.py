@@ -13,78 +13,287 @@ from utils import data_manager as dm
 from utils import kplotlib as kpl
 
 
-# Define the 2D Gaussian function
+# # Define the 2D Gaussian function
+# def gaussian_2d(xy, amplitude, xo, yo, sigma_x, sigma_y, theta, offset):
+#     x, y = xy
+#     xo = float(xo)
+#     yo = float(yo)
+#     a = (np.cos(theta) ** 2) / (2 * sigma_x**2) + (np.sin(theta) ** 2) / (
+#         2 * sigma_y**2
+#     )
+#     b = -(np.sin(2 * theta)) / (4 * sigma_x**2) + (np.sin(2 * theta)) / (4 * sigma_y**2)
+#     c = (np.sin(theta) ** 2) / (2 * sigma_x**2) + (np.cos(theta) ** 2) / (
+#         2 * sigma_y**2
+#     )
+#     g = offset + amplitude * np.exp(
+#         -(a * ((x - xo) ** 2) + 2 * b * (x - xo) * (y - yo) + c * ((y - yo) ** 2))
+#     )
+#     return g.ravel()
+
+
+# # Function to fit a 2D Gaussian around NV coordinates
+# def fit_gaussian(image, coord, window_size=2):
+#     x0, y0 = coord
+#     img_shape_y, img_shape_x = image.shape
+
+#     # Ensure the window is within image bounds
+#     x_min = max(int(x0 - window_size), 0)
+#     x_max = min(int(x0 + window_size + 1), img_shape_x)
+#     y_min = max(int(y0 - window_size), 0)
+#     y_max = min(int(y0 + window_size + 1), img_shape_y)
+
+#     if (x_max - x_min) <= 1 or (y_max - y_min) <= 1:
+#         print(
+#             f"Invalid cutout for NV at ({x0}, {y0}): Region too small or out of bounds"
+#         )
+#         return x0, y0
+
+#     # Extract cutout and mesh grid
+#     x_range = np.arange(x_min, x_max)
+#     y_range = np.arange(y_min, y_max)
+#     x, y = np.meshgrid(x_range, y_range)
+#     image_cutout = image[y_min:y_max, x_min:x_max]
+
+#     # Check for valid cutout size
+#     if image_cutout.size == 0:
+#         print(f"Zero-size cutout for NV at ({x0}, {y0})")
+#         return x0, y0
+
+#     # Normalize the image cutout
+#     image_cutout = (image_cutout - np.min(image_cutout)) / (
+#         np.max(image_cutout) - np.min(image_cutout)
+#     )
+
+#     # Initial guess parameters
+#     initial_guess = (1, x0, y0, 3, 3, 0, 0)  # Amplitude normalized to 1
+
+#     try:
+#         # Apply bounds to avoid unreasonable parameter values
+#         bounds = (
+#             (0, x_min, y_min, 0, 0, -np.pi, 0),  # Lower bounds
+#             (np.inf, x_max, y_max, np.inf, np.inf, np.pi, np.inf),  # Upper bounds
+#         )
+
+#         # Perform the Gaussian fit
+#         popt, _ = curve_fit(
+#             gaussian_2d, (x, y), image_cutout.ravel(), p0=initial_guess, bounds=bounds
+#         )
+#         amplitude, fitted_x, fitted_y, _, _, _, _ = popt
+
+#         return fitted_x, fitted_y, amplitude
+
+#     except Exception as e:
+#         print(f"Fit failed for NV at ({x0}, {y0}): {e}")
+#         return x0, y0, 0
+
+import numpy as np
+from scipy.optimize import curve_fit
+from skimage.draw import disk
+
+
+# -----------------------------
+# 2D rotated Gaussian model
+# -----------------------------
 def gaussian_2d(xy, amplitude, xo, yo, sigma_x, sigma_y, theta, offset):
+    """
+    2D rotated Gaussian:
+      g(x,y) = offset + amplitude * exp(-Q)
+    where Q is the rotated quadratic form.
+
+    NOTE: amplitude is peak height above offset.
+    """
     x, y = xy
     xo = float(xo)
     yo = float(yo)
-    a = (np.cos(theta) ** 2) / (2 * sigma_x**2) + (np.sin(theta) ** 2) / (
-        2 * sigma_y**2
-    )
+
+    # Prevent zero / negative sigmas from blowing up numerically
+    sigma_x = max(float(sigma_x), 1e-6)
+    sigma_y = max(float(sigma_y), 1e-6)
+
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+
+    a = (cos_t**2) / (2 * sigma_x**2) + (sin_t**2) / (2 * sigma_y**2)
     b = -(np.sin(2 * theta)) / (4 * sigma_x**2) + (np.sin(2 * theta)) / (4 * sigma_y**2)
-    c = (np.sin(theta) ** 2) / (2 * sigma_x**2) + (np.cos(theta) ** 2) / (
-        2 * sigma_y**2
-    )
+    c = (sin_t**2) / (2 * sigma_x**2) + (cos_t**2) / (2 * sigma_y**2)
+
     g = offset + amplitude * np.exp(
-        -(a * ((x - xo) ** 2) + 2 * b * (x - xo) * (y - yo) + c * ((y - yo) ** 2))
+        -(a * (x - xo) ** 2 + 2 * b * (x - xo) * (y - yo) + c * (y - yo) ** 2)
     )
     return g.ravel()
 
 
-# Function to fit a 2D Gaussian around NV coordinates
-def fit_gaussian(image, coord, window_size=2):
+# -----------------------------
+# Fit Gaussian around a coordinate
+# -----------------------------
+def fit_gaussian(image, coord, window_size=12, normalize=False, maxfev=5000, return_fit=False):
+    """
+    Fit a 2D Gaussian in a window around coord=(x0,y0).
+
+    Coordinate convention:
+      - coord is (x, y) in pixel units
+      - image is indexed as image[y, x]
+
+    Returns by default:
+      (fitted_x, fitted_y, amplitude)
+
+    If return_fit=True:
+      (fitted_x, fitted_y, amplitude, gaussian_weight, popt)
+
+    gaussian_weight = 2*pi*amplitude*sigma_x*sigma_y  (integral above offset)
+    """
     x0, y0 = coord
-    img_shape_y, img_shape_x = image.shape
+    img_h, img_w = image.shape  # (y, x)
 
-    # Ensure the window is within image bounds
-    x_min = max(int(x0 - window_size), 0)
-    x_max = min(int(x0 + window_size + 1), img_shape_x)
-    y_min = max(int(y0 - window_size), 0)
-    y_max = min(int(y0 + window_size + 1), img_shape_y)
+    # window bounds (ensure within image)
+    x_min = max(int(np.floor(x0 - window_size)), 0)
+    x_max = min(int(np.ceil(x0 + window_size + 1)), img_w)
+    y_min = max(int(np.floor(y0 - window_size)), 0)
+    y_max = min(int(np.ceil(y0 + window_size + 1)), img_h)
 
+    # region must be at least 2x2
     if (x_max - x_min) <= 1 or (y_max - y_min) <= 1:
-        print(
-            f"Invalid cutout for NV at ({x0}, {y0}): Region too small or out of bounds"
-        )
-        return x0, y0
+        if return_fit:
+            return float(x0), float(y0), 0.0, 0.0, None
+        return float(x0), float(y0), 0.0
 
-    # Extract cutout and mesh grid
+    # cutout
+    image_cutout = np.asarray(image[y_min:y_max, x_min:x_max], dtype=float)
+    if image_cutout.size == 0:
+        if return_fit:
+            return float(x0), float(y0), 0.0, 0.0, None
+        return float(x0), float(y0), 0.0
+
+    # mesh grid in ABSOLUTE pixel coords
     x_range = np.arange(x_min, x_max)
     y_range = np.arange(y_min, y_max)
     x, y = np.meshgrid(x_range, y_range)
-    image_cutout = image[y_min:y_max, x_min:x_max]
 
-    # Check for valid cutout size
-    if image_cutout.size == 0:
-        print(f"Zero-size cutout for NV at ({x0}, {y0})")
-        return x0, y0
+    # optional normalization (NOTE: if normalize=True, amplitude becomes unitless)
+    if normalize:
+        den = float(np.max(image_cutout) - np.min(image_cutout))
+        if den <= 0:
+            if return_fit:
+                return float(x0), float(y0), 0.0, 0.0, None
+            return float(x0), float(y0), 0.0
+        image_fit = (image_cutout - np.min(image_cutout)) / den
+    else:
+        image_fit = image_cutout
 
-    # Normalize the image cutout
-    image_cutout = (image_cutout - np.min(image_cutout)) / (
-        np.max(image_cutout) - np.min(image_cutout)
+    # initial guesses from data
+    offset0 = float(np.percentile(image_fit, 10))
+    peak0 = float(np.max(image_fit))
+    amp0 = max(peak0 - offset0, 1e-6)
+
+    # initial center from local maximum in cutout
+    iy, ix = np.unravel_index(np.argmax(image_fit), image_fit.shape)
+    xo0 = float(x_min + ix)
+    yo0 = float(y_min + iy)
+
+    # initial sigma guess
+    sig0 = max(1.0, window_size / 4.0)
+    initial_guess = (amp0, xo0, yo0, sig0, sig0, 0.0, offset0)
+
+    # bounds (avoid sigma=0; restrict theta to remove degeneracy)
+    eps = 0.3
+    bounds = (
+        (0.0, x_min, y_min, eps, eps, -np.pi / 2, -np.inf),  # lower
+        (np.inf, x_max, y_max, window_size * 2, window_size * 2, np.pi / 2, np.inf),  # upper
     )
 
-    # Initial guess parameters
-    initial_guess = (1, x0, y0, 3, 3, 0, 0)  # Amplitude normalized to 1
-
     try:
-        # Apply bounds to avoid unreasonable parameter values
-        bounds = (
-            (0, x_min, y_min, 0, 0, -np.pi, 0),  # Lower bounds
-            (np.inf, x_max, y_max, np.inf, np.inf, np.pi, np.inf),  # Upper bounds
-        )
-
-        # Perform the Gaussian fit
         popt, _ = curve_fit(
-            gaussian_2d, (x, y), image_cutout.ravel(), p0=initial_guess, bounds=bounds
+            gaussian_2d,
+            (x, y),
+            image_fit.ravel(),
+            p0=initial_guess,
+            bounds=bounds,
+            maxfev=maxfev,
         )
-        amplitude, fitted_x, fitted_y, _, _, _, _ = popt
+        amplitude, fitted_x, fitted_y, sigma_x, sigma_y, theta, offset = popt
+        gaussian_weight = float(2 * np.pi * amplitude * sigma_x * sigma_y)
 
-        return fitted_x, fitted_y, amplitude
+        if return_fit:
+            return float(fitted_x), float(fitted_y), float(amplitude), gaussian_weight, popt
+        return float(fitted_x), float(fitted_y), float(amplitude)
 
     except Exception as e:
         print(f"Fit failed for NV at ({x0}, {y0}): {e}")
-        return x0, y0, 0
+        if return_fit:
+            return float(x0), float(y0), 0.0, 0.0, None
+        return float(x0), float(y0), 0.0
+
+
+# -----------------------------
+# Disk integration weight (sum in radius)
+# -----------------------------
+def integrate_intensity(image_array, nv_coords, sigma):
+    """
+    Sum intensity around each (x,y) coord within a disk of radius=sigma.
+    Returns a list of sums in original image units.
+
+    NOTE: skimage.draw.disk expects center=(row, col) = (y, x),
+          so we convert (x,y) -> (y,x).
+    """
+    intensities = []
+    for (x, y) in nv_coords:
+        rr, cc = disk((y, x), radius=sigma, shape=image_array.shape)
+        intensities.append(float(np.sum(image_array[rr, cc])))
+    return intensities
+
+
+# -----------------------------
+# Example: filter + refit coords + keep weights aligned
+# -----------------------------
+def refine_coords_after_fitting(
+    img_array,
+    filtered_reordered_coords,
+    filtered_reordered_spot_weights=None,
+    window_size=12,
+    min_amplitude=0.0,
+    replace_weights_with="none",  # "none" | "amplitude" | "gaussian_weight"
+    normalize=False,
+):
+    """
+    Returns:
+      new_coords, new_weights, fitted_amplitudes, fitted_gaussian_weights
+    """
+    new_coords = []
+    new_weights = [] if filtered_reordered_spot_weights is not None else None
+    fitted_amplitudes = []
+    fitted_gaussian_weights = []
+
+    if filtered_reordered_spot_weights is None:
+        iterable = [(c, None) for c in filtered_reordered_coords]
+    else:
+        iterable = list(zip(filtered_reordered_coords, filtered_reordered_spot_weights))
+
+    for coord, w in iterable:
+        fx, fy, amp, gwt, popt = fit_gaussian(
+            img_array,
+            coord,
+            window_size=window_size,
+            normalize=normalize,
+            return_fit=True,
+        )
+
+        # reject bad fits
+        if amp <= min_amplitude or popt is None:
+            continue
+
+        new_coords.append([fx, fy])
+        fitted_amplitudes.append(amp)
+        fitted_gaussian_weights.append(gwt)
+
+        if new_weights is not None:
+            if replace_weights_with == "amplitude":
+                new_weights.append(float(amp))
+            elif replace_weights_with == "gaussian_weight":
+                new_weights.append(float(gwt))
+            else:
+                new_weights.append(w)
+
+    return new_coords, new_weights, fitted_amplitudes, fitted_gaussian_weights
 
 
 def integrate_intensity(image_array, nv_coords, sigma):
@@ -340,7 +549,7 @@ def curve_extreme_weights_simple(weights, scaling_factor=1.0):
     return curved_weights
 
 
-def curve_inverse_counts(counts, scaling_factor=0.5):
+def curve_inverse_counts(counts, scaling_factor=0.2):
     median_count = np.median(counts)
     adjusted_weights = np.exp(-scaling_factor * (counts / median_count))
     adjusted_weights /= np.max(adjusted_weights)
@@ -394,11 +603,11 @@ if __name__ == "__main__":
     remove_outliers_flag = False  # Set this flag to enable/disable outlier removal
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
-        file_stem="2026_02_24-15_46_26-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_03_03-18_28_53-qnami-nv0_2026_02_20", load_npz=True
         # file_stem="2026_01_31-18_06_49-combined_image_array", load_npz=True
     )
-    # img_array = np.array(data["ref_img_array"])
-    img_array = data["img_array"]
+    img_array = np.array(data["ref_img_array"])
+    # img_array = data["img_array"]
     nv_coordinates, spot_weights = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_327nvs.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_308nvs_reordered.npz"
@@ -411,8 +620,11 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_205nvs_reordered.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_294nvs.npz"
-        file_path="slmsuite/nv_blob_detection/nv_blob_41nvs_reordered.npz"
+        file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz" ##CAL
+        # file_path="slmsuite/nv_blob_detection/nv_blob_237nvs.npz"
     )
+    
+    
     # Convert coordinates to a standard format (lists of lists)
     # nv_coordinates = [[coord[0] - 3, coord[1] + 3] for coord in nv_coordinates]
     nv_coordinates = [list(coord) for coord in nv_coordinates]
@@ -422,7 +634,7 @@ if __name__ == "__main__":
         for coord in nv_coordinates
         if isinstance(coord, (list, tuple))
         and len(coord) == 2
-        and all(2 <= x <= 248 for x in coord)
+        and all(2 <= x <= 254 for x in coord)
     ]
 
     # Ensure spot weights are filtered accordingly
@@ -431,7 +643,7 @@ if __name__ == "__main__":
         for coord, weight in zip(nv_coordinates, spot_weights)
         if isinstance(coord, (list, tuple))
         and len(coord) == 2
-        and all(2 <= x <= 248 for x in coord)
+        and all(2 <= x <= 254 for x in coord)
     ]
 
     # Replace original lists with filtered versions
@@ -442,13 +654,14 @@ if __name__ == "__main__":
 
     # Filter and reorder NV coordinates based on reference NV
     # integrated_intensities = []
-    sigma = 3.0
-    # reference_nv = [124.195, 127.341]
-    reference_nv =  [125.948, 142.238] ## CAl 
+    sigma = 6.0
+    # reference_nv = [119.278, 122.061]
+    reference_nv = nv_coordinates[0]
+    # reference_nv =  [125.948, 142.238] ## CAl 
     
     filtered_reordered_coords, filtered_reordered_spot_weights, include_indices = (
         filter_and_reorder_nv_coords(
-            nv_coordinates, spot_weights, reference_nv, min_distance=3
+            nv_coordinates, spot_weights, reference_nv, min_distance=10
         )
     )
     print(len(filtered_reordered_coords))
@@ -491,10 +704,40 @@ if __name__ == "__main__":
     # print("Filtered and Reordered NV Coordinates:", integrated_intensities)
 
     # Initialize lists to store the results
-    # fitted_amplitudes = []
-    # for coord in filtered_reordered_coords:
-    #     fitted_x, fitted_y, amplitude = fit_gaussian(img_array, coord, window_size=2)
-    #     fitted_amplitudes.append(amplitude)
+    fitted_amplitudes = []
+    for coord in filtered_reordered_coords:
+        fitted_x, fitted_y, amplitude = fit_gaussian(img_array, coord, window_size=12)
+        fitted_amplitudes.append(amplitude)
+
+    # -----------------------------
+    # Your usage pattern
+    # -----------------------------
+    filtered_reordered_coords_0 = [
+        coord for i, coord in enumerate(filtered_reordered_coords) if i not in indices_to_remove
+    ]
+    filtered_reordered_spot_weights_0 = [
+        w for i, w in enumerate(filtered_reordered_spot_weights) if i not in indices_to_remove
+    ]
+    filtered_reordered_coords = filtered_reordered_coords_0
+    filtered_reordered_spot_weights = filtered_reordered_spot_weights_0
+    
+    # refine coords after fitting; keep original weights
+    filtered_reordered_coords, filtered_reordered_spot_weights, fitted_amplitudes, fitted_gauss_w = (
+        refine_coords_after_fitting(
+            img_array,
+            filtered_reordered_coords,
+            filtered_reordered_spot_weights,
+            window_size=6,
+            min_amplitude=0.0,
+            replace_weights_with="none",   # or "amplitude" or "gaussian_weight"
+            normalize=False,              # keep amplitude in image units
+        )
+    )
+    
+    print("Kept after fitting:", len(filtered_reordered_coords))
+    
+    # If you want disk-sum weights (another notion of weight)
+    disk_weights = integrate_intensity(img_array, filtered_reordered_coords, sigma=5)
 
     # fmt: off
     snr = ['0.078', '0.090', '0.019', '0.067', '0.015', '0.014', '0.013', '0.009', '0.046', '0.047', '0.050', '0.042', '-0.005', '0.065', '0.064', '0.052', '0.051', '0.002', '0.059', '0.050', '0.048', '0.072', '0.063', '0.017', '0.028', '0.006', '0.029', '0.088', '0.013', '0.046', '0.055', '0.078', '0.051', '0.029', '0.064', '0.049', '0.053', '0.055', '0.038', '0.030', '0.039', '0.035', '0.037', '0.019', '0.052', '0.036', '0.036', '0.085', '0.029', '0.045', '0.071', '0.041', '0.067', '0.025', '0.058', '0.030', '0.044', '0.094', '0.063', '0.010', '0.015', '0.064', '0.004', '0.013', '0.051', '0.067', '0.053', '-0.003', '0.037', '0.077', '0.052', '0.028', '0.054', '0.025', '-0.004', '0.008', '0.027', '0.003', '0.020', '0.055', '-0.009', '0.008', '0.051', '0.037', '0.045', '0.054', '0.011', '0.064', '0.025', '0.031', '0.043', '0.022', '0.057', '0.051', '0.093', '0.047', '0.044', '0.003', '0.069', '0.018', '0.006', '0.028', '0.018', '0.057', '0.067', '0.035', '0.024', '0.042', '0.065', '0.031', '0.036', '0.064', '0.004', '-0.001', '0.054', '0.009', '0.069', '0.038', '0.023', '0.015', '0.039', '-0.019', '0.042', '0.053', '0.102', '0.020', '0.069', '0.061', '0.002', '0.049', '0.002', '0.067', '0.082', '0.011', '0.037', '0.044', '0.076', '0.028', '0.063', '0.048', '0.082', '0.020', '0.029', '0.029', '-0.002', '0.047', '0.030', '0.044', '0.005', '0.056', '0.009', '0.019', '0.030', '0.071', '0.011', '0.096', '0.008', '0.088', '0.016', '0.051', '0.070', '0.033', '-0.021', '0.029', '0.062', '0.037', '0.014', '0.018', '0.052', '0.062', '0.029', '0.039', '0.035', '0.023', '0.037', '0.069', '0.029', '0.053', '0.078', '0.005', '0.037', '0.067', '0.011', '0.055', '0.067', '0.039', '0.028', '0.056', '0.077', '0.054', '0.053', '0.028', '0.088', '-0.014', '0.026', '0.032', '-0.014', '-0.010', '-0.002', '0.043', '0.054', '0.059', '0.069', '0.008', '0.064', '-0.003', '0.043', '0.016', '0.004', '0.072', '0.072', '0.005', '0.023', '0.037', '0.063', '0.064', '0.063', '0.035', '0.042', '0.080', '0.043', '0.052', '0.032', '0.062', '0.054', '0.034', '0.025', '0.085', '0.018', '0.015', '0.075', '0.061', '0.067', '0.036', '0.018', '0.025', '0.014', '0.053', '0.066', '0.057', '0.034', '0.049', '0.019', '0.000', '0.042', '0.059', '0.027', '-0.000', '0.062', '0.052', '0.019', '0.039', '0.046', '0.058', '-0.012', '0.080', '0.054', '0.082', '0.036', '-0.012', '0.083', '0.042', '0.004', '0.103', '0.064', '0.009', '0.083', '0.100', '0.029', '0.032', '-0.001', '-0.022', '0.034', '0.001', '0.037', '0.032', '0.059', '0.045', '0.014', '0.017', '-0.009', '0.005', '0.043', '0.089', '0.109', '-0.004', '0.069', '0.052', '0.010', '0.081', '0.004', '0.023', '0.006', '0.031', '0.054', '0.058', '0.055', '0.003', '0.071', '0.068', '0.037', '0.095', '-0.010', '0.009', '0.123', '0.077', '0.049', '0.061', '0.060', '0.006', '0.056', '0.076']
@@ -667,7 +910,9 @@ if __name__ == "__main__":
     updated_spot_weights = curve_extreme_weights_simple(
     spot_weights, scaling_factor=1.1
     )
-    # updated_spot_weights = spot_weights
+    # updated_spot_weights = 1/fitted_amplitudes
+    updated_spot_weights = curve_inverse_counts(fitted_amplitudes, scaling_factor=1.0)
+    
     # Update weights for the specified indices using the calculated weights
     # fmt: off
     # selected_indices_68MHz = [0, 7, 8, 9, 11, 14, 18, 22, 24, 25, 26, 27, 28, 30, 31, 32, 33, 35, 38, 44, 45, 46, 47, 48, 49, 53, 55, 57, 58, 60, 62, 64, 66, 67, 68, 69, 70, 71, 72, 73]
@@ -691,7 +936,7 @@ if __name__ == "__main__":
     adjusted_aom_voltage = ((filtered_total_power - c) / a) ** (1 / b)
     print("Adjusted Voltages (V):", adjusted_aom_voltage)
     # sys.exit()
-    # filtered_reordered_spot_weights = spot_weights
+    filtered_reordered_spot_weights = updated_spot_weights
     print("filtered_reordered_spot_weights_len:", len(filtered_reordered_spot_weights))
     print("filtered_reordered_coords_len:", len(filtered_reordered_coords))
     print("filtered_nv_power_len:", len(nv_powers_filtered))
@@ -723,11 +968,11 @@ if __name__ == "__main__":
     # Calculate the spot weights based on the integrated intensities
     # spot_weights = non_linear_weights(filtered_intensities, alpha=0.9)
 
-    # Save the filtered results
+    # # Save the filtered results
     # save_results(
     #     filtered_reordered_coords,
     #     filtered_reordered_spot_weights,
-    #     filename="slmsuite/nv_blob_detection/nv_blob_41nvs_reordered.npz",
+    #     filename="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",
     # )
 
     # # Plot the original image with circles around each NV

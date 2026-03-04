@@ -20,7 +20,9 @@ Reference:
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import constants
+from utils import kplotlib as kpl
 
+kpl.init_kplotlib()
 # =============================================================================
 # FUNDAMENTAL CONSTANTS
 # =============================================================================
@@ -429,4 +431,4 @@ plt.tight_layout()
 # plt.close(fig)
 print("\nSaved: t_deer_first_principles.png")
 print("\nDone!")
-plt.show()
+plt.show(block=True)
