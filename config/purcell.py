@@ -132,47 +132,25 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_0",
                 "uwave_power": 11.0,
-                "frequency": 2.7752, #49G
-                # "frequency": 2.747151,
-                # "frequency": 2.709799,  #62G
-                # "frequency":2.963189,
-                # "frequency": 2.917151,
-                # "frequency": 2.8082,
-                # "rabi_period": 356,
-                # "pi_pulse": 176,
-                # "pi_on_2_pulse": 88,
-                # "frequency": 2.935030,
-                "rabi_period": 176,
-                "pi_pulse": 88,
-                "pi_on_2_pulse": 24,
+                "frequency": 2.7752,
+                "rabi_period": 256,
+                "pi_pulse": 128,
+                "pi_on_2_pulse": 64,
             },
             1: {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
-                # "frequency": 2.917151,
-                "frequency": 2.8137,#49G
-                # "frequency": 2.77000,#49G
-                # "frequency": 2.982049,
-                # "frequency": 2.828210, 
-                # "frequency": 2.816912, #62G
-                # "frequency": 2.8252,
-                # "rabi_period": 288,
-                # "pi_pulse": 168,
-                # "pi_on_2_pulse": 84,
-                "rabi_period": 176,
-                "pi_pulse": 88,
-                "pi_on_2_pulse": 24,
-                
-                
+                "frequency": 2.8137,
+                "rabi_period": 256,
+                "pi_pulse":128,
+                "pi_on_2_pulse": 64,
             },
             2: {
                 "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 11.0,
                 "frequency": 2.7700,
-                # "frequency": 0.145,
                 "rabi_period": 100,
-                # "pi_pulse": 48,
-                "pi_pulse": 1000,
+                "pi_pulse": 48,
                 "pi_on_2_pulse": 24,
             },
         },

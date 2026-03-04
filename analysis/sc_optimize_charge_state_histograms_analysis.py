@@ -847,7 +847,7 @@ if __name__ == "__main__":
     # file_id = "2026_02_07-16_42_58-johnson-nv0_2025_10_21"
     # file_id = "2026_02_09-21_28_39-johnson-nv0_2025_10_21"
     # file_id = "2026_02_16-21_30_52-rubin-nv0_2026_02_15"
-    file_id = "2026_03_03-02_22_47-qnami-nv0_2026_02_20"
+    # file_id = "2026_03_03-02_22_47-qnami-nv0_2026_02_20"
     
 
     ### pol amp var
@@ -888,6 +888,6 @@ if __name__ == "__main__":
     # file_name = dm.get_file_name(file_id=file_id)
     # print(f"{file_name}_{file_id}")
     # process_and_plot(raw_data, do_plot=False)
-    process_and_plot_charge(raw_data, do_plot=True)
+    process_and_plot_charge(raw_data, False)
     # print(dm.get_file_name(1717056176426))
     plt.show(block=True)
