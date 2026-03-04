@@ -1,14 +1,13 @@
-#!/usr/bin/env python3
 """
 Phase accumulation vs time at different P1 concentrations.
 Shows the collective bath phase and marks revival positions.
 """
+
 import numpy as np
-import matplotlib
-
-# matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from utils import kplotlib as kpl
 
+kpl.init_kplotlib()
 # Parameters
 B_gauss = 52.15
 gamma_13C = 1.0705e-3  # MHz/G
@@ -129,7 +128,7 @@ print("Saved: phase_vs_time.png")
 # =================================================================
 fig2, ax = plt.subplots(figsize=(6, 5))
 
-conc_sweep = np.logspace(np.log10(5), np.log10(5000), 200)
+conc_sweep = np.logspace(np.log10(1), np.log10(10000), 200)
 
 milestones = [
     (0.1, "π/10 (detectable)", "green", "-"),
@@ -163,17 +162,21 @@ ax.set_xlabel("[P1] concentration (ppb)", fontsize=12)
 ax.set_ylabel("τ needed (µs)", fontsize=12)
 ax.set_title(
     f"Time to Reach Phase Milestone vs P1 Concentration\n"
-    f"(T₂ = {T2_us:.0f} µs,  revival = {tau_rev_us:.1f} µs)",
+    f"[our lab params: (T₂ ~ {T2_us:.0f} µs,  revival ~ {tau_rev_us:.1f} µs)]",
     fontsize=13,
     # fontweight="bold",
 )
 ax.legend(fontsize=9, loc="upper right")
-ax.set_xlim(5, 5000)
-ax.set_ylim(0.5, 5000)
+ax.tick_params(axis="both", labelsize=13)
+ax.set_xlim(1, 10000)
+ax.set_ylim(1, 10000)
 ax.grid(True, alpha=0.2, which="both")
 
 plt.tight_layout()
-# fig2.savefig("/home/claude/time_to_phase.png", dpi=200, bbox_inches="tight")
+# "C:\Users\Saroj Chand\Downloads"
+# fig2.savefig(
+#     "C:\\Users\\Saroj Chand\\Downloads\\time_to_phase.png", dpi=200, bbox_inches="tight"
+# )
 # plt.close(fig2)
 print("Saved: time_to_phase.png")
 
@@ -203,4 +206,4 @@ print("  * = exceeds π (full dephasing)")
 print(f"  Revival period = {tau_rev_us:.2f} µs")
 print(f"  T₂/2 = {T2_us/2:.0f} µs → max useful revival k ≈ {int(T2_us/2/tau_rev_us)}")
 
-plt.show()
+plt.show(block=True)

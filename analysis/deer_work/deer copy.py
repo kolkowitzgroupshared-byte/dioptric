@@ -28,11 +28,10 @@ T_DEER_REF = 0.77  # ms, at 75 ppb (from Degen et al. Fig 1c)
 CONC_REF = 75.0  # ppb reference
 STRETCH_EXP = 2.0  # Gaussian-like decay for 3D bath
 
+
 # =============================================================================
 # DEER TIME-DOMAIN MODEL
 # =============================================================================
-
-
 def t_deer(conc_ppb):
     """T_DEER in ms, scaling linearly with 1/concentration."""
     return T_DEER_REF * (CONC_REF / conc_ppb)
