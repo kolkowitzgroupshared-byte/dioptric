@@ -13,8 +13,9 @@ from scipy.optimize import curve_fit
 
 from analysis.bimodal_histogram import (
     ProbDist,
-    determine_threshold,
-    fit_bimodal_histogram,
+    analyze_charge_histogram_multinv_binomial,          # estimate N once per NV
+    fit_binomial_multinv_histogram,                     # per-step fit (p, rate0, delta)
+    determine_threshold_any_minus_binomial_multinv,     # per-step binary threshold + fidelity
 )
 from utils import data_manager as dm
 from utils import kplotlib as kpl
@@ -111,6 +112,22 @@ def process_and_plot(raw_data, do_plot=False):
     condensed_counts = np.array(condensed_counts)
 
     prob_dist = ProbDist.COMPOUND_POISSON
+    
+    prob_dist = ProbDist.COMPOUND_POISSON
+    max_nvs_per_position = 3  # allow 1/2/3 NVs
+
+    # Estimate N for each NV spot once (using all steps pooled)
+    n_est_by_nv = np.ones(num_nvs, dtype=int)
+    for nv_ind in range(num_nvs):
+        pooled = condensed_counts[nv_ind].reshape(-1)  # all step shots together
+        fitN = analyze_charge_histogram_multinv_binomial(
+            pooled,
+            prob_dist=prob_dist,
+            max_nvs=max_nvs_per_position,
+            force_nvs=None,          # or set 1/2/3 if you know from imaging
+            seed=nv_ind,
+        )
+    n_est_by_nv[nv_ind] = int(fitN["n_nvs"]) if fitN.get("ok", False) else 1
     # prob_dist = ProbDist.COMPOUND_POISSON_WITH_IONIZATION
 
     # Function to process a single NV and step
@@ -118,20 +135,36 @@ def process_and_plot(raw_data, do_plot=False):
         counts_data = condensed_counts[nv_ind, step_ind]
 
         try:
-            # Fit the bimodal histogram and calculate metrics
-            popt, pcov, chi_squared = fit_bimodal_histogram(counts_data, prob_dist)
+            N = int(n_est_by_nv[nv_ind])  # fixed per NV spot
 
+            popt, pcov, red_chi_sq = fit_binomial_multinv_histogram(
+                counts_data,
+                prob_dist,
+                N,
+                no_print=True,
+                no_plot=True,
+                n_restarts=4,
+                seed=1000 * nv_ind + step_ind,
+            )
             if popt is None:
                 return np.nan, np.nan, np.nan
 
-            # Calculate threshold and fidelities
-
-            threshold, readout_fidelity = determine_threshold(
-                popt, prob_dist, dark_mode_weight=0.5, ret_fidelity=True
+            x_max = int(round(np.max(counts_data)))
+            threshold, readout_fidelity = determine_threshold_any_minus_binomial_multinv(
+                popt,
+                prob_dist,
+                N,
+                x_max=x_max,
+                ret_fidelity=True,
             )
-            prep_fidelity = 1 - popt[0]  # Population weight of dark state
 
-            return readout_fidelity, prep_fidelity, chi_squared
+            # popt[0] = p_minus (per-NV). Convert to your “prep fidelity”:
+            # P(any NV-) = 1 - (1 - p_minus)^N
+            p_minus = float(popt[0])
+            prep_fidelity = 1.0 - (1.0 - p_minus) ** N
+
+            return float(readout_fidelity), float(prep_fidelity), float(red_chi_sq)
+
         except Exception as e:
             print(f"Error processing NV {nv_ind}, step {step_ind}: {e}")
             return np.nan, np.nan, np.nan
@@ -480,89 +513,41 @@ def process_and_plot(raw_data, do_plot=False):
     plt.show(block=False)
 
 
-def fit_fn(tau, delay, slope, decay, transition):
-    """
-    Fit function modeling the preparation fidelity as a function of polarization duration.
-    Smoothly transitions from an initial linear increase to an exponential decay.
-    """
-    tau = np.array(tau) - delay
-
-    # Sigmoid-like transition function (soft transition)
-    smooth_transition = 1 / (1 + np.exp(-(tau - transition) / (0.1 * transition)))
-
-    # Linear rise component
-    linear_part = slope * tau
-
-    # Exponential decay component
-    exp_part = slope * transition * np.exp(-(tau - transition) / decay)
-
-    # Combine both with a smooth transition
-    return (1 - smooth_transition) * linear_part + smooth_transition * exp_part
-
-
-def fit_fn(tau, delay, slope, decay, transition):
-    """
-    Fit function modeling the preparation fidelity as a function of polarization duration.
-    Ensures an initial steep increase followed by an exponential decay.
-    """
-    tau = np.array(tau) - delay
-    tau = np.maximum(tau, 0)  # Ensure no negative time values
-
-    # Enforce a minimum transition duration (e.g., 50 ns)
-    transition = max(transition, 90)
-
-    # Smooth transition function using tanh
-    smooth_transition = 0.5 * (1 + np.tanh((tau - transition) / (0.05 * transition)))
-
-    # Enforce an initial steep rise
-    linear_part = slope * tau
-
-    # Exponential decay component
-    exp_part = slope * transition * np.exp(-(tau - transition) / decay)
-
-    # Combine both components smoothly
-    return (1 - smooth_transition) * linear_part + smooth_transition * exp_part
-
-
-def fit_fn(tau, delay, slope, decay, transition):
-    """
-    Fit function modeling the preparation fidelity as a function of polarization duration.
-    Ensures an initial steep increase followed by an exponential decay.
-    """
-    tau = np.array(tau) - delay
-    tau = np.maximum(tau, 0)  # Ensure no negative time values
-
-    # Enforce a minimum transition duration (e.g., 90 ns)
-    # transition = max(transition, 48)
-    transition = 400
-
-    # Smooth transition function using tanh
-    smooth_transition = 0.5 * (1 + np.tanh((tau - transition) / (0.6 * transition)))
-
-    # Enforce an initial steep rise
-    linear_part = slope * tau
-
-    # Exponential decay component
-    # exp_part = slope * transition * np.exp(-(tau - transition) / decay)
-    exp_part = slope * transition * np.exp(-(tau - transition) / (2 * decay))
-
-    # Combine both components smoothly
-    return (1 - smooth_transition) * linear_part + smooth_transition * exp_part
-
-
-def process_nv_step(nv_ind, step_ind, condensed_counts):
+def process_nv_step(nv_ind, step_ind, condensed_counts, n_est_by_nv, prob_dist=ProbDist.COMPOUND_POISSON):
     counts_data = condensed_counts[nv_ind, step_ind]
+
     try:
-        popt, pcov, chi_squared = fit_bimodal_histogram(
-            counts_data, ProbDist.COMPOUND_POISSON
+        N = int(n_est_by_nv[nv_ind])  # fixed per NV spot (1/2/3)
+
+        popt, pcov, chi_squared = fit_binomial_multinv_histogram(
+            counts_data,
+            prob_dist,
+            N,
+            no_print=True,
+            no_plot=True,
+            n_restarts=4,
+            seed=1000 * nv_ind + step_ind,
         )
         if popt is None:
             return np.nan, np.nan, np.nan
-        threshold, readout_fidelity = determine_threshold(
-            popt, ProbDist.COMPOUND_POISSON, dark_mode_weight=0.5, ret_fidelity=True
+
+        x_max = int(np.max(counts_data)) if len(counts_data) else 0
+
+        # binary threshold: k=0 vs k>=1 ("any NV-")
+        threshold_any, readout_fidelity = determine_threshold_any_minus_binomial_multinv(
+            popt,
+            prob_dist,
+            N,
+            x_max=x_max,
+            ret_fidelity=True,
         )
-        prep_fidelity = 1 - popt[0]  # Population weight of dark state
-        return readout_fidelity, prep_fidelity, chi_squared
+
+        # popt[0] = p_minus (per-NV). Convert to "any NV-" probability:
+        p_minus = float(popt[0])
+        prep_fidelity = 1.0 - (1.0 - p_minus) ** N
+
+        return float(readout_fidelity), float(prep_fidelity), float(chi_squared)
+
     except Exception as e:
         print(f"Error processing NV {nv_ind}, step {step_ind}: {e}")
         return np.nan, np.nan, np.nan
@@ -608,7 +593,8 @@ def process_and_plot_charge(raw_data, do_plot=False):
 
     # --- Saturation models (with offset) ---
     def sat_decay_fit_fn(t, F0, A, t0, tau_r, tau_d):
-        t = np.asarray(t, dtype=float)
+        t = np.asarray(t, dtype=float
+                       )
         x = np.maximum(t - t0, 0.0)  # gate before t0
         tau_r = np.maximum(tau_r, 1e-12)
         tau_d = np.maximum(tau_d, 1e-12)
@@ -747,147 +733,20 @@ def process_and_plot_charge(raw_data, do_plot=False):
 
 if __name__ == "__main__":
     kpl.init_kplotlib()
-    # file_id = 1710843759806
-    # file_id = 1712782503640  # yellow ampl var 50ms 160NVs
-    # file_id = 1723230400688  # yellow ampl var 30ms
-    # file_id = 1717056176426  # yellow duration var
-    # file_id = 1711618252292  # green ampl var
-    # file_id = 1712421496166  # green ampl var
-    # file_id = 1720970373150  # yellow ampl var iter_1
-    # file_id = 1731890617395  # green ampl var after new calinration
-    # file_id = 1732177472880  # yellow ampl var 50ms 117NVs
-    # file_id = 1751274459725  # yellow ampl var 50ms 117NVs afdter birge
-    # file_id = 1751404919855  # yellow ampl var 50ms 117NVs afdter birge
-    # file_id = 1752870018575  # yellow ampl var 50ms 117NVs afdter birge
-    # file_id = 1752968732835  # green ampl var
-    # file_id = 1770658719969  # readout yellow ampl var 50ms shallow nvs
-    # file_id = 1776463838159  # yellow ampl var 50ms shallow nvs
-    # file_id = 1766460747869  # yellow ampl var 50ms shallow nvs
-    # file_id = 1780914190838  # yellow ampl var 60ms shallow nvs
-    # file_id = 1782586909215  # yellow ampl 60ms shallow nvs (selected two orieantation)
-    # file_id = 1766460747869  # yellow ampl var 50ms shallow 148nvs
-    # file_id = 1780914190838  # yellow ampl var 60ms shallow 148nvs
-    # file_id = 1782586909215  # yellow ampl var 60ms shallow 69nvs
-
-    # file_id = 1767789140438  # pol dur var 200ns to 2us
-    # file_id = 1768024979194  # pol dur var 100ns to 1us
-    # file_id = 1769942144688  # pol dur var 100ns to 1us dataset
-    # file_id = 1767789140438  # pol dur var 200ns to 2us
-    # file_id = 1768024979194  # pol dur var 100ns to 1us
-    # file_id = 1769942144688  # pol dur var 100ns to 1us dataset
-    # file_id = 1770306530123  # pol dur var 16ns to 1028ns dataset 148NVs
-    # file_id = 1770306530123  # pol dur var 16ns to 1028ns dataset 148NVs
-    # file_id = 1778627435145 # pol dur var 16ns to 1028ns dataset 148NVs
-    # file_id = 1778426682976  # green ampl var 60ms shallow nvs
-    # file_id = 1778524699003  # green ampl var 60ms shallow nvs (large range)
-    # file_id = 1780495024088  # green ampl var 60ms shallow nvs (large range
-    # raw_data = dm.get_raw_data(file_id=1709868774004, load_npz=False) #yellow ampl var
-
-    # rubin sample
-    # file_id = 1791404857391  # yellow ampl 50ms
-    # file_id = 1792169039756  # yellow ampl 50ms
-    # file_id = 1793934866370  # yellow ampl 60ms 140NVs
-    # file_id = 1794442033227  # yellow ampl 60ms 140NVs
-    # file_id = 1800416464270  # yellow ampl 60ms 107NVs
-
-    # file_id = 1802933502486  # yellow ampl 60ms 300NVs
-    # file_id = 1804148043654  # yellow ampl 60ms 300NVs
-    # file_id = 1804934228627 # yellow ampl 60ms 200NVs
-    # file_id = 1805383839845  # yellow ampl 60ms 240NVs
-    # file_id = 1806165457282  # yellow ampl 60ms 154NVs
-    # file_id = 1807233914030  # yellow ampl 60ms 81NVs
-    # file_id = 1807632138996  # yellow ampl 60ms 81NVs
-    # file_id = 1808503038483  # yellow ampl 60ms 81NVs
-    # file_id = 1809414309242  # yellow ampl 60ms 81NVs
-    # file_id = 1834021972039  # yellow ampl 60ms 75NVs
-
-    # file_id = "2025_03_05-05_04_57-rubin-nv0_2025_02_26"  # 1794442033227  # yellow ampl 60ms 140NVs
-    # file_id = 1793116636570  # yellow ampl 24ms
-    # file_id = 1792980892323  # yellow ampl 80ms
-    # file_id = 1791756537192  # green durations
-    # file_id = 1794216207756  # green durations 60ms 140NVs
-    # file_id = 1791914648483  # green amps
-
-    # file_id = 1800302862093  # green amps 107 NVs
-    # file_id = 1801385197244  # green durations 60ms
-    # file_id = 1803091794064  # green durations 303NVs
-    # file_id = 1805189336738  # green durations 203NVs
-    # file_id = 1805991515134  # green durations 240NVs
-    # file_id = 1806362913488  # green durations 154NVs
-    # file_id = 1807384237764  # green durations 81NVs
-    # file_id = 1810477160439  # green durations 75NVs
-    # file_id = 1810477160439  # green durations 75NVs
-    # file_id = 1833010688783  # green durations 75NVs (4/13/2025)
-    # file_id = 1834390490156  # green durations 75NVs (4/14/2025)
-    # file_id = 1836625491633  # green durations 75NVs (4/16/2025)
-    # file_id = (
-    #     "2025_04_29-00_04_37-rubin-nv0_2025_02_26"  # green amplitude 75NVs (4/16/2025)
-    # )
-    # file_id = (
-    #     "2025_05_12-21_22_21-rubin-nv0_2025_02_26"  # green amplitude 75NVs (4/16/2025)
-    # )
     ### readout amp
-    # file_stem = "2025_09_11-01_45_11-rubin-nv0_2025_09_08"  #
-    # file_stem = "2025_09_11-23_23_30-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_13-20_27_20-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_119-06_48_20-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_19-22_37_11-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_28-04_31_09-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_28-22_59_27-rubin-nv0_2025_09_08"
-    # file_id = "2025_10_01-17_07_50-rubin-nv0_2025_09_08"
-    # file_id = "2025_10_08-19_20_50-rubin-nv0_2025_09_08"
-    # file_id = "2025_10_08-19_20_50-rubin-nv0_2025_09_08"
-    # file_id = "2025_10_22-07_09_20-rubin-nv0_2025_09_08"
-    # file_id = "2025_10_22-09_46_22-johnson-nv0_2025_10_21"
-    # file_id = "2025_10_22-13_38_22-johnson-nv0_2025_10_21"
-    # file_id = "2025_10_23-02_24_51-johnson-nv0_2025_10_21"
-    # file_id = "2025_10_26-16_36_03-johnson-nv0_2025_10_21"
-    # file_id = "2025_10_30-06_21_14-johnson-nv0_2025_10_21"
-    # file_id = "2026_02_01-00_09_17-johnson-nv0_2025_10_21"
-    # file_id = "2026_02_07-16_42_58-johnson-nv0_2025_10_21"
-    # file_id = "2026_02_09-21_28_39-johnson-nv0_2025_10_21"
-    # file_id = "2026_02_16-21_30_52-rubin-nv0_2026_02_15"
     file_id = "2026_03_03-02_22_47-qnami-nv0_2026_02_20"
     
-
     ### pol amp var
-    # file_id = "2025_09_12-16_53_34-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_12-18_30_09-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_12-20_43_54-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_19-03_41_13-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_20-03_38_25-rubin-nv0_2025_09_08"  # 10us
-    # file_id = "2025_09_20-14_18_23-rubin-nv0_2025_09_08"  # 1us
-    # file_id = "2025_09_28-20_18_06-rubin-nv0_2025_09_08"  # 1us
-    # file_id = "2025_10_22-18_10_57-johnson-nv0_2025_10_21"
     # file_id = "2026_02_10-00_47_07-johnson-nv0_2025_10_21"
 
     ### pol dur var
-    # file_id = "2025_09_12-04_47_45-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_13-00_31_26-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_13-02_58_29-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_14-21_59_00-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_18-12_06_11-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_18-16_19_05-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_19-11_56_40-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_21-22_20_08-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_23-19_06_00-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_28-00_14_24-rubin-nv0_2025_09_08"
-    # file_id = "2025_09_28-22_59_27-rubin-nv0_2025_09_08"
-    # file_id = "2025_10_23-15_48_46-johnson-nv0_2025_10_21"
-    # file_id = "2025_10_26-20_37_42-johnson-nv0_2025_10_21"
-    # file_id = "2025_10_30-18_37_28-johnson-nv0_2025_10_21"
-    # file_id = "2025_11_01-19_02_31-johnson-nv0_2025_10_21"
-    # file_id = "2025_11_22-19_58_10-johnson-nv0_2025_10_21"
-    # file_id = "2026_02_07-20_07_20-johnson-nv0_2025_10_21"
     # file_id = "2026_02_10-03_18_17-johnson-nv0_2025_10_21"
-    file_id = "2026_03_02-20_10_14-qnami-nv0_2026_02_20"
-    
     
     # dm.USE_NEW_CLOUD = False
     raw_data = dm.get_raw_data(file_stem=file_id, load_npz=True)
     # file_name = dm.get_file_name(file_id=file_id)
     # print(f"{file_name}_{file_id}")
-    # process_and_plot(raw_data, do_plot=False)
-    process_and_plot_charge(raw_data, do_plot=True)
+    process_and_plot(raw_data, do_plot=True)
+    # process_and_plot_charge(raw_data, do_plot=True)
     # print(dm.get_file_name(1717056176426))
     plt.show(block=True)

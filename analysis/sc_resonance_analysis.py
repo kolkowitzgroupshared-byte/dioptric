@@ -687,7 +687,7 @@ if __name__ == "__main__":
     file_ids = [
         "2025_10_09-09_29_58-rubin-nv0_2025_09_08",
     ]
-
+    
     ## 118 nVs
     # file_ids = [
     #     "2025_10_17-23_28_58-rubin-nv0_2025_09_08",
@@ -823,8 +823,21 @@ if __name__ == "__main__":
     file_ids = [
         "2026_02_09-05_33_54-johnson-nv0_2025_10_21",
     ]
-
-
+    ########## Rubin with beads
+    # file_ids = [
+    #     "2026_02_16-08_20_17-rubin-nv0_2026_02_15",
+    # ]
+    
+    ##########
+    file_ids = [
+        "2026_02_19-15_37_59-rubin-nv0_2026_02_15",
+    ]
+    file_ids = [
+        "2026_02_19-19_16_49-rubin-nv0_2026_02_15",
+        "2026_02_19-22_39_18-rubin-nv0_2026_02_15",
+    ]
+    ####QNami
+    
     # Load the first dataset as a base
     combined_data = dm.get_raw_data(
         file_stem=file_ids[0], load_npz=True, use_cache=True

@@ -18,8 +18,11 @@ from utils.constants import CoordsKey, CountFormat, VirtualLaserKey
 def main(
     nv_sig,
     run_time,
-    pulse_time,
     disable_opt=None,
+    nv_minus_init=False,
+    nv_zero_init=False,
+    background_subtraction=False,
+    background_coords=None,  # SAMPLE-space [x, y] (or [x, y, z] — z ignored)
 ):
     # -------------------- Initial setup --------------------
     if disable_opt is not None:
@@ -34,21 +37,20 @@ def main(
     )
     readout_sec = readout * 1e-9
 
-    ## get servers
+    charge_init = bool(nv_minus_init or nv_zero_init)
+
     pulsegen_server = tool_belt.get_server_pulse_streamer()
     counter_server = tool_belt.get_server_counter()
 
     # -------------------- Laser selection / power --------------------
     # Imaging laser (VirtualLaserKey.IMAGING)
-    # readout_laser = vld_img["physical_name"]
-    # readout_laser = "imaging"
-    # tool_belt.set_filter(nv_sig, VirtualLaserKey.IMAGING)
+    readout_laser = vld_img["physical_name"]
+    tool_belt.set_filter(nv_sig, VirtualLaserKey.IMAGING)
+    readout_power = tool_belt.set_laser_power(nv_sig, VirtualLaserKey.IMAGING)
 
-    # get argument and seq files
     delay = 0
-    seq_args = [delay, readout, pulse_time, VirtualLaserKey.IMAGING]
+    seq_args = [delay, readout, readout_laser, readout_power]
     seq_args_string = tool_belt.encode_seq_args(seq_args)
-    print(seq_args_string, seq_args_string[0])
     seq_name = "simple_readout_test.py"
 
     # Program pulse generator
@@ -66,7 +68,12 @@ def main(
     ax.set_xlim(-0.05 * run_time_s, 1.05 * run_time_s)
     ax.set_xlabel("Time (s)")
 
+    cfg = common.get_config_dict()
+    count_fmt: CountFormat = cfg["count_format"]  # CountFormat.KCPS or CountFormat.RAW
+    # count_fmt = CountFormat.RAW
     ax.set_ylabel("Raw counts")
+    # ax.set_ylabel("Kcps" if count_fmt == CountFormat.KCPS is not None else "Counts")
+    # ax.set_ylabel("Count rateS (kcps)")
     try:
         plt.get_current_fig_manager().window.showMaximized()
     except Exception:
@@ -74,7 +81,7 @@ def main(
 
     # -------------------- Acquisition --------------------
     counter_server.start_tag_stream()
-    pulsegen_server.stream_start(-1)  #  run until stopped
+    pulsegen_server.stream_start(-1)  # stream_start(-1): run until stopped
     tool_belt.init_safe_stop()
 
     def _ensure_1d_counts(arr_like):
@@ -90,29 +97,34 @@ def main(
         return arr
 
     i = 0
-    # print(np.random.randint(1, 11))
     while True:
         if tool_belt.safe_stop():
             break
 
         # Read new samples
-        new = counter_server.read_counter_simple()  # N
-        if i < 10:
+        if charge_init:
+            new = counter_server.read_counter_modulo_gates(2)  # Nx2
+        else:
+            new = counter_server.read_counter_simple()  # N
+
+        if i < 5:
             print(new)
             i += 1
-
         new = _ensure_1d_counts(new)
+
+        # Convert modulo-gates to single count per gate
+        if charge_init and new.size > 0:
+            # Expect Nx2; if flattened, reshape safely
+            new = np.array(new)
+            new = new.reshape((-1, 2)) if new.ndim == 1 else new
+            new = np.maximum(new[:, 0] - new[:, 1], 0)
 
         n_new = new.size
         if n_new == 0:
-            if i < 10:
-                print("n_new == 0")
             continue
 
         # Write into circular-ish buffer area: if overflow, drop earliest
         num_written = int(np.count_nonzero(~np.isnan(samples)))
-        if i < 10:
-            print(num_written)
         overflow = (num_written + n_new) - total_num_samples
         if overflow > 0:
             # shift left and append
@@ -126,13 +138,13 @@ def main(
             write_pos += n_new
 
         # # Update plot in kcps
+        # samples_kcps = samples / (1e3 * readout_sec)
+        # kpl.plot_line_update(ax, x=x_vals, y=samples_kcps, relim_x=False)
         kpl.plot_line_update(ax, x=x_vals, y=samples, relim_x=False)
 
     # -------------------- Cleanup + stats --------------------
     tool_belt.reset_cfm()
-    print(len(samples))
-    print(samples)
-    print(new)
+
     if write_pos > 0:
         avg = float(np.nanmean(samples[:write_pos])) / (1e3 * readout_sec)
         std = float(np.nanstd(samples[:write_pos])) / (1e3 * readout_sec)

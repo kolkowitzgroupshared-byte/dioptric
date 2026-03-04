@@ -94,8 +94,9 @@ def blaze(vector_deg=(0.2, 0.2)):
 def fourier_calibration():
     cam.set_exposure(0.002)  # Increase exposure because power will be split many ways
     fs.fourier_calibrate(
-        array_shape=[20, 12],  # Size of the calibration grid (Nx, Ny) [knm]
-        array_pitch=[30, 40],  # Pitch of the calibration grid (x, y) [knm]
+        array_shape=[30, 18],  # Size of the calibration grid (Nx, Ny) [knm]
+        # array_pitch=[30, 40],  # Pitch of the calibration grid (x, y) [knm]
+        array_pitch=[45, 60],  # Pitch of the calibration grid (x, y) [knm]
         plot=True,
     )
     # cam.set_exposure(0.01)
@@ -138,7 +139,8 @@ def wavefront_calibration():
 def load_fourier_calibration():
     calibration_file_path = (
         # "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00003.h5"
-        "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00006.h5"
+        # "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00006.h5"
+        "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00008.h5"
     )
     fs.load_fourier_calibration(calibration_file_path)
     print("Fourier calibration loaded from:", calibration_file_path)
@@ -236,8 +238,8 @@ def calibration_triangle():
     cam.set_exposure(0.1)
 
     # Define parameters for the equilateral triangle
-    center = (680, 560)  # Center of the triangle
-    side_length = 400  # Length of each side of the triangle\
+    center = (720, 600)  # Center of the triangle
+    side_length = 420  # Length of each side of the triangle\
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
     theta = np.linspace(0, 2 * np.pi, 4)[:-1]  # Exclude the last point to avoid overlap
@@ -277,11 +279,11 @@ def nuvu2thorcam_calibration(coords):
     to the Thorlabs camera's coordinate system using an affine transformation.
     """
     cal_coords_thorcam = np.array(
-        [[1026.410, 760.0], [333.589, 760.0], [680.0, 160.0]], dtype="float32"
+        [[1083.730,   810.0], [356.269,  810.0], [720.0, 180.0]], dtype="float32"
     )
 
     cal_coords_nuvu = np.array(
-        [[221.406, 238.716], [188.886, 19.012], [17.021, 156.085]], dtype="float32"
+        [[221.653, 245.996], [205.716, 10.727], [9.537, 141.33]], dtype="float32"
     )
     # Compute the affine transformation matrix
     M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
@@ -303,7 +305,12 @@ def load_nv_coords(
     # file_path="slmsuite/nv_blob_detection/nv_blob_230nvs_reordered.npz", #johnson
     # file_path="slmsuite/nv_blob_detection/nv_blob_223nvs_reordered.npz", #johnson
     # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz",  # johnson
-    file_path="slmsuite/nv_blob_detection/nv_blob_205nvs_reordered.npz",  # johnson
+    # file_path="slmsuite/nv_blob_detection/nv_blob_205nvs_reordered.npz",  # johnson
+    # file_path="slmsuite/nv_blob_detection/nv_blob_195nvs_reordered.npz",  # johnson
+    # file_path="slmsuite/nv_blob_detection/nv_blob_276nvs_reordered.npz",  # johnson
+    # file_path="slmsuite/nv_blob_detection/nv_blob_41nvs_reordered.npz",  # cL
+    file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",  # cal
+    # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
@@ -311,7 +318,6 @@ def load_nv_coords(
     print(f"spot_weights: {spot_weights}")
     print(len(spot_weights))
     return nv_coordinates, spot_weights
-
 
 nuvu_pixel_coords, spot_weights = load_nv_coords()
 # nuvu_pixel_coords = np.array(
@@ -327,12 +333,13 @@ print(f"Total NV coordinates: {len(nuvu_pixel_coords)}")
 thorcam_coords = nuvu2thorcam_calibration(nuvu_pixel_coords).T
 # sys.exit()
 
+{}
 def compute_and_write_nvs_phase():
     hologram = SpotHologram(
         shape=(4096, 2048),
         spot_vectors=thorcam_coords,
         basis="ij",
-        # spot_amp=spot_weights,
+        spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally
@@ -342,7 +349,7 @@ def compute_and_write_nvs_phase():
         feedback="computational_spot",
         stat_groups=["computational_spot"],
     )
-
+# 
     initial_phase = hologram.extract_phase()
     # Define the path to save the phase data1
     file_path = r"slmsuite\computed_phase"
@@ -355,7 +362,6 @@ def compute_and_write_nvs_phase():
     save(initial_phase, file_path, filename)
     slm.write(initial_phase, settle=True)
     # cam_plot()
-
 
 def write_pre_computed_nvs_phase():
     phase = np.load("slmsuite\computed_phase\slm_phase_75nvs_20250605_181402.npy")

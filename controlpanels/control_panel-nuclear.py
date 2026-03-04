@@ -24,6 +24,7 @@ from majorroutines.spectroscopy import (
     singlet_search_with_etalon,
     # singlet_search_with_spect,
     singlet_search_with_spect_binned,
+    stationary_count,
     th_stationary_count,
 )
 
@@ -36,10 +37,9 @@ from utils.constants import Axes, CoordsKey, NVSig, VirtualLaserKey
 
 def do_stationary_count(nv_sig, disable_opt=None):
     run_time = 3 * 60 * 10**9  # ns
-    th_stationary_count.main(
+    stationary_count.main(
         nv_sig,
         run_time,
-        pulse_time=10e6,
         disable_opt=disable_opt,
     )
 
@@ -407,7 +407,7 @@ def do_pulse_streamer_constant(digital_channels=(2,), analog0=None, analog1=None
 
 
 if __name__ == "__main__":
-    # 5kpl.init_kplotlib()
+    kpl.init_kplotlib()
 
     email_recipient = ["mccambria@berkeley.edu", "jennychen42@berkeley.edu"]
     do_email = False
@@ -429,6 +429,7 @@ if __name__ == "__main__":
         # do_pulse_streamer_constant(digital_channels=(0,))
         # ^leave the comma at the end or it will complain
         do_stationary_count(th_sig, disable_opt=True)
+        # print("hi")
         # test_shutter()
         # test_multimeter()
         # test_multimeter_avg()

@@ -29,45 +29,108 @@ def gaussian_2d(xy, amplitude, xo, yo, sigma_x, sigma_y, theta, offset):
     return g.ravel()
 
 
-# Fit a 2D Gaussian to a local region of the image data and return FWHM
-def fit_gaussian_2d_local(image, center, size=10):
-    x0, y0 = center
-    x_min, x_max = int(x0 - size), int(x0 + size)
-    y_min, y_max = int(y0 - size), int(y0 + size)
+# # Fit a 2D Gaussian to a local region of the image data and return FWHM
+# def fit_gaussian_2d_local(image, center, size=10):
+#     x0, y0 = center
+#     x_min, x_max = int(x0 - size), int(x0 + size)
+#     y_min, y_max = int(y0 - size), int(y0 + size)
+
+#     x_min = max(x_min, 0)
+#     x_max = min(x_max, image.shape[1])
+#     y_min = max(y_min, 0)
+#     y_max = min(y_max, image.shape[0])
+
+#     local_image = image[y_min:y_max, x_min:x_max]
+
+#     x = np.arange(x_min, x_max)
+#     y = np.arange(y_min, y_max)
+#     x, y = np.meshgrid(x, y)
+
+#     initial_guess = (
+#         local_image.max(),
+#         x0,
+#         y0,
+#         1,
+#         1,
+#         0,
+#         np.min(local_image),
+#     )
+
+#     try:
+#         popt, _ = curve_fit(gaussian_2d, (x, y), local_image.ravel(), p0=initial_guess)
+#         amplitude, xo, yo, sigma_x, sigma_y, theta, offset = popt
+
+#         # Calculate FWHM in pixels for both x and y directions
+#         fwhm_x = 2.355 * sigma_x  # FWHM = 2.355 * sigma
+#         fwhm_y = 2.355 * sigma_y
+
+#         return (round(xo, 3), round(yo, 3)), (fwhm_x, fwhm_y), popt
+#     except RuntimeError:
+#         return center, (None, None), None
+
+
+def fit_gaussian_2d_local(image, center, size=12, maxfev=20000):
+    """
+    size = half-size of the patch in pixels (so patch is ~2*size x 2*size)
+    """
+    x0, y0 = center  # x, y in global coords (float ok)
+
+    x_min, x_max = int(np.floor(x0 - size)), int(np.ceil(x0 + size))
+    y_min, y_max = int(np.floor(y0 - size)), int(np.ceil(y0 + size))
 
     x_min = max(x_min, 0)
-    x_max = min(x_max, image.shape[1])
     y_min = max(y_min, 0)
+    x_max = min(x_max, image.shape[1])
     y_max = min(y_max, image.shape[0])
 
-    local_image = image[y_min:y_max, x_min:x_max]
+    patch = image[y_min:y_max, x_min:x_max].astype(float)
+    if patch.size == 0:
+        return (x0, y0), (None, None), None
 
-    x = np.arange(x_min, x_max)
-    y = np.arange(y_min, y_max)
-    x, y = np.meshgrid(x, y)
+    # Use local coordinate system for numerical stability
+    yy, xx = np.mgrid[0:patch.shape[0], 0:patch.shape[1]]
 
-    initial_guess = (
-        local_image.max(),
-        x0,
-        y0,
-        1,
-        1,
-        0,
-        np.min(local_image),
-    )
+    # Better initial guess: use brightest pixel in patch
+    iy, ix = np.unravel_index(np.argmax(patch), patch.shape)
+
+    offset0 = np.percentile(patch, 20)               # robust-ish background
+    amp0 = max(patch[iy, ix] - offset0, 1.0)
+
+    # initial sigmas: a couple pixels (tune if needed)
+    sigma_x0 = 2.0
+    sigma_y0 = 2.0
+    theta0 = 0.0
+
+    p0 = (amp0, ix, iy, sigma_x0, sigma_y0, theta0, offset0)
+
+    # Bounds: keep center inside patch; keep sigmas positive and reasonable; limit theta
+    eps = 1e-6
+    lower = (0.0, 0.0, 0.0, 0.5, 0.5, -np.pi/4, np.min(patch) - abs(amp0))
+    upper = (np.inf, patch.shape[1]-1 + eps, patch.shape[0]-1 + eps,
+             float(size), float(size), np.pi/4, np.max(patch) + abs(amp0))
 
     try:
-        popt, _ = curve_fit(gaussian_2d, (x, y), local_image.ravel(), p0=initial_guess)
-        amplitude, xo, yo, sigma_x, sigma_y, theta, offset = popt
+        popt, _ = curve_fit(
+            gaussian_2d,
+            (xx, yy),
+            patch.ravel(),
+            p0=p0,
+            bounds=(lower, upper),
+            maxfev=maxfev,
+        )
+        amp, xo_l, yo_l, sx, sy, theta, offset = popt
 
-        # Calculate FWHM in pixels for both x and y directions
-        fwhm_x = 2.355 * sigma_x  # FWHM = 2.355 * sigma
-        fwhm_y = 2.355 * sigma_y
+        # Convert local fitted center back to global coordinates
+        xo_g = x_min + xo_l
+        yo_g = y_min + yo_l
 
-        return (round(xo, 3), round(yo, 3)), (fwhm_x, fwhm_y), popt
-    except RuntimeError:
-        return center, (None, None), None
+        fwhm_x = 2.355 * sx
+        fwhm_y = 2.355 * sy
 
+        return (round(xo_g, 3), round(yo_g, 3)), (fwhm_x, fwhm_y), popt
+
+    except Exception:
+        return (x0, y0), (None, None), None
 
 # Apply the blob detection algorithm and estimate spot size in pixels
 def detect_nv_coordinates_blob(
@@ -103,9 +166,13 @@ def detect_nv_coordinates_blob(
             upper_threshold is None or integrated_intensity <= upper_threshold
         ):
             valid_blobs.append(blob)
+            fit_size = max(8, int(2 * integration_radius))   # good default
+            # or: fit_size = max(10, int(2.5 * sigma))
+
+            optimized_coord, fwhm, _ = fit_gaussian_2d_local(smoothed_img, (x, y), size=fit_size)
 
             # Perform Gaussian fitting and get the FWHM
-            optimized_coord, fwhm, _ = fit_gaussian_2d_local(img_array, (x, y), size=3)
+            # optimized_coord, fwhm, _ = fit_gaussian_2d_local(img_array, (x, y), size=3)
             optimized_coords.append(optimized_coord)
             spot_sizes.append(fwhm)  # Append the FWHM for the spot
             integrated_counts.append(integrated_intensity)
@@ -313,22 +380,24 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
     # Load the image data
     data = dm.get_raw_data(
-        file_stem="2026_02_07-11_52_34-johnson-nv0_2025_10_21", load_npz=True
+        file_stem="2026_03_02-16_52_17-qnami-nv0_2026_02_20", load_npz=True
     )
-    img_array = np.array(data["ref_img_array"])
-    # img_array = np.array(data["img_array"])
+    # img_array = np.array(data["ref_img_array"])
+    img_array = np.array(data["img_array"])
 
     # Apply the blob detection and Gaussian fitting
-    sigma = 2.0
-    lower_threshold = 0.15
-    upper_threshold = 500
-    smoothing_sigma = 0.0
+    sigma = 4.0
+    lower_threshold = 10.0
+    upper_threshold = 5000000
+    smoothing_sigma = 1.0
+    integration_radius= 4
     nv_coordinates, integrated_counts, spot_sizes = detect_nv_coordinates_blob(
         img_array,
         sigma=sigma,
         lower_threshold=lower_threshold,
         upper_threshold=upper_threshold,
         smoothing_sigma=smoothing_sigma,
+        integration_radius=integration_radius,
     )
 
     # List to store valid NV coordinates after filtering
@@ -343,7 +412,7 @@ if __name__ == "__main__":
         for existing_coord in filtered_nv_coords:
             distance = np.linalg.norm(np.array(existing_coord) - np.array(coord))
 
-            if distance < 3:
+            if distance < 10:
                 keep_coord = False  # Mark it for exclusion if too close
                 break  # No need to check further distances
 
@@ -359,7 +428,7 @@ if __name__ == "__main__":
         print(f"NV {idx}: {coord}, {count}:.2f")
     # Plotting the results
     # Verify if reversing coordinates resolves the offset
-    default_radius = 2.4
+    default_radius = 4
     fig, ax = plt.subplots()
     title = "24ms, Ref"
     cax = kpl.imshow(ax, img_array, title=title, cbar_label="Photons")
@@ -383,14 +452,14 @@ if __name__ == "__main__":
 
     print(f"Detected NV coordinates (optimized): {len(filtered_nv_coords)}")
 
-    # Save the results
-    save_results(
-        filtered_nv_coords,
-        filtered_counts,
-        path="slmsuite/nv_blob_detection",
-        filename="nv_blob_206nvs.npz",
-    )
+    # # Save the results
+    # save_results(
+    #     filtered_nv_coords,
+    #     filtered_counts,
+    #     path="slmsuite/nv_blob_detection",
+    #     filename="nv_blob_237nvs.npz",
+    # )
 
     # full ROI -- multiple images save in the same file
     # process_scan_file(file_stem="2025_10_22-01_29_02-rubin-nv0_2025_09_08")
-    # process_scan_file(file_stem="2026_01_31-18_01_44-johnson-nv0_2025_10_21")
+    process_scan_file(file_stem="2026_02_14-12_00_21-johnson-nv0_2025_10_21")

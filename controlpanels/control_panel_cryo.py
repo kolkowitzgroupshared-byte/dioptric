@@ -63,7 +63,7 @@ def do_image_sample(nv_sig):
     photon counts at defined x,y galvo positions. Photon count is displayed as a color map.
     """
 
-    scan_range = 1.0  # voltage
+    scan_range = 0.2  # voltage
     num_steps = 90
 
     # For now we only support square scans so pass scan_range twice
@@ -259,10 +259,28 @@ def do_compensate_for_drift(nv_sig):
 #     )
 
 
-def do_stationary_count(
-    nv_sig,
-    disable_opt=None,
-):
+# def do_stationary_count(
+#     nv_sig,
+#     disable_opt=None,
+# ):
+#     """
+#     A 1D scan which holds the galvo and piezo at a fixed position while collecting photon counts.
+
+#     Movement can be done during this scan using cryo_position_control.py file and running in
+#     a dedicated terminal.
+
+#     """
+#     run_time = 3 * 60 * 10**9  # ns
+
+#     stationary_count.main(
+#         nv_sig,
+#         run_time,
+#         disable_opt=disable_opt,
+#         # nv_minus_initialization=nv_minus_initialization,
+#         # nv_zero_initialization=nv_zero_initialization,
+#     )
+
+def do_stationary_count(nv_sig, disable_opt=None):
     """
     A 1D scan which holds the galvo and piezo at a fixed position while collecting photon counts.
 
@@ -799,12 +817,9 @@ if __name__ == "__main__":
     # coords: SAMPLE (piezo) xyz
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z
-    sample_xy = [
-        0.0,
-        0.0,
-    ]  # piezo XY voltage input (1.0=1V) (not coordinates, relative)
+    sample_xy = [0,0]  # piezo XY voltage input (1.0=1V) (not coordinates, relative)
     coord_z = 0  # piezo z voltage (0 is the set midpoint, absolute) (negative is closer to smaple, move unit steps in sample; 37 is good surface focus with bs for Lovelace; 20 is good for dye)
-    pixel_xy = [0.0, 0.0]  # galvo ref
+    pixel_xy = [0,0]  # galvo ref
 
     # return
     nv_sig = NVSig(
@@ -841,7 +856,7 @@ if __name__ == "__main__":
         # tool_belt.set_drift([0.0, 0.0, drift[2]])  # Keep z
         # tool_belt.set_drifts([drift[0], drift[1], 0.0])  # Keep xy
         
-        # pos.set_xyz_on_nv(nv_sig) # Leave this line out when calibrating z
+        pos.set_xyz_on_nv(nv_sig) # Leave this line out when calibrating z
 
 
         # do_pulse_gen_constant()
@@ -860,7 +875,7 @@ if __name__ == "__main__":
 
         # region 2D scan (x galvo, z piezo)
         # # do_2D_xz_scan(nv_sig)
-        # z_range = np.linspace(20, 20, 11)
+        # z_range = np.linspace(1, 3, 2)
         # for z in z_range:
         #     nv_sig.coords[CoordsKey.Z] = z
         #     pos.set_xyz_on_nv(nv_sig)
@@ -881,7 +896,7 @@ if __name__ == "__main__":
         #     nv_sig.coords[CoordsKey.Z] = z
         #     # pos.set_xyz_on_nv(nv_sig)
         #     # do_image_sample_zoom(nv_sig)
-        #       do_image_sample(nv_sig)
+        #     do_image_sample(nv_sig)
 
         # do_image_sample(nv_sig, nv_minus_initialization=True)
         # do_image_sample_zoom(nv_sig, nv_minus_initialization=True)

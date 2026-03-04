@@ -32,9 +32,9 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
-calibration_coords_pixel = [[16.469, 47.014],[147.124, 239.353],[215.515, 60.949]]
-calibration_coords_green = [[119.04, 118.505],[106.545, 95.253],[96.696, 114.696]]
-calibration_coords_red = [[82.018, 81.394],[72.623, 61.855],[63.888, 77.153]]
+calibration_coords_pixel = [[225.135, 23.577], [134.176, 239.977],[21.814, 31.9]]
+calibration_coords_green = [[86.88, 125.371], [107.788, 87.997], [124.058, 127.528]]
+calibration_coords_red = [[55.488, 85.327],[73.895, 56.021], [85.802, 88.986]]
 
 # calibration_coords_pixel = [[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
 # calibration_coords_green = [[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
@@ -132,33 +132,38 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_0",
                 "uwave_power": 11.0,
-                "frequency": 2.7700, #49G
+                "frequency": 2.7752, #49G
                 # "frequency": 2.747151,
                 # "frequency": 2.709799,  #62G
                 # "frequency":2.963189,
                 # "frequency": 2.917151,
                 # "frequency": 2.8082,
-                "rabi_period": 356,
-                "pi_pulse": 176,
-                "pi_on_2_pulse": 88,
+                # "rabi_period": 356,
+                # "pi_pulse": 176,
+                # "pi_on_2_pulse": 88,
                 # "frequency": 2.935030,
-                # "rabi_period": 112,
-                # "pi_pulse": 56,
-                # "pi_on_2_pulse": 28,
+                "rabi_period": 176,
+                "pi_pulse": 88,
+                "pi_on_2_pulse": 24,
             },
             1: {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
                 # "frequency": 2.917151,
-                "frequency": 2.8101,#49G
+                "frequency": 2.8137,#49G
                 # "frequency": 2.77000,#49G
                 # "frequency": 2.982049,
                 # "frequency": 2.828210, 
                 # "frequency": 2.816912, #62G
                 # "frequency": 2.8252,
-                "rabi_period": 288,
-                "pi_pulse": 168,
-                "pi_on_2_pulse": 84,
+                # "rabi_period": 288,
+                # "pi_pulse": 168,
+                # "pi_on_2_pulse": 84,
+                "rabi_period": 176,
+                "pi_pulse": 88,
+                "pi_on_2_pulse": 24,
+                
+                
             },
             2: {
                 "physical_name": "sig_gen_STAN_sg394_3",
@@ -166,7 +171,8 @@ config |= {
                 "frequency": 2.7700,
                 # "frequency": 0.145,
                 "rabi_period": 100,
-                "pi_pulse": 48,
+                # "pi_pulse": 48,
+                "pi_pulse": 1000,
                 "pi_on_2_pulse": 24,
             },
         },
@@ -175,7 +181,7 @@ config |= {
     "Camera": {
         "server_name": "camera_NUVU_hnu512gamma",
         "resolution": (512, 512),
-        "spot_radius": 2.5,  # Radius for integrating NV counts in a camera image
+        "spot_radius": 4.0,  # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
         "em_gain": 5000,
         # "em_gain": 10,
@@ -186,7 +192,8 @@ config |= {
         # See camera server file for details
         "readout_mode": 1,  # 16 for double horizontal readout rate (em mode)
         # "readout_mode": 6,  # Fast conventional
-        "roi": (122, 126, 250, 250),  # offsetX, offsetY, width, height
+        # "roi": (122, 126, 250, 250),  # offsetX, offsetY, width, height
+        "roi": (142, 122, 256, 256),  # offsetX, offsetY, width, height
         # "roi": None,  # offsetX, offsetY, width, height
         "scale": 5 / 0.6,  # pixels / micron
     },
@@ -212,7 +219,7 @@ config |= {
             # LaserKey.IMAGING: {"physical_name": green_laser, "duration": 50e6},
             VirtualLaserKey.IMAGING: {
                 "physical_name": green_laser,
-                # "duration": 12e6,
+                # "duration": 60e6,
                 "duration": 12e6,
             },
             # SBC: created for calibration only
@@ -255,7 +262,7 @@ config |= {
             },
             VirtualLaserKey.WIDEFIELD_IMAGING: {
                 "physical_name": yellow_laser,
-                "duration": 12e6,
+                "duration": 60e6,
                 # "duration": 24e6,
             },
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 10e3},
@@ -296,7 +303,7 @@ config |= {
                 "delay": int(1e6),  # 5 ms for PIFOC xyz
                 "nm_per_unit": 1000,
                 # "optimize_range": 0.09,
-                "optimize_range": 0.24,
+                "optimize_range": 0.4,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
@@ -304,7 +311,7 @@ config |= {
                 "control_mode": PosControlMode.SEQUENCE,
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
-                "optimize_range": 1.2,
+                "optimize_range": 2.2,
                 "units": "MHz",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
                 "aod": True,
@@ -950,25 +957,26 @@ opx_config = {
     ### Analog
     "waveforms": {
         # Green AOD
-        "green_aod_cw-opti": {"type": "constant", "sample": 0.11},
+        "green_aod_cw-opti": {"type": "constant", "sample": 0.06},
         "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.15},
         # Red AOD
-        "red_aod_cw-opti": {"type": "constant", "sample": 0.13},
-        "red_aod_cw-ion": {"type": "constant", "sample": 0.13},
-        "red_aod_cw-scc": {"type": "constant", "sample": 0.13},
+        "red_aod_cw-opti": {"type": "constant", "sample": 0.11},
+        "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
+        "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.45},
+        "yellow_imaging": {"type": "constant", "sample": 0.20},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2675},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2367}, #136NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2267}, #118NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.34947}, ## 312NV johnson
-        "yellow_charge_readout": {"type": "constant", "sample": 0.33}, ## 230NV johnson
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.3257}, ## 205NV johnson
+        "yellow_charge_readout": {"type": "constant", "sample": 0.20}, ## 195NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3084}, ## 223NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
-        "yellow_spin_pol": {"type": "constant", "sample": 0.31510},
+        "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other
         "aod_cw": {"type": "constant", "sample": 0.35},
