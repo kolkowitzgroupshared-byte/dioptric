@@ -20,7 +20,6 @@ from utils import data_manager as dm
 from utils import kplotlib as kpl
 
 
-
 def find_optimal_value_geom_mean(
     step_vals, prep_fidelity, readout_fidelity, goodness_of_fit, weights=(1, 1, 1)
 ):
@@ -230,8 +229,8 @@ def process_and_plot(raw_data, do_plot=False):
             print(f"Failed to process NV{nv_ind}: {e}")
             optimal_values.append((nv_ind, np.nan, np.nan))
             continue
-        
-        if do_plot:  
+
+        if do_plot:
             # # Plotting
             fig, ax1 = plt.subplots(figsize=(7, 5))
             # Plot readout fidelity
@@ -703,7 +702,10 @@ def process_and_plot_charge(raw_data, do_plot=False):
             plt.scatter(x_f, y_f, label="Measured")
             plt.plot(results["grid_t"], results["grid_y"], label="Sat-Decay Fit")
             plt.axvline(
-                opti_dur, color="green", linestyle="--", label=f"Peak ≈ {opti_dur:.0f} ns"
+                opti_dur,
+                color="green",
+                linestyle="--",
+                label=f"Peak ≈ {opti_dur:.0f} ns",
             )
             plt.scatter([opti_dur], [opti_fid], color="green", zorder=5)
             plt.xlabel("Duration (ns)")
@@ -721,9 +723,11 @@ def process_and_plot_charge(raw_data, do_plot=False):
         median_duration = int(np.nanmedian(numeric_durations))
         # Replace None or out-of-range values with median
         opti_durs = [
-            median_duration
-            if (d is None or (100 <= d <= 200) or (1930 <= d <= 2000))
-            else d
+            (
+                median_duration
+                if (d is None or (100 <= d <= 200) or (1930 <= d <= 2000))
+                else d
+            )
             for d in opti_durs
         ]
 
@@ -848,7 +852,6 @@ if __name__ == "__main__":
     # file_id = "2026_02_09-21_28_39-johnson-nv0_2025_10_21"
     # file_id = "2026_02_16-21_30_52-rubin-nv0_2026_02_15"
     file_id = "2026_03_03-02_22_47-qnami-nv0_2026_02_20"
-    
 
     ### pol amp var
     # file_id = "2025_09_12-16_53_34-rubin-nv0_2025_09_08"
@@ -880,14 +883,13 @@ if __name__ == "__main__":
     # file_id = "2025_11_22-19_58_10-johnson-nv0_2025_10_21"
     # file_id = "2026_02_07-20_07_20-johnson-nv0_2025_10_21"
     # file_id = "2026_02_10-03_18_17-johnson-nv0_2025_10_21"
-    file_id = "2026_03_02-20_10_14-qnami-nv0_2026_02_20"
-    
-    
+    # file_id = "2026_03_02-20_10_14-qnami-nv0_2026_02_20"
+
     # dm.USE_NEW_CLOUD = False
     raw_data = dm.get_raw_data(file_stem=file_id, load_npz=True)
     # file_name = dm.get_file_name(file_id=file_id)
     # print(f"{file_name}_{file_id}")
-    # process_and_plot(raw_data, do_plot=False)
-    process_and_plot_charge(raw_data, do_plot=True)
+    process_and_plot(raw_data, do_plot=False)
+    # process_and_plot_charge(raw_data, do_plot=True)
     # print(dm.get_file_name(1717056176426))
     plt.show(block=True)
