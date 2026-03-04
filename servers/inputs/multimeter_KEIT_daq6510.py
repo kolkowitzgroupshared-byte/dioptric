@@ -63,11 +63,17 @@ class MultimeterKeitDaq6510(LabradServer):
     #         logging.info("Recovered!")
     #     return float(value)
 
-    @setting(5, returns="v[]")
-    def read(self, c):
+    @setting(5, returns="v[]", channel="i")
+    def read_voltage(self, c, channel):
         """Return the value from the main display."""
-        value = self.multimeter.query(":MEASure:VOLTage:DC?")
-        return value
+        #value = self.multimeter.query(":MEASure:VOLTage:DC?")
+
+        multimeter = self.multimeter
+        multimeter.write("*RST")
+        multimeter.write(":FUNCtion 'VOLTage[:DC]', (@{})".format(channel))
+        multimeter.write(":ROUT:CLOS (@{})".format(channel))
+        output = float(multimeter.query(":READ?".format(channel)))
+        return output
 
     @setting(6)
     def reset_cfm_opt_out(self, c):
