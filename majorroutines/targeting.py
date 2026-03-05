@@ -459,7 +459,7 @@ def _read_counts(
         laser_name = tb.get_physical_laser_name(laser_key)
         pulse_gen = tb.get_server_pulse_streamer()
 
-        if positioner not in (CoordsKey.SAMPLE, CoordsKey.PIXEL):
+        if positioner not in (CoordsKey.SAMPLE, CoordsKey.PIXEL, CoordsKey.Z):
             msg = "Optimization with a counter is only implemented for SAMPLE or PIXEL coords."
             raise NotImplementedError(msg)
 

@@ -137,50 +137,50 @@ def do_2D_xz_scan(nv_sig):
 
 
 
-def do_optimize_z(nv_sig, num_steps=20, step_size=1, scan_direction="down"):
-    """
-    Optimize Z position by scanning and fitting a Gaussian to find the focus peak.
+# def do_optimize_z(nv_sig, num_steps=20, step_size=1, scan_direction="down"):
+#     """
+#     Optimize Z position by scanning and fitting a Gaussian to find the focus peak.
 
-    # Uses the step-based scanning pattern from calibrate_z_axis.optimize_z which
-    is compatible with the Attocube piezo (unlike targeting.optimize which requires
-    streaming support).
+#     # Uses the step-based scanning pattern from calibrate_z_axis.optimize_z which
+#     is compatible with the Attocube piezo (unlike targeting.optimize which requires
+#     streaming support).
 
-    Parameters
-    ----------
-    nv_sig : NVSig
-        NV center parameters (pulse durations, laser settings)
-    num_steps : int, optional
-        Total number of Z positions to scan. Default: 40
-    step_size : int, optional
-        Step size in piezo units between positions. Default: 1
-    scan_direction : str, optional
-        Direction to scan: "up" starts low and scans upward (away from sample),
-        "down" starts high and scans downward (toward sample). Default: "down"
+#     Parameters
+#     ----------
+#     nv_sig : NVSig
+#         NV center parameters (pulse durations, laser settings)
+#     num_steps : int, optional
+#         Total number of Z positions to scan. Default: 40
+#     step_size : int, optional
+#         Step size in piezo units between positions. Default: 1
+#     scan_direction : str, optional
+#         Direction to scan: "up" starts low and scans upward (away from sample),
+#         "down" starts high and scans downward (toward sample). Default: "down"
 
-    Returns
-    -------
-    float or None
-        Optimal Z position (piezo steps), or None if optimization failed
-    """
-    results = calibrate_z_axis.optimize_z(
-        nv_sig,
-        num_steps=num_steps,
-        step_size=step_size,
-        num_averages=5,
-        move_to_optimal=True,
-        save_data=True,
-        scan_direction=scan_direction,
-    )
+#     Returns
+#     -------
+#     float or None
+#         Optimal Z position (piezo steps), or None if optimization failed
+#     """
+#     results = calibrate_z_axis.optimize_z(
+#         nv_sig,
+#         num_steps=num_steps,
+#         step_size=step_size,
+#         num_averages=5,
+#         move_to_optimal=True,
+#         save_data=True,
+#         scan_direction=scan_direction,
+#     )
 
-    opti_z = results.get("opti_z")  # Actual final position
-    opti_z_fit = results.get("opti_z_fit")  # Gaussian fit estimate
-    opti_counts = results.get("opti_counts")
+#     opti_z = results.get("opti_z")  # Actual final position
+#     opti_z_fit = results.get("opti_z_fit")  # Gaussian fit estimate
+#     opti_counts = results.get("opti_counts")
 
-    print(f"Z optimization complete: Final Z={opti_z}, Counts={opti_counts}")
-    if opti_z_fit is not None:
-        print(f"  (Gaussian fit estimated Z={opti_z_fit:.1f})")
+#     print(f"Z optimization complete: Final Z={opti_z}, Counts={opti_counts}")
+#     if opti_z_fit is not None:
+#         print(f"  (Gaussian fit estimated Z={opti_z_fit:.1f})")
 
-    return opti_z
+#     return opti_z
 
 
 def do_optimize_green(nv_sig):
@@ -193,6 +193,10 @@ def do_optimize_green(nv_sig):
 
     return opti_coords
 
+def do_optimize_z(nv_sig):
+    ret_vals = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
+    opti_coords = ret_vals[0]
+    return opti_coords
 
 def do_optimize_xy(nv_sig, num_steps=15, scan_range=None, fit_method="gaussian"):
     """
@@ -799,10 +803,11 @@ def do_constant_ac(digital_channels=(4,), analog0=None, analog1=None):
         analog_channels.append(1)
         analog_voltages.append(float(analog1))
 
+
     # Microwave test
-    amp = 2
+    amp = 5
     sig_gen.set_amp(amp)  # 12
-    sig_gen.set_freq(1.0) #Ghz
+    sig_gen.set_freq(2.87) #Ghz
     sig_gen.uwave_on()
     # Turn on constant outputs
     pulse_gen.constant(digital_channels, analog_channels, analog_voltages)
@@ -848,13 +853,14 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z
     sample_xy = [0,0]  # piezo XY voltage input (1.0=1V) (not coordinates, relative)
-    coord_z = 0.000  # piezo z voltage (0 is the set midpoint, absolute) (negative is closer to smaple, move unit steps in sample; 37 is good surface focus with bs for Lovelace; 20 is good for dye)
+    coord_z = 4.0  # piezo z voltage (0 is the set midpoint, absolute) (negative is closer to smaple, move unit steps in sample; 37 is good surface focus with bs for Lovelace; 20 is good for dye)
     # pixel_xy = [0,0]  # galvo ref
     # pixel_xy = [-0.031,-0.023]  # other
     # pixel_xy = [-0.055, -0.018]  # other
     # pixel_xy = [0.053, -0.093]  # Lovelace image center
     # pixel_xy = [-0.022, -0.014]  # other
-    pixel_xy = [0,0]  # weird black spot
+    pixel_xy = [0.0, 0.024]  # weird black spot
+    # pixel_xy = [-0.01, 0.037]  # weird black spot
 
     # return
     nv_sig = NVSig(
@@ -921,7 +927,7 @@ if __name__ == "__main__":
         # endregion 2D scan
 
         # region Image / 3D scan    
-        do_constant_ac()
+        # do_constant_ac()
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None)
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None):
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
@@ -945,7 +951,10 @@ if __name__ == "__main__":
         # region Optimize
         # do_optimize_z(nv_sig) # z position optimize
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
-        # do_optimize_green(nv_sig) # old optimize xy
+        
+        
+        do_optimize_green(nv_sig) # old optimize xy
+        # do_optimize_z(nv_sig) # z position optimize
         # do_compensate_for_drift(nv_sig)
         # endregion Optimize
 
