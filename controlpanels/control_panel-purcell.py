@@ -81,8 +81,8 @@ def do_widefield_image_sample(nv_sig, num_reps=1):
 
 
 def do_scanning_image_sample(nv_sig):
-    scan_range = 60
-    num_steps =30
+    scan_range = 15
+    num_steps =15
     image_sample.scanning(nv_sig, scan_range, scan_range, num_steps)
 
 
@@ -97,9 +97,9 @@ def do_red_calibration_image(nv_sig, coords_list, force_laser_key=None, num_reps
 
 
 def do_scanning_image_full_roi(nv_sig):
-    total_range = 20
-    scan_range = 10
-    num_steps = 10
+    total_range = 75
+    scan_range = 15
+    num_steps = 15
     image_sample.scanning_full_roi(nv_sig, total_range, scan_range, num_steps)
 
 
@@ -1410,7 +1410,7 @@ def do_opx_constant_ac():
         [4],  # Digital channels
         [3, 4, 7],  # Analog channels
         [0.11, 0.11, 0.30],  # Analog voltages
-        [107, 107, 0],  # Analog frequencies
+        [70, 70, 0],  # Analog frequencies
     )
     # Red + green + Yellow
     # opx.constant_ac(
@@ -1546,9 +1546,9 @@ if __name__ == "__main__":
     sample_name = "qnami"
     # magnet_angle = 90
     date_str = "2026_02_20"
-    sample_coords = [0.0, 0.2]
-    # z_coord = -1.9
-    z_coord = 0.2
+    sample_coords = [0.9, 0.2]
+    z_coord = 1.
+    # z_coord = -1.0
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
@@ -1584,12 +1584,25 @@ if __name__ == "__main__":
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
 
-    # pixel_coords_list = [[119.278, 122.061], [225.135, 23.577], [134.176, 239.977],[21.814, 31.9]]
-    # green_coords_list = [[108.218, 109.384], [86.88, 125.371], [107.788, 87.997], [124.058, 127.528]]
-    # red_coords_list = [    [73.493, 73.426],
-    # [55.488, 85.327],
-    # [73.895, 56.021],
-    # [85.802, 88.986],]
+    pixel_coords_list = [ 
+                         [194.338, 155.68],
+                         [361.956, 11.14],
+                        [214.335, 315.423],
+                        [47.979, 35.184], 
+
+                         ]
+    green_coords_list = [
+                        [107.322, 107.322],
+                        [73.552, 130.534], 
+                        [107.416, 77.811], 
+                        [131.715, 132.311],
+                        ]
+    red_coords_list = [ 
+    [72.833, 71.704],
+    [44.412, 88.841],
+    [73.949, 47.722],
+    [91.893, 93.266],
+                        ]
 
     # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
     # green_coords_list = [[107.85, 108.084],[119.238, 119.6],[111.232, 95.81],[95.925, 118.974]]
@@ -1690,7 +1703,7 @@ if __name__ == "__main__":
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
-    nv_sig.expected_counts = 4500
+    # nv_sig.expected_counts = 4500
     # nv_sig.expected_counts = 13000
     # nv_sig.expected_counts = 1300
     # nv_sig.expected_counts = 1250
@@ -1733,7 +1746,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_compensate_for_drift(nv_sig)
+        # do_compensate_for_drift(nv_sig)
         # do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 200)
 
@@ -1773,7 +1786,7 @@ if __name__ == "__main__":
         #         print(f"Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         #         do_scanning_image_sample(nv_sig)
 
-        # do_opx_constant_ac()
+        do_opx_constant_ac()
         # do_opx_square_wave()
 
         # do_optimize_pixel(nv_sig)
@@ -1829,7 +1842,7 @@ if __name__ == "__main__":
         # do_calibrate_iq_delay(nv_list)
         # do_rabi(nv_list)
         # do_power_rabi(nv_list)
-        do_resonance(nv_list)
+        # do_resonance(nv_list)
         # do_optimize_pol_duration(nv_list)
         # do_rabi(nv_list)
         # do_deer_hahn(nv_list)
