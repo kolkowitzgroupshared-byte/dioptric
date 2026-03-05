@@ -312,15 +312,15 @@ def process_scan_file(file_stem):
         img_array = np.array(scan["scan_data"], dtype=np.float64)
 
         # Detect NVs
-        optimized_coords, integrated_counts, _ = detect_nv_coordinates_blob(
-            img_array,
-            lower_threshold=11,
-        )
+        # optimized_coords, integrated_counts, _ = detect_nv_coordinates_blob(
+        #     img_array,
+        #     lower_threshold=11,
+        # )
 
         # Only store detected NVs if not empty
-        if optimized_coords.size > 0:
-            blob_coords.extend(optimized_coords)  # Ensure list format
-            spot_weights.extend(integrated_counts)
+        # if optimized_coords.size > 0:
+        #     blob_coords.extend(optimized_coords)  # Ensure list format
+        #     spot_weights.extend(integrated_counts)
 
         # Normalize image
         img_array = (img_array - 300) / max(1, np.median(img_array))
@@ -344,12 +344,12 @@ def process_scan_file(file_stem):
         print("No valid images found.")
 
     # **Save the results (uncomment if needed)**
-    save_results(
-        blob_coords,
-        spot_weights,
-        path="slmsuite/nv_blob_detection",
-        filename=f"nv_blob_{len(blob_coords)}nvs.npz",
-    )
+    # save_results(
+    #     blob_coords,
+    #     spot_weights,
+    #     path="slmsuite/nv_blob_detection",
+    #     filename=f"nv_blob_{len(blob_coords)}nvs.npz",
+    # )
 
     timestamp = dm.get_time_stamp()
     data = {
@@ -380,17 +380,17 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
     # Load the image data
     data = dm.get_raw_data(
-        file_stem="2026_03_02-16_52_17-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_03_05-08_55_37-combined_image_array", load_npz=True
     )
     # img_array = np.array(data["ref_img_array"])
     img_array = np.array(data["img_array"])
 
     # Apply the blob detection and Gaussian fitting
-    sigma = 4.0
-    lower_threshold = 10.0
-    upper_threshold = 5000000
-    smoothing_sigma = 1.0
-    integration_radius= 4
+    sigma = 2.0
+    lower_threshold = 0.01
+    upper_threshold = None
+    smoothing_sigma = 0.0
+    integration_radius= 2
     nv_coordinates, integrated_counts, spot_sizes = detect_nv_coordinates_blob(
         img_array,
         sigma=sigma,
@@ -399,60 +399,61 @@ if __name__ == "__main__":
         smoothing_sigma=smoothing_sigma,
         integration_radius=integration_radius,
     )
+    filtered_nv_coords = nv_coordinates
+    filtered_counts = integrated_counts
+    # # List to store valid NV coordinates after filtering
+    # filtered_nv_coords = []
+    # filtered_counts = []
+    # # Iterate through detected NV coordinates and apply distance filtering
+    # for coord, count in zip(nv_coordinates, integrated_counts):
+    #     # Assume the coordinate is valid initially
+    #     keep_coord = True
 
-    # List to store valid NV coordinates after filtering
-    filtered_nv_coords = []
-    filtered_counts = []
-    # Iterate through detected NV coordinates and apply distance filtering
-    for coord, count in zip(nv_coordinates, integrated_counts):
-        # Assume the coordinate is valid initially
-        keep_coord = True
+    #     # Check distance with all previously accepted NVs
+    #     for existing_coord in filtered_nv_coords:
+    #         distance = np.linalg.norm(np.array(existing_coord) - np.array(coord))
 
-        # Check distance with all previously accepted NVs
-        for existing_coord in filtered_nv_coords:
-            distance = np.linalg.norm(np.array(existing_coord) - np.array(coord))
+    #         if distance < 1:
+    #             keep_coord = False  # Mark it for exclusion if too close
+    #             break  # No need to check further distances
 
-            if distance < 10:
-                keep_coord = False  # Mark it for exclusion if too close
-                break  # No need to check further distances
+    #     # If the coordinate passes the distance check, add it to the list
+    #     if keep_coord:
+    #         filtered_nv_coords.append(coord)
+    #         filtered_counts.append(count)
 
-        # If the coordinate passes the distance check, add it to the list
-        if keep_coord:
-            filtered_nv_coords.append(coord)
-            filtered_counts.append(count)
+    # print(f"Number of NVs detected: {len(filtered_nv_coords)}")
+    # for idx, (coord, count) in enumerate(
+    #     zip(filtered_nv_coords, filtered_counts), start=1
+    # ):
+    #     print(f"NV {idx}: {coord}, {count}:.2f")
+    # # Plotting the results
+    # # Verify if reversing coordinates resolves the offset
+    # default_radius = 2
+    # fig, ax = plt.subplots()
+    # title = "24ms, Ref"
+    # cax = kpl.imshow(ax, img_array, title=title, cbar_label="Photons")
+    # ax.set_title("NV Detection with Blob")
+    # ax.axis("off")
 
-    print(f"Number of NVs detected: {len(filtered_nv_coords)}")
-    for idx, (coord, count) in enumerate(
-        zip(filtered_nv_coords, filtered_counts), start=1
-    ):
-        print(f"NV {idx}: {coord}, {count}:.2f")
-    # Plotting the results
-    # Verify if reversing coordinates resolves the offset
-    default_radius = 4
-    fig, ax = plt.subplots()
-    title = "24ms, Ref"
-    cax = kpl.imshow(ax, img_array, title=title, cbar_label="Photons")
-    ax.set_title("NV Detection with Blob")
-    ax.axis("off")
-
-    for idx, (x, y) in enumerate(filtered_nv_coords, start=1):  # Swapped y, x to x, y
-        circ = plt.Circle((x, y), default_radius, color="red", linewidth=1, fill=False)
-        ax.add_patch(circ)
-        ax.text(
-            x,
-            y - default_radius - 2,
-            f"{idx}",
-            # color="black",
-            fontsize=8,
-            ha="center",
-            va="center",
-        )
+    # for idx, (x, y) in enumerate(filtered_nv_coords, start=1):  # Swapped y, x to x, y
+    #     circ = plt.Circle((x, y), default_radius, color="red", linewidth=1, fill=False)
+    #     ax.add_patch(circ)
+    #     ax.text(
+    #         x,
+    #         y - default_radius - 1,
+    #         f"{idx}",
+    #         # color="black",
+    #         fontsize=8,
+    #         ha="center",
+    #         va="center",
+    #     )
 
     kpl.show(block=True)
 
     print(f"Detected NV coordinates (optimized): {len(filtered_nv_coords)}")
 
-    # # Save the results
+    # Save the results
     # save_results(
     #     filtered_nv_coords,
     #     filtered_counts,
@@ -461,5 +462,5 @@ if __name__ == "__main__":
     # )
 
     # full ROI -- multiple images save in the same file
-    # process_scan_file(file_stem="2025_10_22-01_29_02-rubin-nv0_2025_09_08")
-    process_scan_file(file_stem="2026_02_14-12_00_21-johnson-nv0_2025_10_21")
+    process_scan_file(file_stem="2026_03_04-23_42_24-qnami-nv0_2026_02_20")
+    # process_scan_file(file_stem="2026_03_05-09_46_19-qnami-nv0_2026_02_20")

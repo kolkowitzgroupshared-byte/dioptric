@@ -1,10 +1,10 @@
-# -*- coding: utf-8 -*-
-"""
-Rabi sequence (Pulse Streamer): two APD gates per period (signal, then reference).
-Constant period per step by padding with (pad_budget_ns - tau_ns).
+# # -*- coding: utf-8 -*-
+# """
+# Rabi sequence (Pulse Streamer): two APD gates per period (signal, then reference).
+# Constant period per step by padding with (pad_budget_ns - tau_ns).
 
-Author: Saroj Chand
-"""
+# Author: Saroj Chand
+# """
 
 # from typing import Callable, List, Tuple
 
