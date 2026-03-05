@@ -300,11 +300,9 @@ def _read_counts_camera_sequence(
 
     return [np.array(counts, dtype=int), img_array]
 
-
-def _find_center_coords(nv_sig: NVSig, positioner, axis_ind, fig=None):
+def _find_center_coords(nv_sig: NVSig, positioner, axis_ind, fig=None, num_steps = 20):
     """Optimize on just one axis (0, 1, 2) for (x, y, z)."""
 
-    num_steps = 20
     scan_range = pos.get_positioner_optimize_range(positioner)
     if positioner is CoordsKey.Z:
         axis_center = pos.get_nv_coords(nv_sig, positioner)
@@ -577,36 +575,48 @@ def _optimize_pixel_cost_jac(fit_params, x_crop_mesh, y_crop_mesh, img_array_cro
 # endregion
 # region General public functions
 
-def stationary_count_confocal_once(nv_sig, num_samples=50):
+def stationary_count_confocal_once(nv_sig, num_averages=10):
     # Put NV at its SAMPLE coords
     pos.set_xyz_on_nv(nv_sig)
 
-    vld_img = tb.get_virtual_laser_dict(VirtualLaserKey.IMAGING)
-    readout = int(nv_sig.pulse_durations.get(VirtualLaserKey.IMAGING, int(vld_img["duration"])))
-    readout_laser = vld_img["physical_name"]
-    readout_power = tb.set_laser_power(nv_sig, VirtualLaserKey.IMAGING)
+    config = common.get_config_dict()
 
-    pulsegen = tb.get_server_pulse_streamer()
+    # Get hardware servers
     counter = tb.get_server_counter()
+    pulse_gen = tb.get_server_pulse_streamer()
 
-    delay = 0
-    seq_args = [delay, readout, readout_laser, readout_power]
-    seq_args_string = tb.encode_seq_args(seq_args)
-    seq_name = "simple_readout.py"
+    # Get optimize range - use provided value or fall back to config
 
-    period = pulsegen.stream_load(seq_name, seq_args_string)[0]
-    # One gate per sample
-    counter.start_tag_stream()
-    counts = []
-    for _ in range(num_samples):
-        pulsegen.stream_start(1)
-        new = counter.read_counter_simple(1)
-        if len(new) > 0:
-            counts.append(int(new[0]))
-    counter.stop_tag_stream()
+    # Setup laser for imaging (matching confocal_image_sample.py)
+    laser_dict = tb.get_virtual_laser_dict(VirtualLaserKey.IMAGING)
+    readout_ns = int(
+        nv_sig.pulse_durations.get(VirtualLaserKey.IMAGING, int(laser_dict["duration"]))
+    )
+    readout_s = readout_ns / 1e9
+    laser_name = laser_dict["physical_name"]
 
-    counts = np.array(counts, dtype=int)
-    avg_counts = float(np.mean(counts))
+    # delay = 0
+    tb.reset_cfm()
+    tb.init_safe_stop()
+    counter.start_tag_stream()  # Start BEFORE loading sequence
+    # Load pulse sequence
+    seq_file = "simple_readout.py"
+    positioner_dict = config["Positioning"]["Positioners"][CoordsKey.Z]
+    delay_ns = int(positioner_dict.get("delay", 0))
+
+    seq_args = [delay_ns, readout_ns, laser_name, 1.0]
+    pulse_gen.stream_load(seq_file, tb.encode_seq_args(seq_args))
+    samples = []
+    for _ in range(num_averages):
+        pos.set_xyz_on_nv(nv_sig)
+        pulse_gen.stream_start(1)
+        raw = counter.read_counter_simple(1)
+        if raw and len(raw) > 0:
+            samples.append(int(raw[0]))
+
+        # Average and store in image array
+        avg_counts = np.mean(samples) if samples else 0
+    counter.clear_buffer()
     return avg_counts
 
 
@@ -895,6 +905,7 @@ def optimize(
     # if coords_key == CoordsKey.PIXEL:
     #     return optimize_pixel(nv_sig)
     config = common.get_config_dict()
+    num_steps = config["Positioning"]["optimize_num_steps"]
     # Use image-based optimizer only in widefield CAMERA mode
     if coords_key == CoordsKey.PIXEL and config["collection_mode"] == CollectionMode.CAMERA:
         return optimize_pixel(nv_sig)
@@ -916,7 +927,7 @@ def optimize(
     ### Perform the optimizations
 
     for axis_ind in axes:
-        ret_vals = _find_center_coords(nv_sig, coords_key, axis_ind, fig)
+        ret_vals = _find_center_coords(nv_sig, coords_key, axis_ind, fig, num_steps)
         opti_coords[axis_ind] = ret_vals[0]
         scan_vals[axis_ind] = ret_vals[1]
         scan_counts[axis_ind] = ret_vals[2]

@@ -135,7 +135,7 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 6.0,
-                "frequency": 2.800,
+                "frequency": 2.8785,
                 "rabi_period": 144,
                 "pi_pulse": 72,
                 "pi_on_2_pulse": 36,
@@ -244,7 +244,8 @@ config |= {
                 # "delay": int(1e6),  # 1 ms for ATTO
                 "delay": int(5e6),  # 5 ms for PIFOC xyz
                 "nm_per_unit": 1000,
-                "optimize_range": 0.09,
+                # "optimize_range": 0.09,
+                "optimize_range": 0.1,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
@@ -253,17 +254,16 @@ config |= {
                 "control_mode": PosControlMode.STREAM,
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
+                # "optimize_range": 0.02,
                 "optimize_range": 0.02,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
         },
-        # "calibration_coords_nv1": calibration_coords_nv1,
-        # "calibration_coords_nv2": calibration_coords_nv2,
-        # "calibration_coords_nv3": calibration_coords_nv3,
         "pixel_to_sample_affine_transformation_matrix": pixel_to_sample_affine_transformation_matrix,
         "cryo_piezos_voltage": 33,
         "z_bias_adjust": 0.0,
+        "optimize_num_steps": 40,
     },
     ###
     "Servers": {  # Bucket for miscellaneous servers not otherwise listed above

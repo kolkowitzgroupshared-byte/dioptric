@@ -405,7 +405,6 @@ def main(
     readout_vkey=VirtualLaserKey.SPIN_READOUT,
     readout_power=None,
     apd_indices=(0,),
-    norm_mode=NormMode.SINGLE_VALUED,
     do_plot=True,
     do_save=True,
 ):
