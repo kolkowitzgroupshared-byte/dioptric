@@ -1410,7 +1410,7 @@ def do_opx_constant_ac():
         [4],  # Digital channels
         [3, 4, 7],  # Analog channels
         [0.11, 0.11, 0.30],  # Analog voltages
-        [70, 70, 0],  # Analog frequencies
+        [70, 1, 0],  # Analog frequencies
     )
     # Red + green + Yellow
     # opx.constant_ac(
@@ -1793,7 +1793,7 @@ if __name__ == "__main__":
         # do_optimize_green(nv_sig)
         # repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
         # do_optimize_red(nv_sig, repr_nv_sig)
-        do_optimize_z(nv_sig)
+        # do_optimize_z(nv_sig)
 
         # do_optimize_sample(nv_sig)
         # optimize.optimize_pixel_and_z(nv_sig, do_plot=True)
