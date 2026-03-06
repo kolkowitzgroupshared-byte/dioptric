@@ -961,7 +961,7 @@ if __name__ == "__main__":
         # tool_belt.set_drifts([drift[0], drift[1], 0.0])  # Keep xy
         
         pos.set_xyz_on_nv(nv_sig) # Leave this line out when calibrating z
-        do_optimize_z_PI(nv_sig, 3.95, 4.15)
+        do_optimize_z_PI(nv_sig, voltage_start=3.95, voltage_end=4.15, step_size=0.01)
 
         # do_pulse_gen_constant()
         # do_pulse_gen_constant(digital_channels=(2,))
