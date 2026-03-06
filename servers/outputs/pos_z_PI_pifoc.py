@@ -242,10 +242,14 @@ class PosZPiPifoc(LabradServer):
     def read_z(self, c):
         """Return the current voltages on the piezo's DAQ channel"""
         with nidaqmx.Task() as task:
-            # Set up the internal channels - to do: actual parsing...
-            if self.daq_ao_objective_piezo == "dev1/AO2":
-                chan_name = "dev1/_ao2_vs_aognd"
-            task.ai_channels.add_ai_voltage_chan(chan_name, min_val=1.0, max_val=9.0)
+            # Parse AO channel name to get internal readback channel
+            # e.g., "dev1/AO21" -> "dev1/_ao21_vs_aognd"
+            ao_chan = self.daq_ao_objective_piezo  # e.g., "dev1/AO21"
+            parts = ao_chan.split("/")
+            device = parts[0]  # e.g., "dev1"
+            ao_num = parts[1].lower()  # e.g., "ao21"
+            chan_name = f"{device}/_{ao_num}_vs_aognd"  # e.g., "dev1/_ao21_vs_aognd"
+            task.ai_channels.add_ai_voltage_chan(chan_name, min_val=0.0, max_val=10.0)
             voltage = task.read()
         return voltage
 
