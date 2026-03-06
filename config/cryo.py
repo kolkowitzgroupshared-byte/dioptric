@@ -79,15 +79,13 @@ config |= {
     "disable_z_drift_compensation":True,
     ###
     # Common durations are in ns
+    ###
     "CommonDurations": {
-        "default_pulse_duration": 1000,
-        "aod_access_time": 11e3,  # access time in specs is 10us
-        "widefield_operation_buffer": 1e3,
-        "uwave_buffer": 0,
-        "iq_buffer": 0,
-        "iq_delay": 136,  # SBC measured using NVs 4/18/2025
-        "temp_reading_interval": 15 * 60,  # for PID
-        # "iq_delay": 140,  # SBC measured using NVs 4/18/2025
+        "cw_meas_buffer": 5000,
+        "pol_to_uwave_wait_dur": 5000,
+        "scc_ion_readout_buffer": 10000,
+        "uwave_buffer": 100,
+        "uwave_to_readout_wait_dur": 5000,
     },
     ###
     "DeviceIDs": {
