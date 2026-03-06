@@ -10,13 +10,25 @@ import matplotlib.pyplot as plt
 import numpy as np
 from joblib import Parallel, delayed
 from scipy.optimize import curve_fit
+import analysis.bimodal_histogram as bh
+import sys
+from pathlib import Path
+import sys
+from pathlib import Path
 
+# Ensure this script's repo is first on sys.path
+repo_root = Path(__file__).resolve().parents[1]  # .../GitHub/dioptric
+sys.path.insert(0, str(repo_root))
+print(
+    "HAS fit_binomial_multinv_histogram:", hasattr(bh, "fit_binomial_multinv_histogram")
+)
 from analysis.bimodal_histogram import (
     ProbDist,
     fit_binomial_multinv_histogram,  # per-step fit (p, rate0, delta)
     analyze_charge_histogram_multinv_binomial,  # estimate N once per NV
     determine_threshold_any_minus_binomial_multinv,  # per-step binary threshold + fidelity
 )
+
 from utils import data_manager as dm
 from utils import kplotlib as kpl
 
