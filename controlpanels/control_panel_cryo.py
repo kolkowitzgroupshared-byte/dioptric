@@ -9,7 +9,7 @@ Created on Oct 7th, 2025
 @author: chemistatcode
 @author: Saroj B Chand
 @author: ericvin
-@author: mccambria
+@author: mccambrias
 """
 
 
@@ -996,7 +996,7 @@ if __name__ == "__main__":
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None)
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None):
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
-        # do_image_sample(nv_sig)
+        do_image_sample(nv_sig)
         # do_image_sample_zoom(nv_sig)
 
         # # Quick NV area scans
@@ -1014,7 +1014,7 @@ if __name__ == "__main__":
         # end region Image sample
 
         # region Optimize
-        do_optimize_z_PI(nv_sig, voltage_start=3.95, voltage_end=4.15, step_size=0.01)
+        # do_optimize_z_PI(nv_sig, voltage_start=3.95, voltage_end=4.15, step_size=0.01)
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         
