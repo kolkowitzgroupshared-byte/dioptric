@@ -58,6 +58,7 @@ def optimize_z_PI(
     num_averages: int = 3,
     move_to_optimal: bool = True,
     save_data: bool = True,
+    use_position_feedback: bool = False,
 ) -> dict:
     """
     Optimize Z position for PI E-709 piezo using voltage scan and Gaussian fit.
@@ -85,6 +86,10 @@ def optimize_z_PI(
         Whether to move piezo to optimal position after fitting. Default: True
     save_data : bool, optional
         Whether to save data and plot. Default: True
+    use_position_feedback : bool, optional
+        Whether to use qPOS() to read actual position. Default: False.
+        Note: qPOS() may timeout in external control mode. When False,
+        position is estimated from voltage using ~6.0 µm/V conversion.
 
     Returns
     -------
@@ -145,7 +150,10 @@ def optimize_z_PI(
     ### Setup figure for real-time display
     kpl.init_kplotlib()
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.set_xlabel("Position (µm)")
+    if use_position_feedback:
+        ax.set_xlabel("Position (µm)")
+    else:
+        ax.set_xlabel("Voltage (V)")
     ax.set_ylabel("Counts")
     ax.set_title(f"PI E-709 Z Optimization - {laser_name}, {readout_ns/1e6:.1f} ms")
     ax.grid(True, alpha=0.3)
@@ -169,7 +177,7 @@ def optimize_z_PI(
     ### Data collection
     positions_um = []
     counts_list = []
-    use_position_feedback = True
+    # use_position_feedback is passed as parameter (default False due to external control mode)
 
     try:
         print(f"Scanning {num_steps} positions...")
@@ -188,14 +196,14 @@ def optimize_z_PI(
                 try:
                     position_um = piezo_server.get_z_position()
                 except Exception as e:
-                    # Fallback: estimate from voltage
-                    position_um = (voltage - 1.0) * 12.5
+                    # Fallback: estimate from voltage (~6.0 µm/V empirically)
+                    position_um = (voltage - 1.0) * 6.0
                     if i == 0:
                         print(f"[Warning] qPOS() failed: {e}")
                         print("Falling back to voltage-based position estimate")
                         use_position_feedback = False
             else:
-                position_um = (voltage - 1.0) * 12.5
+                position_um = (voltage - 1.0) * 6.0
 
             positions_um.append(position_um)
 
@@ -210,8 +218,11 @@ def optimize_z_PI(
             avg_counts = np.mean(samples) if samples else 0
             counts_list.append(avg_counts)
 
-            # Update plot
-            line.set_data(positions_um, counts_list)
+            # Update plot (use voltage for x-axis if no position feedback)
+            if use_position_feedback:
+                line.set_data(positions_um, counts_list)
+            else:
+                line.set_data(voltages[:i+1], counts_list)
             ax.relim()
             ax.autoscale_view()
             plt.pause(0.01)
@@ -236,6 +247,14 @@ def optimize_z_PI(
     voltages_scanned = voltages[: len(counts)]  # In case of early stop
 
     ### Gaussian fit
+    # When position feedback is off, fit voltage directly; otherwise fit position
+    if use_position_feedback:
+        x_data = positions
+        x_label = "µm"
+    else:
+        x_data = voltages_scanned
+        x_label = "V"
+
     opti_voltage = None
     opti_position = None
     fit_params = None
@@ -247,20 +266,20 @@ def optimize_z_PI(
             max_idx = np.argmax(counts)
             offset_guess = np.min(counts)
             amplitude_guess = np.max(counts) - offset_guess
-            center_guess = positions[max_idx]
-            sigma_guess = (positions[-1] - positions[0]) / 4
+            center_guess = x_data[max_idx]
+            sigma_guess = (x_data[-1] - x_data[0]) / 4
 
             guess = [amplitude_guess, center_guess, sigma_guess, offset_guess]
             bounds = (
-                [0, positions[0], 0, 0],
-                [np.inf, positions[-1], np.inf, np.inf],
+                [0, x_data[0], 0, 0],
+                [np.inf, x_data[-1], np.inf, np.inf],
             )
 
             popt, _ = curve_fit(
-                gaussian_1d, positions, counts, p0=guess, bounds=bounds, maxfev=10000
+                gaussian_1d, x_data, counts, p0=guess, bounds=bounds, maxfev=10000
             )
 
-            opti_position = popt[1]
+            opti_center = popt[1]
             fit_params = {
                 "amplitude": float(popt[0]),
                 "center": float(popt[1]),
@@ -269,45 +288,52 @@ def optimize_z_PI(
             }
             fit_success = True
 
-            # Convert position back to voltage
-            # position_um = (voltage - 1.0) * 12.5  =>  voltage = 1.0 + position_um / 12.5
-            opti_voltage = 1.0 + (opti_position / 12.5)
-            opti_voltage = max(1.0, min(9.0, opti_voltage))  # Clamp to safe range
+            if use_position_feedback:
+                opti_position = opti_center
+                # Convert position back to voltage (estimated)
+                opti_voltage = 1.0 + (opti_position / 6.0)
+                opti_voltage = max(1.0, min(9.0, opti_voltage))
+            else:
+                opti_voltage = opti_center
+                opti_voltage = max(1.0, min(9.0, opti_voltage))
+                # Estimate position from voltage
+                opti_position = (opti_voltage - 1.0) * 6.0
 
             # Plot fit curve
-            pos_fit = np.linspace(positions[0], positions[-1], 200)
-            counts_fit = gaussian_1d(pos_fit, *popt)
-            ax.plot(pos_fit, counts_fit, "r-", linewidth=2, label="Gaussian fit")
+            x_fit = np.linspace(x_data[0], x_data[-1], 200)
+            counts_fit = gaussian_1d(x_fit, *popt)
+            ax.plot(x_fit, counts_fit, "r-", linewidth=2, label="Gaussian fit")
             ax.axvline(
-                opti_position,
+                opti_center,
                 color="g",
                 linestyle="--",
                 linewidth=2,
-                label=f"Optimal: {opti_position:.2f} µm",
+                label=f"Optimal: {opti_center:.4f} {x_label}",
             )
             ax.legend(loc="upper right")
 
             print(f"\nGaussian fit successful:")
-            print(f"  Optimal position: {opti_position:.2f} µm")
             print(f"  Optimal voltage: {opti_voltage:.4f} V")
+            if use_position_feedback:
+                print(f"  Optimal position: {opti_position:.2f} µm")
             print(f"  Amplitude: {fit_params['amplitude']:.0f} counts")
-            print(f"  Sigma: {fit_params['sigma']:.2f} µm")
+            print(f"  Sigma: {fit_params['sigma']:.4f} {x_label}")
             print(f"  Offset: {fit_params['offset']:.0f} counts")
 
         except Exception as e:
             print(f"\nGaussian fit failed: {e}")
             print("Using max counts position")
             max_idx = np.argmax(counts)
-            opti_position = positions[max_idx]
             opti_voltage = voltages_scanned[max_idx]
-            print(f"  Max counts at: {opti_position:.2f} µm ({opti_voltage:.3f} V)")
+            opti_position = positions[max_idx]
+            print(f"  Max counts at: {opti_voltage:.4f} V")
 
     else:
         print("\nInsufficient data for fitting, using max counts")
         if len(counts) > 0:
             max_idx = np.argmax(counts)
-            opti_position = positions[max_idx]
             opti_voltage = voltages_scanned[max_idx]
+            opti_position = positions[max_idx]
 
     plt.pause(0.1)
 
@@ -332,9 +358,10 @@ def optimize_z_PI(
         print(f"  Counts at optimal: {opti_counts}")
 
         # Mark on plot
-        if opti_position is not None:
+        if opti_voltage is not None:
+            plot_x = opti_position if use_position_feedback else opti_voltage
             ax.plot(
-                opti_position,
+                plot_x,
                 opti_counts,
                 "g*",
                 markersize=20,
