@@ -921,9 +921,11 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0,0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z =4.00 # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z =4.112 # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # pixel_xy = [0,0]  # galvo ref
-    pixel_xy = [-0.0778 ,  -0.1194 ]  # NV Lovelace ODMR
+    # pixel_xy = [-0.0778 ,  -0.1194 ]  # NV Lovelace ODMR
+    # pixel_xy = [-0.021, -0.052] # zoom picture
+    pixel_xy = [-0.1604, -0.1862] # NV Lovelace
 
     # return
     nv_sig = NVSig(
@@ -961,7 +963,7 @@ if __name__ == "__main__":
         # tool_belt.set_drifts([drift[0], drift[1], 0.0])  # Keep xy
         
         pos.set_xyz_on_nv(nv_sig) # Leave this line out when calibrating z
-        do_optimize_z_PI(nv_sig, voltage_start=3.95, voltage_end=4.15, step_size=0.01)
+        
 
         # do_pulse_gen_constant()
         # do_pulse_gen_constant(digital_channels=(2,))
@@ -1012,6 +1014,7 @@ if __name__ == "__main__":
         # end region Image sample
 
         # region Optimize
+        do_optimize_z_PI(nv_sig, voltage_start=3.95, voltage_end=4.15, step_size=0.01)
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         

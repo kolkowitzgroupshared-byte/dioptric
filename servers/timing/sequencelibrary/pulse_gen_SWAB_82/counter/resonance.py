@@ -9,7 +9,6 @@ from pulsestreamer import Sequence
 from pulsestreamer import OutputState
 import numpy
 import utils.tool_belt as tool_belt
-from utils.tool_belt import States
 
 LOW = 0
 HIGH = 1
@@ -20,7 +19,7 @@ def get_seq(pulse_streamer, config, args):
     # Unpack the args
     readout, state, laser_name, laser_power = args
     
-    state = States(state)
+    # state = States(state)
     pulser_wiring = config['Wiring']['PulseGen']
     sig_gen_name = config['Servers'][f'sig_gen_{state.name}']
     uwave_delay = config['Microwaves'][sig_gen_name]['delay']

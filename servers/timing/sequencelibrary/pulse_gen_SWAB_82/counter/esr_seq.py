@@ -1,32 +1,21 @@
 # -*- coding: utf-8 -*-
 """
-Confocal ESR pulse-streamer sequence (SWAB_82 counter path)
+Confocal ESR pulse-streamer sequence.
 
-Contract:
-  args = [base_args, mw_dur_ns] or [base_args, mw_dur_ns, num_reps_ignored]
+Experiment 0 (signal):
+    pol -> MW ON -> readout
 
-  base_args = [
-      pol_ns,
-      readout_ns,
-      uwave_ind_list,
-      readout_vkey,
-      readout_power,
-      max_mw_dur_ns,   # used only for constant period padding (same idea as max_tau_ns)
-  ]
+Experiment 1 (reference):
+    pol -> MW OFF -> readout
 
-Sequence produces EXACTLY 2 APD gates per repetition:
-  gate0 = signal readout
-  gate1 = reference readout
-
-ESR sweep:
-  - Frequency is swept OUTSIDE this sequence (sig-gen set_freq per step).
-  - Here we just apply a fixed-length MW pulse in the "signal evolution" window.
+This sequence produces EXACTLY 2 APD gates per repetition:
+    gate0 = signal
+    gate1 = reference
 """
 
 import numpy as np
 from pulsestreamer import OutputState, Sequence
 
-from utils import common
 from utils import tool_belt as tb
 from utils.constants import Digital, ModMode, VirtualLaserKey
 
@@ -56,7 +45,7 @@ def _vkey_from_arg(x):
     raise TypeError(f"Bad virtual laser key: {x!r}")
 
 
-def _set_laser_train(seq: Sequence, cfg: dict, readout_vkey: VirtualLaserKey, train, readout_power=None):
+def _set_laser_train(seq, cfg, readout_vkey, train, readout_power=None):
     wiring = cfg["Wiring"]["PulseGen"]
 
     vld = cfg["Optics"]["VirtualLasers"][readout_vkey]
@@ -75,7 +64,7 @@ def _set_laser_train(seq: Sequence, cfg: dict, readout_vkey: VirtualLaserKey, tr
             if "laser_power" not in vld:
                 raise ValueError(
                     f"{readout_vkey} is ANALOG but no readout_power provided and no "
-                    f"'laser_power' in config Optics->VirtualLasers->{readout_vkey}."
+                    f"'laser_power' in config."
                 )
             readout_power = vld["laser_power"]
 
@@ -89,7 +78,6 @@ def _set_laser_train(seq: Sequence, cfg: dict, readout_vkey: VirtualLaserKey, tr
 
 
 def get_seq(pulse_streamer, config, args):
-    # -------- parse args --------
     if len(args) == 3 and isinstance(args[0], (list, tuple)):
         base_args, mw_dur_ns, _num_reps_ignored = args
     elif len(args) == 2 and isinstance(args[0], (list, tuple)):
@@ -108,12 +96,10 @@ def get_seq(pulse_streamer, config, args):
     mw_dur_ns = _as_int64("mw_dur_ns", mw_dur_ns)
     max_mw_dur_ns = _as_int64("max_mw_dur_ns", max_mw_dur_ns)
 
-    # keep constant period by padding to max_mw_dur_ns (like your Rabi code)
     if mw_dur_ns > max_mw_dur_ns:
         max_mw_dur_ns = mw_dur_ns
-    pad_ns = _as_int64("pad_ns", (max_mw_dur_ns - mw_dur_ns))
+    pad_ns = _as_int64("pad_ns", max_mw_dur_ns - mw_dur_ns)
 
-    # normalize uwave_ind_list
     if isinstance(uwave_ind_list, (int, np.integer)):
         uwave_ind_list = [int(uwave_ind_list)]
     else:
@@ -121,13 +107,15 @@ def get_seq(pulse_streamer, config, args):
 
     readout_vkey = _vkey_from_arg(readout_vkey_arg)
 
-    # -------- wiring & delays --------
     wiring = config["Wiring"]["PulseGen"]
     do_apd_gate = wiring["do_apd_gate"]
     do_sample_clock = wiring["do_sample_clock"]
 
     laser_name = config["Optics"]["VirtualLasers"][readout_vkey]["physical_name"]
-    laser_delay = _as_int64("laser_delay", config["Optics"]["PhysicalLasers"][laser_name]["delay"])
+    laser_delay = _as_int64(
+        "laser_delay",
+        config["Optics"]["PhysicalLasers"][laser_name]["delay"],
+    )
 
     uwave_delays = []
     do_sig_gen_dm_list = []
@@ -141,40 +129,71 @@ def get_seq(pulse_streamer, config, args):
     common_delay = np.int64(max(laser_delay, uwave_delay))
     uwave_buffer = _as_int64("uwave_buffer", config["CommonDurations"]["uwave_buffer"])
 
-    # -------- timeline per repetition --------
-    # Same structure as Rabi:
-    #  - signal evolution window: MW ON for mw_dur_ns then OFF for pad_ns
-    #  - reference evolution window: MW OFF for full max_mw_dur_ns
-
+    # gate0 = signal, gate1 = reference
     apd_train = [
         (common_delay, LOW),
+
+        # signal experiment
         (pol_ns, LOW),
         (uwave_buffer, LOW),
         (max_mw_dur_ns, LOW),
         (uwave_buffer, LOW),
         (readout_ns, HIGH),
+
+        # reference experiment
+        (uwave_buffer, LOW),
+        (pol_ns, LOW),
+        (uwave_buffer, LOW),
+        (max_mw_dur_ns, LOW),
+        (uwave_buffer, LOW),
+        (readout_ns, HIGH),
+
+        (uwave_buffer, LOW),
     ]
 
     laser_train = [
         (common_delay - laser_delay, LOW),
+
+        # signal experiment
         (pol_ns, HIGH),
         (uwave_buffer, LOW),
         (max_mw_dur_ns, LOW),
         (uwave_buffer, LOW),
         (readout_ns, HIGH),
+
+        # reference experiment
+        (uwave_buffer, LOW),
+        (pol_ns, HIGH),
+        (uwave_buffer, LOW),
+        (max_mw_dur_ns, LOW),
+        (uwave_buffer, LOW),
+        (readout_ns, HIGH),
+
+        (uwave_buffer + laser_delay, LOW),
     ]
 
     mw_train = [
         (common_delay - uwave_delay, LOW),
+
+        # signal experiment
         (pol_ns, LOW),
         (uwave_buffer, LOW),
-        (mw_dur_ns, HIGH),   # MW ON during signal evolution
-        (pad_ns, LOW),       # pad to max_mw_dur_ns
+        (mw_dur_ns, HIGH),
+        (pad_ns, LOW),
         (uwave_buffer, LOW),
         (readout_ns, LOW),
+
+        # reference experiment
+        (uwave_buffer, LOW),
+        (pol_ns, LOW),
+        (uwave_buffer, LOW),
+        (max_mw_dur_ns, LOW),
+        (uwave_buffer, LOW),
+        (readout_ns, LOW),
+
+        (uwave_buffer + uwave_delay, LOW),
     ]
 
-    # -------- assemble --------
     seq = Sequence()
     seq.setDigital(do_apd_gate, apd_train)
     _set_laser_train(seq, config, readout_vkey, laser_train, readout_power=readout_power)
@@ -184,7 +203,6 @@ def get_seq(pulse_streamer, config, args):
 
     period_ns = np.int64(sum(int(d) for d, _ in apd_train))
 
-    # sample clock: 100 ns pulse near end (if long enough)
     if period_ns >= 300:
         clk_train = [(int(period_ns - 200), LOW), (100, HIGH), (100, LOW)]
     else:
@@ -196,6 +214,8 @@ def get_seq(pulse_streamer, config, args):
 
 
 if __name__ == "__main__":
+    from utils import common
+
     cfg = common.get_config_dict()
 
     pol_ns = 10_000
@@ -203,9 +223,8 @@ if __name__ == "__main__":
     uwave_ind_list = [0]
     readout_vkey = "SPIN_READOUT"
     readout_power = None
-
-    max_mw_dur_ns = 2_00  # e.g. 2 us
-    mw_dur_ns = 1_00      # fixed for ESR
+    max_mw_dur_ns = 2000
+    mw_dur_ns = 2000
 
     base_args = [pol_ns, readout_ns, uwave_ind_list, readout_vkey, readout_power, max_mw_dur_ns]
     seq, final, ret = get_seq(None, cfg, [base_args, mw_dur_ns])
