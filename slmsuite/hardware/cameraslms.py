@@ -409,8 +409,9 @@ class FourierSLM(CameraSLM):
 
         # Make the spot array
         shape = SpotHologram.calculate_padded_shape(
-            self, padding_order=1, square_padding=True
+            self, padding_order=2, square_padding=True
         )
+        print(shape)
         hologram = SpotHologram.make_rectangular_array(
             shape,
             array_shape=array_shape,

@@ -1305,7 +1305,6 @@ def do_charge_quantum_jump(nv_list):
     num_reps = 3000
     charge_monitor.charge_quantum_jump(nv_list, num_reps)
 
-
 def do_opx_constant_ac():
     cxn = common.labrad_connect()
     opx = cxn.QM_opx
@@ -1338,12 +1337,12 @@ def do_opx_constant_ac():
     # opx.stream_start()
 
     # Yellow
-    # opx.constant_ac(
-    #     [],  # Digital channels
-    #     [7],  # Analog channels
-    #     [0.30],  # Analog voltages
-    #     [0],  # Analog frequencies
-    # )
+    opx.constant_ac(
+        [],  # Digital channels
+        [7],  # Analog channels
+        [0.20],  # Analog voltages
+        [0],  # Analog frequencies
+    )
     # opx.constant_ac([4])  # Just laser
     # Red
     # freqs = [65, 75, 85]
@@ -1406,12 +1405,12 @@ def do_opx_constant_ac():
     # )
 
     # Green + yellow
-    opx.constant_ac(
-        [4],  # Digital channels
-        [3, 4, 7],  # Analog channels
-        [0.11, 0.11, 0.30],  # Analog voltages
-        [70, 1, 0],  # Analog frequencies
-    )
+    # opx.constant_ac(
+    #     [4],  # Digital channels
+    #     [3, 4, 7],  # Analog channels
+    #     [0.11, 0.11, 0.30],  # Analog voltages
+    #     [70, 1, 0],  # Analog frequencies
+    # )
     # Red + green + Yellow
     # opx.constant_ac(
     #     [4, 1],  # Digital channels1

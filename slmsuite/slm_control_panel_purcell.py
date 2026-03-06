@@ -91,21 +91,20 @@ def blaze(vector_deg=(0.2, 0.2)):
 
 # region "calibration"
 def fourier_calibration():
-    cam.set_exposure(0.002)  # Increase exposure because power will be split many ways
+    cam.set_exposure(0.0001)  # Increase exposure because power will be split many ways
     fs.fourier_calibrate(
-        array_shape=[30, 18],  # Size of the calibration grid (Nx, Ny) [knm]
-        # array_pitch=[30, 40],  # Pitch of the calibration grid (x, y) [knm]
-        array_pitch=[45, 60],  # Pitch of the calibration grid (x, y) [knm]
+        array_shape=[15, 15],  # Size of the calibration grid (Nx, Ny) [knm]
+        array_pitch=[100, 100],  # Pitch of the calibration grid (x, y) [knm]
         plot=True,
     )
-    # cam.set_exposure(0.01)
+    cam.set_exposure(0.0002)
     # save calibation
     calibration_file = fs.save_fourier_calibration(path="slmsuite/fourier_calibration")
     print("Fourier calibration saved to:", calibration_file)
 
 
 def test_wavefront_calibration():
-    cam.set_exposure(0.001)
+    cam.set_exposure(0.0001)
     movie = fs.wavefront_calibrate(
         interference_point=(600, 400),
         field_point=(0.25, 0),
@@ -139,7 +138,8 @@ def load_fourier_calibration():
     calibration_file_path = (
         # "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00003.h5"
         # "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00006.h5"
-        "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00008.h5"
+        # "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00008.h5"
+        "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00015.h5"
     )
     fs.load_fourier_calibration(calibration_file_path)
     print("Fourier calibration loaded from:", calibration_file_path)
@@ -235,8 +235,8 @@ def circles():
 # region "nv phase calulation"
 def calibration_triangle():
     # Define parameters for the equilateral triangle
-    center = (800, 600)  # Center of the triangle
-    side_length = 600  # Length of each side of the triangle\
+    center = (720, 540)  # Center of the triangle
+    side_length = 300  # Length of each side of the triangle
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
     theta = np.linspace(0, 2 * np.pi, 4)[:-1]  # Exclude the last point to avoid overlap
@@ -247,7 +247,7 @@ def calibration_triangle():
     triangle_points = np.vstack((x_triangle, y_triangle))
     print("thorcam coords:", triangle_points)
     hologram = SpotHologram(
-        shape=(2048, 2048), spot_vectors=triangle_points, basis="ij", cameraslm=fs
+        shape=(4096, 4096), spot_vectors=triangle_points, basis="ij", cameraslm=fs
     )
 
     # Precondition computationally
@@ -406,7 +406,30 @@ def save(data, path, filename):
         os.makedirs(path)
     np.save(os.path.join(path, filename), data)
 
+def calibration_triangle_kxy():
+    r = 0.005
+    theta = np.array([0, 2*np.pi/3, 4*np.pi/3]) + np.pi/6
+    triangle_kxy = np.vstack((r*np.cos(theta), r*np.sin(theta)))
 
+    hologram = SpotHologram(
+        shape=(4096, 4096),
+        spot_vectors=triangle_kxy,
+        basis="kxy",
+        cameraslm=fs,
+    )
+
+    print("converted spots =", hologram.spot_vectors)
+
+    hologram.optimize(
+        "WGS-Kim",
+        maxiter=20,
+        feedback="computational_spot",
+        stat_groups=["computational_spot"],
+    )
+
+    phase = hologram.extract_phase()
+    slm.write(phase, settle=True)
+    
 class DummyCamera:
     """
     Minimal Camera-like object for slmsuite CameraSLM/FourierSLM.
@@ -428,18 +451,19 @@ try:
     slm = ThorSLM()
     # slm = Meadowlark()
     thorcam_shape = (2160, 2880) 
-    cam = DummyCamera(shape=thorcam_shape, name="26438")
-    # cam = ThorCam(serial="26438", verbose=True)
+    # cam = DummyCamera(shape=thorcam_shape, name="26438")
+    cam = ThorCam(serial="26438", verbose=True)
     fs = FourierSLM(cam, slm)
     # cam = tb.get_server_thorcam()
     # slm = tb.get_server_thorslm()
     # fourier_calibration()
-    load_fourier_calibration()
+    # load_fourier_calibration()
     # test_wavefront_calibration()
     # wavefront_calibration()
     # load_wavefront_calibration()
     # compute_and_write_nvs_phase()
-    calibration_triangle()
+    # calibration_triangle()
+    calibration_triangle_kxy()
     # circles()
     # write_pre_computed_circles()
     # smiley()
