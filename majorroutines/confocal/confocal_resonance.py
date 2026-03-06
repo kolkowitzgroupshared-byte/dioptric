@@ -18,6 +18,7 @@ from utils import kplotlib as kpl
 from utils import positioning as positioning
 from utils import tool_belt as tb
 from utils.constants import NormStyle, States
+
 from utils.kplotlib import KplColors
 import utils.data_manager as dm
 from utils import kplotlib as kpl

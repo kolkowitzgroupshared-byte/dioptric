@@ -34,7 +34,7 @@ import majorroutines.confocal.confocal_image_sample as image_sample
 # import majorroutines.confocal.optimize_magnet_angle as optimize_magnet_angle
 # import majorroutines.confocal.pulsed_resonance as pulsed_resonance
 import majorroutines.confocal.confocal_rabi as rabi
-import majorroutines.confocal.confocal_resonance as resonance
+# import majorroutines.confocal.confocal_resonance as resonance
 
 # import majorroutines.confocal.ramsey as ramsey
 # import majorroutines.confocal.resonance as resonance
@@ -921,11 +921,12 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0,0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z =4.112 # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z =4.15 # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # pixel_xy = [0,0]  # galvo ref
     # pixel_xy = [-0.0778 ,  -0.1194 ]  # NV Lovelace ODMR
     # pixel_xy = [-0.021, -0.052] # zoom picture
-    pixel_xy = [-0.1604, -0.1862] # NV Lovelace
+    # pixel_xy = [-0.1604, -0.1862] # NV Lovelace
+    pixel_xy = [ -0.1823,  -0.2755 ] # NV Lovelace
 
     # return
     nv_sig = NVSig(
@@ -996,8 +997,8 @@ if __name__ == "__main__":
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None)
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None):
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
-        do_image_sample(nv_sig)
-        # do_image_sample_zoom(nv_sig)
+        # do_image_sample(nv_sig)
+        do_image_sample_zoom(nv_sig)
 
         # # Quick NV area scans
         # for i in range(10):
