@@ -132,47 +132,25 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_0",
                 "uwave_power": 11.0,
-                "frequency": 2.7752, #49G
-                # "frequency": 2.747151,
-                # "frequency": 2.709799,  #62G
-                # "frequency":2.963189,
-                # "frequency": 2.917151,
-                # "frequency": 2.8082,
-                # "rabi_period": 356,
-                # "pi_pulse": 176,
-                # "pi_on_2_pulse": 88,
-                # "frequency": 2.935030,
-                "rabi_period": 176,
-                "pi_pulse": 88,
-                "pi_on_2_pulse": 24,
+                "frequency": 2.7752,
+                "rabi_period": 256,
+                "pi_pulse": 128,
+                "pi_on_2_pulse": 64,
             },
             1: {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
-                # "frequency": 2.917151,
-                "frequency": 2.8137,#49G
-                # "frequency": 2.77000,#49G
-                # "frequency": 2.982049,
-                # "frequency": 2.828210, 
-                # "frequency": 2.816912, #62G
-                # "frequency": 2.8252,
-                # "rabi_period": 288,
-                # "pi_pulse": 168,
-                # "pi_on_2_pulse": 84,
-                "rabi_period": 176,
-                "pi_pulse": 88,
-                "pi_on_2_pulse": 24,
-                
-                
+                "frequency": 2.8137,
+                "rabi_period": 256,
+                "pi_pulse":128,
+                "pi_on_2_pulse": 64,
             },
             2: {
                 "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 11.0,
                 "frequency": 2.7700,
-                # "frequency": 0.145,
                 "rabi_period": 100,
-                # "pi_pulse": 48,
-                "pi_pulse": 1000,
+                "pi_pulse": 48,
                 "pi_on_2_pulse": 24,
             },
         },
@@ -181,10 +159,10 @@ config |= {
     "Camera": {
         "server_name": "camera_NUVU_hnu512gamma",
         "resolution": (512, 512),
-        "spot_radius": 4.0,  # Radius for integrating NV counts in a camera image
+        "spot_radius": 3.0,  # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
-        "em_gain": 5000,
-        # "em_gain": 10,
+        # "em_gain": 5000,
+        "em_gain": 10,
         "temp": -60,
         "timeout": 60e3,  # ms
         # "timeout": -1,  # No timeout
@@ -193,7 +171,7 @@ config |= {
         "readout_mode": 1,  # 16 for double horizontal readout rate (em mode)
         # "readout_mode": 6,  # Fast conventional
         # "roi": (122, 126, 250, 250),  # offsetX, offsetY, width, height
-        "roi": (142, 122, 256, 256),  # offsetX, offsetY, width, height
+        # "roi": (66, 130, 400, 350),  # offsetX, offsetY, width, height
         # "roi": None,  # offsetX, offsetY, width, height
         "scale": 5 / 0.6,  # pixels / micron
     },
@@ -957,7 +935,7 @@ opx_config = {
     ### Analog
     "waveforms": {
         # Green AOD
-        "green_aod_cw-opti": {"type": "constant", "sample": 0.06},
+        "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
         "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},

@@ -12,6 +12,8 @@ Compatible with your rabi_seq.py contract:
 And rabi_seq produces EXACTLY 2 APD gates per repetition:
   gate0 = signal readout
   gate1 = reference readout
+
+@author: Saroj Chand
 """
 
 import traceback
@@ -25,26 +27,6 @@ from utils import data_manager as dm
 from utils import kplotlib as kpl
 from utils import tool_belt as tb
 from utils.constants import NormMode, VirtualLaserKey
-
-
-# -*- coding: utf-8 -*-
-"""
-majorroutines/confocal/confocal_rabi_postprocess.py
-
-Post-processing for saved confocal Rabi datasets.
-
-Handles both:
-- counts shape (2, runs, steps)  [already aggregated over reps]
-- counts shape (2, runs, steps, reps) [need sum over reps]
-"""
-
-import numpy as np
-import matplotlib.pyplot as plt
-
-from utils import data_manager as dm
-from utils import kplotlib as kpl
-from utils import tool_belt as tb
-from utils.constants import NormMode
 
 
 def _as_array(x):
@@ -394,18 +376,17 @@ def build_base_args(
 def main(
     nv_sig,
     *,
-    num_steps=51,
-    num_reps=20000,
-    num_runs=6,
-    tau_min=0,
-    tau_max=400,
-    uwave_ind=0,
+    num_steps,
+    num_reps,
+    num_runs,
+    tau_min,
+    tau_max,
+    uwave_ind,
     pol_ns=None,
     readout_ns=None,
     readout_vkey=VirtualLaserKey.SPIN_READOUT,
     readout_power=None,
     apd_indices=(0,),
-    norm_mode=NormMode.SINGLE_VALUED,
     do_plot=True,
     do_save=True,
 ):

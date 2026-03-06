@@ -81,8 +81,8 @@ def do_widefield_image_sample(nv_sig, num_reps=1):
 
 
 def do_scanning_image_sample(nv_sig):
-    scan_range = 60
-    num_steps =30
+    scan_range = 15
+    num_steps =15
     image_sample.scanning(nv_sig, scan_range, scan_range, num_steps)
 
 
@@ -97,9 +97,9 @@ def do_red_calibration_image(nv_sig, coords_list, force_laser_key=None, num_reps
 
 
 def do_scanning_image_full_roi(nv_sig):
-    total_range = 20
-    scan_range = 10
-    num_steps = 10
+    total_range = 75
+    scan_range = 15
+    num_steps = 15
     image_sample.scanning_full_roi(nv_sig, total_range, scan_range, num_steps)
 
 
@@ -122,8 +122,8 @@ def do_image_single_nv(nv_sig):
 
 def do_charge_state_histograms(nv_list):
     # 50 ms
-    num_reps = 600
-    num_runs = 1
+    num_reps = 200
+    num_runs = 10
 
     # 100 ms
     # num_reps = 100
@@ -563,15 +563,12 @@ def do_calibrate_iq_delay(nv_list):
 
 def do_resonance(nv_list):
     freq_center = 2.8785
-
     # freq_range = 0.36
     # num_steps = 65
-
     freq_range = 0.260
     num_steps = 45
     num_reps = 4
     num_runs = 200
-    # num_runs = 1
     freqs = calculate_freqs(freq_center, freq_range, num_steps)
     ##
     # Remove duplicates and sort
@@ -584,7 +581,7 @@ def do_resonance(nv_list):
             num_reps,
             num_runs,
             freqs=freqs,
-            uwave_ind_list=[1],
+            uwave_ind_list=[0],
         )
     # for _ in range(2):
     #     resonance.main(nv_list, num_steps, num_reps, num_runs, freqs=freqs)
@@ -709,37 +706,21 @@ def do_rabi(nv_list):
     uwave_ind_list = [0, 1]
     # uwave_ind_list = [2]
     rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
-    # for _ in range(2):
-    #     rabi.main(
-    #         nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
-    #     )
-    # uwave_ind_list = [0]
-    # rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
-    # uwave_ind_list = [1]
-    # rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
 
 
 def do_widefield_coherence_test(nv_list, evol_time, seq_type):
-    # num_reps = 11
     num_reps = 15
     num_runs = 150
     # num_runs = 2
-    # phi_list = np.linspace(0, 360, num_steps)
     # fmt: off
     # phi_list = [0, 45, 90, 135, 180, 225, 270, 315, 360]
     phi_list = [0, 18, 36, 54, 72, 90, 108, 126, 144, 162, 180, 198, 216, 234, 252, 270, 288, 306, 324, 342, 360]
-    # phi_list = [-351, -333, -315, -297, -279, -261, -243, -225, -207, -189, -171, -153, -135, -117, -99, -81, -63, -45, -27, -9, 9, 27, 45, 63, 81, 99, 117, 135, 153, 171, 189, 207, 225, 243, 261, 279, 297, 315, 333, 351]
     # fmt: on
     num_steps = len(phi_list)
     uwave_ind_list = [0, 1]  # both are has iq modulation
     widefield_coherence.main(
         nv_list, num_steps, num_reps, num_runs, phi_list, evol_time, seq_type, uwave_ind_list
     )
-    # for _ in range(2):
-    #     spin_echo_phase_scan_test.main(
-    #         nv_list, num_steps, num_reps, num_runs, min_phi, max_phi, uwave_ind_list
-    #     )
-
 
 def do_ac_stark(nv_list):
     min_tau = 0
@@ -1429,7 +1410,7 @@ def do_opx_constant_ac():
         [4],  # Digital channels
         [3, 4, 7],  # Analog channels
         [0.11, 0.11, 0.30],  # Analog voltages
-        [107, 107, 0],  # Analog frequencies
+        [70, 1, 0],  # Analog frequencies
     )
     # Red + green + Yellow
     # opx.constant_ac(
@@ -1502,9 +1483,9 @@ def piezo_voltage_to_pixel_calibration():
 def load_nv_coords(
     file_path="slmsuite/nv_blob_detection/nv_blob_filtered_multiple_nv302.npz",
     x_min=0,
-    x_max=250,
+    x_max=256,
     y_min=0,
-    y_max=250,
+    y_max=256,
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
@@ -1565,28 +1546,14 @@ if __name__ == "__main__":
     sample_name = "qnami"
     # magnet_angle = 90
     date_str = "2026_02_20"
-    sample_coords = [0.0, 0.2]
-    # z_coord = -1.9
-    z_coord = 0.2
+    sample_coords = [0.9, 0.2]
+    z_coord = 1.
+    # z_coord = -1.0
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
-        # file_path="slmsuite/nv_blob_detection/nv_blob_308nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_254nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_151nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_136nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_118nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_312nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_230nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_223nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_82nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_41nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",
-        file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",
+        file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
+        # file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",
     ).tolist()
-    # pixel_coords_list = [[124.195, 127.341],[16.501, 46.951],[146.942, 239.125],[206.995, 41.423]]
-    # pixel_coords_list = [[124.195, 127.341],[23.53, 23.794], [106.927, 228.008],[225.41, 28.953]]
-    # pixel_coords_list = [[124.195, 127.341],[3.896, 34.475], [138.401, 235.041],[245.444, 3.833]]
 
     green_coords_list = [
         [
@@ -1617,12 +1584,25 @@ if __name__ == "__main__":
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
 
-    # pixel_coords_list = [[119.278, 122.061], [225.135, 23.577], [134.176, 239.977],[21.814, 31.9]]
-    # green_coords_list = [[108.218, 109.384], [86.88, 125.371], [107.788, 87.997], [124.058, 127.528]]
-    # red_coords_list = [    [73.493, 73.426],
-    # [55.488, 85.327],
-    # [73.895, 56.021],
-    # [85.802, 88.986],]
+    pixel_coords_list = [ 
+                         [194.338, 155.68],
+                         [361.956, 11.14],
+                        [214.335, 315.423],
+                        [47.979, 35.184], 
+
+                         ]
+    green_coords_list = [
+                        [107.322, 107.322],
+                        [73.552, 130.534], 
+                        [107.416, 77.811], 
+                        [131.715, 132.311],
+                        ]
+    red_coords_list = [ 
+    [72.833, 71.704],
+    [44.412, 88.841],
+    [73.949, 47.722],
+    [91.893, 93.266],
+                        ]
 
     # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
     # green_coords_list = [[107.85, 108.084],[119.238, 119.6],[111.232, 95.81],[95.925, 118.974]]
@@ -1806,7 +1786,7 @@ if __name__ == "__main__":
         #         print(f"Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         #         do_scanning_image_sample(nv_sig)
 
-        # do_opx_constant_ac()
+        do_opx_constant_ac()
         # do_opx_square_wave()
 
         # do_optimize_pixel(nv_sig)
@@ -1822,14 +1802,15 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
 
-        do_charge_state_histograms(nv_list)
+        # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
         # do_optimize_readout_amp(nv_list)
-
+        # do_optimize_pol_duration(nv_list)
+    
         # do_optimize_readout_duration(nv_list)
         # optimize_readout_amp_and_duration(nv_list)
         # do_optimize_spin_pol_amp(nv_list)

@@ -330,8 +330,8 @@ def get_positioner_stream_fn(positioner, axis_ind):
     if axis_ind == 1:
         stream_fn = server.load_stream_y
     if axis_ind == 2:
-        # stream_fn = server.load_stream_z
-        stream_fn = server.load_scan_z
+        stream_fn = server.load_stream_z
+        # stream_fn = server.load_scan_z
     return stream_fn
 
 

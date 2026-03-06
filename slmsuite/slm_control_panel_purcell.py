@@ -30,7 +30,6 @@ from slmsuite.holography.algorithms import SpotHologram
 warnings.filterwarnings("ignore")
 mpl.rc("image", cmap="Blues")
 
-
 def plot_phase(phase, angle):
     # Initialize the figure and axes outside the loop
     fig, ax = plt.subplots(1, 3, figsize=(15, 5))
@@ -235,11 +234,9 @@ def circles():
 
 # region "nv phase calulation"
 def calibration_triangle():
-    cam.set_exposure(0.1)
-
     # Define parameters for the equilateral triangle
-    center = (720, 600)  # Center of the triangle
-    side_length = 420  # Length of each side of the triangle\
+    center = (800, 600)  # Center of the triangle
+    side_length = 600  # Length of each side of the triangle\
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
     theta = np.linspace(0, 2 * np.pi, 4)[:-1]  # Exclude the last point to avoid overlap
@@ -273,6 +270,35 @@ def calibration_triangle():
     # cam_plot()
 
 
+# def calibration_triangle_kxy():
+#     # Small radius so we stay well within k-space
+#     r = 0.04  # try 0.03–0.12; if too large you’ll hit Nyquist / bounds
+
+#     theta = np.array([0, 2*np.pi/3, 4*np.pi/3]) + np.pi/6
+#     x = r * np.cos(theta)
+#     y = r * np.sin(theta)
+#     triangle_kxy = np.vstack((x, y))  # (2,3)
+
+#     # If you want padding/resolution, compute a padded shape; otherwise slm.shape is fine
+#     shape = slm.shape  # or a padded shape (see Fix 3)
+
+#     hologram = SpotHologram(
+#         shape=shape,
+#         spot_vectors=triangle_kxy,
+#         basis="kxy",
+#         cameraslm=fs,  # OK: used for internal conversions; no camera calls needed
+#     )
+
+#     hologram.optimize(
+#         "WGS-Kim",
+#         maxiter=20,
+#         feedback="computational_spot",
+#         stat_groups=["computational_spot"],
+#     )
+
+#     phase = hologram.extract_phase()
+#     slm.write(phase, settle=True)
+    
 def nuvu2thorcam_calibration(coords):
     """
     Calibrates and transforms coordinates from the Nuvu camera's coordinate system
@@ -309,8 +335,8 @@ def load_nv_coords(
     # file_path="slmsuite/nv_blob_detection/nv_blob_195nvs_reordered.npz",  # johnson
     # file_path="slmsuite/nv_blob_detection/nv_blob_276nvs_reordered.npz",  # johnson
     # file_path="slmsuite/nv_blob_detection/nv_blob_41nvs_reordered.npz",  # cL
-    file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",  # cal
-    # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
+    # file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",  # cal
+    file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
@@ -339,7 +365,7 @@ def compute_and_write_nvs_phase():
         shape=(4096, 2048),
         spot_vectors=thorcam_coords,
         basis="ij",
-        spot_amp=spot_weights,
+        # spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally
@@ -381,10 +407,29 @@ def save(data, path, filename):
     np.save(os.path.join(path, filename), data)
 
 
+class DummyCamera:
+    """
+    Minimal Camera-like object for slmsuite CameraSLM/FourierSLM.
+    Must have: name, shape, get_image().
+    """
+    def __init__(self, shape, name="dummy_cam"):
+        # shape is (H, W) in numpy convention
+        self.shape = tuple(shape)
+        self.name = str(name)
+
+    def get_image(self, *args, **kwargs):
+        raise RuntimeError(
+            "DummyCamera has no hardware attached. "
+            "You called get_image(), which is not allowed in camera-free runtime."
+        )
+
+
 try:
     slm = ThorSLM()
     # slm = Meadowlark()
-    cam = ThorCam(serial="26438", verbose=True)
+    thorcam_shape = (2160, 2880) 
+    cam = DummyCamera(shape=thorcam_shape, name="26438")
+    # cam = ThorCam(serial="26438", verbose=True)
     fs = FourierSLM(cam, slm)
     # cam = tb.get_server_thorcam()
     # slm = tb.get_server_thorslm()
@@ -393,8 +438,8 @@ try:
     # test_wavefront_calibration()
     # wavefront_calibration()
     # load_wavefront_calibration()
-    compute_and_write_nvs_phase()
-    # calibration_triangle()
+    # compute_and_write_nvs_phase()
+    calibration_triangle()
     # circles()
     # write_pre_computed_circles()
     # smiley()
@@ -403,5 +448,5 @@ finally:
     print("Closing")
     slm.close_window()
     slm.close_device()
-    cam.close()
+    # cam.close()
 # endregions
