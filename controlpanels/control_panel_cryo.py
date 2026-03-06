@@ -684,23 +684,19 @@ def do_rabi(nv_sig):
     )
 
 def do_resonance(nv_sig):
-    num_steps = 41
-    num_reps = 2e4
-    num_runs = 30
-    center_freq_ghz=2.8786
-    span_mhz=200         
-    num_steps=101
-    num_reps=20000
-    num_runs=6
-    uwave_ind_list = [0]
     resonance.main(
         nv_sig,
-        center_freq_ghz = center_freq_ghz,
-        span_mhz = span_mhz,
-        num_steps = num_steps,
-        num_reps = num_reps,
-        num_runs = num_runs,
-        uwave_ind_list = uwave_ind_list,
+        center_freq_ghz=2.8786,
+        span_mhz=40.0,
+        num_steps=101,
+        num_reps=20000,
+        num_runs=6,
+        uwave_ind=0,
+        mw_dur_ns=2000,
+        shuffle_freqs=True,
+        shuffle_seed=0,
+        do_save=True,
+        do_plot=True,
     )
 
 # def do_t1_dq(nv_sig):
@@ -944,7 +940,7 @@ if __name__ == "__main__":
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None)
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None):
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
-        # do_image_sample(nv_sig)
+        do_image_sample(nv_sig)
         # do_image_sample_zoom(nv_sig)
 
         # # Quick NV area scans
@@ -984,7 +980,7 @@ if __name__ == "__main__":
         # do_pulsed_re2.sonance_state(nv_sig, States.LOW)
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
         # do_rabi(nv_sig)
-        do_resonance(nv_sig)
+        # do_resonance(nv_sig)
         # do_rabi(nv_sig, uwave_time_range=[0, 400])
         # do_spin_echo(nv_sig)
         # do_g2_measurement(nv_sig, 0, 1)
