@@ -189,8 +189,8 @@ def do_optimize_z_PI(nv_sig, voltage_start, voltage_end, step_size=0.01, num_ave
     """
     Optimize Z position for PI E-709 piezo using voltage scan + Gaussian fit.
 
-    Uses GCS qPOS() to read actual piezo position for accurate feedback.
-    Much simpler than Attocube optimization since PI has hardware position feedback.
+    Scans through the specified voltage range, collects photon counts,
+    fits a Gaussian to find the optimal Z voltage, and moves to the peak.
 
     Parameters
     ----------
@@ -224,13 +224,13 @@ def do_optimize_z_PI(nv_sig, voltage_start, voltage_end, step_size=0.01, num_ave
         num_averages=num_averages,
         move_to_optimal=True,
         save_data=True,
+        use_position_feedback=False,  # qPOS() times out in external control mode
     )
 
     opti_voltage = results.get("opti_voltage")
-    opti_position = results.get("opti_position_um")
     opti_counts = results.get("opti_counts")
 
-    print(f"Z optimization complete: V={opti_voltage:.4f}, Pos={opti_position:.2f}µm")
+    print(f"Z optimization complete: V={opti_voltage:.4f}")
     if opti_counts is not None:
         print(f"  Counts at optimal: {opti_counts}")
 
