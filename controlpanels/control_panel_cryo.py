@@ -921,7 +921,7 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0,0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z =4.00 # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace
+    coord_z =4.00 # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # pixel_xy = [0,0]  # galvo ref
     pixel_xy = [-0.0778 ,  -0.1194 ]  # NV Lovelace ODMR
 
@@ -961,7 +961,7 @@ if __name__ == "__main__":
         # tool_belt.set_drifts([drift[0], drift[1], 0.0])  # Keep xy
         
         pos.set_xyz_on_nv(nv_sig) # Leave this line out when calibrating z
-
+        do_optimize_z_PI(nv_sig, 3.95, 4.15)
 
         # do_pulse_gen_constant()
         # do_pulse_gen_constant(digital_channels=(2,))
@@ -994,7 +994,7 @@ if __name__ == "__main__":
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None)
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None):
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
-        do_image_sample(nv_sig)
+        # do_image_sample(nv_sig)
         # do_image_sample_zoom(nv_sig)
 
         # # Quick NV area scans
