@@ -33,6 +33,7 @@ import majorroutines.confocal.confocal_image_sample as image_sample
 # import majorroutines.confocal.optimize_magnet_angle as optimize_magnet_angle
 # import majorroutines.confocal.pulsed_resonance as pulsed_resonance
 import majorroutines.confocal.confocal_rabi as rabi
+import majorroutines.confocal.confocal_resonance as resonance
 
 # import majorroutines.confocal.ramsey as ramsey
 # import majorroutines.confocal.resonance as resonance
@@ -681,11 +682,26 @@ def do_rabi(nv_sig):
         max_tau,
         uwave_ind_list,
     )
-    # rabi.main(
-    #     nv_sig,
-    # )
-    # nv_sig["rabi_{}".format(state.name)] = period
 
+def do_resonance(nv_sig):
+    num_steps = 41
+    num_reps = 2e4
+    num_runs = 30
+    center_freq_ghz=2.8786
+    span_mhz=200         
+    num_steps=101
+    num_reps=20000
+    num_runs=6
+    uwave_ind_list = [0]
+    resonance.main(
+        nv_sig,
+        center_freq_ghz = center_freq_ghz,
+        span_mhz = span_mhz,
+        num_steps = num_steps,
+        num_reps = num_reps,
+        num_runs = num_runs,
+        uwave_ind_list = uwave_ind_list,
+    )
 
 # def do_t1_dq(nv_sig):
 #     # T1 experiment parameters, formatted:
@@ -968,7 +984,8 @@ if __name__ == "__main__":
         # do_pulsed_re2.sonance_state(nv_sig, States.LOW)
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
         # do_rabi(nv_sig)
-        do_rabi(nv_sig, States.HIGH, uwave_time_range=[0, 400])
+        do_resonance(nv_sig)
+        # do_rabi(nv_sig, uwave_time_range=[0, 400])
         # do_spin_echo(nv_sig)
         # do_g2_measurement(nv_sig, 0, 1)
         # do_determine_standard_readout_params(nv_sig)

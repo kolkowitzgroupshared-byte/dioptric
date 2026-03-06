@@ -364,18 +364,17 @@ def build_base_args(
 def main(
     nv_sig,
     *,
-    center_freq_ghz=2.8786,
-    span_mhz=50.0,          # total span (e.g. 50 MHz sweep => ±25 MHz)
-    num_steps=101,
-    num_reps=20000,
-    num_runs=6,
-    uwave_ind=0,
+    center_freq_ghz,
+    span_mhz,         
+    num_steps,
+    num_reps,
+    num_runs,
+    uwave_ind_list=[0],
     pol_ns=None,
     readout_ns=None,
     readout_vkey=VirtualLaserKey.SPIN_READOUT,
     readout_power=None,
     apd_indices=(0,),
-    norm_mode=NormMode.SINGLE_VALUED,
     do_save=True,
 ):
     kpl.init_kplotlib()
@@ -390,7 +389,7 @@ def main(
         nv_sig,
         pol_ns=pol_ns,
         readout_ns=readout_ns,
-        uwave_ind=uwave_ind,
+        uwave_ind=uwave_ind_list[0],
         readout_vkey=readout_vkey,
         readout_power=readout_power,
         max_freq_ghz=float(np.max(freqs_ghz)),
@@ -401,28 +400,44 @@ def main(
 
     seq_file = "esr_seq.py"
 
-    def step_fn(step_ind: int):
-        f_ghz = float(freqs_ghz[int(step_ind)])
+    ### Collect the data
+    # Assume freqs is a 1D array (GHz) for RF sweep (e.g., 0.120–0.150 GHz)
+    delta = 0.6  # 600 MHz detuning for OFF
+    freqs_on = np.asarray(freqs_ghz, float)
+    freqs_off = freqs_on + delta
 
-        # If your esr_seq.py only needs base_args:
+    # Interleave [on0, off0, on1, off1, ...]
+    freqs_interleaved = np.empty(2 * len(freqs_on), dtype=float)
+    freqs_interleaved[0::2] = freqs_on
+    freqs_interleaved[1::2] = freqs_off
+
+    original_num_steps = len(freqs_interleaved)
+    num_steps = original_num_steps  # no need for ×4 in DEER
+
+    def step_fn(step_ind):
+        # MW (NV) chain: fixed at NV transition; ON for pulses
+        for ind in uwave_ind_list:
+            rf_ind = uwave_ind_list[ind]
+            rf = tb.get_server_sig_gen(rf_ind)
+            rf_dict = tb.get_virtual_sig_gen_dict(rf_ind)
+            rf.set_amp(rf_dict["uwave_power"])  # RF power (dBm) for π_RF
+            rf.set_freq(freqs_interleaved[step_ind])  # GHz
+            rf.uwave_on()  # leave RF CW; OPX gates it with RF_GATE TTL
+
+    def run_fn(step_ind: int):
         seq_args = [base_args]
-        # If it also wants current freq, you can pass it too:
-        # seq_args = [base_args, f_ghz]
-
         seq_args_string = tb.encode_seq_args(seq_args)
-
-        # IMPORTANT: return THIRD value = per-step freq (GHz)
-        return seq_file, seq_args_string, f_ghz
+        return seq_file, seq_args_string,
 
     raw = base.main(
         nv_sig=nv_sig,
         num_steps=int(num_steps),
         num_reps=int(num_reps),
         num_runs=int(num_runs),
-        run_fn=None,
+        run_fn=run_fn,
         step_fn=step_fn,
-        uwave_ind_list=[int(uwave_ind)],
-        num_exps=2,                      # sig + ref
+        uwave_ind_list=uwave_ind_list,
+        num_exps=1,                      # sig + ref
         apd_indices=list(apd_indices),
         load_iq=False,
         stream_load_in_run_fn=False,

@@ -153,11 +153,6 @@ def get_seq(pulse_streamer, config, args):
         (max_mw_dur_ns, LOW),
         (uwave_buffer, LOW),
         (readout_ns, HIGH),
-        (uwave_buffer, LOW),
-        (max_mw_dur_ns, LOW),
-        (uwave_buffer, LOW),
-        (readout_ns, HIGH),
-        (uwave_buffer, LOW),
     ]
 
     laser_train = [
@@ -167,11 +162,6 @@ def get_seq(pulse_streamer, config, args):
         (max_mw_dur_ns, LOW),
         (uwave_buffer, LOW),
         (readout_ns, HIGH),
-        (uwave_buffer, LOW),
-        (max_mw_dur_ns, LOW),
-        (uwave_buffer, LOW),
-        (readout_ns, HIGH),
-        (uwave_buffer + laser_delay, LOW),
     ]
 
     mw_train = [
@@ -182,11 +172,6 @@ def get_seq(pulse_streamer, config, args):
         (pad_ns, LOW),       # pad to max_mw_dur_ns
         (uwave_buffer, LOW),
         (readout_ns, LOW),
-        (uwave_buffer, LOW),
-        (max_mw_dur_ns, LOW),  # reference evolution: MW OFF
-        (uwave_buffer, LOW),
-        (readout_ns, LOW),
-        (uwave_buffer + uwave_delay, LOW),
     ]
 
     # -------- assemble --------
@@ -219,8 +204,8 @@ if __name__ == "__main__":
     readout_vkey = "SPIN_READOUT"
     readout_power = None
 
-    max_mw_dur_ns = 2_000  # e.g. 2 us
-    mw_dur_ns = 2_000      # fixed for ESR
+    max_mw_dur_ns = 2_00  # e.g. 2 us
+    mw_dur_ns = 1_00      # fixed for ESR
 
     base_args = [pol_ns, readout_ns, uwave_ind_list, readout_vkey, readout_power, max_mw_dur_ns]
     seq, final, ret = get_seq(None, cfg, [base_args, mw_dur_ns])
