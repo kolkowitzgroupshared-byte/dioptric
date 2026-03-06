@@ -24,6 +24,7 @@ import numpy as np
 
 import majorroutines.calibration.calibrate_z_axis as calibrate_z_axis
 import majorroutines.calibration.optimize_xy as optimize_xy
+import majorroutines.calibration.optimize_z_PI as optimize_z_PI
 
 # import majorroutines.confocal.determine_standard_readout_params as determine_standard_readout_params
 # import majorroutines.confocal.g2_measurement as g2_measurement
@@ -183,7 +184,60 @@ def do_optimize_z_atto(nv_sig, num_steps=20, step_size=1, scan_direction="down")
 
     return opti_z
 
-# def do_optimize_z_PI(nv_sig, num_steps=20, step_size=1, scan_direction="down"):
+
+def do_optimize_z_PI(nv_sig, voltage_start, voltage_end, step_size=0.01, num_averages=3):
+    """
+    Optimize Z position for PI E-709 piezo using voltage scan + Gaussian fit.
+
+    Uses GCS qPOS() to read actual piezo position for accurate feedback.
+    Much simpler than Attocube optimization since PI has hardware position feedback.
+
+    Parameters
+    ----------
+    nv_sig : NVSig
+        NV center parameters (pulse durations, laser settings)
+    voltage_start : float
+        Starting voltage (V). Required. Must be in range [1.0, 9.0].
+    voltage_end : float
+        Ending voltage (V). Required. Must be in range [1.0, 9.0].
+    step_size : float, optional
+        Voltage step size (V). Default: 0.01V (10mV)
+    num_averages : int, optional
+        Photon count samples per position. Default: 3
+
+    Returns
+    -------
+    float or None
+        Optimal voltage (V), or None if optimization failed
+
+    Examples
+    --------
+    do_optimize_z_PI(nv_sig, 3.90, 4.10)  # 20 steps at 10mV each
+    do_optimize_z_PI(nv_sig, 3.90, 4.02, step_size=0.005)  # Fine: 24 steps at 5mV
+    do_optimize_z_PI(nv_sig, 1.0, 9.0, step_size=0.1)  # Full range: 80 steps
+    """
+    results = optimize_z_PI.optimize_z_PI(
+        nv_sig,
+        voltage_start=voltage_start,
+        voltage_end=voltage_end,
+        step_size=step_size,
+        num_averages=num_averages,
+        move_to_optimal=True,
+        save_data=True,
+    )
+
+    opti_voltage = results.get("opti_voltage")
+    opti_position = results.get("opti_position_um")
+    opti_counts = results.get("opti_counts")
+
+    print(f"Z optimization complete: V={opti_voltage:.4f}, Pos={opti_position:.2f}µm")
+    if opti_counts is not None:
+        print(f"  Counts at optimal: {opti_counts}")
+
+    return opti_voltage
+
+
+# def do_optimize_z_PI(nv_sig, num_steps=20, step_size=1, scan_direction="down"):  # Old placeholder
 
 
 

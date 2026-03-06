@@ -256,6 +256,23 @@ class PosZPiPifoc(LabradServer):
         period = 1e6
         self.load_stream_writer_z(c, "ObjectivePiezo-load_scan_z", coords_z, period)
 
+    @setting(24, returns="v[]")
+    def get_z_position(self, c):
+        """
+        Read actual position from PI E-709 via GCS qPOS().
+
+        Returns the current piezo position in micrometers (µm).
+        The E-709 PIFOC has approximately 100µm travel range.
+
+        Returns
+        -------
+        float
+            Current Z position in micrometers
+        """
+        ordered_dict = self.piezo.qPOS(self.axis)
+        position_um = ordered_dict[str(self.axis)]
+        return position_um
+
 
 __server__ = PosZPiPifoc()
 
