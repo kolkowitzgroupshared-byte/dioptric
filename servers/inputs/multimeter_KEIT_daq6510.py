@@ -70,7 +70,7 @@ class MultimeterKeitDaq6510(LabradServer):
 
         multimeter = self.multimeter
         multimeter.write("*RST")
-        multimeter.write(":FUNCtion 'VOLTage[:DC]', (@{})".format(channel))
+        multimeter.write("SENS:FUNC 'VOLT:DC', (@{})".format(channel))
         multimeter.write(":ROUT:CLOS (@{})".format(channel))
         output = float(multimeter.query(":READ?".format(channel)))
         return output

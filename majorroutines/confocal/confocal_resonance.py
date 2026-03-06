@@ -399,7 +399,7 @@ def main(
     print(f"[ESR] center={center_freq_ghz:.6f} GHz, span={span_mhz:.3f} MHz, steps={num_steps}")
     print(f"[ESR base_args] pol_ns={base_args[0]}, readout_ns={base_args[1]}")
 
-    seq_file = "esr_seq.py"  # <-- your pulse-streamer sequence file
+    seq_file = "esr_seq.py"
 
     def step_fn(step_ind: int):
         f_ghz = float(freqs_ghz[int(step_ind)])

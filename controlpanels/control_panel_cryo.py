@@ -672,19 +672,18 @@ def do_rabi(nv_sig):
     min_tau = 8
     max_tau = 400
     uwave_ind_list = [0]
-# endregion
-    # rabi.main(
-    #     nv_sig,
-    #     num_steps,
-    #     num_reps,
-    #     num_runs,
-    #     min_tau,
-    #     max_tau,
-    #     uwave_ind_list,
-    # )
     rabi.main(
         nv_sig,
+        num_steps,
+        num_reps,
+        num_runs,
+        min_tau,
+        max_tau,
+        uwave_ind_list,
     )
+    # rabi.main(
+    #     nv_sig,
+    # )
     # nv_sig["rabi_{}".format(state.name)] = period
 
 
@@ -947,11 +946,11 @@ if __name__ == "__main__":
         # end region Image sample
 
         # region Optimize
-        do_optimize_z_atto(nv_sig) # z position optimize atto
-        do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
+        # do_optimize_z_atto(nv_sig) # z position optimize atto
+        # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         
         # do_optimize_green(nv_sig) # old optimize xy
-        do_optimize_z_PI(nv_sig) # z position optimize PI (RT Set-up)
+        # do_optimize_z_PI(nv_sig) # z position optimize PI (RT Set-up)
         # do_compensate_for_drift(nv_sig)
         # endregion Optimize
 
@@ -969,7 +968,7 @@ if __name__ == "__main__":
         # do_pulsed_re2.sonance_state(nv_sig, States.LOW)
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
         # do_rabi(nv_sig)
-        # do_rabi(nv_sig, States.HIGH, uwave_time_range=[0, 400])
+        do_rabi(nv_sig, States.HIGH, uwave_time_range=[0, 400])
         # do_spin_echo(nv_sig)
         # do_g2_measurement(nv_sig, 0, 1)
         # do_determine_standard_readout_params(nv_sig)
