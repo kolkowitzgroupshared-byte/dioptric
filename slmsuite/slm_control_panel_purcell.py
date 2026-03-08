@@ -141,7 +141,9 @@ def load_fourier_calibration():
         # "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00008.h5"
         "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00015.h5"
     )
+    
     fs.load_fourier_calibration(calibration_file_path)
+    print(fs.fourier_calibration)
     print("Fourier calibration loaded from:", calibration_file_path)
 
 
@@ -235,8 +237,8 @@ def circles():
 # region "nv phase calulation"
 def calibration_triangle():
     # Define parameters for the equilateral triangle
-    center = (720, 540)  # Center of the triangle
-    side_length = 300  # Length of each side of the triangle
+    center = (705, 550)  # Center of the triangle
+    side_length = 200  # Length of each side of the triangle
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
     theta = np.linspace(0, 2 * np.pi, 4)[:-1]  # Exclude the last point to avoid overlap
@@ -247,7 +249,7 @@ def calibration_triangle():
     triangle_points = np.vstack((x_triangle, y_triangle))
     print("thorcam coords:", triangle_points)
     hologram = SpotHologram(
-        shape=(4096, 4096), spot_vectors=triangle_points, basis="ij", cameraslm=fs
+        shape=(2048, 2048), spot_vectors=triangle_points, basis="ij", cameraslm=fs
     )
 
     # Precondition computationally
@@ -305,11 +307,11 @@ def nuvu2thorcam_calibration(coords):
     to the Thorlabs camera's coordinate system using an affine transformation.
     """
     cal_coords_thorcam = np.array(
-        [[1083.730,   810.0], [356.269,  810.0], [720.0, 180.0]], dtype="float32"
+        [[878.205,   650. ], [531.794,  650. ], [705.0, 350.]], dtype="float32"
     )
 
     cal_coords_nuvu = np.array(
-        [[221.653, 245.996], [205.716, 10.727], [9.537, 141.33]], dtype="float32"
+        [[368.607, 368.881], [341.824, 18.206], [49.004, 217.328]] , dtype="float32"
     )
     # Compute the affine transformation matrix
     M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
@@ -446,24 +448,28 @@ class DummyCamera:
             "You called get_image(), which is not allowed in camera-free runtime."
         )
 
-
 try:
     slm = ThorSLM()
     # slm = Meadowlark()
-    thorcam_shape = (2160, 2880) 
+    # thorcam_shape = (2160, 2880) 
     # cam = DummyCamera(shape=thorcam_shape, name="26438")
     cam = ThorCam(serial="26438", verbose=True)
     fs = FourierSLM(cam, slm)
     # cam = tb.get_server_thorcam()
     # slm = tb.get_server_thorslm()
     # fourier_calibration()
-    # load_fourier_calibration()
+    load_fourier_calibration()
     # test_wavefront_calibration()
     # wavefront_calibration()
     # load_wavefront_calibration()
     # compute_and_write_nvs_phase()
+    # calibrate_slm_to_emccd_grid(
+    # center_xy=(720, 540),
+    # pitch_xy=(80, 80),
+    # grid_shape=(7, 7),
+    # hologram_shape=(4096, 4096))
     # calibration_triangle()
-    calibration_triangle_kxy()
+    # calibration_triangle_kxy()
     # circles()
     # write_pre_computed_circles()
     # smiley()

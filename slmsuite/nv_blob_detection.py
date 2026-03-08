@@ -28,48 +28,7 @@ def gaussian_2d(xy, amplitude, xo, yo, sigma_x, sigma_y, theta, offset):
     )
     return g.ravel()
 
-
-# # Fit a 2D Gaussian to a local region of the image data and return FWHM
-# def fit_gaussian_2d_local(image, center, size=10):
-#     x0, y0 = center
-#     x_min, x_max = int(x0 - size), int(x0 + size)
-#     y_min, y_max = int(y0 - size), int(y0 + size)
-
-#     x_min = max(x_min, 0)
-#     x_max = min(x_max, image.shape[1])
-#     y_min = max(y_min, 0)
-#     y_max = min(y_max, image.shape[0])
-
-#     local_image = image[y_min:y_max, x_min:x_max]
-
-#     x = np.arange(x_min, x_max)
-#     y = np.arange(y_min, y_max)
-#     x, y = np.meshgrid(x, y)
-
-#     initial_guess = (
-#         local_image.max(),
-#         x0,
-#         y0,
-#         1,
-#         1,
-#         0,
-#         np.min(local_image),
-#     )
-
-#     try:
-#         popt, _ = curve_fit(gaussian_2d, (x, y), local_image.ravel(), p0=initial_guess)
-#         amplitude, xo, yo, sigma_x, sigma_y, theta, offset = popt
-
-#         # Calculate FWHM in pixels for both x and y directions
-#         fwhm_x = 2.355 * sigma_x  # FWHM = 2.355 * sigma
-#         fwhm_y = 2.355 * sigma_y
-
-#         return (round(xo, 3), round(yo, 3)), (fwhm_x, fwhm_y), popt
-#     except RuntimeError:
-#         return center, (None, None), None
-
-
-def fit_gaussian_2d_local(image, center, size=12, maxfev=20000):
+def fit_gaussian_2d(image, center, size=12, maxfev=20000):
     """
     size = half-size of the patch in pixels (so patch is ~2*size x 2*size)
     """
@@ -169,7 +128,7 @@ def detect_nv_coordinates_blob(
             fit_size = max(8, int(2 * integration_radius))   # good default
             # or: fit_size = max(10, int(2.5 * sigma))
 
-            optimized_coord, fwhm, _ = fit_gaussian_2d_local(smoothed_img, (x, y), size=fit_size)
+            optimized_coord, fwhm, _ = fit_gaussian_2d(smoothed_img, (x, y), size=fit_size)
 
             # Perform Gaussian fitting and get the FWHM
             # optimized_coord, fwhm, _ = fit_gaussian_2d_local(img_array, (x, y), size=3)
@@ -202,6 +161,237 @@ def detect_nv_coordinates_blob(
 
     return optimized_coords, integrated_counts, spot_sizes
 
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+from scipy.ndimage import gaussian_filter, binary_dilation
+from scipy.spatial import cKDTree
+from skimage.draw import disk
+from skimage.feature import peak_local_max
+
+from utils import kplotlib as kpl
+
+
+def local_hex_metrics(points_xy, d_min=4.5, d_max=8.5):
+    """
+    For each point:
+      - count neighbors in the first lattice shell
+      - compute hexagonal bond-order parameter |psi6|
+
+    For a good interior hex point:
+      - nn_count is usually ~3-6
+      - |psi6| is relatively high
+    """
+    if len(points_xy) == 0:
+        return np.array([]), np.array([])
+
+    tree = cKDTree(points_xy)
+    nn_count = np.zeros(len(points_xy), dtype=int)
+    psi6 = np.zeros(len(points_xy), dtype=float)
+
+    for i, p in enumerate(points_xy):
+        idx = tree.query_ball_point(p, r=d_max + 0.25)
+        idx = [j for j in idx if j != i]
+        if len(idx) == 0:
+            continue
+
+        vec = points_xy[idx] - p
+        dist = np.linalg.norm(vec, axis=1)
+
+        keep = (dist >= d_min) & (dist <= d_max)
+        vec = vec[keep]
+
+        nn_count[i] = len(vec)
+
+        if len(vec) >= 2:
+            ang = np.arctan2(vec[:, 1], vec[:, 0])
+            psi6[i] = np.abs(np.mean(np.exp(1j * 6 * ang)))
+        else:
+            psi6[i] = 0.0
+
+    return nn_count, psi6
+
+
+def detect_nv_coordinates_hex(
+    img_array,
+    # detection
+    dog_sigma_small=0.9,
+    dog_sigma_large=3.2,
+    min_distance=3,
+    peak_threshold_abs=0.35,
+    # Gaussian refinement
+    fit_size=8,
+    # local lattice filter
+    d_min=4.5,
+    d_max=8.5,
+    min_neighbors=2,
+    psi6_min=0.30,
+    # broad-wall / boundary rejection
+    wall_sigma=6.0,
+    wall_percentile=93,
+    wall_dilate_iters=3,
+    # optional extra filters
+    min_amp=0.0,
+    max_sigma_px=4.0,
+    show_debug=True,
+):
+    """
+    Better detector for dense hex-like NV arrays with boundaries.
+
+    Strategy:
+      1) bandpass image with DoG
+      2) liberal peak detection (includes weak spots)
+      3) Gaussian-fit each candidate
+      4) reject broad bright boundary-wall regions
+      5) keep only candidates that live in a locally hex-like neighborhood
+    """
+
+    img = img_array.astype(float)
+
+    # --------------------------------------------------------
+    # 1) bandpass / DoG image
+    # --------------------------------------------------------
+    img_small = gaussian_filter(img, dog_sigma_small)
+    img_large = gaussian_filter(img, dog_sigma_large)
+    dog = img_small - img_large
+
+    # --------------------------------------------------------
+    # 2) broad-wall / boundary mask
+    #    These bright thick walls are NOT the small NV spots.
+    # --------------------------------------------------------
+    low = gaussian_filter(img, wall_sigma)
+    wall_thresh = np.percentile(low, wall_percentile)
+    wall_mask = low > wall_thresh
+    wall_mask = binary_dilation(wall_mask, iterations=wall_dilate_iters)
+
+    # --------------------------------------------------------
+    # 3) liberal peak detection
+    #    Much better than blob_log here for your dense lattice.
+    # --------------------------------------------------------
+    peak_rc = peak_local_max(
+        dog,
+        min_distance=min_distance,
+        threshold_abs=peak_threshold_abs,
+        exclude_border=False,
+    )
+
+    # --------------------------------------------------------
+    # 4) Gaussian refinement + basic fit quality info
+    # --------------------------------------------------------
+    refined_xy = []
+    amp_list = []
+    bg_list = []
+    sigma_list = []
+    raw_rc_keep = []
+
+    for r, c in peak_rc:
+        # reject immediately if candidate lies on broad wall
+        if wall_mask[r, c]:
+            continue
+
+        optimized_coord, fwhm, popt = fit_gaussian_2d(img, (c, r), size=fit_size)
+
+        if popt is None:
+            continue
+
+        amp, xo_l, yo_l, sx, sy, theta, offset = popt
+        sigma_mean = 0.5 * (sx + sy)
+
+        # simple fit sanity cuts
+        if amp < min_amp:
+            continue
+        if sigma_mean <= 0 or sigma_mean > max_sigma_px:
+            continue
+
+        refined_xy.append(optimized_coord)
+        amp_list.append(amp)
+        bg_list.append(offset)
+        sigma_list.append(sigma_mean)
+        raw_rc_keep.append((r, c))
+
+    if len(refined_xy) == 0:
+        return np.empty((0, 2)), [], [], {}
+
+    refined_xy = np.array(refined_xy, dtype=float)
+    amp_list = np.array(amp_list, dtype=float)
+    bg_list = np.array(bg_list, dtype=float)
+    sigma_list = np.array(sigma_list, dtype=float)
+    raw_rc_keep = np.array(raw_rc_keep, dtype=int)
+
+    # --------------------------------------------------------
+    # 5) local hex-order filter
+    #    This is what lets weak in-between spots survive,
+    #    while noise / wall / boundary junk gets removed.
+    # --------------------------------------------------------
+    nn_count, psi6 = local_hex_metrics(refined_xy, d_min=d_min, d_max=d_max)
+
+    keep = (
+        (nn_count >= min_neighbors) &
+        (psi6 >= psi6_min)
+    )
+
+    final_xy = refined_xy[keep]
+    final_amp = amp_list[keep]
+    final_sigma = sigma_list[keep]
+
+    # --------------------------------------------------------
+    # 6) integrated counts on original image
+    # --------------------------------------------------------
+    integrated_counts = []
+    spot_sizes = []
+
+    integration_radius = 2
+    for x, y in final_xy:
+        rr, cc = disk((y, x), integration_radius, shape=img.shape)
+        integrated_counts.append(np.sum(img[rr, cc]))
+        # convert sigma_mean -> approximate FWHM if desired
+        spot_sizes.append((2.355 * final_sigma[len(spot_sizes)],
+                           2.355 * final_sigma[len(spot_sizes)]))
+
+    integrated_counts = np.array(integrated_counts, dtype=float)
+    spot_sizes = np.array(spot_sizes, dtype=float)
+
+    debug = {
+        "dog": dog,
+        "low": low,
+        "wall_mask": wall_mask,
+        "all_peak_rc": peak_rc,
+        "refined_xy_all": refined_xy,
+        "nn_count_all": nn_count,
+        "psi6_all": psi6,
+        "keep_mask_after_hex": keep,
+    }
+
+    # --------------------------------------------------------
+    # 7) debug plot
+    # --------------------------------------------------------
+    if show_debug:
+        fig, ax = plt.subplots(figsize=(7, 7))
+        kpl.imshow(ax, img, title="NV detection: hex-aware", cbar_label="Photons")
+        ax.set_title("Hex-aware NV detection")
+        ax.axis("off")
+
+        # show rejected refined points faintly
+        rejected_xy = refined_xy[~keep]
+        if len(rejected_xy) > 0:
+            ax.scatter(
+                rejected_xy[:, 0], rejected_xy[:, 1],
+                s=12, facecolors="none", edgecolors="cyan", linewidths=0.6, alpha=0.35
+            )
+
+        # show final kept points strongly
+        if len(final_xy) > 0:
+            ax.scatter(
+                final_xy[:, 0], final_xy[:, 1],
+                s=20, facecolors="none", edgecolors="lime", linewidths=0.9
+            )
+
+        # optional wall overlay
+        yy, xx = np.where(wall_mask)
+        ax.scatter(xx, yy, s=1, c="magenta", alpha=0.04)
+
+    return final_xy, integrated_counts, spot_sizes, debug
 
 # Save the results to a file
 def save_results(
@@ -380,28 +570,39 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
     # Load the image data
     data = dm.get_raw_data(
-        file_stem="2026_03_05-08_55_37-combined_image_array", load_npz=True
+        file_stem="2026_03_07-18_40_05-combined_image_array", load_npz=True
     )
     # img_array = np.array(data["ref_img_array"])
-    img_array = np.array(data["img_array"])
-
+    # img_array = np.array(data["img_array"])
+    # final_xy, integrated_counts, spot_sizes, debug = detect_nv_coordinates_hex(
+    #     img_array,
+    #     peak_threshold_abs=0.035,   # much lower than your old threshold=15
+    #     d_min=4.5,
+    #     d_max=8.5,
+    #     min_neighbors=2,
+    #     psi6_min=0.30,
+    #     wall_percentile=93,
+    #     wall_dilate_iters=3,
+    #     fit_size=8,
+    #     show_debug=True,
+    # )
     # Apply the blob detection and Gaussian fitting
-    sigma = 2.0
-    lower_threshold = 0.01
-    upper_threshold = None
-    smoothing_sigma = 0.0
-    integration_radius= 2
-    nv_coordinates, integrated_counts, spot_sizes = detect_nv_coordinates_blob(
-        img_array,
-        sigma=sigma,
-        lower_threshold=lower_threshold,
-        upper_threshold=upper_threshold,
-        smoothing_sigma=smoothing_sigma,
-        integration_radius=integration_radius,
-    )
-    filtered_nv_coords = nv_coordinates
-    filtered_counts = integrated_counts
-    # # List to store valid NV coordinates after filtering
+    # sigma = 2.0
+    # lower_threshold = 0.001
+    # upper_threshold = None
+    # smoothing_sigma = 0.0
+    # integration_radius= 2
+    # nv_coordinates, integrated_counts, spot_sizes = detect_nv_coordinates_blob(
+    #     img_array,
+    #     sigma=sigma,
+    #     lower_threshold=lower_threshold,
+    #     upper_threshold=upper_threshold,
+    #     smoothing_sigma=smoothing_sigma,
+    #     integration_radius=integration_radius,
+    # )
+    # filtered_nv_coords = nv_coordinates
+    # filtered_counts = integrated_counts
+    # List to store valid NV coordinates after filtering
     # filtered_nv_coords = []
     # filtered_counts = []
     # # Iterate through detected NV coordinates and apply distance filtering
@@ -427,8 +628,8 @@ if __name__ == "__main__":
     #     zip(filtered_nv_coords, filtered_counts), start=1
     # ):
     #     print(f"NV {idx}: {coord}, {count}:.2f")
-    # # Plotting the results
-    # # Verify if reversing coordinates resolves the offset
+    # Plotting the results
+    # Verify if reversing coordinates resolves the offset
     # default_radius = 2
     # fig, ax = plt.subplots()
     # title = "24ms, Ref"
@@ -451,7 +652,7 @@ if __name__ == "__main__":
 
     kpl.show(block=True)
 
-    print(f"Detected NV coordinates (optimized): {len(filtered_nv_coords)}")
+    # print(f"Detected NV coordinates (optimized): {len(filtered_nv_coords)}")
 
     # Save the results
     # save_results(
@@ -462,5 +663,5 @@ if __name__ == "__main__":
     # )
 
     # full ROI -- multiple images save in the same file
-    process_scan_file(file_stem="2026_03_04-23_42_24-qnami-nv0_2026_02_20")
+    process_scan_file(file_stem="2026_03_07-19_18_36-qnami-nv0_2026_02_20")
     # process_scan_file(file_stem="2026_03_05-09_46_19-qnami-nv0_2026_02_20")
