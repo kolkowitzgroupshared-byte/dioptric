@@ -32,9 +32,9 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
-calibration_coords_pixel = [[225.135, 23.577], [134.176, 239.977],[21.814, 31.9]]
-calibration_coords_green = [[86.88, 125.371], [107.788, 87.997], [124.058, 127.528]]
-calibration_coords_red = [[55.488, 85.327],[73.895, 56.021], [85.802, 88.986]]
+calibration_coords_pixel = [[386.275, 34.97],[236.116, 394.016],[49.773, 62.002]]
+calibration_coords_green = [[66.33, 126.711], [99.67, 64.663],[127.352, 127.155]]
+calibration_coords_red = [[38.643, 85.363],[68.08, 36.638],[88.508, 88.851]]
 
 # calibration_coords_pixel = [[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
 # calibration_coords_green = [[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
@@ -80,8 +80,8 @@ config |= {
     # Common durations are in ns
     "CommonDurations": {
         "default_pulse_duration": 1000,
-        # "aod_access_time":2.6e3,  # access time in specs is 10us
-        "aod_access_time":8e3,  # access time in specs is 10us
+        "aod_access_time":2.6e3,  # access time in specs is 10us
+        # "aod_access_time":8e3,  # access time in specs is 10us
         "widefield_operation_buffer": 1e3,
         "uwave_buffer": 0,
         "iq_buffer": 0,
@@ -952,7 +952,7 @@ opx_config = {
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2267}, #118NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.34947}, ## 312NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3257}, ## 205NV johnson
-        "yellow_charge_readout": {"type": "constant", "sample": 0.20}, ## 195NV johnson
+        "yellow_charge_readout": {"type": "constant", "sample": 0.33}, ## 195NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3084}, ## 223NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},

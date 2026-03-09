@@ -1340,7 +1340,7 @@ def do_opx_constant_ac():
     opx.constant_ac(
         [],  # Digital channels
         [7],  # Analog channels
-        [0.35],  # Analog voltages
+        [0.15],  # Analog voltages
         [0],  # Analog frequencies
     )
     # opx.constant_ac([4])  # Just laser
@@ -1412,12 +1412,12 @@ def do_opx_constant_ac():
     #     [99, 99, 0],  # Analog frequencies
     # )
     # Red + green + Yellow
-    # opx.constant_ac(
-    #     [4, 1],  # Digital channels1
-    #     [3, 4, 2, 6, 7],  # Analog channels
-    #     [0.08, 0.08, 0.08, 0.08, 0.35],  # Analog voltages
-    #     [99, 99, 64, 64, 0],  # Analog frequencies
-    # )
+    opx.constant_ac(
+        [4, 1],  # Digital channels1
+        [3, 4, 2, 6, 7],  # Analog channels
+        [0.08, 0.08, 0.08, 0.08, 0.35],  # Analog voltages
+        [99, 99, 64, 64, 0],  # Analog frequencies
+    )
     input("Press enter to stop...")
     # sig_gen.uwave_off()
 
@@ -1545,13 +1545,14 @@ if __name__ == "__main__":
     sample_name = "qnami"
     # magnet_angle = 90
     date_str = "2026_02_20"
-    sample_coords = [0.0, 0.2]
-    z_coord = 0.5
+    sample_coords = [0.05, 0.4]
+    z_coord = 1.0
     # z_coord = -1.6
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
-        file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
+        # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
         # file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",
+        file_path="slmsuite/nv_blob_detection/nv_blob_4892nvs_reordered.npz",
     ).tolist()
 
     green_coords_list = [
@@ -1584,28 +1585,27 @@ if __name__ == "__main__":
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
 
     pixel_coords_list = [ 
-                        [219.964, 203.919],
-                        [386.275, 34.97],
+                        [231.394, 236.113],
+                        [97.737, 96.409],
                         [236.116, 394.016],
                         [49.773, 62.002], 
                          ]
     green_coords_list = [
-                        [99.048, 98.746], 
+                        [97.766, 96.493], 
                         [66.33, 126.711], 
                         [99.67, 64.663],
                         [127.352, 127.155],
                         ]
     red_coords_list = [ 
-                        [72.833, 71.704],
-                        [44.412, 88.841],
-                        [73.949, 47.722],
-                        [91.893, 93.266],
+                    [66.372, 64.31],
+                    [38.643, 85.363],
+                    [68.08, 36.638],
+                    [88.508, 88.851],
                         ]
 
     # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
     # green_coords_list = [[107.85, 108.084],[119.238, 119.6],[111.232, 95.81],[95.925, 118.974]]
     # red_coords_list = [[73.238, 72.351],[82.142, 82.295],[76.435, 62.548],[63.107, 80.591]]
-
 
     ###
     num_nvs = len(pixel_coords_list)
@@ -1701,8 +1701,8 @@ if __name__ == "__main__":
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
-    # nv_sig.expected_counts = 4500
-    nv_sig.expected_counts = 15000
+    # nv_sig.expected_counts = 3300
+    # nv_sig.expected_counts = 15000
     # nv_sig.expected_counts = 1300
     # nv_sig.expected_counts = 1250
     # nv_sig.expected_counts = 1800
@@ -1753,7 +1753,7 @@ if __name__ == "__main__":
 
         # do_scanning_image_sample(nv_sig)
         # do_scanning_image_sample_zoom(nv_sig)
-        do_scanning_image_full_roi(nv_sig)
+        # do_scanning_image_full_roi(nv_sig)
 
         # scan_equilateral_triangle(nv_sig, center_co1ord=sample_coords, radius=0.4)
         # do_image_nv_list(nv_list)
@@ -1788,7 +1788,7 @@ if __name__ == "__main__":
         # do_opx_square_wave()
 
         # do_optimize_pixel(nv_sig)
-        # do_optimize_green(nv_sig)
+        do_optimize_green(nv_sig)
         # repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
         # do_optimize_red(nv_sig, repr_nv_sig)
         # do_optimize_z(nv_sig)
@@ -1827,8 +1827,8 @@ if __name__ == "__main__":
         # do_spin_echo_phase_scan_test(nv_list)  # for iq mod test
         # evol_time_list = [18000, 19600, 21000]
 
-        # evol_time_list = [16]  # ns
-        # seq_types = ["hahn", "xy4", "xy8"]  # or add "ramsey", "xy16"
+        # evol_time_list = [16]
+        # seq_types = ["hahn", "xy4", "xy8"]
         # for seq_type in seq_types:
         #     for evol_time in evol_time_list:
         #         print(f"Running {seq_type} at evol_time={evol_time} ns")

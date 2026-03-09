@@ -178,7 +178,7 @@ def evaluate_uniformity(vectors=None, size=25):
 def circles():
     cam.set_exposure(0.1)
     center = (750, 530)  # Center of the circle
-    radii = np.linspace(50, 200, num=4)  # Adjust the number of circles as needed
+    radii = np.linspace(10, 60, num=4)  # Adjust the number of circles as needed
     circle_points = []
     for radius in radii:
         num_points = int(2 * np.pi * radius / 60)
@@ -338,7 +338,8 @@ def load_nv_coords(
     # file_path="slmsuite/nv_blob_detection/nv_blob_276nvs_reordered.npz",  # johnson
     # file_path="slmsuite/nv_blob_detection/nv_blob_41nvs_reordered.npz",  # cL
     # file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",  # cal
-    file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
+    # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
+    file_path="slmsuite/nv_blob_detection/nv_blob_4892nvs_reordered.npz",  # 
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
@@ -348,24 +349,12 @@ def load_nv_coords(
     return nv_coordinates, spot_weights
 
 nuvu_pixel_coords, spot_weights = load_nv_coords()
-# nuvu_pixel_coords = np.array(
-#     [
-#         [124.195, 127.341],
-#         [6.768, 210.203],
-#         [239.681, 215.048],
-#         [123.376, 19.656],
-#     ]
-# )
-# spot_weights = np.array([0.8, 1.0, 1.0, 1.0])
-print(f"Total NV coordinates: {len(nuvu_pixel_coords)}")
-thorcam_coords = nuvu2thorcam_calibration(nuvu_pixel_coords).T
-# sys.exit()
+thorcam_coords_xy = nuvu2thorcam_calibration(nuvu_pixel_coords).T
 
-{}
 def compute_and_write_nvs_phase():
     hologram = SpotHologram(
         shape=(4096, 2048),
-        spot_vectors=thorcam_coords,
+        spot_vectors=thorcam_coords_xy,
         basis="ij",
         # spot_amp=spot_weights,
         cameraslm=fs,
@@ -391,6 +380,38 @@ def compute_and_write_nvs_phase():
     slm.write(initial_phase, settle=True)
     # cam_plot()
 
+# def compute_and_write_nvs_phase(spot_vectors_ij, nuvu_pixel_coords, spot_weights, comp_shape):
+#     print("Inside compute_and_write_nvs_phase")
+#     print("spot_vectors_ij shape:", spot_vectors_ij.shape)
+#     print("i min/max:", spot_vectors_ij[0].min(), spot_vectors_ij[0].max())
+#     print("j min/max:", spot_vectors_ij[1].min(), spot_vectors_ij[1].max())
+
+#     hologram = SpotHologram(
+#         shape=comp_shape,
+#         spot_vectors=spot_vectors_ij,
+#         basis="ij",
+#         # spot_amp=spot_weights,
+#         cameraslm=fs,
+#     )
+
+#     hologram.optimize(
+#         "WGS-Kim",
+#         maxiter=30,
+#         feedback="computational_spot",
+#         stat_groups=["computational_spot"],
+#     )
+
+#     initial_phase = hologram.extract_phase()
+
+#     file_path = r"slmsuite\computed_phase"
+#     num_nvs = len(nuvu_pixel_coords)
+#     now = datetime.now()
+#     date_time_str = now.strftime("%Y%m%d_%H%M%S")
+#     filename = f"slm_phase_{num_nvs}nvs_{date_time_str}.npy"
+
+#     save(initial_phase, file_path, filename)
+#     slm.write(initial_phase, settle=True)
+    
 def write_pre_computed_nvs_phase():
     phase = np.load("slmsuite\computed_phase\slm_phase_75nvs_20250605_181402.npy")
     slm.write(phase, settle=True)
@@ -463,11 +484,6 @@ try:
     # wavefront_calibration()
     # load_wavefront_calibration()
     # compute_and_write_nvs_phase()
-    # calibrate_slm_to_emccd_grid(
-    # center_xy=(720, 540),
-    # pitch_xy=(80, 80),
-    # grid_shape=(7, 7),
-    # hologram_shape=(4096, 4096))
     # calibration_triangle()
     # calibration_triangle_kxy()
     # circles()

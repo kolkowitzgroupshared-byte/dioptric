@@ -553,19 +553,19 @@ if __name__ == "__main__":
     # data = dm.get_raw_data(file_id=1806222218365, load_npz=False)
     # data = dm.get_raw_data(file_id=1806227898070, load_npz=False)
     # data = dm.get_raw_data(file_id=1806410973406, load_npz=False)
-    # data = dm.get_raw_data(
-    #     file_stem="2025_10_23-17_31_05-johnson-nv0_2025_10_21", load_npz=True
-    # )
-    # process_and_plot(data, do_plot_histograms=True)
     data = dm.get_raw_data(
-        file_stem="2026_03_02-17_30_11-qnami-nv0_2026_02_20", load_npz=True
-    )
-    out = analyze_nv122_ref_only(data, nv_num=122, ref_axis=1)
-    compare_readout_sets(
-        file_stems=["2026_03_02-17_30_11-qnami-nv0_2026_02_20"],
-        readout_ms=[50],          # <-- must match length
-        nv_num=122,
-        ref_axis=1,
+        file_stem="2025_10_23-17_31_05-johnson-nv0_2025_10_21", load_npz=True
     )
     # process_and_plot(data, do_plot_histograms=True)
+    # data = dm.get_raw_data(
+    #     file_stem="pti_x, opti_y", load_npz=True
+    # )
+    # out = analyze_nv122_ref_only(data, nv_num=122, ref_axis=1)
+    # compare_readout_sets(
+    #     file_stems=["2026_03_02-17_30_11-qnami-nv0_2026_02_20"],
+    #     readout_ms=[50],          # <-- must match length
+    #     nv_num=122,
+    #     ref_axis=1,
+    # )
+    process_and_plot(data, do_plot_histograms=False)
     kpl.show(block=True)
