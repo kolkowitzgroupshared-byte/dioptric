@@ -837,6 +837,9 @@ if __name__ == "__main__":
         "2026_02_19-22_39_18-rubin-nv0_2026_02_15",
     ]
     ####QNami
+    file_ids = [
+        "2026_03_04-14_45_10-qnami-nv0_2026_02_20",
+    ]
     
     # Load the first dataset as a base
     combined_data = dm.get_raw_data(

@@ -97,8 +97,8 @@ def do_red_calibration_image(nv_sig, coords_list, force_laser_key=None, num_reps
 
 
 def do_scanning_image_full_roi(nv_sig):
-    total_range = 75
-    scan_range = 15
+    total_range = 72
+    scan_range = 9
     num_steps = 15
     image_sample.scanning_full_roi(nv_sig, total_range, scan_range, num_steps)
 
@@ -1305,7 +1305,6 @@ def do_charge_quantum_jump(nv_list):
     num_reps = 3000
     charge_monitor.charge_quantum_jump(nv_list, num_reps)
 
-
 def do_opx_constant_ac():
     cxn = common.labrad_connect()
     opx = cxn.QM_opx
@@ -1338,12 +1337,12 @@ def do_opx_constant_ac():
     # opx.stream_start()
 
     # Yellow
-    # opx.constant_ac(
-    #     [],  # Digital channels
-    #     [7],  # Analog channels
-    #     [0.30],  # Analog voltages
-    #     [0],  # Analog frequencies
-    # )
+    opx.constant_ac(
+        [],  # Digital channels
+        [7],  # Analog channels
+        [0.15],  # Analog voltages
+        [0],  # Analog frequencies
+    )
     # opx.constant_ac([4])  # Just laser
     # Red
     # freqs = [65, 75, 85]
@@ -1406,19 +1405,19 @@ def do_opx_constant_ac():
     # )
 
     # Green + yellow
-    opx.constant_ac(
-        [4],  # Digital channels
-        [3, 4, 7],  # Analog channels
-        [0.11, 0.11, 0.30],  # Analog voltages
-        [70, 1, 0],  # Analog frequencies
-    )
-    # Red + green + Yellow
     # opx.constant_ac(
-    #     [4, 1],  # Digital channels1
-    #     [3, 4, 2, 6, 7],  # Analog channels
-    #     [0.19, 0.19, 0.17, 0.17, 0.25],  # Analog voltages
-    #     [107, 107, 72, 72, 0],  # Analog frequencies
+    #     [4],  # Digital channels
+    #     [3, 4, 7],  # Analog channels
+    #     [0.11, 0.11, 0.30],  # Analog voltages
+    #     [99, 99, 0],  # Analog frequencies
     # )
+    # Red + green + Yellow
+    opx.constant_ac(
+        [4, 1],  # Digital channels1
+        [3, 4, 2, 6, 7],  # Analog channels
+        [0.08, 0.08, 0.08, 0.08, 0.35],  # Analog voltages
+        [99, 99, 64, 64, 0],  # Analog frequencies
+    )
     input("Press enter to stop...")
     # sig_gen.uwave_off()
 
@@ -1452,10 +1451,10 @@ def compile_speed_test(nv_list):
 
 def piezo_voltage_to_pixel_calibration():
     cal_voltage_coords = np.array(
-        [[0.4, 0.2], [-0.1999, 0.5464], [-0.2, -0.1464]], dtype="float32"
+        [(1.1, 0.2), (0.20000000000000012, 0.7196152422706632), (0.19999999999999973, -0.319615242270663)], dtype="float32"
     )
     cal_pixel_coords = np.array(
-        [[135.141, 117.788], [97.234, 144.799], [92.568, 98.422]], dtype="float32"
+        [[247.886, 242.951], [234.037, 253.065], [232.579, 236.378]], dtype="float32"
     )
     # Compute the affine transformation matrix
     M = cv2.getAffineTransform(cal_voltage_coords, cal_pixel_coords)
@@ -1483,9 +1482,9 @@ def piezo_voltage_to_pixel_calibration():
 def load_nv_coords(
     file_path="slmsuite/nv_blob_detection/nv_blob_filtered_multiple_nv302.npz",
     x_min=0,
-    x_max=256,
+    x_max=450,
     y_min=0,
-    y_max=256,
+    y_max=450,
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
@@ -1546,13 +1545,14 @@ if __name__ == "__main__":
     sample_name = "qnami"
     # magnet_angle = 90
     date_str = "2026_02_20"
-    sample_coords = [0.9, 0.2]
-    z_coord = 1.
-    # z_coord = -1.0
+    sample_coords = [-0.5, -0.2]
+    z_coord = 1.1
+    # z_coord = -1.8
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
-        file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
+        # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
         # file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",
+        file_path="slmsuite/nv_blob_detection/nv_blob_4966nvs_reordered.npz",
     ).tolist()
 
     green_coords_list = [
@@ -1584,30 +1584,26 @@ if __name__ == "__main__":
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
 
-    pixel_coords_list = [ 
-                         [194.338, 155.68],
-                         [361.956, 11.14],
-                        [214.335, 315.423],
-                        [47.979, 35.184], 
+#     pixel_coords_list = [ 
+#                         [231.012, 236.029],
+#                         [389.856, 58.163],
+#                         [247.463, 418.465],
+#                         [52.964, 83.962]]
+#     green_coords_list = [[97.766, 96.493], 
+#                         [66.156, 126.437], 
+#                         [97.996, 63.61],
+#                         [127.079, 126.63]]
+#     red_coords_list = [
+#     [65.403, 62.413],
+#     [38.51, 85.132],
+#     [66.749, 35.697],
+#     [88.304, 88.41],
+# ]
 
-                         ]
-    green_coords_list = [
-                        [107.322, 107.322],
-                        [73.552, 130.534], 
-                        [107.416, 77.811], 
-                        [131.715, 132.311],
-                        ]
-    red_coords_list = [ 
-    [72.833, 71.704],
-    [44.412, 88.841],
-    [73.949, 47.722],
-    [91.893, 93.266],
-                        ]
 
     # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
     # green_coords_list = [[107.85, 108.084],[119.238, 119.6],[111.232, 95.81],[95.925, 118.974]]
     # red_coords_list = [[73.238, 72.351],[82.142, 82.295],[76.435, 62.548],[63.107, 80.591]]
-
 
     ###
     num_nvs = len(pixel_coords_list)
@@ -1703,20 +1699,20 @@ if __name__ == "__main__":
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
-    # nv_sig.expected_counts = 4500
-    # nv_sig.expected_counts = 13000
+    nv_sig.expected_counts = 3300
+    # nv_sig.expected_counts = 15000
     # nv_sig.expected_counts = 1300
     # nv_sig.expected_counts = 1250
     # nv_sig.expected_counts = 1800
 
     # nv_list = nv_list[::-1]  # flipping the order of NVs
-    # nv_list = nv_list[:1]
+    nv_list = nv_list[:4094]
     print(f"length of NVs list:{len(nv_list)}")
     # sys.exit()
     # endregion
 
     # region Functions to run
-    email_recipient = "mccambria@berkeley.edu"
+    email_recipient = "schand@berkeley.edu"
     do_email = False
     try:
         # this is to create a flag that tell expt is runnig
@@ -1732,11 +1728,11 @@ if __name__ == "__main__":
         # piezo_voltage_to_pixel_calibration()
 
         ### warning: this direclty iamge the laser spo, boftfor starign this makesure the red laser so set to 1mw on GUI
-        ### ⚠️ CAUTION: direct laser imaging, check power
-        ### ⚠️ CAUTION Set RED ≈ 0.1 mW • Exposure ≤ 0.1ms • Low em gain ≤ 10 / ND filter if needed
+        ### CAUTION: direct laser imaging, check power
+        ### CAUTION Set RED ≈ 0.1 mW • Exposure ≤ 0.1ms • Low em gain ≤ 10 / ND filter if needed
         # do_red_calibration_image(
         #     nv_sig,
-        #     red_coords_list,
+        #     red_coords_list, 
         #     force_laser_key=VirtualLaserKey.RED_IMAGIN,
         # )
         # do_compensate_for_drift(nv_sig)
@@ -1747,8 +1743,8 @@ if __name__ == "__main__":
         # )
 
         # do_compensate_for_drift(nv_sig)
-        # do_widefield_image_sample(nv_sig, 50)
-        # do_widefield_image_sample(nv_sig, 200)
+        do_widefield_image_sample(nv_sig, 50)
+        # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list:
         #     do_scanning_image_sample_zoom(nv)
@@ -1757,7 +1753,7 @@ if __name__ == "__main__":
         # do_scanning_image_sample_zoom(nv_sig)
         # do_scanning_image_full_roi(nv_sig)
 
-        # scan_equilateral_triangle(nv_sig, center_co1ord=sample_coords, radius=0.4)
+        # scan_equilateral_triangle(nv_sig, center_coord=sample_coords, radius=0.6)
         # do_image_nv_list(nv_list)
         # do_image_single_nv(nv_sig)
         # z_range = np.linspace(0, 3.0, 31)
@@ -1786,7 +1782,7 @@ if __name__ == "__main__":
         #         print(f"Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         #         do_scanning_image_sample(nv_sig)
 
-        do_opx_constant_ac()
+        # do_opx_constant_ac()
         # do_opx_square_wave()
 
         # do_optimize_pixel(nv_sig)
@@ -1829,8 +1825,8 @@ if __name__ == "__main__":
         # do_spin_echo_phase_scan_test(nv_list)  # for iq mod test
         # evol_time_list = [18000, 19600, 21000]
 
-        # evol_time_list = [16]  # ns
-        # seq_types = ["hahn", "xy4", "xy8"]  # or add "ramsey", "xy16"
+        # evol_time_list = [16]
+        # seq_types = ["hahn", "xy4", "xy8"]
         # for seq_type in seq_types:
         #     for evol_time in evol_time_list:
         #         print(f"Running {seq_type} at evol_time={evol_time} ns")

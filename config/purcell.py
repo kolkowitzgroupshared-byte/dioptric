@@ -32,9 +32,9 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
-calibration_coords_pixel = [[225.135, 23.577], [134.176, 239.977],[21.814, 31.9]]
-calibration_coords_green = [[86.88, 125.371], [107.788, 87.997], [124.058, 127.528]]
-calibration_coords_red = [[55.488, 85.327],[73.895, 56.021], [85.802, 88.986]]
+calibration_coords_pixel = [[389.856, 58.163],[247.463, 418.465],[52.964, 83.962]]
+calibration_coords_green = [[66.156, 126.437], [97.996, 63.61],[127.079, 126.63]]
+calibration_coords_red = [[38.51, 85.132], [66.749, 35.697],[88.304, 88.41]]
 
 # calibration_coords_pixel = [[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
 # calibration_coords_green = [[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
@@ -59,10 +59,15 @@ calibration_coords_nv3 = {
     red_laser_aod: calibration_coords_red[2],
 }
 
+# pixel_to_sample_affine_transformation_matrix = [
+#     [0.01476835, -0.00148369, -1.42104908],
+#     [0.00140560, 0.01479702, -1.73286644],
+# ]
 pixel_to_sample_affine_transformation_matrix = [
-    [0.01476835, -0.00148369, -1.42104908],
-    [0.00140560, 0.01479702, -1.73286644],
+    [0.06108861, -0.00533755, -12.74624750],    
+    [0.00748424, 0.06162394, -16.62683414],  
 ]
+
 # endregion
 # region Base config
 # Add on to the default config
@@ -161,8 +166,8 @@ config |= {
         "resolution": (512, 512),
         "spot_radius": 3.0,  # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
-        # "em_gain": 5000,
-        "em_gain": 10,
+        "em_gain": 5000,
+        # "em_gain": 10,
         "temp": -60,
         "timeout": 60e3,  # ms
         # "timeout": -1,  # No timeout
@@ -171,7 +176,7 @@ config |= {
         "readout_mode": 1,  # 16 for double horizontal readout rate (em mode)
         # "readout_mode": 6,  # Fast conventional
         # "roi": (122, 126, 250, 250),  # offsetX, offsetY, width, height
-        # "roi": (66, 130, 400, 350),  # offsetX, offsetY, width, height
+        "roi": (40, 45, 450, 450),  # offsetX, offsetY, width, height
         # "roi": None,  # offsetX, offsetY, width, height
         "scale": 5 / 0.6,  # pixels / micron
     },
@@ -281,7 +286,7 @@ config |= {
                 "delay": int(1e6),  # 5 ms for PIFOC xyz
                 "nm_per_unit": 1000,
                 # "optimize_range": 0.09,
-                "optimize_range": 0.4,
+                "optimize_range": 0.8,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
@@ -289,7 +294,7 @@ config |= {
                 "control_mode": PosControlMode.SEQUENCE,
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
-                "optimize_range": 2.2,
+                "optimize_range": 1.6,
                 "units": "MHz",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
                 "aod": True,
@@ -304,6 +309,7 @@ config |= {
                 "aod": True,
             },
         },
+        "optimize_num_steps": 20,
         "calibration_coords_nv1": calibration_coords_nv1,
         "calibration_coords_nv2": calibration_coords_nv2,
         "calibration_coords_nv3": calibration_coords_nv3,
@@ -945,13 +951,13 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.20},
+        "yellow_imaging": {"type": "constant", "sample": 0.33},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2675},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2367}, #136NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2267}, #118NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.34947}, ## 312NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3257}, ## 205NV johnson
-        "yellow_charge_readout": {"type": "constant", "sample": 0.20}, ## 195NV johnson
+        "yellow_charge_readout": {"type": "constant", "sample": 0.33}, ## 195NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3084}, ## 223NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
@@ -1076,8 +1082,6 @@ def build_phase_sweep(min_deg=-360, max_deg=360, step_deg=9):
     phases_unwrapped = np.arange(min_deg, max_deg + 1e-9, step_deg, dtype=int)  # -360..360
     phases_cmd = (phases_unwrapped % 360)  # wrap to [0,360)
     return phases_unwrapped.tolist(), phases_cmd.tolist()
-
-
 
 # ref_img_array = np.array([])
 # generate_iq_pulses(["pi_pulse", "pi_on_2_pulse"], [0, 90, 180, 270])

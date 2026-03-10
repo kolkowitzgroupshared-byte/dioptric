@@ -379,24 +379,24 @@ def main(
         keys_to_compress = None
 
     # Histograms
-    try:
-        hist_figs = process_and_plot(raw_data, do_plot_histograms=do_plot_histograms)
-        # Save
-        if hist_figs is not None:
-            num_nvs = len(nv_list)
-            for nv_ind in range(num_nvs):
-                fig = hist_figs[nv_ind]
-                nv_sig = nv_list[nv_ind]
-                nv_name = nv_sig.name
-                file_path = dm.get_file_path(__file__, timestamp, nv_name)
-                dm.save_figure(fig, file_path)
-    except Exception:
-        print(traceback.format_exc())
+    # try:
+    #     hist_figs = process_and_plot(raw_data, do_plot_histograms=do_plot_histograms)
+    #     # Save
+    #     if hist_figs is not None:
+    #         num_nvs = len(nv_list)
+    #         for nv_ind in range(num_nvs):
+    #             fig = hist_figs[nv_ind]
+    #             nv_sig = nv_list[nv_ind]
+    #             nv_name = nv_sig.name
+    #             file_path = dm.get_file_path(__file__, timestamp, nv_name)
+    #             dm.save_figure(fig, file_path)
+    # except Exception:
+    #     print(traceback.format_exc())
 
-    try:
-        del raw_data["img_arrays"]
-    except Exception:
-        pass
+    # try:
+    #     del raw_data["img_arrays"]
+    # except Exception:
+    #     pass
 
     ### Save raw data
 
@@ -553,19 +553,19 @@ if __name__ == "__main__":
     # data = dm.get_raw_data(file_id=1806222218365, load_npz=False)
     # data = dm.get_raw_data(file_id=1806227898070, load_npz=False)
     # data = dm.get_raw_data(file_id=1806410973406, load_npz=False)
-    # data = dm.get_raw_data(
-    #     file_stem="2025_10_23-17_31_05-johnson-nv0_2025_10_21", load_npz=True
-    # )
-    # process_and_plot(data, do_plot_histograms=True)
     data = dm.get_raw_data(
-        file_stem="2026_03_02-17_30_11-qnami-nv0_2026_02_20", load_npz=True
-    )
-    out = analyze_nv122_ref_only(data, nv_num=122, ref_axis=1)
-    compare_readout_sets(
-        file_stems=["2026_03_02-17_30_11-qnami-nv0_2026_02_20"],
-        readout_ms=[50],          # <-- must match length
-        nv_num=122,
-        ref_axis=1,
+        file_stem="2025_10_23-17_31_05-johnson-nv0_2025_10_21", load_npz=True
     )
     # process_and_plot(data, do_plot_histograms=True)
+    # data = dm.get_raw_data(
+    #     file_stem="pti_x, opti_y", load_npz=True
+    # )
+    # out = analyze_nv122_ref_only(data, nv_num=122, ref_axis=1)
+    # compare_readout_sets(
+    #     file_stems=["2026_03_02-17_30_11-qnami-nv0_2026_02_20"],
+    #     readout_ms=[50],          # <-- must match length
+    #     nv_num=122,
+    #     ref_axis=1,
+    # )
+    process_and_plot(data, do_plot_histograms=False)
     kpl.show(block=True)
