@@ -379,24 +379,24 @@ def main(
         keys_to_compress = None
 
     # Histograms
-    try:
-        hist_figs = process_and_plot(raw_data, do_plot_histograms=do_plot_histograms)
-        # Save
-        if hist_figs is not None:
-            num_nvs = len(nv_list)
-            for nv_ind in range(num_nvs):
-                fig = hist_figs[nv_ind]
-                nv_sig = nv_list[nv_ind]
-                nv_name = nv_sig.name
-                file_path = dm.get_file_path(__file__, timestamp, nv_name)
-                dm.save_figure(fig, file_path)
-    except Exception:
-        print(traceback.format_exc())
+    # try:
+    #     hist_figs = process_and_plot(raw_data, do_plot_histograms=do_plot_histograms)
+    #     # Save
+    #     if hist_figs is not None:
+    #         num_nvs = len(nv_list)
+    #         for nv_ind in range(num_nvs):
+    #             fig = hist_figs[nv_ind]
+    #             nv_sig = nv_list[nv_ind]
+    #             nv_name = nv_sig.name
+    #             file_path = dm.get_file_path(__file__, timestamp, nv_name)
+    #             dm.save_figure(fig, file_path)
+    # except Exception:
+    #     print(traceback.format_exc())
 
-    try:
-        del raw_data["img_arrays"]
-    except Exception:
-        pass
+    # try:
+    #     del raw_data["img_arrays"]
+    # except Exception:
+    #     pass
 
     ### Save raw data
 

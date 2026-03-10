@@ -1451,10 +1451,10 @@ def compile_speed_test(nv_list):
 
 def piezo_voltage_to_pixel_calibration():
     cal_voltage_coords = np.array(
-        [[0.4, 0.2], [-0.1999, 0.5464], [-0.2, -0.1464]], dtype="float32"
+        [(1.1, 0.2), (0.20000000000000012, 0.7196152422706632), (0.19999999999999973, -0.319615242270663)], dtype="float32"
     )
     cal_pixel_coords = np.array(
-        [[135.141, 117.788], [97.234, 144.799], [92.568, 98.422]], dtype="float32"
+        [[247.886, 242.951], [234.037, 253.065], [232.579, 236.378]], dtype="float32"
     )
     # Compute the affine transformation matrix
     M = cv2.getAffineTransform(cal_voltage_coords, cal_pixel_coords)
@@ -1482,9 +1482,9 @@ def piezo_voltage_to_pixel_calibration():
 def load_nv_coords(
     file_path="slmsuite/nv_blob_detection/nv_blob_filtered_multiple_nv302.npz",
     x_min=0,
-    x_max=256,
+    x_max=450,
     y_min=0,
-    y_max=256,
+    y_max=450,
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
@@ -1545,14 +1545,14 @@ if __name__ == "__main__":
     sample_name = "qnami"
     # magnet_angle = 90
     date_str = "2026_02_20"
-    sample_coords = [0.05, 0.4]
-    z_coord = 1.0
-    # z_coord = -1.6
+    sample_coords = [-0.5, -0.2]
+    z_coord = 1.1
+    # z_coord = -1.8
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
         # file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",
-        file_path="slmsuite/nv_blob_detection/nv_blob_4892nvs_reordered.npz",
+        file_path="slmsuite/nv_blob_detection/nv_blob_4966nvs_reordered.npz",
     ).tolist()
 
     green_coords_list = [
@@ -1584,24 +1584,22 @@ if __name__ == "__main__":
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
 
-    pixel_coords_list = [ 
-                        [231.394, 236.113],
-                        [97.737, 96.409],
-                        [236.116, 394.016],
-                        [49.773, 62.002], 
-                         ]
-    green_coords_list = [
-                        [97.766, 96.493], 
-                        [66.33, 126.711], 
-                        [99.67, 64.663],
-                        [127.352, 127.155],
-                        ]
-    red_coords_list = [ 
-                    [66.372, 64.31],
-                    [38.643, 85.363],
-                    [68.08, 36.638],
-                    [88.508, 88.851],
-                        ]
+#     pixel_coords_list = [ 
+#                         [231.012, 236.029],
+#                         [389.856, 58.163],
+#                         [247.463, 418.465],
+#                         [52.964, 83.962]]
+#     green_coords_list = [[97.766, 96.493], 
+#                         [66.156, 126.437], 
+#                         [97.996, 63.61],
+#                         [127.079, 126.63]]
+#     red_coords_list = [
+#     [65.403, 62.413],
+#     [38.51, 85.132],
+#     [66.749, 35.697],
+#     [88.304, 88.41],
+# ]
+
 
     # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
     # green_coords_list = [[107.85, 108.084],[119.238, 119.6],[111.232, 95.81],[95.925, 118.974]]
@@ -1701,20 +1699,20 @@ if __name__ == "__main__":
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
-    # nv_sig.expected_counts = 3300
+    nv_sig.expected_counts = 3300
     # nv_sig.expected_counts = 15000
     # nv_sig.expected_counts = 1300
     # nv_sig.expected_counts = 1250
     # nv_sig.expected_counts = 1800
 
     # nv_list = nv_list[::-1]  # flipping the order of NVs
-    # nv_list = nv_list[:1]
+    nv_list = nv_list[:4094]
     print(f"length of NVs list:{len(nv_list)}")
     # sys.exit()
     # endregion
 
     # region Functions to run
-    email_recipient = "mccambria@berkeley.edu"
+    email_recipient = "schand@berkeley.edu"
     do_email = False
     try:
         # this is to create a flag that tell expt is runnig
@@ -1734,7 +1732,7 @@ if __name__ == "__main__":
         ### CAUTION Set RED ≈ 0.1 mW • Exposure ≤ 0.1ms • Low em gain ≤ 10 / ND filter if needed
         # do_red_calibration_image(
         #     nv_sig,
-        #     red_coords_list,
+        #     red_coords_list, 
         #     force_laser_key=VirtualLaserKey.RED_IMAGIN,
         # )
         # do_compensate_for_drift(nv_sig)
@@ -1744,9 +1742,9 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_compensate_for_drift(nv_sig)
-        # do_widefield_image_sample(nv_sig, 50)
-        # do_widefield_image_sample(nv_sig, 200)
+        # do_compensate_for_drift(nv_sig)
+        do_widefield_image_sample(nv_sig, 50)
+        # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list:
         #     do_scanning_image_sample_zoom(nv)
@@ -1755,7 +1753,7 @@ if __name__ == "__main__":
         # do_scanning_image_sample_zoom(nv_sig)
         # do_scanning_image_full_roi(nv_sig)
 
-        # scan_equilateral_triangle(nv_sig, center_co1ord=sample_coords, radius=0.4)
+        # scan_equilateral_triangle(nv_sig, center_coord=sample_coords, radius=0.6)
         # do_image_nv_list(nv_list)
         # do_image_single_nv(nv_sig)
         # z_range = np.linspace(0, 3.0, 31)
@@ -1788,7 +1786,7 @@ if __name__ == "__main__":
         # do_opx_square_wave()
 
         # do_optimize_pixel(nv_sig)
-        do_optimize_green(nv_sig)
+        # do_optimize_green(nv_sig)
         # repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
         # do_optimize_red(nv_sig, repr_nv_sig)
         # do_optimize_z(nv_sig)

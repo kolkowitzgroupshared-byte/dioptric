@@ -32,9 +32,9 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
-calibration_coords_pixel = [[386.275, 34.97],[236.116, 394.016],[49.773, 62.002]]
-calibration_coords_green = [[66.33, 126.711], [99.67, 64.663],[127.352, 127.155]]
-calibration_coords_red = [[38.643, 85.363],[68.08, 36.638],[88.508, 88.851]]
+calibration_coords_pixel = [[389.856, 58.163],[247.463, 418.465],[52.964, 83.962]]
+calibration_coords_green = [[66.156, 126.437], [97.996, 63.61],[127.079, 126.63]]
+calibration_coords_red = [[38.51, 85.132], [66.749, 35.697],[88.304, 88.41]]
 
 # calibration_coords_pixel = [[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
 # calibration_coords_green = [[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
@@ -59,10 +59,15 @@ calibration_coords_nv3 = {
     red_laser_aod: calibration_coords_red[2],
 }
 
+# pixel_to_sample_affine_transformation_matrix = [
+#     [0.01476835, -0.00148369, -1.42104908],
+#     [0.00140560, 0.01479702, -1.73286644],
+# ]
 pixel_to_sample_affine_transformation_matrix = [
-    [0.01476835, -0.00148369, -1.42104908],
-    [0.00140560, 0.01479702, -1.73286644],
+    [0.06108861, -0.00533755, -12.74624750],    
+    [0.00748424, 0.06162394, -16.62683414],  
 ]
+
 # endregion
 # region Base config
 # Add on to the default config
@@ -161,8 +166,8 @@ config |= {
         "resolution": (512, 512),
         "spot_radius": 3.0,  # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
-        # "em_gain": 5000,
-        "em_gain": 10,
+        "em_gain": 5000,
+        # "em_gain": 10,
         "temp": -60,
         "timeout": 60e3,  # ms
         # "timeout": -1,  # No timeout

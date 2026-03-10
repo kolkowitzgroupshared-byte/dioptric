@@ -604,10 +604,10 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_07-20_01_14-combined_image_array", load_npz=True
-        file_stem="2026_03_08-11_19_47-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_03_09-15_58_05-combined_image_array", load_npz=True
     )
-    img_array = np.array(data["ref_img_array"])
-    # img_array = data["img_array"]
+    # img_array = np.array(data["ref_img_array"])
+    img_array = data["img_array"]
     nv_coordinates, spot_weights = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_327nvs.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_308nvs_reordered.npz"
@@ -623,7 +623,7 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz" ##CAL
         # file_path="slmsuite/nv_blob_detection/nv_blob_237nvs.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz"
-        file_path="slmsuite/nv_blob_detection/nv_blob_6588nvs.npz"
+        file_path="slmsuite/nv_blob_detection/nv_blob_6837nvs.npz"
     )
 
     # Convert coordinates to a standard format (lists of lists)
@@ -667,7 +667,7 @@ if __name__ == "__main__":
     # Filter and reorder NV coordinates based on reference NV
     # integrated_intensities = []
     sigma = 2.0
-    reference_nv = [219.964, 203.919]
+    reference_nv = [231.012, 236.029]
     # reference_nv = nv_coordinates[0]
     # reference_nv =  [125.948, 142.238] ## CAl 
     # 
@@ -981,11 +981,11 @@ if __name__ == "__main__":
     # Calculate the spot weights based on the integrated intensities
     # spot_weights = non_linear_weights(filtered_intensities, alpha=0.9)
 
-    # Save the filtered results
+    # # Save the filtered results
     # save_results(
     #     filtered_reordered_coords,
     #     filtered_reordered_spot_weights,
-    #     filename="slmsuite/nv_blob_detection/nv_blob_4892nvs_reordered.npz",
+    #     filename="slmsuite/nv_blob_detection/nv_blob_4966nvs_reordered.npz",
     # )
 
     # # Plot the original image with circles around each NV
@@ -993,9 +993,9 @@ if __name__ == "__main__":
     title = "LASER_589, 50ms Ref"
     kpl.imshow(ax, img_array, title=title, cbar_label="Estimated Photons")
     # Draw circles and index numbers
-    # for idx, coord in enumerate(filtered_reordered_coords):
-    #     circ = plt.Circle(coord, sigma, color="lightblue", fill=False, linewidth=0.5)
-    #     ax.add_patch(circ)
+    for idx, coord in enumerate(filtered_reordered_coords):
+        circ = plt.Circle(coord, sigma, color="lightblue", fill=False, linewidth=0.5)
+        ax.add_patch(circ)
         # Place text just above the circle
         # ax.text(
         #     coord[0],
