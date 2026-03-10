@@ -132,11 +132,11 @@ config |= {
         "VirtualSigGens": {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
-                "uwave_power": 6.0,
+                "uwave_power": 6,
                 "frequency": 2.8785,
                 "rabi_period": 144,
-                "pi_pulse": 72,
-                "pi_on_2_pulse": 36,
+                "pi_pulse": 300,
+                "pi_on_2_pulse": 150,
             },
             # sig gen 1 is iq molulated
             1: {
