@@ -560,10 +560,10 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
     # Load the image data
     data = dm.get_raw_data(
-        file_stem="2026_03_09-15_58_05-combined_image_array", load_npz=True
+        file_stem="2026_03_11-01_36_16-qnami-nv0_2026_02_20", load_npz=True
     )
-    # img_array = np.array(data["ref_img_array"])
-    img_array = np.array(data["img_array"])
+    img_array = np.array(data["ref_img_array"])
+    # img_array = np.array(data["img_array"])
     # final_xy, integrated_counts, spot_sizes, debug = detect_nv_coordinates_hex(
     #     img_array,
     #     peak_threshold_abs=0.035,   # much lower than your old threshold=15
@@ -592,6 +592,7 @@ if __name__ == "__main__":
     )
     filtered_nv_coords = nv_coordinates
     filtered_counts = integrated_counts
+    print(f"Detected NV coordinates (optimized): {len(filtered_nv_coords)}")
     # List to store valid NV coordinates after filtering
     # filtered_nv_coords = []
     # filtered_counts = []
@@ -641,18 +642,18 @@ if __name__ == "__main__":
     #     )
 
 
-    print(f"Detected NV coordinates (optimized): {len(filtered_nv_coords)}")
+    # print(f"Detected NV coordinates (optimized): {len(filtered_nv_coords)}")
 
     # Save the results
-    save_results(
-        filtered_nv_coords,
-        filtered_counts,
-        path="slmsuite/nv_blob_detection",
-        filename="nv_blob_6837nvs.npz",
-    )
+    # save_results(
+    #     filtered_nv_coords,
+    #     filtered_counts,
+    #     path="slmsuite/nv_blob_detection",
+    #     filename="nv_blob_6904nvs.npz",
+    # )
 
     # full ROI -- multiple images save in the same file
-    # process_scan_file(file_stem="2026_03_09-15_55_09-qnami-nv0_2026_02_20")
+    # process_scan_file(file_stem="2026_03_10-16_54_16-qnami-nv0_2026_02_20")
     # process_scan_file(file_stem="2026_03_05-09_46_19-qnami-nv0_2026_02_20")
     
     kpl.show(block=True)

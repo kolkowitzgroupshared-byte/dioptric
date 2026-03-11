@@ -1546,13 +1546,14 @@ if __name__ == "__main__":
     # magnet_angle = 90
     date_str = "2026_02_20"
     sample_coords = [-0.5, -0.2]
-    z_coord = 1.1
+    z_coord = 0.5
     # z_coord = -1.8
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
         # file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",
-        file_path="slmsuite/nv_blob_detection/nv_blob_4966nvs_reordered.npz",
+        # file_path="slmsuite/nv_blob_detection/nv_blob_4966nvs_reordered.npz",
+        file_path="slmsuite/nv_blob_detection/nv_blob_3986nvs_reordered.npz",
     ).tolist()
 
     green_coords_list = [
@@ -1584,22 +1585,24 @@ if __name__ == "__main__":
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
 
-#     pixel_coords_list = [ 
-#                         [231.012, 236.029],
-#                         [389.856, 58.163],
-#                         [247.463, 418.465],
-#                         [52.964, 83.962]]
-#     green_coords_list = [[97.766, 96.493], 
-#                         [66.156, 126.437], 
-#                         [97.996, 63.61],
-#                         [127.079, 126.63]]
-#     red_coords_list = [
-#     [65.403, 62.413],
-#     [38.51, 85.132],
-#     [66.749, 35.697],
-#     [88.304, 88.41],
-# ]
-
+    pixel_coords_list = [
+        [231.42, 235.968], 
+        [388.665, 57.301], 
+        [246.772, 417.641], 
+        [52.76, 83.18],
+        ]
+    green_coords_list = [
+        [97.728, 96.436],
+        [66.175, 126.495],
+        [98.104, 63.814],
+        [127.156, 126.799],
+                        ]
+    red_coords_list = [
+        [65.423, 62.37],
+        [38.561, 85.173],
+        [66.876, 35.855],
+        [88.411, 88.557],
+        ]
 
     # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
     # green_coords_list = [[107.85, 108.084],[119.238, 119.6],[111.232, 95.81],[95.925, 118.974]]
@@ -1699,8 +1702,8 @@ if __name__ == "__main__":
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
-    nv_sig.expected_counts = 3300
-    # nv_sig.expected_counts = 15000
+    # nv_sig.expected_counts = 3300
+    # nv_sig.expected_counts = 19000
     # nv_sig.expected_counts = 1300
     # nv_sig.expected_counts = 1250
     # nv_sig.expected_counts = 1800
@@ -1735,7 +1738,7 @@ if __name__ == "__main__":
         #     red_coords_list, 
         #     force_laser_key=VirtualLaserKey.RED_IMAGIN,
         # )
-        # do_compensate_for_drift(nv_sig)
+        do_compensate_for_drift(nv_sig)
         # do_red_calibration_image(
         #     nv_sig,
         #     green_coords_list,
@@ -1743,7 +1746,7 @@ if __name__ == "__main__":
         # )
 
         # do_compensate_for_drift(nv_sig)
-        do_widefield_image_sample(nv_sig, 50)
+        # do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list:

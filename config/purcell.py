@@ -32,9 +32,9 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
-calibration_coords_pixel = [[389.856, 58.163],[247.463, 418.465],[52.964, 83.962]]
-calibration_coords_green = [[66.156, 126.437], [97.996, 63.61],[127.079, 126.63]]
-calibration_coords_red = [[38.51, 85.132], [66.749, 35.697],[88.304, 88.41]]
+calibration_coords_pixel = [[388.939, 56.665], [246.477, 417.549], [52.295, 83.172]]
+calibration_coords_green = [[66.175, 126.495],[98.104, 63.814],[127.156, 126.799]]
+calibration_coords_red = [[38.561, 85.173],[66.876, 35.855],[88.411, 88.557]]
 
 # calibration_coords_pixel = [[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
 # calibration_coords_green = [[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
@@ -90,8 +90,7 @@ config |= {
         "widefield_operation_buffer": 1e3,
         "uwave_buffer": 0,
         "iq_buffer": 0,
-        # "iq_delay": 136,  # SBC measured using NVs 4/18/2025
-        "iq_delay": 140,  # 
+        "iq_delay": 140,
     },
     ###
     "DeviceIDs": {
@@ -166,8 +165,8 @@ config |= {
         "resolution": (512, 512),
         "spot_radius": 3.0,  # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
-        "em_gain": 5000,
-        # "em_gain": 10,
+        # "em_gain": 5000,
+        "em_gain": 10,
         "temp": -60,
         "timeout": 60e3,  # ms
         # "timeout": -1,  # No timeout
@@ -257,8 +256,8 @@ config |= {
             VirtualLaserKey.WIDEFIELD_CHARGE_READOUT: {
                 "physical_name": yellow_laser,
                 # "duration": 200e6,
-                # "duration": 60e6,
-                "duration": 50e6,
+                "duration": 60e6,
+                # "duration": 50e6,
                 # "duration": 24e6,  # for red calibration
             },
             # LaserKey.WIDEFIELD_CHARGE_READOUT: {"physical_name": yellow_laser, "duration": 100e6},
@@ -951,13 +950,13 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.33},
+        "yellow_imaging": {"type": "constant", "sample": 0.45},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2675},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2367}, #136NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2267}, #118NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.34947}, ## 312NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3257}, ## 205NV johnson
-        "yellow_charge_readout": {"type": "constant", "sample": 0.33}, ## 195NV johnson
+        "yellow_charge_readout": {"type": "constant", "sample": 0.25}, ## 195NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3084}, ## 223NV johnson
         # "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
