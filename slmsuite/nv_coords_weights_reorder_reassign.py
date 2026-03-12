@@ -721,10 +721,10 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_03_11-01_12_16-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_03_11-19_13_38-combined_image_array", load_npz=True
     )
-    img_array = np.array(data["ref_img_array"])
-    # img_array = data["img_array"]
+    # img_array = np.array(data["ref_img_array"])
+    img_array = data["img_array"]
     nv_coordinates, spot_weights = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_327nvs.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_308nvs_reordered.npz"
@@ -774,10 +774,11 @@ if __name__ == "__main__":
     # ]
     
     nv_coordinates = np.asarray(nv_coordinates, dtype=float)
-    spot_weights = np.asarray(spot_weights)
-
-    cx, cy = 215, 215
-    r = 250
+    # spot_weights = np.asarray(spot_weights)
+    spot_weights = np.ones(nv_coordinates.shape[0], dtype=float)
+    # filtered_reordered_coords, filtered_reordered_spot_weights = nv_coordinates, spot_weights
+    cx, cy = 215, 230
+    r = 220
 
     mask = (nv_coordinates[:, 0] - cx)**2 + (nv_coordinates[:, 1] - cy)**2 <= r**2
 
@@ -789,25 +790,26 @@ if __name__ == "__main__":
     spot_weights = spot_weights_filtered
 
     print(f"After filtering: {len(spot_weights)} NVs")
-
+    filtered_reordered_coords, filtered_reordered_spot_weights = nv_coordinates_filtered, spot_weights_filtered 
     # Filter and reorder NV coordinates based on reference NV
     sigma = 2.0
-    reference_nv = [230.994, 236.014]
-    filtered_reordered_coords, filtered_reordered_spot_weights, include_indices = (
-        filter_and_reorder_nv_coords(
-            nv_coordinates, spot_weights, reference_nv, min_distance=4.0
-        )
-    )
+    reference_nv = [231.42, 235.968]
+    # reference_nv = [230.994, 236.014]
+    # filtered_reordered_coords, filtered_reordered_spot_weights, include_indices = (
+    #     filter_and_reorder_nv_coords(
+    #         nv_coordinates, spot_weights, reference_nv, min_distance=4.0
+    #     )
+    # )
     
     # Initialize lists to store the results
-    # fitted_amplitudes = []
-    # fitted_coords = []
-    # for coord in filtered_reordered_coords:
-    #     fitted_x, fitted_y, amplitude = fit_gaussian(img_array, coord, window_size=2)
-    #     fitted_coords.append([fitted_x, fitted_y])
-    #     fitted_amplitudes.append(amplitude)
+    fitted_amplitudes = []
+    fitted_coords = []
+    for coord in filtered_reordered_coords:
+        fitted_x, fitted_y, amplitude = fit_gaussian(img_array, coord, window_size=1)
+        fitted_coords.append([fitted_x, fitted_y])
+        fitted_amplitudes.append(amplitude)
         
-    # filtered_reordered_coords = fitted_coords
+    filtered_reordered_coords = fitted_coords
     
     filtered_reordered_coords, filtered_reordered_spot_weights, include_indices = (
         filter_and_reorder_nv_coords(
@@ -826,6 +828,7 @@ if __name__ == "__main__":
             [130.063, 311.115],
         ],
     }
+    
     region2 = {
         "type": "polygon",
         "vertices": [
@@ -872,7 +875,8 @@ if __name__ == "__main__":
     [190.763, 82.947],
     [97.892, 52.141],
     [90.19, 59.842],]
-    } 
+    }
+     
     region3 =  {
         "type": "polygon",
         "vertices":[
@@ -898,6 +902,7 @@ if __name__ == "__main__":
     [230.111, 219.353],
     ]
     }
+    
     region4 =  {
         "type": "polygon",
         "vertices":[
@@ -927,7 +932,8 @@ if __name__ == "__main__":
     [448.157, 91.129],
     [415.631, 92.523],
     ]
-    }   
+    }
+       
     region6 =  {
         "type": "polygon",
         "vertices":[
@@ -950,6 +956,7 @@ if __name__ == "__main__":
     [1.151, 116.56],
     ]
     }
+    
     region7 =  {
         "type": "polygon",
         "vertices":[
@@ -972,6 +979,7 @@ if __name__ == "__main__":
     [1.151, 116.56],
     ]
     }
+    
     region8 =  {
         "type": "polygon",
         "vertices":[
@@ -990,7 +998,7 @@ if __name__ == "__main__":
     [97.221, -2.43],
     ]
     }
-       
+
     region9 =  {
         "type": "polygon",
         "vertices":[
@@ -1012,7 +1020,6 @@ if __name__ == "__main__":
     [386.704, 393.529],
     ]
     }
-    
     
     # Add more bars / regions here
     regions = [
@@ -1043,15 +1050,15 @@ if __name__ == "__main__":
         # },
     ]
 
-    kept_coords, removed_coords, mask = remove_coords_in_regions(filtered_reordered_coords, regions)
+    # kept_coords, removed_coords, mask = remove_coords_in_regions(filtered_reordered_coords, regions)
 
-    print("Kept coords:")
-    print(kept_coords)
+    # print("Kept coords:")
+    # print(kept_coords)
 
-    print("\nRemoved coords:")
-    print(removed_coords)
-    filtered_reordered_coords = kept_coords
-    print(f"After filtering:{len(filtered_reordered_coords)}")
+    # print("\nRemoved coords:")
+    # print(removed_coords)
+    # filtered_reordered_coords = kept_coords
+    # print(f"After filtering:{len(filtered_reordered_coords)}")
 
     # filtered_reordered_coords = [
     #     [coord[0] - 5, coord[1] - 0] for coord in filter_and_reorder_nv_coords
@@ -1349,14 +1356,14 @@ if __name__ == "__main__":
 
     # Calculate the spot weights based on the integrated intensities
     # spot_weights = non_linear_weights(filtered_intensities, alpha=0.9)
-    filtered_reordered_spot_weights = filtered_reordered_spot_weights[:4094]
-    filtered_reordered_coords = filtered_reordered_coords[:4094]
+    # filtered_reordered_spot_weights = filtered_reordered_spot_weights[:4094]
+    # filtered_reordered_coords = filtered_reordered_coords[:4094]
     # # Save the filtered results
-    # save_results(
-    #     filtered_reordered_coords,
-    #     filtered_reordered_spot_weights,
-    #     filename="slmsuite/nv_blob_detection/nv_blob_3986nvs_reordered.npz",
-    # )
+    save_results(
+        filtered_reordered_coords,
+        filtered_reordered_spot_weights,
+        filename="slmsuite/nv_blob_detection/nv_blob_3546nvs_reordered.npz",
+    )
 
     # # Plot the original image with circles around each NV
     fig, ax = plt.subplots()
