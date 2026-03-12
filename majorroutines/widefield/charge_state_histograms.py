@@ -554,7 +554,8 @@ if __name__ == "__main__":
     # data = dm.get_raw_data(file_id=1806227898070, load_npz=False)
     # data = dm.get_raw_data(file_id=1806410973406, load_npz=False)
     data = dm.get_raw_data(
-        file_stem="2025_10_23-17_31_05-johnson-nv0_2025_10_21", load_npz=True
+        # file_stem="2026_03_11-01_36_16-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_03_11-20_46_02-qnami-nv0_2026_02_20", load_npz=True
     )
     # process_and_plot(data, do_plot_histograms=True)
     # data = dm.get_raw_data(
@@ -564,8 +565,8 @@ if __name__ == "__main__":
     # compare_readout_sets(
     #     file_stems=["2026_03_02-17_30_11-qnami-nv0_2026_02_20"],
     #     readout_ms=[50],          # <-- must match length
-    #     nv_num=122,
+    #     nv_num=122,-
     #     ref_axis=1,
     # )
-    process_and_plot(data, do_plot_histograms=False)
+    process_and_plot(data, do_plot_histograms=True)
     kpl.show(block=True)

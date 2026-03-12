@@ -32,13 +32,9 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
-calibration_coords_pixel = [[389.856, 58.163],[247.463, 418.465],[52.964, 83.962]]
-calibration_coords_green = [[66.156, 126.437], [97.996, 63.61],[127.079, 126.63]]
-calibration_coords_red = [[38.51, 85.132], [66.749, 35.697],[88.304, 88.41]]
-
-# calibration_coords_pixel = [[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
-# calibration_coords_green = [[119.248, 119.584],[111.265, 95.774],[95.933, 118.969]]
-# calibration_coords_red = [[82.15, 82.282],[76.463, 62.52],[63.114, 80.587]]
+calibration_coords_pixel = [[388.939, 56.665], [246.477, 417.549], [52.295, 83.172]]
+calibration_coords_green = [[66.11, 126.468],[98.028, 63.844],[127.058, 126.789]]
+calibration_coords_red = [[38.561, 85.173],[66.876, 35.855], [88.411, 88.557]]
 
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -90,8 +86,7 @@ config |= {
         "widefield_operation_buffer": 1e3,
         "uwave_buffer": 0,
         "iq_buffer": 0,
-        # "iq_delay": 136,  # SBC measured using NVs 4/18/2025
-        "iq_delay": 140,  # 
+        "iq_delay": 140,
     },
     ###
     "DeviceIDs": {
@@ -257,8 +252,8 @@ config |= {
             VirtualLaserKey.WIDEFIELD_CHARGE_READOUT: {
                 "physical_name": yellow_laser,
                 # "duration": 200e6,
-                # "duration": 60e6,
-                "duration": 50e6,
+                "duration": 60e6,
+                # "duration": 50e6,
                 # "duration": 24e6,  # for red calibration
             },
             # LaserKey.WIDEFIELD_CHARGE_READOUT: {"physical_name": yellow_laser, "duration": 100e6},
@@ -951,15 +946,8 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.33},
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.2675},
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.2367}, #136NVs
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.2267}, #118NVs
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.34947}, ## 312NV johnson
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.3257}, ## 205NV johnson
-        "yellow_charge_readout": {"type": "constant", "sample": 0.33}, ## 195NV johnson
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.3084}, ## 223NV johnson
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
+        "yellow_imaging": {"type": "constant", "sample": 0.45},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.35}, ## 195NV johnson
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other
@@ -976,29 +964,6 @@ opx_config = {
     # endregion
 }
 # endregion
-
-
-# def correct_pulse_params_by_phase(phase_deg, base_amp=0.5):
-#     # Centralized pulse error values from bootstrap
-#     pulse_errors = {
-#         "phi_prime": -0.031938,
-#         "chi_prime": -0.037178,
-#         "phi": 0.069222,
-#         "chi": 0.07584,
-#         "vz": -0.016646,
-#         "ez": 0.111846,
-#         "epsilon_z_prime": -0.011931,
-#         "nu_x_prime": -0.059049,
-#         "nu_z_prime": 0.007111,
-#         "epsilon_y": 0.048215,
-#         "nu_x": 0.017096,
-#     }
-
-#     # Y-aligned rotation
-#     tilt = pulse_errors.get("epsilon_y", 0)
-#     phase_corr = -np.degrees(tilt, 0.0)
-#     return phase_corr
-
 
 def correct_pulse_params_by_phase(phase_deg):
     # Centralized pulse error values from bootstrap
@@ -1046,12 +1011,6 @@ def generate_iq_pulses(pulse_names, phases):
     amp = 0.5
 
     for phase in phases:
-        # phase_corr = correct_pulse_params_by_phase(phase)
-        # corrected_phase = np.round(phase + phase_corr)
-        # corrected_phase = corrected_phase % 360
-        # i_comp = np.cos(np.deg2rad(corrected_phase)) * amp
-        # q_comp = np.sin(np.deg2rad(corrected_phase)) * amp
-        # print(f"phase (deg): {(corrected_phase):.2f}")
         i_comp = np.cos(np.deg2rad(phase)) * amp
         q_comp = np.sin(np.deg2rad(phase)) * amp
         opx_config["waveforms"][f"i_{phase}"] = {"type": "constant", "sample": i_comp}

@@ -270,36 +270,6 @@ def calibration_triangle():
     # Save the phase data
     # save(phase, file_path, filename)
     # cam_plot()
-
-
-# def calibration_triangle_kxy():
-#     # Small radius so we stay well within k-space
-#     r = 0.04  # try 0.03–0.12; if too large you’ll hit Nyquist / bounds
-
-#     theta = np.array([0, 2*np.pi/3, 4*np.pi/3]) + np.pi/6
-#     x = r * np.cos(theta)
-#     y = r * np.sin(theta)
-#     triangle_kxy = np.vstack((x, y))  # (2,3)
-
-#     # If you want padding/resolution, compute a padded shape; otherwise slm.shape is fine
-#     shape = slm.shape  # or a padded shape (see Fix 3)
-
-#     hologram = SpotHologram(
-#         shape=shape,
-#         spot_vectors=triangle_kxy,
-#         basis="kxy",
-#         cameraslm=fs,  # OK: used for internal conversions; no camera calls needed
-#     )
-
-#     hologram.optimize(
-#         "WGS-Kim",
-#         maxiter=20,
-#         feedback="computational_spot",
-#         stat_groups=["computational_spot"],
-#     )
-
-#     phase = hologram.extract_phase()
-#     slm.write(phase, settle=True)
     
 def nuvu2thorcam_calibration(coords):
     """
@@ -311,7 +281,7 @@ def nuvu2thorcam_calibration(coords):
     )
 
     cal_coords_nuvu = np.array(
-        [[370.268, 389.543], [343.496, 38.508], [49.691, 237.974]], dtype="float32"
+        [[369.964, 389.347], [343.328, 38.66], [50.046, 237.974]], dtype="float32"
     )
     # Compute the affine transformation matrix
     M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
@@ -339,13 +309,15 @@ def load_nv_coords(
     # file_path="slmsuite/nv_blob_detection/nv_blob_41nvs_reordered.npz",  # cL
     # file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",  # cal
     # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
-    file_path="slmsuite/nv_blob_detection/nv_blob_4966nvs_reordered.npz",  # 
+    # file_path="slmsuite/nv_blob_detection/nv_blob_4966nvs_reordered.npz",  # 
+    # file_path="slmsuite/nv_blob_detection/nv_blob_3986nvs_reordered.npz",  # 
+    # file_path="slmsuite/nv_blob_detection/nv_blob_3554nvs_reordered.npz",  # 
+    file_path="slmsuite/nv_blob_detection/nv_blob_3546nvs_reordered.npz",  # 
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
     spot_weights = data["updated_spot_weights"]
-    print(f"spot_weights: {spot_weights}")
-    print(len(spot_weights))
+    print(f"len of nv coords: {len(nv_coordinates)}")
     return nv_coordinates, spot_weights
 
 nuvu_pixel_coords, spot_weights = load_nv_coords()
