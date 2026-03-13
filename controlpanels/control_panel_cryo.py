@@ -34,7 +34,7 @@ import majorroutines.confocal.confocal_image_sample as image_sample
 # import majorroutines.confocal.optimize_magnet_angle as optimize_magnet_angle
 # import majorroutines.confocal.pulsed_resonance as pulsed_resonance
 import majorroutines.confocal.confocal_rabi as rabi
-import majorroutines.confocal.confocal_resonance as resonance
+# import majorroutines.confocal.confocal_resonance as resonance
 
 # import majorroutines.confocal.ramsey as ramsey
 # import majorroutines.confocal.resonance as resonance
@@ -767,13 +767,18 @@ def do_rabi(nv_sig):
 def do_resonance(nv_sig):
     resonance.main(
         nv_sig,
-        freq_center_ghz= 2.8786,
-        freq_span_mhz = 200.0,
-        num_steps=51,
-        num_reps=1,
-        num_runs=10,
-)
-
+        center_freq_ghz=2.8786,
+        span_mhz=40.0,
+        num_steps=101,
+        num_reps=20000,
+        num_runs=6,
+        uwave_ind=0,
+        mw_dur_ns=2000,
+        shuffle_freqs=True,
+        shuffle_seed=0,
+        do_save=True,
+        do_plot=True,
+    )
 
 # def do_t1_dq(nv_sig):
 #     # T1 experiment parameters, formatted:
@@ -895,7 +900,7 @@ def do_constant_ac(digital_channels=(4,), analog0=None, analog1=None):
 
 
     # Microwave test
-    amp = 1 #dbm
+    amp = 5
     sig_gen.set_amp(amp)  # 12
     sig_gen.set_freq(2.87) #Ghz
     sig_gen.uwave_on()
@@ -943,11 +948,12 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0,0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z = 4.2247 #4.2925   # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
-    # pixel_xy = [0,0]  # galvo ref test
-    # pixel_xy = [-0.265, -0.042]  # NV Lovelace ODMR
-    # pixel_xy = [-0.197, -0.241] # zoom picture
-    pixel_xy = [-0.093, -0.075] # NV Lovelace
+    coord_z =4.15 # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    # pixel_xy = [0,0]  # galvo ref
+    # pixel_xy = [-0.0778 ,  -0.1194 ]  # NV Lovelace ODMR
+    # pixel_xy = [-0.021, -0.052] # zoom picture
+    # pixel_xy = [-0.1604, -0.1862] # NV Lovelace
+    pixel_xy = [ -0.1823,  -0.2755 ] # NV Lovelace
 
     # return
     nv_sig = NVSig(
@@ -961,8 +967,8 @@ if __name__ == "__main__":
         disable_z_opt=True,
         expected_counts=13,       
         pulse_durations={
-            VirtualLaserKey.IMAGING: 10e6,
-            VirtualLaserKey.SPIN_READOUT: 10e6,
+            VirtualLaserKey.IMAGING: int(10e6),  # readout is in ns (5e6 = 5ms)
+            VirtualLaserKey.CHARGE_POL: int(1e4),
             VirtualLaserKey.SPIN_POL: 2000,
             VirtualLaserKey.SINGLET_DRIVE: 300,  # placeholder
         },
@@ -1019,7 +1025,7 @@ if __name__ == "__main__":
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None):
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
         # do_image_sample(nv_sig)
-        # do_image_sample_zoom(nv_sig)
+        do_image_sample_zoom(nv_sig)
 
         # # Quick NV area scans
         # for i in range(10):
@@ -1036,23 +1042,12 @@ if __name__ == "__main__":
         # end region Image sample
 
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=4.15, voltage_end=4.35, step_size=0.001)
-        # # do_optimize_z_atto(nv_sig) # z position optimize atto
-        do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008)
-        # for (i) in range(3):
-        #     do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008)
-        #     print(f"XY optimization iteration {i+1} completed.")
-        #     print(f"Current NV coordinates (PIXEL): {nv_sig.coords[CoordsKey.PIXEL]}")
-        #     # pos.set_xyz((do_optimize_xy.opti_x, do_optimize_xy.opti_y), positioner=CoordsKey.PIXEL)
-        #     # pixel_xy = [do_optimize_xy.opti_x, do_optimize_xy.opti_y]
-        #     # nv_sig.coords[CoordsKey.PIXEL] = pixel_xy
-        #     # pos.set_xyz_on_nv(nv_sig)
-        #     do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008)
-
-        # do_optimize_xy(nv_sig, num_steps=16, scan_range=0.008)
-        # do_optimize_xy_loop(nv_sig, num_iterations=5, num_steps=8, scan_range=0.008) 
+        # do_optimize_z_PI(nv_sig, voltage_start=3.95, voltage_end=4.15, step_size=0.01)
+        # do_optimize_z_atto(nv_sig) # z position optimize atto
+        # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
+        
         # do_optimize_green(nv_sig) # old optimize xy
-        # do_optimize_z_PI(nv_sig, 4.1, 4.3,step_size=0.01) # z position optimize PI (RT Set-up)
+        # do_optimize_z_PI(nv_sig) # z position optimize PI (RT Set-up)
         # do_compensate_for_drift(nv_sig)
         # endregion Optimize
 

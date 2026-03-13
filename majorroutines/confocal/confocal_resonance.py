@@ -11,7 +11,7 @@ Very close to old working ESR style:
 Returns:
     raw_data, proc_data
 """
-import sys
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -28,16 +28,16 @@ def main(
     freq_span_mhz=200.0,
     num_steps=51,
     num_reps=1,
-    num_runs=50,
+    num_runs=20,
     uwave_ind=0,
-    readout_ns=None, # if not NONE shows normalized plot
+    readout_vkey=VirtualLaserKey.IMAGING,
+    readout_ns=None,
     uwave_power_dbm=None,
     laser_power=None,
     do_targeting=True,
     do_plot=True,
     do_save=True,
     shuffle=False,
-    # shuffle=True,
     norm_mode=NormMode.SINGLE_VALUED,
 ):
     tb.reset_cfm()
@@ -46,18 +46,15 @@ def main(
     counter_server = tb.get_server_counter()
     pulsegen_server = tb.get_server_pulse_streamer()
         
-    readout_vkey=VirtualLaserKey.SPIN_READOUT
-    # readout_vkey=VirtualLaserKey.IMAGING
+    # readout_vkey=VirtualLaserKey.SPIN_READOUT
+    readout_vkey=VirtualLaserKey.if hasattr(nv_sig, "readout_vkey"):
 
     vld = tb.get_virtual_laser_dict(readout_vkey)
     if readout_ns is None:
         readout_ns = int(nv_sig.pulse_durations.get(readout_vkey, int(vld["duration"])))
     readout_ns = int(readout_ns)
 
-    spin_pol_vkey=VirtualLaserKey.SPIN_POL
-    vld_pol = tb.get_virtual_laser_dict(spin_pol_vkey)
-    pol_ns = int(nv_sig.pulse_durations.get(spin_pol_vkey, int(vld_pol["duration"])))
-
+    # MW setup
     sig_gen = tb.get_server_sig_gen(int(uwave_ind))
     vsg = tb.get_virtual_sig_gen_dict(int(uwave_ind))
 
@@ -65,18 +62,20 @@ def main(
         uwave_power_dbm = vsg.get("uwave_power", None)
     if uwave_power_dbm is not None:
         sig_gen.set_amp(float(uwave_power_dbm))
+    sig_gen.set_freq(float(freq_ghz))
     sig_gen.uwave_on()
 
-    # sequence is loaded once
+    # Sequence setup
     seq_file = "resonance.py"
     seq_args = [
-        pol_ns,
+        # pol_ns,
         readout_ns,
         int(uwave_ind),
         readout_vkey.name if hasattr(readout_vkey, "name") else str(readout_vkey),
         laser_power,
     ]
     seq_args_string = tb.encode_seq_args(seq_args)
+
     pulsegen_server.stream_load(seq_file, seq_args_string)
 
     # frequency axis
@@ -90,18 +89,20 @@ def main(
     sweep_order = np.arange(num_steps)
     if shuffle:
         np.random.shuffle(sweep_order)
-    total_reps = num_runs * num_reps
-    sig_counts = np.full((total_reps, num_steps), np.nan, dtype=float)
-    ref_counts = np.full((total_reps, num_steps), np.nan, dtype=float)
+
+    sig_counts = np.full((num_runs, num_steps), np.nan, dtype=float)
+    ref_counts = np.full((num_runs, num_steps), np.nan, dtype=float)
 
     timestamp = dm.get_time_stamp()
-    opti_coords_list = []
 
+    # plotting
     if do_plot:
         fig, ax = plt.subplots()
-        ax.set_xlabel("Frequency (GHz)")
-        ax.set_ylabel("Normalized signal")
-        line, = ax.plot([], [], "o-")
+        ax.set_xlabel("Run")
+        ax.set_ylabel("Counts")
+        (line_ref,) = ax.plot([], [], label="Ref")
+        (line_sig,) = ax.plot([], [], label="Sig")
+        ax.legend()
     else:
         fig = None
 
@@ -117,15 +118,14 @@ def main(
 
         if tb.safe_stop():
             break
-        
-        ### Drift correction / targeting to be implemented here
-        # if do_targeting:
-        #     try:
-        #         opti_coords = targeting.main_with_cxn(nv_sig)
-        #         opti_coords_list.append(opti_coords)
-        #     except Exception as e:
-        #         print(f"Targeting failed on run {run_ind}: {e}")
-        #         opti_coords_list.append(None)
+
+        if do_targeting:
+            try:
+                opti_coords = targeting.main_with_cxn(nv_sig)
+                opti_coords_list.append(opti_coords)
+            except Exception as e:
+                print(f"Targeting failed on run {run_ind}: {e}")
+                opti_coords_list.append(None)
 
         
         try:
@@ -133,46 +133,20 @@ def main(
                 if tb.safe_stop():
                     break
 
-                # import time
-                # t0=time.time()
                 f = float(freqs_ghz[step_ind])
                 sig_gen.set_freq(f)
-                # t1=time.time()
-                # counter_server.clear_buffer()
-                counter_server.stop_tag_stream()    # ← resets leftover_channels to empty
-                counter_server.start_tag_stream()   # ← re-arms tagger FPGA
-                pulsegen_server.stream_load(seq_file, seq_args_string)  # ← reloads sequence
-                # t2=time.time()
+
+                counter_server.clear_buffer()
                 pulsegen_server.stream_start(int(num_reps))
-                # pulsegen_server.stream_immediate(seq_file, num_reps, seq_args_string)
-                # t3 = time.time()
-                # new_counts = counter_server.read_counter_modulo_gates(2,int(num_reps))
-                new_counts = np.array(counter_server.read_counter_modulo_gates(2, int(num_reps)))
-                print(f"new_counts shape: {new_counts.shape}, values: {new_counts}", flush=True)
-                print(f"new_counts: {new_counts}", flush=True)
 
-                # t4=time.time()
-
-                # print(f"set_freq={1000*(t1-t0):.1f}ms  clear={1000*(t2-t1):.1f}ms  stream_start={1000*(t3-t2):.1f}ms  read={1000*(t4-t3):.1f}ms  total={1000*(t4-t0):.1f}ms", flush=True)
-                # new_counts = counter_server.read_counter_modulo_gates(2, 1)
-                # sample_counts = new_counts[0]
-
-                # new_counts = np.array(new_counts)
+                new_counts = counter_server.read_counter_modulo_gates(2, 1)
+                sample_counts = new_counts[0]
                 # print("len(new_counts) =", len(new_counts))
                 # print("first few =", new_counts[:5])
 
                 # gate0 = ref, gate1 = sig
-                # ref_counts[run_ind, step_ind] = sample_counts[0]
-                # sig_counts[run_ind, step_ind] = sample_counts[1]
-                # ref_counts[run_ind, step_ind] = np.sum(new_counts[:,0])
-                # sig_counts[run_ind, step_ind] = np.sum(new_counts[:,1])
-                base = run_ind * num_reps
-                for rep_i in range(num_reps):
-                    ref_counts[base + rep_i, step_ind] = new_counts[rep_i, 0]
-                    sig_counts[base + rep_i, step_ind] = new_counts[rep_i, 1]
-                # new_counts = np.asarray(new_counts)
-                # ref_counts[run_ind, step_ind] = np.mean(new_counts[0,:])
-                # sig_counts[run_ind, step_ind] = np.mean(new_counts[1,:])
+                ref_counts[run_ind, step_ind] = sample_counts[0]
+                sig_counts[run_ind, step_ind] = sample_counts[1]
 
         finally:
             try:
@@ -181,11 +155,9 @@ def main(
                 pass
 
         if do_plot:
-            filled = (run_ind + 1) * num_reps  
-            # valid_runs = np.isfinite(sig_counts[: filled]) & np.isfinite(ref_counts[: filled])
+            valid_runs = np.isfinite(sig_counts[: run_ind + 1]) & np.isfinite(ref_counts[: run_ind + 1])
             with np.errstate(divide="ignore", invalid="ignore"):
-                # norm_runs = sig_counts[: run_ind + 1] / np.maximum(ref_counts[: run_ind + 1], 1)
-                norm_runs = sig_counts[:filled] / np.maximum(ref_counts[:filled], 1)  # ← line 180
+                norm_runs = sig_counts[: run_ind + 1] / np.maximum(ref_counts[: run_ind + 1], 1)
             norm_mean = np.nanmean(norm_runs, axis=0)
 
             line.set_data(freqs_ghz, norm_mean)
@@ -193,73 +165,77 @@ def main(
             ax.autoscale_view()
             plt.pause(0.01)
 
+        if do_save:
+            raw_incremental = {
+                "timestamp": timestamp,
+                "nv_sig": nv_sig,
+                "freq_ghz": float(freq_ghz),
+                "num_reps": int(num_reps),
+                "num_runs": int(num_runs),
+                "uwave_ind": int(uwave_ind),
+                "uwave_power_dbm": uwave_power_dbm,
+                "readout_ns": int(readout_ns),
+                "opti_coords_list": opti_coords_list,
+                "sig_counts": sig_counts.tolist(),
+                "ref_counts": ref_counts.tolist(),
+            }
+            file_path = dm.get_file_path(
+                __file__, timestamp, nv_sig["name"], "incremental"
+            )
+            dm.save_raw_data(raw_incremental, file_path)
+
     # process
     with np.errstate(divide="ignore", invalid="ignore"):
-        # norm_runs = sig_counts / np.maximum(ref_counts[: run_ind + 1], 1], 1)
-        filled = (run_ind + 1) * num_reps
-        norm_runs = sig_counts[:filled] / np.maximum(ref_counts[:filled], 1)
+        norm_runs = sig_counts / np.maximum(ref_counts, 1)
+
     norm_mean = np.nanmean(norm_runs, axis=0)
     norm_ste = np.nanstd(norm_runs, axis=0, ddof=1) / np.sqrt(np.sum(np.isfinite(norm_runs), axis=0))
 
     raw_data = {
         "timestamp": timestamp,
         "nv_sig": nv_sig,
-        "freqs_ghz": freqs_ghz.tolist(),
+        "freq_ghz": float(freq_ghz),
         "num_reps": int(num_reps),
         "num_runs": int(num_runs),
         "uwave_ind": int(uwave_ind),
         "uwave_power_dbm": uwave_power_dbm,
         "readout_ns": int(readout_ns),
+        "opti_coords_list": opti_coords_list,
         "sig_counts": sig_counts.tolist(),
         "ref_counts": ref_counts.tolist(),
-        "norm_mean": norm_mean.tolist(),
-        "norm_ste": norm_ste.tolist(),
-        "opti_coords_list": opti_coords_list,
+        "sig_kcps": sig_kcps,
+        "ref_kcps": ref_kcps,
+        "norm": norm,
+        "norm_ste": norm_ste,
     }
 
-    # print("Resonance measurement complete.")
-    ts = dm.get_time_stamp()
-    file_path  = dm.get_file_path(__file__, ts, getattr(nv_sig, "name", "nv"))
-    dm.save_raw_data(raw_data, file_path)
-    dm.save_figure(fig, file_path)
+    print("\nFinal results")
+    print(f"freq       = {freq_ghz:.6f} GHz")
+    print(f"sig kcps   = {sig_kcps:.3f}")
+    print(f"ref kcps   = {ref_kcps:.3f}")
+    print(f"norm       = {norm:.6f} ± {norm_ste:.6f}")
+    print(f"contrast   = {proc_data['contrast']:.6f}")
 
-    # file_path = dm.get_file_path(__file__, timestamp, nv_sig["name"])
-    # if fig is not None:
-    #     dm.save_figure(fig, file_path)
-    #     dm.save_raw_data(raw_data, file_path)
-    print(f"Saved data to {file_path}")
-
-
-    # if do_save:
-    #     file_path = dm.get_file_path(__file__, timestamp, nv_sig["name"])
-    #     print('test')
-    #     if fig is not None:
-    #         dm.save_figure(fig, file_path)
-    #     dm.save_raw_data(raw_data, file_path)
-    #     print(f"Saved data to {file_path}")
+    if do_save:
+        file_path = dm.get_file_path(__file__, timestamp, nv_sig["name"])
+        if fig is not None:
+            dm.save_figure(fig, file_path)
+        dm.save_raw_data(raw_data, file_path)
 
     tb.reset_cfm()
-    return raw_data
+    return raw_data, proc_data
+
 
 if __name__ == "__main__":
     # example:
-    kpl.init_kplotlib()
-    data = dm.get_raw_data(file_stem="2026_03_09-13_37_07-(lovelace)", load_npz=True)
-    nv_sig = data["nv_sig"]
-    sig_counts = np.asarray(data["sig_counts"]) 
-    ref_counts = np.asarray(data["ref_counts"])   
-    norm_mean = np.asarray(data["norm_mean"])
-    norm_ste = np.asarray(data["norm_ste"])
-    freqs_ghz = np.asarray(data["freqs_ghz"])
-
-    plt.figure()
-    plt.errorbar(freqs_ghz, norm_mean, yerr=norm_ste, fmt="o-")
-    plt.xlabel("Frequency (GHz)")
-    plt.ylabel("Normalized signal")
-    plt.title("Confocal ESR")
-    plt.grid(True) 
-    kpl.show(block =True)
-    
+    # raw, proc = main(
+    #     nv_sig=nv_sig,
+    #     freq_ghz=2.8786,
+    #     num_reps=10000,
+    #     num_runs=10,
+    #     uwave_ind=0,
+    # )
+    pass
 
 # # -*- coding: utf-8 -*-
 # """

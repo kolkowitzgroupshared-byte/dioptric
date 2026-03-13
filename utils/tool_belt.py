@@ -187,7 +187,7 @@ def process_laser_seq(seq, virtual_laser_key, train):
     # print(config)
     pulser_wiring = config["Wiring"]["PulseGen"]
     mod_mode = config["Optics"]["PhysicalLasers"][laser_name]["mod_mode"]
-    print(laser_name)
+
     # Digital: do nothing
     if mod_mode is ModMode.DIGITAL:
         pulser_laser_mod = pulser_wiring["do_{}_dm".format(laser_name)]
