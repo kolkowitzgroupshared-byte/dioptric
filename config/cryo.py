@@ -132,10 +132,10 @@ config |= {
         "VirtualSigGens": {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
-                "uwave_power": 6,
+                "uwave_power": 5.0,
                 "frequency": 2.8785,
                 "rabi_period": 144,
-                "pi_pulse": 300,
+                "pi_pulse": 150,
                 "pi_on_2_pulse": 150,
             },
             # sig gen 1 is iq molulated
@@ -253,7 +253,7 @@ config |= {
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
                 # "optimize_range": 0.02,
-                "optimize_range": 0.02,
+                "optimize_range": 0.008,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
