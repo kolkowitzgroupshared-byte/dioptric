@@ -1049,7 +1049,8 @@ if __name__ == "__main__":
         #     # pos.set_xyz_on_nv(nv_sig)
         #     do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008)
 
-        do_optimize_xy(nv_sig, num_steps=16, scan_range=0.008)
+        # do_optimize_xy(nv_sig, num_steps=16, scan_range=0.008)
+        do_optimize_xy_loop(nv_sig, num_iterations=5, num_steps=8, scan_range=0.008) 
         # do_optimize_green(nv_sig) # old optimize xy
         # do_optimize_z_PI(nv_sig, 4.4, 4.6,step_size=0.005) # z position optimize PI (RT Set-up)
         # do_compensate_for_drift(nv_sig)
