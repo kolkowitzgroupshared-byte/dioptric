@@ -28,7 +28,7 @@ def main(
     freq_span_mhz=200.0,
     num_steps=51,
     num_reps=1,
-    num_runs=20,
+    num_runs=50,
     uwave_ind=0,
     readout_ns=None, # if not NONE shows normalized plot
     uwave_power_dbm=None,
@@ -37,6 +37,7 @@ def main(
     do_plot=True,
     do_save=True,
     shuffle=False,
+    # shuffle=True,
     norm_mode=NormMode.SINGLE_VALUED,
 ):
     tb.reset_cfm()
@@ -45,8 +46,8 @@ def main(
     counter_server = tb.get_server_counter()
     pulsegen_server = tb.get_server_pulse_streamer()
         
-    # readout_vkey=VirtualLaserKey.SPIN_READOUT
-    readout_vkey=VirtualLaserKey.if hasattr(nv_sig, "readout_vkey"):
+    readout_vkey=VirtualLaserKey.SPIN_READOUT
+    # readout_vkey=VirtualLaserKey.IMAGING
 
     vld = tb.get_virtual_laser_dict(readout_vkey)
     if readout_ns is None:
@@ -69,7 +70,7 @@ def main(
     # sequence is loaded once
     seq_file = "resonance.py"
     seq_args = [
-        # pol_ns,
+        pol_ns,
         readout_ns,
         int(uwave_ind),
         readout_vkey.name if hasattr(readout_vkey, "name") else str(readout_vkey),
@@ -89,9 +90,9 @@ def main(
     sweep_order = np.arange(num_steps)
     if shuffle:
         np.random.shuffle(sweep_order)
-
-    sig_counts = np.full((num_runs, num_steps), np.nan, dtype=float)
-    ref_counts = np.full((num_runs, num_steps), np.nan, dtype=float)
+    total_reps = num_runs * num_reps
+    sig_counts = np.full((total_reps, num_steps), np.nan, dtype=float)
+    ref_counts = np.full((total_reps, num_steps), np.nan, dtype=float)
 
     timestamp = dm.get_time_stamp()
     opti_coords_list = []
@@ -107,7 +108,12 @@ def main(
     tb.init_safe_stop()
 
     for run_ind in range(num_runs):
+        counter_server.start_tag_stream()
+
         print(f"Run {run_ind + 1}/{num_runs}")
+        # print(f"uwave_power: {uwave_power_dbm}")
+        # print(f" VirtualLaserKey.SPIN_READOUT: {readout_ns} ns")
+
 
         if tb.safe_stop():
             break
@@ -121,27 +127,52 @@ def main(
         #         print(f"Targeting failed on run {run_ind}: {e}")
         #         opti_coords_list.append(None)
 
-        counter_server.start_tag_stream()
-
+        
         try:
             for step_ind in sweep_order:
                 if tb.safe_stop():
                     break
 
+                # import time
+                # t0=time.time()
                 f = float(freqs_ghz[step_ind])
                 sig_gen.set_freq(f)
-
-                counter_server.clear_buffer()
+                # t1=time.time()
+                # counter_server.clear_buffer()
+                counter_server.stop_tag_stream()    # ← resets leftover_channels to empty
+                counter_server.start_tag_stream()   # ← re-arms tagger FPGA
+                pulsegen_server.stream_load(seq_file, seq_args_string)  # ← reloads sequence
+                # t2=time.time()
                 pulsegen_server.stream_start(int(num_reps))
+                # pulsegen_server.stream_immediate(seq_file, num_reps, seq_args_string)
+                # t3 = time.time()
+                # new_counts = counter_server.read_counter_modulo_gates(2,int(num_reps))
+                new_counts = np.array(counter_server.read_counter_modulo_gates(2, int(num_reps)))
+                print(f"new_counts shape: {new_counts.shape}, values: {new_counts}", flush=True)
+                print(f"new_counts: {new_counts}", flush=True)
 
-                new_counts = counter_server.read_counter_modulo_gates(2, 1)
-                sample_counts = new_counts[0]
+                # t4=time.time()
+
+                # print(f"set_freq={1000*(t1-t0):.1f}ms  clear={1000*(t2-t1):.1f}ms  stream_start={1000*(t3-t2):.1f}ms  read={1000*(t4-t3):.1f}ms  total={1000*(t4-t0):.1f}ms", flush=True)
+                # new_counts = counter_server.read_counter_modulo_gates(2, 1)
+                # sample_counts = new_counts[0]
+
+                # new_counts = np.array(new_counts)
                 # print("len(new_counts) =", len(new_counts))
                 # print("first few =", new_counts[:5])
 
                 # gate0 = ref, gate1 = sig
-                ref_counts[run_ind, step_ind] = sample_counts[0]
-                sig_counts[run_ind, step_ind] = sample_counts[1]
+                # ref_counts[run_ind, step_ind] = sample_counts[0]
+                # sig_counts[run_ind, step_ind] = sample_counts[1]
+                # ref_counts[run_ind, step_ind] = np.sum(new_counts[:,0])
+                # sig_counts[run_ind, step_ind] = np.sum(new_counts[:,1])
+                base = run_ind * num_reps
+                for rep_i in range(num_reps):
+                    ref_counts[base + rep_i, step_ind] = new_counts[rep_i, 0]
+                    sig_counts[base + rep_i, step_ind] = new_counts[rep_i, 1]
+                # new_counts = np.asarray(new_counts)
+                # ref_counts[run_ind, step_ind] = np.mean(new_counts[0,:])
+                # sig_counts[run_ind, step_ind] = np.mean(new_counts[1,:])
 
         finally:
             try:
@@ -150,9 +181,11 @@ def main(
                 pass
 
         if do_plot:
-            valid_runs = np.isfinite(sig_counts[: run_ind + 1]) & np.isfinite(ref_counts[: run_ind + 1])
+            filled = (run_ind + 1) * num_reps  
+            # valid_runs = np.isfinite(sig_counts[: filled]) & np.isfinite(ref_counts[: filled])
             with np.errstate(divide="ignore", invalid="ignore"):
-                norm_runs = sig_counts[: run_ind + 1] / np.maximum(ref_counts[: run_ind + 1], 1)
+                # norm_runs = sig_counts[: run_ind + 1] / np.maximum(ref_counts[: run_ind + 1], 1)
+                norm_runs = sig_counts[:filled] / np.maximum(ref_counts[:filled], 1)  # ← line 180
             norm_mean = np.nanmean(norm_runs, axis=0)
 
             line.set_data(freqs_ghz, norm_mean)
@@ -162,8 +195,9 @@ def main(
 
     # process
     with np.errstate(divide="ignore", invalid="ignore"):
-        norm_runs = sig_counts / np.maximum(ref_counts, 1)
-
+        # norm_runs = sig_counts / np.maximum(ref_counts[: run_ind + 1], 1], 1)
+        filled = (run_ind + 1) * num_reps
+        norm_runs = sig_counts[:filled] / np.maximum(ref_counts[:filled], 1)
     norm_mean = np.nanmean(norm_runs, axis=0)
     norm_ste = np.nanstd(norm_runs, axis=0, ddof=1) / np.sqrt(np.sum(np.isfinite(norm_runs), axis=0))
 

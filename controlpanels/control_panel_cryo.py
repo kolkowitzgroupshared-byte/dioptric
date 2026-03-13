@@ -943,11 +943,11 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0,0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z = 4.4621 #4.2925   # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
-    # pixel_xy = [-0.123, -0.255]  # galvo ref
-    pixel_xy = [-0.2771, -0.0362]  # NV Lovelace ODMR
+    coord_z = 4.2247 #4.2925   # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    # pixel_xy = [0,0]  # galvo ref test
+    # pixel_xy = [-0.265, -0.042]  # NV Lovelace ODMR
     # pixel_xy = [-0.197, -0.241] # zoom picture
-    # pixel_xy = [-0.1863, -0.2112] # NV Lovelace
+    pixel_xy = [-0.093, -0.075] # NV Lovelace
 
     # return
     nv_sig = NVSig(
@@ -1036,9 +1036,9 @@ if __name__ == "__main__":
         # end region Image sample
 
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=4.3, voltage_end=4.45, step_size=0.005)
+        # do_optimize_z_PI(nv_sig, voltage_start=4.15, voltage_end=4.35, step_size=0.001)
         # # do_optimize_z_atto(nv_sig) # z position optimize atto
-        # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008)
+        do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008)
         # for (i) in range(3):
         #     do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008)
         #     print(f"XY optimization iteration {i+1} completed.")
@@ -1050,9 +1050,9 @@ if __name__ == "__main__":
         #     do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008)
 
         # do_optimize_xy(nv_sig, num_steps=16, scan_range=0.008)
-        do_optimize_xy_loop(nv_sig, num_iterations=5, num_steps=8, scan_range=0.008) 
+        # do_optimize_xy_loop(nv_sig, num_iterations=5, num_steps=8, scan_range=0.008) 
         # do_optimize_green(nv_sig) # old optimize xy
-        # do_optimize_z_PI(nv_sig, 4.4, 4.6,step_size=0.005) # z position optimize PI (RT Set-up)
+        # do_optimize_z_PI(nv_sig, 4.1, 4.3,step_size=0.01) # z position optimize PI (RT Set-up)
         # do_compensate_for_drift(nv_sig)
         # endregion Optimize
 
