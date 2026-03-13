@@ -380,17 +380,18 @@ def main(
         print(f"Current NV coordinates (PIXEL): {nv_sig.coords[CoordsKey.PIXEL]}")
 
         # Measure counts at optimal position
-        # counter.start_tag_stream()
-        # samples = []
-        # for _ in range(5):  # Average 5 samples for verification
-        #     pulse_gen.stream_start(1)
-        #     raw = counter.read_counter_simple(1)
-        #     if raw:
-        #         samples.append(int(raw[0]))
-        # counter.stop_tag_stream()
+        counter.start_tag_stream()
+        pulse_gen.stream_load(seq_file, tb.encode_seq_args(seq_args)) 
+        samples = []
+        for _ in range(5):  # Average 5 samples for verification
+            pulse_gen.stream_start(1)
+            raw = counter.read_counter_simple(1)
+            if raw:
+                samples.append(int(raw[0]))
+        counter.stop_tag_stream()
 
-        # opti_counts = int(np.mean(samples)) if samples else 0
-        # print(f"  Counts at optimal position: {opti_counts}")
+        opti_counts = int(np.mean(samples)) if samples else 0
+        print(f"  Counts at optimal position: {opti_counts}")
 
     plt.ioff()
     tb.reset_cfm()
