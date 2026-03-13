@@ -301,6 +301,33 @@ def do_optimize_xy(nv_sig, num_steps=15, scan_range=None, fit_method="gaussian")
     return opti_x, opti_y
 
 
+def do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008, fit_method="gaussian"):
+    for i in range(num_iterations):
+        if tool_belt.safe_stop():
+            break
+
+        results = optimize_xy.main(
+            nv_sig,
+            num_steps=num_steps,
+            scan_range=scan_range,
+            fit_method=fit_method,
+            move_to_optimal=True,
+            save_data=True,
+        )
+
+        opti_x = results.get("opti_x")
+        opti_y = results.get("opti_y")
+        opti_counts = results.get("opti_counts")
+
+        if opti_x is not None and opti_y is not None:
+            # Update nv_sig so next iteration re-centers on optimal position
+            nv_sig.coords[CoordsKey.PIXEL] = [opti_x, opti_y]
+
+        plt.close("all")  # Close figure to prevent accumulation
+
+        print(f"Iteration {i+1}/{num_iterations}: X={opti_x:.4f}, Y={opti_y:.4f}, Counts={opti_counts}")
+
+
 # def do_optimize_pixel(nv_sig):
 #     ret_vals = targeting.optimize(nv_sig, coords_key=CoordsKey.PIXEL)
 #     opti_coords = ret_vals[0]
