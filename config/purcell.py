@@ -32,9 +32,9 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
-calibration_coords_pixel = [[388.939, 56.665], [246.477, 417.549], [52.295, 83.172]]
-calibration_coords_green = [[66.11, 126.468],[98.028, 63.844],[127.058, 126.789]]
-calibration_coords_red = [[38.561, 85.173],[66.876, 35.855], [88.411, 88.557]]
+calibration_coords_pixel = [[367.181, 25.354], [229.35, 379.51], [34.93, 44.916]]
+calibration_coords_green = [[70.549, 130.563], [101.642, 69.085], [130.588, 132.298],]
+calibration_coords_red = [[41.956, 88.71], [69.537, 40.334],[90.972, 93.197],]
 
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -161,8 +161,8 @@ config |= {
         "resolution": (512, 512),
         "spot_radius": 3.0,  # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
-        "em_gain": 5000,
-        # "em_gain": 10,
+        # "em_gain": 5000,
+        "em_gain": 10,
         "temp": -60,
         "timeout": 60e3,  # ms
         # "timeout": -1,  # No timeout
@@ -171,7 +171,7 @@ config |= {
         "readout_mode": 1,  # 16 for double horizontal readout rate (em mode)
         # "readout_mode": 6,  # Fast conventional
         # "roi": (122, 126, 250, 250),  # offsetX, offsetY, width, height
-        "roi": (40, 45, 450, 450),  # offsetX, offsetY, width, height
+        "roi": (55, 85, 400, 400),  # offsetX, offsetY, width, height
         # "roi": None,  # offsetX, offsetY, width, height
         "scale": 5 / 0.6,  # pixels / micron
     },
@@ -198,7 +198,7 @@ config |= {
             VirtualLaserKey.IMAGING: {
                 "physical_name": green_laser,
                 # "duration": 60e6,
-                "duration": 12e6,
+                "duration": 6e6,
             },
             # SBC: created for calibration only
             VirtualLaserKey.RED_IMAGING: {
@@ -936,15 +936,15 @@ opx_config = {
     ### Analog
     "waveforms": {
         # Green AOD
-        "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
+        "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
         "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.15},
         # Red AOD
-        "red_aod_cw-opti": {"type": "constant", "sample": 0.11},
-        "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
-        "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
+        "red_aod_cw-opti": {"type": "constant", "sample": 0.13},
+        "red_aod_cw-ion": {"type": "constant", "sample": 0.13},
+        "red_aod_cw-scc": {"type": "constant", "sample": 0.13},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.45},
         "yellow_charge_readout": {"type": "constant", "sample": 0.35}, ## 195NV johnson

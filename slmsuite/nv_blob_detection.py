@@ -577,22 +577,22 @@ if __name__ == "__main__":
     #     show_debug=True,
     # )
     # Apply the blob detection and Gaussian fitting
-    sigma = 1.0
-    lower_threshold = 0.0001
-    upper_threshold = None
-    smoothing_sigma = 0.0
-    integration_radius= 2
-    nv_coordinates, integrated_counts, spot_sizes = detect_nv_coordinates_blob(
-        img_array,
-        sigma=sigma,
-        lower_threshold=lower_threshold,
-        upper_threshold=upper_threshold,
-        smoothing_sigma=smoothing_sigma,
-        integration_radius=integration_radius,
-    )
-    filtered_nv_coords = nv_coordinates
-    filtered_counts = integrated_counts
-    print(f"Detected NV coordinates (optimized): {len(filtered_nv_coords)}")
+    # sigma = 1.0
+    # lower_threshold = 0.0001
+    # upper_threshold = None
+    # smoothing_sigma = 0.0
+    # integration_radius= 2
+    # nv_coordinates, integrated_counts, spot_sizes = detect_nv_coordinates_blob(
+    #     img_array,
+    #     sigma=sigma,
+    #     lower_threshold=lower_threshold,
+    #     upper_threshold=upper_threshold,
+    #     smoothing_sigma=smoothing_sigma,
+    #     integration_radius=integration_radius,
+    # )
+    # filtered_nv_coords = nv_coordinates
+    # filtered_counts = integrated_counts
+    # print(f"Detected NV coordinates (optimized): {len(filtered_nv_coords)}")
     # List to store valid NV coordinates after filtering
     # filtered_nv_coords = []
     # filtered_counts = []
@@ -653,7 +653,7 @@ if __name__ == "__main__":
     # )
 
     # full ROI -- multiple images save in the same file
-    process_scan_file(file_stem="2026_03_11-17_39_40-qnami-nv0_2026_02_20")
+    process_scan_file(file_stem="2026_03_13-00_01_52-qnami-nv0_2026_02_20")
     # process_scan_file(file_stem="2026_03_05-09_46_19-qnami-nv0_2026_02_20")
     
     kpl.show(block=True)

@@ -237,7 +237,7 @@ def circles():
 # region "nv phase calulation"
 def calibration_triangle():
     # Define parameters for the equilateral triangle
-    center = (705, 550)  # Center of the triangle
+    center = (710, 540)  # Center of the triangle
     side_length = 200  # Length of each side of the triangle
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
@@ -277,11 +277,11 @@ def nuvu2thorcam_calibration(coords):
     to the Thorlabs camera's coordinate system using an affine transformation.
     """
     cal_coords_thorcam = np.array(
-        [[878.205,   650. ], [531.794,  650. ], [705.0, 350.]], dtype="float32"
+        [[883.205,   640. ], [536.795,  640. ], [710., 340.]], dtype="float32"
     )
 
     cal_coords_nuvu = np.array(
-        [[369.964, 389.347], [343.328, 38.66], [50.046, 237.974]], dtype="float32"
+        [[343.863, 363.7], [317.427, 12.089], [22.642, 211.289]], dtype="float32"
     )
     # Compute the affine transformation matrix
     M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
@@ -312,7 +312,9 @@ def load_nv_coords(
     # file_path="slmsuite/nv_blob_detection/nv_blob_4966nvs_reordered.npz",  # 
     # file_path="slmsuite/nv_blob_detection/nv_blob_3986nvs_reordered.npz",  # 
     # file_path="slmsuite/nv_blob_detection/nv_blob_3554nvs_reordered.npz",  # 
-    file_path="slmsuite/nv_blob_detection/nv_blob_3546nvs_reordered.npz",  # 
+    # file_path="slmsuite/nv_blob_detection/nv_blob_3546nvs_reordered.npz",  # 
+    file_path="slmsuite/nv_blob_detection/nv_blob_3325nvs_reordered.npz",   
+    
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]

@@ -701,17 +701,164 @@ class ManualPolygonSelector:
         self.ax.figure.canvas.draw_idle()
 
 
-# def remove_coords_in_polygons(coords, polygons):
-#     coords = np.asarray(coords, dtype=float)
-#     remove_mask = np.zeros(len(coords), dtype=bool)
+import numpy as np
 
-#     for poly in polygons:
-#         path = Path(poly)
-#         remove_mask |= path.contains_points(coords)
 
-#     kept = coords[~remove_mask]
-#     removed = coords[remove_mask]
-#     return kept, removed, remove_mask
+def filter_and_rescale_coords_for_new_roi(
+    nv_coordinates,
+    spot_weights=None,
+    old_roi=(40, 45, 450, 450),
+    new_roi=(40, 90, 400, 400),
+    rescale=False,
+    coords_are_roi_local=True,
+):
+    """
+    Convert coordinates from old ROI to new ROI, and remove coordinates outside new ROI.
+
+    Parameters
+    ----------
+    nv_coordinates : array-like, shape (N, 2)
+        NV coordinates.
+    spot_weights : array-like or None
+        Per-NV weights. If None, all ones are used.
+    old_roi : tuple
+        (x0, y0, width, height) of old ROI.
+    new_roi : tuple
+        (x0, y0, width, height) of new ROI.
+    rescale : bool
+        If False: only shift coordinates into new ROI frame, then crop.
+        If True: also rescale from old ROI size to new ROI size.
+    coords_are_roi_local : bool
+        If True, input coords are local to old ROI.
+        If False, input coords are already in full-image/global coordinates.
+
+    Returns
+    -------
+    new_coords : np.ndarray, shape (M, 2)
+        Coordinates in the new ROI frame.
+    new_weights : np.ndarray, shape (M,)
+        Weights for kept coordinates.
+    keep_indices : np.ndarray
+        Indices of kept coordinates in the original array.
+    keep_mask : np.ndarray
+        Boolean mask of kept coordinates.
+    global_coords_kept : np.ndarray, shape (M, 2)
+        Kept coordinates in full-image/global frame.
+    """
+    nv_coordinates = np.asarray(nv_coordinates, dtype=float)
+
+    if spot_weights is None:
+        spot_weights = np.ones(len(nv_coordinates), dtype=float)
+    else:
+        spot_weights = np.asarray(spot_weights, dtype=float)
+
+    old_x0, old_y0, old_w, old_h = old_roi
+    new_x0, new_y0, new_w, new_h = new_roi
+
+    # Step 1: move to global/full-image coordinates
+    if coords_are_roi_local:
+        global_coords = nv_coordinates.copy()
+        global_coords[:, 0] += old_x0
+        global_coords[:, 1] += old_y0
+    else:
+        global_coords = nv_coordinates.copy()
+
+    # Step 2: map into new ROI frame
+    if rescale:
+        # Interpret coordinates relative to old ROI and scale into new ROI size
+        if coords_are_roi_local:
+            old_local = nv_coordinates.copy()
+        else:
+            old_local = global_coords.copy()
+            old_local[:, 0] -= old_x0
+            old_local[:, 1] -= old_y0
+
+        sx = new_w / old_w
+        sy = new_h / old_h
+
+        new_local = np.empty_like(old_local)
+        new_local[:, 0] = old_local[:, 0] * sx
+        new_local[:, 1] = old_local[:, 1] * sy
+
+        # recompute corresponding global coords after rescaling
+        global_coords_rescaled = np.empty_like(new_local)
+        global_coords_rescaled[:, 0] = new_local[:, 0] + new_x0
+        global_coords_rescaled[:, 1] = new_local[:, 1] + new_y0
+
+        coords_in_new_roi = new_local
+        global_coords_used = global_coords_rescaled
+    else:
+        # No rescaling: just shift into new ROI frame
+        coords_in_new_roi = np.empty_like(global_coords)
+        coords_in_new_roi[:, 0] = global_coords[:, 0] - new_x0
+        coords_in_new_roi[:, 1] = global_coords[:, 1] - new_y0
+        global_coords_used = global_coords
+
+    # Step 3: keep only points inside new ROI
+    keep_mask = (
+        (coords_in_new_roi[:, 0] >= 0)
+        & (coords_in_new_roi[:, 0] < new_w)
+        & (coords_in_new_roi[:, 1] >= 0)
+        & (coords_in_new_roi[:, 1] < new_h)
+    )
+
+    keep_indices = np.where(keep_mask)[0]
+
+    new_coords = coords_in_new_roi[keep_mask]
+    new_weights = spot_weights[keep_mask]
+    global_coords_kept = global_coords_used[keep_mask]
+
+    return new_coords, new_weights, keep_indices, keep_mask, global_coords_kept
+
+def remap_single_coord(coord, old_roi, new_roi, rescale=False):
+    coord = np.asarray(coord, dtype=float).reshape(1, 2)
+    new_coord, _, _, _, _ = filter_and_rescale_coords_for_new_roi(
+        coord,
+        spot_weights=np.array([1.0]),
+        old_roi=old_roi,
+        new_roi=new_roi,
+        rescale=rescale,
+        coords_are_roi_local=True,
+    )
+    if len(new_coord) == 0:
+        raise ValueError("Reference NV is outside the new ROI.")
+    return new_coord[0].tolist()
+
+
+
+
+def update_calibration_pixel_coords(
+    calibration_coords_pixel,
+    old_roi=(40, 45, 450, 450),
+    new_roi=(40, 90, 400, 400),
+    rescale=False,
+):
+    coords = np.asarray(calibration_coords_pixel, dtype=float)
+
+    old_x0, old_y0, old_w, old_h = old_roi
+    new_x0, new_y0, new_w, new_h = new_roi
+
+    if rescale:
+        sx = new_w / old_w
+        sy = new_h / old_h
+        new_coords = coords.copy()
+        new_coords[:, 0] *= sx
+        new_coords[:, 1] *= sy
+    else:
+        # old ROI-local -> global -> new ROI-local
+        new_coords = coords.copy()
+        new_coords[:, 0] = coords[:, 0] + old_x0 - new_x0
+        new_coords[:, 1] = coords[:, 1] + old_y0 - new_y0
+
+    keep_mask = (
+        (new_coords[:, 0] >= 0) & (new_coords[:, 0] < new_w) &
+        (new_coords[:, 1] >= 0) & (new_coords[:, 1] < new_h)
+    )
+
+    return new_coords[keep_mask].tolist(), keep_mask
+
+
+
 
 # Main section of the code
 if __name__ == "__main__":
@@ -721,7 +868,7 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_03_11-19_13_38-combined_image_array", load_npz=True
+        file_stem="2026_03_13-00_03_54-combined_image_array", load_npz=True
     )
     # img_array = np.array(data["ref_img_array"])
     img_array = data["img_array"]
@@ -742,8 +889,27 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_6837nvs.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_6904nvs.npz"
-        file_path="slmsuite/nv_blob_detection/nv_blob_3986nvs_reordered.npz"
+        # file_path="slmsuite/nv_blob_detection/nv_blob_3986nvs_reordered.npz"
+        # file_path="slmsuite/nv_blob_detection/nv_blob_3554nvs_reordered.npz"
+        file_path="slmsuite/nv_blob_detection/nv_blob_3366nvs_reordered.npz"
     )
+    
+    # calibration_coords_pixel = [
+    #     [231.42, 235.968], 
+    #     [388.665, 57.301], 
+    #     [246.772, 417.641], 
+    #     [52.76, 83.18]]
+
+    # new_coords, keep_mask = update_calibration_pixel_coords(
+    #     calibration_coords_pixel,
+    #     old_roi=(40, 45, 450, 450),
+    #     new_roi=(55, 85, 400, 400),
+    #     rescale=False,
+    # )
+
+    # print(new_coords)
+    # print(keep_mask)
+    
     
     # kept_weights = spot_weights[~remove_mask]
     # removed_weights = spot_weights[remove_mask]
@@ -754,7 +920,7 @@ if __name__ == "__main__":
 
     # Convert coordinates to a standard format (lists of lists)
     # nv_coordinates = [[coord[0] - 3, coord[1] + 3] for coord in nv_coordinates]
-    nv_coordinates = [list(coord) for coord in nv_coordinates]
+    # nv_coordinates = [list(coord) for coord in nv_coordinates]
     # Filter NV coordinates: Keep only those where both x and y are in [0, 250]
     # nv_coordinates_filtered = [
     #     coord
@@ -773,27 +939,61 @@ if __name__ == "__main__":
     #     and all(5 <= x <= 445 for x in coord)
     # ]
     
-    nv_coordinates = np.asarray(nv_coordinates, dtype=float)
-    # spot_weights = np.asarray(spot_weights)
+    nv_coordinates = np.asarray([list(coord) for coord in nv_coordinates], dtype=float)
     spot_weights = np.ones(nv_coordinates.shape[0], dtype=float)
-    # filtered_reordered_coords, filtered_reordered_spot_weights = nv_coordinates, spot_weights
-    cx, cy = 215, 230
-    r = 220
 
-    mask = (nv_coordinates[:, 0] - cx)**2 + (nv_coordinates[:, 1] - cy)**2 <= r**2
+    # old_roi = (40, 45, 450, 450)
+    # new_roi = (55, 85, 400, 400)
 
-    nv_coordinates_filtered = nv_coordinates[mask]
-    spot_weights_filtered = spot_weights[mask]
+    # nv_coordinates, spot_weights, keep_indices, keep_mask, global_coords_kept = (
+    #     filter_and_rescale_coords_for_new_roi(
+    #         nv_coordinates,
+    #         spot_weights=spot_weights,
+    #         old_roi=old_roi,
+    #         new_roi=new_roi,
+    #         rescale=False,          # recommended for your case
+    #         coords_are_roi_local=True,
+    #     )
+    # )
+    
+    dx = 214.999 - 216.4199
+    dy = 203.945 - 195.96799
 
-    # Replace original lists with filtered versions
-    nv_coordinates = nv_coordinates_filtered
-    spot_weights = spot_weights_filtered
+    nv_coordinates = np.asarray(nv_coordinates, dtype=float)
+    nv_coordinates[:, 0] += dx
+    nv_coordinates[:, 1] += dy
 
-    print(f"After filtering: {len(spot_weights)} NVs")
-    filtered_reordered_coords, filtered_reordered_spot_weights = nv_coordinates_filtered, spot_weights_filtered 
-    # Filter and reorder NV coordinates based on reference NV
+    mask = (
+        (nv_coordinates[:, 0] >= 0) & (nv_coordinates[:, 0] < 400) &
+        (nv_coordinates[:, 1] >= 0) & (nv_coordinates[:, 1] < 400)
+    )
+
+    nv_coordinates = nv_coordinates[mask]
+    spot_weights = spot_weights[mask]
+
+    print(f"After filtering: {len(nv_coordinates)} NVs")
+    filtered_reordered_coords, filtered_reordered_spot_weights = nv_coordinates, spot_weights
+    # cx, cy = 215, 230
+    # r = 220
+
+    # mask = (nv_coordinates[:, 0] - cx)**2 + (nv_coordinates[:, 1] - cy)**2 <= r**2
+
+    # nv_coordinates_filtered = nv_coordinates[mask]
+    # spot_weights_filtered = spot_weights[mask]
+
+    # # Replace original lists with filtered versions
+    # nv_coordinates = nv_coordinates_filtered
+    # spot_weights = spot_weights_filtered
+
+    # print(f"After filtering: {len(spot_weights)} NVs")
+    # filtered_reordered_coords, filtered_reordered_spot_weights = nv_coordinates, spot_weights 
+    # # Filter and reorder NV coordinates based on reference NV
     sigma = 2.0
-    reference_nv = [231.42, 235.968]
+    # reference_nv = [231.42, 235.968]
+    # reference_nv_old = [231.42, 235.968]
+    # reference_nv = remap_single_coord(reference_nv_old, old_roi, new_roi, rescale=False)
+
+    # print("New reference_nv:", reference_nv)
     # reference_nv = [230.994, 236.014]
     # filtered_reordered_coords, filtered_reordered_spot_weights, include_indices = (
     #     filter_and_reorder_nv_coords(
@@ -801,21 +1001,21 @@ if __name__ == "__main__":
     #     )
     # )
     
-    # Initialize lists to store the results
-    fitted_amplitudes = []
-    fitted_coords = []
-    for coord in filtered_reordered_coords:
-        fitted_x, fitted_y, amplitude = fit_gaussian(img_array, coord, window_size=1)
-        fitted_coords.append([fitted_x, fitted_y])
-        fitted_amplitudes.append(amplitude)
+    # # Initialize lists to store the results
+    # fitted_amplitudes = []
+    # fitted_coords = []
+    # for coord in filtered_reordered_coords:
+    #     fitted_x, fitted_y, amplitude = fit_gaussian(img_array, coord, window_size=1)
+    #     fitted_coords.append([fitted_x, fitted_y])
+    #     fitted_amplitudes.append(amplitude)
         
-    filtered_reordered_coords = fitted_coords
+    # filtered_reordered_coords = fitted_coords
     
-    filtered_reordered_coords, filtered_reordered_spot_weights, include_indices = (
-        filter_and_reorder_nv_coords(
-            filtered_reordered_coords, filtered_reordered_spot_weights, reference_nv, min_distance=4.0
-        )
-    )
+    # filtered_reordered_coords, filtered_reordered_spot_weights, include_indices = (
+    #     filter_and_reorder_nv_coords(
+    #         filtered_reordered_coords, filtered_reordered_spot_weights, reference_nv, min_distance=4.0
+    #     )
+    # )
     # -----------------------------
     # Example: your bar as polygon
     # -----------------------------
@@ -828,210 +1028,11 @@ if __name__ == "__main__":
             [130.063, 311.115],
         ],
     }
-    
-    region2 = {
-        "type": "polygon",
-        "vertices": [
-    [88.684, 60.481],
-    [100.111, 63.658],
-    [175.936, 87.402],
-    [80.197, 20.767],
-    [47.263, 16.938],
-    [190.488, 91.997],
-    [195.191, 101.974],
-    [200.277, 134.593],
-    [184.421, 136.858],
-    [189.857, 162.228],
-    [191.216, 173.1],
-    [193.481, 188.503],
-    [211.603, 185.332],
-    [210.697, 187.144],
-    [217.492, 220.669],
-    [124.168, 303.12],
-    [110.577, 304.48],
-    [12.722, 269.596],
-    [0.49, 263.254],
-    [0.49, 277.298],
-    [115.107, 317.618],
-    [123.715, 354.766],
-    [109.671, 360.656],
-    [109.671, 371.075],
-    [115.56, 391.009],
-    [116.013, 400.522],
-    [118.278, 407.771],
-    [119.184, 411.848],
-    [134.485, 408.224],
-    [140.93, 448.091],
-    [153.615, 448.091],
-    [143.648, 408.224],
-    [136.399, 361.109],
-    [127.339, 314.899],
-    [221.569, 233.807],
-    [229.271, 226.105],
-    [226.553, 208.437],
-    [204.354, 93.82],
-    [201.183, 83.853],
-    [196.2, 80.682],
-    [190.763, 82.947],
-    [97.892, 52.141],
-    [90.19, 59.842],]
-    }
-     
-    region3 =  {
-        "type": "polygon",
-        "vertices":[
-    [229.564, 220.295],
-    [230.251, 219.817],
-    [350.192, 261.08],
-    [448.946, 172.526],
-    [449.55, 176.235],
-    [450.337, 191.072],
-    [358.074, 270.353],
-    [356.219, 273.598],
-    [378.937, 402.952],
-    [371.983, 410.37],
-    [362.246, 362.152],
-    [347.874, 364.007],
-    [344.165, 352.879],
-    [341.383, 340.825],
-    [337.674, 313.934],
-    [338.601, 311.616],
-    [352.51, 308.834],
-    [346.483, 273.135],
-    [225.938, 231.408],
-    [230.111, 219.353],
-    ]
-    }
-    
-    region4 =  {
-        "type": "polygon",
-        "vertices":[
-    [81.036, 54.763],
-    [188.923, 92.318],
-    [205.15, 91.39],
-    [291.385, 15.818],
-    [285.358, 8.864],
-    [196.804, 82.581],
-    [93.878, 42.709],
-    [79.505, 51.982],
-    [82.751, 56.154],
-    [127.723, 38.536],
-    [239.922, 16.746],
-    [259.858, 26.945],
-    [284.895, 6.546],
-    ]
-    }
-    
-    region5 =  {
-        "type": "polygon",
-        "vertices":[
-    [413.144, 94.599],
-    [413.449, 93.917],
-    [423.995, 145.495],
-    [448.622, 140.848],
-    [448.157, 91.129],
-    [415.631, 92.523],
-    ]
-    }
-       
-    region6 =  {
-        "type": "polygon",
-        "vertices":[
-    [1.292, 116.56],
-    [66.987, 52.579],
-    [68.842, 55.824],
-    [82.751, 54.897],
-    [92.487, 35.888],
-    [272.377, 18.27],
-    [149.514, 22.906],
-    [162.496, 31.715],
-    [236.677, 20.125],
-    [325.694, 17.806],
-    [329.403, 23.37],
-    [402.194, 55.361],
-    [404.048, 0.188],
-    [0.703, 0.739],
-    [0.167, 117.024],
-    [1.615, 116.56],
-    [1.151, 116.56],
-    ]
-    }
-    
-    region7 =  {
-        "type": "polygon",
-        "vertices":[
-    [1.292, 116.56],
-    [66.987, 52.579],
-    [68.842, 55.824],
-    [82.751, 54.897],
-    [92.487, 35.888],
-    [272.377, 18.27],
-    [149.514, 22.906],
-    [162.496, 31.715],
-    [236.677, 20.125],
-    [325.694, 17.806],
-    [329.403, 23.37],
-    [402.194, 55.361],
-    [404.048, 0.188],
-    [0.703, 0.739],
-    [0.167, 117.024],
-    [1.615, 116.56],
-    [1.151, 116.56],
-    ]
-    }
-    
-    region8 =  {
-        "type": "polygon",
-        "vertices":[
-    [97.84, -1.48],
-    [77.256, 44.628],
-    [-1.175, 85.983],
-    [-1.175, 108.799],
-    [81.059, 50.332],
-    [76.306, 47.956],
-    [100.073, 42.252],
-    [114.808, 24.664],
-    [317.304, 2.323],
-    [296.389, -1.955],
-    [96.745, -3.381],
-    [97.221, -2.43],
-    [97.221, -2.43],
-    ]
-    }
 
-    region9 =  {
-        "type": "polygon",
-        "vertices":[
-    [388.605, 394.004],
-    [359.134, 399.233],
-    [360.085, 399.708],
-    [308.272, 444.39],
-    [363.412, 397.807],
-    [363.412, 399.708],
-    [307.322, 445.816],
-    [310.649, 444.39],
-    [89.615, 444.866],
-    [161.392, 442.014],
-    [170.899, 444.866],
-    [145.23, 438.686],
-    [109.104, 446.767],
-    [106.252, 448.668],
-    [366.264, 449.144],
-    [386.704, 393.529],
-    ]
-    }
     
     # Add more bars / regions here
     regions = [
         bar_region,
-        region2,
-        region3,
-        region4,
-        region5,
-        region6,
-        region7,
-        region8,
-        region9
         
         # # Example rectangle
         # {
@@ -1359,11 +1360,11 @@ if __name__ == "__main__":
     # filtered_reordered_spot_weights = filtered_reordered_spot_weights[:4094]
     # filtered_reordered_coords = filtered_reordered_coords[:4094]
     # # Save the filtered results
-    save_results(
-        filtered_reordered_coords,
-        filtered_reordered_spot_weights,
-        filename="slmsuite/nv_blob_detection/nv_blob_3546nvs_reordered.npz",
-    )
+    # save_results(
+    #     filtered_reordered_coords,
+    #     filtered_reordered_spot_weights,
+    #     filename="slmsuite/nv_blob_detection/nv_blob_3325nvs_reordered.npz",
+    # )
 
     # # Plot the original image with circles around each NV
     fig, ax = plt.subplots()
