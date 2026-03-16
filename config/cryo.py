@@ -253,7 +253,7 @@ config |= {
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
                 # "optimize_range": 0.02,
-                "optimize_range": 0.02,
+                "optimize_range": 0.008,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },

@@ -24,9 +24,11 @@ from utils.constants import VirtualLaserKey, NormMode
 
 def main(
     nv_sig,
-    freq_ghz,
-    num_reps,
-    num_runs,
+    freq_center_ghz=2.8786,
+    freq_span_mhz=200.0,
+    num_steps=51,
+    num_reps=1,
+    num_runs=20,
     uwave_ind=0,
     readout_vkey=VirtualLaserKey.IMAGING,
     readout_ns=None,
@@ -35,6 +37,7 @@ def main(
     do_targeting=True,
     do_plot=True,
     do_save=True,
+    shuffle=False,
     norm_mode=NormMode.SINGLE_VALUED,
 ):
     tb.reset_cfm()
@@ -42,8 +45,10 @@ def main(
 
     counter_server = tb.get_server_counter()
     pulsegen_server = tb.get_server_pulse_streamer()
+        
+    # readout_vkey=VirtualLaserKey.SPIN_READOUT
+    readout_vkey=VirtualLaserKey.if hasattr(nv_sig, "readout_vkey"):
 
-    # Readout duration from NV override or config default
     vld = tb.get_virtual_laser_dict(readout_vkey)
     if readout_ns is None:
         readout_ns = int(nv_sig.pulse_durations.get(readout_vkey, int(vld["duration"])))
@@ -63,6 +68,7 @@ def main(
     # Sequence setup
     seq_file = "resonance.py"
     seq_args = [
+        # pol_ns,
         readout_ns,
         int(uwave_ind),
         readout_vkey.name if hasattr(readout_vkey, "name") else str(readout_vkey),
@@ -72,12 +78,21 @@ def main(
 
     pulsegen_server.stream_load(seq_file, seq_args_string)
 
-    ref_counts = np.empty(num_runs, dtype=float)
-    sig_counts = np.empty(num_runs, dtype=float)
-    ref_counts[:] = np.nan
-    sig_counts[:] = np.nan
+    # frequency axis
+    span_ghz = freq_span_mhz * 1e-3
+    freqs_ghz = np.linspace(
+        freq_center_ghz - span_ghz / 2,
+        freq_center_ghz + span_ghz / 2,
+        num_steps,
+    )
 
-    opti_coords_list = []
+    sweep_order = np.arange(num_steps)
+    if shuffle:
+        np.random.shuffle(sweep_order)
+
+    sig_counts = np.full((num_runs, num_steps), np.nan, dtype=float)
+    ref_counts = np.full((num_runs, num_steps), np.nan, dtype=float)
+
     timestamp = dm.get_time_stamp()
 
     # plotting
@@ -94,7 +109,12 @@ def main(
     tb.init_safe_stop()
 
     for run_ind in range(num_runs):
+        counter_server.start_tag_stream()
+
         print(f"Run {run_ind + 1}/{num_runs}")
+        # print(f"uwave_power: {uwave_power_dbm}")
+        # print(f" VirtualLaserKey.SPIN_READOUT: {readout_ns} ns")
+
 
         if tb.safe_stop():
             break
@@ -107,24 +127,26 @@ def main(
                 print(f"Targeting failed on run {run_ind}: {e}")
                 opti_coords_list.append(None)
 
-        counter_server.start_tag_stream()
-
+        
         try:
-            counter_server.clear_buffer()
-            pulsegen_server.stream_start(int(num_reps))
+            for step_ind in sweep_order:
+                if tb.safe_stop():
+                    break
 
-            new_counts = counter_server.read_counter_modulo_gates(2, 1)
-            sample_counts = new_counts[0]
+                f = float(freqs_ghz[step_ind])
+                sig_gen.set_freq(f)
 
-            # first gate = ref, second gate = sig
-            ref_counts[run_ind] = sample_counts[0]
-            sig_counts[run_ind] = sample_counts[1]
+                counter_server.clear_buffer()
+                pulsegen_server.stream_start(int(num_reps))
 
-            print(
-                f"  ref={int(ref_counts[run_ind])}, "
-                f"sig={int(sig_counts[run_ind])}, "
-                f"norm={sig_counts[run_ind] / max(ref_counts[run_ind], 1):.4f}"
-            )
+                new_counts = counter_server.read_counter_modulo_gates(2, 1)
+                sample_counts = new_counts[0]
+                # print("len(new_counts) =", len(new_counts))
+                # print("first few =", new_counts[:5])
+
+                # gate0 = ref, gate1 = sig
+                ref_counts[run_ind, step_ind] = sample_counts[0]
+                sig_counts[run_ind, step_ind] = sample_counts[1]
 
         finally:
             try:
@@ -133,9 +155,12 @@ def main(
                 pass
 
         if do_plot:
-            valid = np.arange(run_ind + 1)
-            line_ref.set_data(valid, ref_counts[: run_ind + 1])
-            line_sig.set_data(valid, sig_counts[: run_ind + 1])
+            valid_runs = np.isfinite(sig_counts[: run_ind + 1]) & np.isfinite(ref_counts[: run_ind + 1])
+            with np.errstate(divide="ignore", invalid="ignore"):
+                norm_runs = sig_counts[: run_ind + 1] / np.maximum(ref_counts[: run_ind + 1], 1)
+            norm_mean = np.nanmean(norm_runs, axis=0)
+
+            line.set_data(freqs_ghz, norm_mean)
             ax.relim()
             ax.autoscale_view()
             plt.pause(0.01)
@@ -160,37 +185,11 @@ def main(
             dm.save_raw_data(raw_incremental, file_path)
 
     # process
-    valid_mask = np.isfinite(sig_counts) & np.isfinite(ref_counts)
-    sig_counts_valid = sig_counts[valid_mask].reshape(-1, 1)
-    ref_counts_valid = ref_counts[valid_mask].reshape(-1, 1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        norm_runs = sig_counts / np.maximum(ref_counts, 1)
 
-    if len(sig_counts_valid) > 0:
-        sig_kcps, ref_kcps, norm, norm_ste = tb.process_counts(
-            sig_counts_valid,
-            ref_counts_valid,
-            int(num_reps),
-            int(readout_ns),
-            norm_mode=norm_mode,
-        )
-        sig_kcps = float(sig_kcps[0])
-        ref_kcps = float(ref_kcps[0])
-        norm = float(norm[0])
-        norm_ste = float(norm_ste[0])
-    else:
-        sig_kcps = np.nan
-        ref_kcps = np.nan
-        norm = np.nan
-        norm_ste = np.nan
-
-    proc_data = {
-        "freq_ghz": float(freq_ghz),
-        "sig_kcps": sig_kcps,
-        "ref_kcps": ref_kcps,
-        "norm": norm,
-        "norm_ste": norm_ste,
-        "contrast": float(1.0 - norm) if np.isfinite(norm) else np.nan,
-        "num_valid_runs": int(np.sum(valid_mask)),
-    }
+    norm_mean = np.nanmean(norm_runs, axis=0)
+    norm_ste = np.nanstd(norm_runs, axis=0, ddof=1) / np.sqrt(np.sum(np.isfinite(norm_runs), axis=0))
 
     raw_data = {
         "timestamp": timestamp,
