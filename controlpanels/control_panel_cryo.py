@@ -980,7 +980,8 @@ if __name__ == "__main__":
     # pixel_xy = [0,0]  # galvo ref
     # pixel_xy = [-0.021, -0.052]s # zoom picture
     # pixel_xy = [0.093, 0.067] # NV Lovelace
-    pixel_xy = [-0.008, 0.009] # NV Lovelace
+    #pixel_xy = [-0.008, 0.009] # NV Lovelace
+    pixel_xy = [-0.037, -0.011]
     # pixel_xy = [-0.008, 0.003] # NV Lovelace
     # return
     nv_sig = NVSig(
