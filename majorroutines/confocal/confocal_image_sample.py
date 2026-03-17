@@ -112,7 +112,8 @@ def confocal_scan(nv_sig: NVSig, x_range, y_range, num_steps, nv_minus_init=Fals
             Xr = []
             Yr = []
             for row in range(h):
-                y = y1d[(h - 1) - row]   # bottom row first
+                y = y1d[(h - 1) - row]
+                # y = y1d[row]   # bottom row first
                 for col in range(w):
                     x = x1d[col]        # left -> right always
                     Xr.append(x); Yr.append(y)

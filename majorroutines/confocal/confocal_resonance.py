@@ -11,7 +11,7 @@ Very close to old working ESR style:
 Returns:
     raw_data, proc_data
 """
-
+import sys
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -28,10 +28,9 @@ def main(
     freq_span_mhz=200.0,
     num_steps=51,
     num_reps=1,
-    num_runs=20,
+    num_runs=40,
     uwave_ind=0,
-    readout_vkey=VirtualLaserKey.IMAGING,
-    readout_ns=None,
+    readout_ns= 10e6, #None, # if not NONE shows normalized plot
     uwave_power_dbm=None,
     laser_power=None,
     do_targeting=True,
@@ -47,14 +46,18 @@ def main(
     pulsegen_server = tb.get_server_pulse_streamer()
         
     # readout_vkey=VirtualLaserKey.SPIN_READOUT
-    readout_vkey=VirtualLaserKey.if hasattr(nv_sig, "readout_vkey"):
+    # readout_vkey=VirtualLaserKey.if hasattr(nv_sig, "readout_vkey"):
+    readout_vkey=VirtualLaserKey.SPIN_READOUT
 
     vld = tb.get_virtual_laser_dict(readout_vkey)
     if readout_ns is None:
         readout_ns = int(nv_sig.pulse_durations.get(readout_vkey, int(vld["duration"])))
     readout_ns = int(readout_ns)
 
-    # MW setup
+    spin_pol_vkey=VirtualLaserKey.SPIN_POL
+    vld_pol = tb.get_virtual_laser_dict(spin_pol_vkey)
+    pol_ns = int(nv_sig.pulse_durations.get(spin_pol_vkey, int(vld_pol["duration"])))
+
     sig_gen = tb.get_server_sig_gen(int(uwave_ind))
     vsg = tb.get_virtual_sig_gen_dict(int(uwave_ind))
 
@@ -62,10 +65,9 @@ def main(
         uwave_power_dbm = vsg.get("uwave_power", None)
     if uwave_power_dbm is not None:
         sig_gen.set_amp(float(uwave_power_dbm))
-    sig_gen.set_freq(float(freq_ghz))
     sig_gen.uwave_on()
 
-    # Sequence setup
+    # sequence is loaded once
     seq_file = "resonance.py"
     seq_args = [
         # pol_ns,
@@ -75,7 +77,6 @@ def main(
         laser_power,
     ]
     seq_args_string = tb.encode_seq_args(seq_args)
-
     pulsegen_server.stream_load(seq_file, seq_args_string)
 
     # frequency axis
@@ -94,31 +95,25 @@ def main(
     ref_counts = np.full((num_runs, num_steps), np.nan, dtype=float)
 
     timestamp = dm.get_time_stamp()
+    opti_coords_list = []
 
-    # plotting
     if do_plot:
         fig, ax = plt.subplots()
-        ax.set_xlabel("Run")
-        ax.set_ylabel("Counts")
-        (line_ref,) = ax.plot([], [], label="Ref")
-        (line_sig,) = ax.plot([], [], label="Sig")
-        ax.legend()
+        ax.set_xlabel("Frequency (GHz)")
+        ax.set_ylabel("Normalized signal")
+        line, = ax.plot([], [], "o-")
     else:
         fig = None
 
     tb.init_safe_stop()
 
     for run_ind in range(num_runs):
-        counter_server.start_tag_stream()
-
         print(f"Run {run_ind + 1}/{num_runs}")
-        # print(f"uwave_power: {uwave_power_dbm}")
-        # print(f" VirtualLaserKey.SPIN_READOUT: {readout_ns} ns")
-
 
         if tb.safe_stop():
             break
-
+        
+        ## Drift correction / targeting to be implemented here
         if do_targeting:
             try:
                 opti_coords = targeting.main_with_cxn(nv_sig)
@@ -127,7 +122,8 @@ def main(
                 print(f"Targeting failed on run {run_ind}: {e}")
                 opti_coords_list.append(None)
 
-        
+        counter_server.start_tag_stream()
+
         try:
             for step_ind in sweep_order:
                 if tb.safe_stop():
@@ -165,25 +161,6 @@ def main(
             ax.autoscale_view()
             plt.pause(0.01)
 
-        if do_save:
-            raw_incremental = {
-                "timestamp": timestamp,
-                "nv_sig": nv_sig,
-                "freq_ghz": float(freq_ghz),
-                "num_reps": int(num_reps),
-                "num_runs": int(num_runs),
-                "uwave_ind": int(uwave_ind),
-                "uwave_power_dbm": uwave_power_dbm,
-                "readout_ns": int(readout_ns),
-                "opti_coords_list": opti_coords_list,
-                "sig_counts": sig_counts.tolist(),
-                "ref_counts": ref_counts.tolist(),
-            }
-            file_path = dm.get_file_path(
-                __file__, timestamp, nv_sig["name"], "incremental"
-            )
-            dm.save_raw_data(raw_incremental, file_path)
-
     # process
     with np.errstate(divide="ignore", invalid="ignore"):
         norm_runs = sig_counts / np.maximum(ref_counts, 1)
@@ -194,48 +171,62 @@ def main(
     raw_data = {
         "timestamp": timestamp,
         "nv_sig": nv_sig,
-        "freq_ghz": float(freq_ghz),
+        "freqs_ghz": freqs_ghz.tolist(),
         "num_reps": int(num_reps),
         "num_runs": int(num_runs),
         "uwave_ind": int(uwave_ind),
         "uwave_power_dbm": uwave_power_dbm,
         "readout_ns": int(readout_ns),
-        "opti_coords_list": opti_coords_list,
         "sig_counts": sig_counts.tolist(),
         "ref_counts": ref_counts.tolist(),
-        "sig_kcps": sig_kcps,
-        "ref_kcps": ref_kcps,
-        "norm": norm,
-        "norm_ste": norm_ste,
+        "norm_mean": norm_mean.tolist(),
+        "norm_ste": norm_ste.tolist(),
+        "opti_coords_list": opti_coords_list,
     }
 
-    print("\nFinal results")
-    print(f"freq       = {freq_ghz:.6f} GHz")
-    print(f"sig kcps   = {sig_kcps:.3f}")
-    print(f"ref kcps   = {ref_kcps:.3f}")
-    print(f"norm       = {norm:.6f} ± {norm_ste:.6f}")
-    print(f"contrast   = {proc_data['contrast']:.6f}")
+    # print("Resonance measurement complete.")
+    ts = dm.get_time_stamp()
+    file_path  = dm.get_file_path(__file__, ts, getattr(nv_sig, "name", "nv"))
+    dm.save_raw_data(raw_data, file_path)
+    dm.save_figure(fig, file_path)
 
-    if do_save:
-        file_path = dm.get_file_path(__file__, timestamp, nv_sig["name"])
-        if fig is not None:
-            dm.save_figure(fig, file_path)
-        dm.save_raw_data(raw_data, file_path)
+    # file_path = dm.get_file_path(__file__, timestamp, nv_sig["name"])
+    # if fig is not None:
+    #     dm.save_figure(fig, file_path)
+    #     dm.save_raw_data(raw_data, file_path)
+    print(f"Saved data to {file_path}")
+
+
+    # if do_save:
+    #     file_path = dm.get_file_path(__file__, timestamp, nv_sig["name"])
+    #     print('test')
+    #     if fig is not None:
+    #         dm.save_figure(fig, file_path)
+    #     dm.save_raw_data(raw_data, file_path)
+    #     print(f"Saved data to {file_path}")
 
     tb.reset_cfm()
-    return raw_data, proc_data
-
+    return raw_data
 
 if __name__ == "__main__":
     # example:
-    # raw, proc = main(
-    #     nv_sig=nv_sig,
-    #     freq_ghz=2.8786,
-    #     num_reps=10000,
-    #     num_runs=10,
-    #     uwave_ind=0,
-    # )
-    pass
+    kpl.init_kplotlib()
+    data = dm.get_raw_data(file_stem="2026_03_09-13_37_07-(lovelace)", load_npz=True)
+    nv_sig = data["nv_sig"]
+    sig_counts = np.asarray(data["sig_counts"]) 
+    ref_counts = np.asarray(data["ref_counts"])   
+    norm_mean = np.asarray(data["norm_mean"])
+    norm_ste = np.asarray(data["norm_ste"])
+    freqs_ghz = np.asarray(data["freqs_ghz"])
+
+    plt.figure()
+    plt.errorbar(freqs_ghz, norm_mean, yerr=norm_ste, fmt="o-")
+    plt.xlabel("Frequency (GHz)")
+    plt.ylabel("Normalized signal")
+    plt.title("Confocal ESR")
+    plt.grid(True) 
+    kpl.show(block =True)
+    
 
 # # -*- coding: utf-8 -*-
 # """
