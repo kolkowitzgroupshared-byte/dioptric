@@ -33,8 +33,8 @@ green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
 calibration_coords_pixel = [[367.181, 25.354], [229.35, 379.51], [34.93, 44.916]]
-calibration_coords_green = [[70.549, 130.563], [101.642, 69.085], [130.588, 132.298],]
-calibration_coords_red = [[41.956, 88.71], [69.537, 40.334],[90.972, 93.197],]
+calibration_coords_green = [[70.546, 130.492],[101.628, 69.147],[130.573, 132.308]]
+calibration_coords_red = [[41.956, 88.653],[69.523, 40.383],[90.96, 93.205]]
 
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -161,8 +161,8 @@ config |= {
         "resolution": (512, 512),
         "spot_radius": 3.0,  # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
-        # "em_gain": 5000,
-        "em_gain": 10,
+        "em_gain": 5000,
+        # "em_gain": 10,
         "temp": -60,
         "timeout": 60e3,  # ms
         # "timeout": -1,  # No timeout
@@ -251,7 +251,6 @@ config |= {
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 1e6},
             VirtualLaserKey.WIDEFIELD_CHARGE_READOUT: {
                 "physical_name": yellow_laser,
-                # "duration": 200e6,
                 "duration": 60e6,
                 # "duration": 50e6,
                 # "duration": 24e6,  # for red calibration
@@ -298,7 +297,7 @@ config |= {
                 "control_mode": PosControlMode.SEQUENCE,
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
-                "optimize_range": 2.4,
+                "optimize_range": 2.0,
                 "units": "MHz",
                 "opti_virtual_laser_key": VirtualLaserKey.ION,
                 "aod": True,
@@ -942,12 +941,12 @@ opx_config = {
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.15},
         # Red AOD
-        "red_aod_cw-opti": {"type": "constant", "sample": 0.13},
-        "red_aod_cw-ion": {"type": "constant", "sample": 0.13},
-        "red_aod_cw-scc": {"type": "constant", "sample": 0.13},
+        "red_aod_cw-opti": {"type": "constant", "sample": 0.11},
+        "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
+        "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.45},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.35}, ## 195NV johnson
+        "yellow_charge_readout": {"type": "constant", "sample": 0.33}, 
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other

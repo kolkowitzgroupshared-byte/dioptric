@@ -265,10 +265,10 @@ def do_optimize_green(nv_sig):
 
 def do_optimize_red(nv_sig, ref_nv_sig):
     opti_coords = []
-    # axes_list = [Axes.X, Axes.Y]
-    axes_list = [Axes.Y, Axes.X]
+    axes_list = [Axes.X, Axes.Y]
+    # axes_list = [Axes.Y, Axes.X]
     # shuffle(axes_list)
-    for ind in range(1):
+    for ind in range(2):
         axes = axes_list[ind]
         ret_vals = targeting.optimize(nv_sig, coords_key=red_laser_aod, axes=axes)
         opti_coords.append(ret_vals[0])
@@ -1656,7 +1656,7 @@ if __name__ == "__main__":
     date_str = "2026_02_20"
     sample_coords = [-0.75, 1.8]
     z_coord = -2.4
-    # z_coord = -3.8
+    # z_coord = -4.8
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
@@ -1666,7 +1666,12 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_3554nvs_reordered.npz",
         file_path="slmsuite/nv_blob_detection/nv_blob_3325nvs_reordered.npz",   
     ).tolist()
-    pixel_coords_list = [[214.998, 203.945], [367.181, 25.354], [229.35, 379.51], [34.93, 44.916]]
+    # pixel_coords_list = [
+    #     [214.998, 203.945], 
+    #     [63.98, 100.887], 
+    #     [238.084, 328.972], 
+    #     [308.461, 104.005],
+    #     ]
 
     green_coords_list = [
         [
@@ -1687,25 +1692,39 @@ if __name__ == "__main__":
         ]
         for nv_pixel_coords in pixel_coords_list
     ]
-
+    # green_coords_list = [
+    #     [101.07, 100.883], 
+    #     [126.355, 121.798], 
+    #     [99.157, 78.076], 
+    #     [82.498, 117.319]]
+    # red_coords_list = [[68.408, 66.649], 
+    #                    [87.066, 84.623],
+    #                    [67.154, 47.3], 
+    #                    [51.451, 78.381]]
+    # print(red_coords_list)
+    # print(green_coords_list)
     # sys.exit()
     print(f"Number of NVs: {len(pixel_coords_list)}")
     print(f"Reference NV:{pixel_coords_list[0]}")
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
-
-#     pixel_coords_list = [[214.998, 203.945], [367.181, 25.354], [229.35, 379.51], [34.93, 44.916]]
+#     pixel_coords_list = [
+#         [214.998, 203.945], 
+#         [367.181, 25.354], 
+#         [229.35, 379.51], 
+#         [34.93, 44.916],
+#         ]
 #     green_coords_list = [
-#         [101.126, 100.673],
-#         [70.549, 130.563],
-#         [101.642, 69.085],
-#         [130.588, 132.298],
+#         [101.092, 100.667],
+#         [70.546, 130.492],
+#         [101.628, 69.147],
+#         [130.573, 132.308],
 #     ]
 #     red_coords_list = [
-#     [68.003, 65.982],
-#     [41.956, 88.71],
-#     [69.537, 40.334],
-#     [90.972, 93.197],
+#     [67.975, 65.976],
+#     [41.956, 88.653],
+#     [69.523, 40.383],
+#     [90.96, 93.205],
 # ]
     ###
     num_nvs = len(pixel_coords_list)
@@ -1803,7 +1822,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts = 1100.0
-    # nv_sig.expected_counts = 18000
+    nv_sig.expected_counts = 1800
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:2]
     # print(f"length of NVs list:{len(nv_list)}")
@@ -1843,8 +1862,8 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_compensate_for_drift(nv_sig)
-        do_widefield_image_sample(nv_sig, 50)
+        # do_compensate_for_drift(nv_sig)
+        # do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list:
@@ -1904,8 +1923,8 @@ if __name__ == "__main__":
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
         # do_optimize_pol_amp(nv_list)
-        # do_optimize_pol_duration(nv_list)
-        # do_optimize_readout_amp(nv_list)
+        do_optimize_pol_duration(nv_list)
+        do_optimize_readout_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
     
         # do_optimize_readout_duration(nv_list)
