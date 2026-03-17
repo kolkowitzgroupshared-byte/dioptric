@@ -760,6 +760,11 @@ def get_server_tagger():
     return common.get_server("tagger")
 
 
+def get_server_wavegen():
+    """Get the photon time tagger server for this setup, e.g. opx or swabian"""
+    return common.get_server("waveform_gen")
+
+
 def get_server_temp_controller():
     return common.get_server("temp_controller")
 

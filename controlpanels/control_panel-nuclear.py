@@ -18,7 +18,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import websocket
 
-from majorroutines.spectroscopy import (
+from majorroutines.caf_spectroscopy import (
+    laser_char,
+    lifetime_caf,
+    resonance,
     singlet_search,
     # singlet_search_1043,
     singlet_search_with_etalon,
@@ -35,6 +38,37 @@ from utils import tool_belt as tb
 from utils.constants import Axes, CoordsKey, NVSig, VirtualLaserKey
 
 
+def do_resonance(nv_sig):
+    # resonance.main(
+    #     nv_sig,
+    #     1.7,  # GHz,
+    #     0.3,
+    #     num_steps= ,
+    #     num_runs= ,
+
+    # )
+
+    resonance.main(
+        nv_sig,
+        center_freq_ghz=1.72,
+        span_mhz=300,
+        num_steps=101,
+        num_reps=20000,
+        num_runs=6,
+        uwave_ind=0,
+        mw_dur_ns=2000,
+        shuffle_freqs=True,
+        shuffle_seed=0,
+        do_save=True,
+        do_plot=True,
+    )
+
+
+def do_awg_test():
+    laser_char.main()
+    return
+
+
 def do_stationary_count(nv_sig, disable_opt=None):
     run_time = 3 * 60 * 10**9  # ns
     stationary_count.main(
@@ -42,6 +76,47 @@ def do_stationary_count(nv_sig, disable_opt=None):
         run_time,
         disable_opt=disable_opt,
     )
+
+
+def do_lifetime_measurement(nv_sig):
+    readout_time, pulse_time = 0.15e3, 0.2e3
+    time_args = [readout_time, pulse_time]
+    print("Lifetime!")
+    lifetime_caf.main(
+        nv_sig,
+        apd_indices=[0],
+        readout_times=time_args,
+        num_reps=70000,
+        num_runs=100,
+        num_bins=200,
+    )
+
+
+def do_th_lifetime_measurement(caf_sig):
+
+    readout_time, pulse_time = 0.8e3, 1e3
+    time_args = [readout_time, pulse_time]
+    # print("CaF2 Lifetime!")
+    print("Laser Lifetime!")
+    lifetime_caf.main(
+        caf_sig,
+        apd_indices=[0],
+        readout_times=time_args,
+        filter_pos=[2, 2],  # [2, 1],  # Slider 1 and 3  0, 2
+        num_reps=100000,
+        num_runs=1,
+        num_bins=200,
+        laser_power=5e-3,
+    )
+
+    # Simple lifetime (715 SP, 715 LP)
+    # LOW HIGH LOW LOW LOW ... LOW
+
+    # LOW HIGH HIGH HIGH ... LOW
+
+    # LOW HIGH HIGH LOW ... LOW HIGH HIGH LOW ... LOW HIGH HIGH LOW
+
+    return
 
 
 def do_singlet_search():
@@ -428,7 +503,10 @@ if __name__ == "__main__":
     try:
         # do_pulse_streamer_constant(digital_channels=(0,))
         # ^leave the comma at the end or it will complain
-        do_stationary_count(th_sig, disable_opt=True)
+        # do_stationary_count(th_sig, disable_opt=True)
+        # do_lifetime_measurement(th_sig)
+        # do_th_lifetime_measurement(th_sig)
+        do_awg_test()
         # print("hi")
         # test_shutter()
         # test_multimeter()
