@@ -31,7 +31,7 @@ from majorroutines.widefield import (
     crosstalk_check,
     image_sample,
     optimize_amp_duration_charge_state_histograms,
-    optimize_charge_state_histograms_mcc,
+    optimize_charge_state_histograms,
     optimize_scc,
     optimize_scc_amp_duration,
     power_rabi,
@@ -127,7 +127,7 @@ def do_optimize_pol_duration(nv_list):
     # num_runs = 2
     min_duration = 20
     max_duration = 608
-    return optimize_charge_state_histograms_mcc.optimize_pol_duration(
+    return optimize_charge_state_histograms.optimize_pol_duration(
         nv_list, num_steps, num_reps, num_runs, min_duration, max_duration
     )
 
@@ -140,7 +140,7 @@ def do_optimize_pol_amp(nv_list):
     num_runs = 250
     min_amp = 0.6
     max_amp = 1.4
-    return optimize_charge_state_histograms_mcc.optimize_pol_amp(
+    return optimize_charge_state_histograms.optimize_pol_amp(
         nv_list, num_steps, num_reps, num_runs, min_amp, max_amp
     )
 
@@ -153,7 +153,7 @@ def do_optimize_readout_duration(nv_list):
     num_runs = 225
     min_duration = 12e6
     max_duration = 108e6
-    return optimize_charge_state_histograms_mcc.optimize_readout_duration(
+    return optimize_charge_state_histograms.optimize_readout_duration(
         nv_list, num_steps, num_reps, num_runs, min_duration, max_duration
     )
 
@@ -168,7 +168,7 @@ def do_optimize_readout_amp(nv_list):
     # num_runs = 200
     min_amp = 0.8
     max_amp = 1.2
-    return optimize_charge_state_histograms_mcc.optimize_readout_amp(
+    return optimize_charge_state_histograms.optimize_readout_amp(
         nv_list, num_steps, num_reps, num_runs, min_amp, max_amp
     )
 

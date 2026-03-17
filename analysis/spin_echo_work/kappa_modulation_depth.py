@@ -20,7 +20,6 @@ from itertools import combinations, product
 
 # ========= Exact-κ orientation-aware ESEEM catalog (Hz) ======================
 
-
 # Pauli/2:
 Sx = 0.5 * np.array([[0, 1], [1, 0]], float)
 Sy = 0.5 * np.array([[0, -1j], [1j, 0]], complex)

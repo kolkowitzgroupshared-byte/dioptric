@@ -20,158 +20,74 @@ import utils.tool_belt as tb
 from servers.timing.sequencelibrary.QM_opx import seq_utils
 from servers.timing.sequencelibrary.QM_opx.camera import base_scc_sequence
 
-# def emit_phase_switch(uwave_ind_list, phi_var, allowed_phases):
-#     # Build a QUA switch with the compile-time list of allowed phases
-#     with qua.switch_(phi_var):
-#         for ph in allowed_phases:
-#             with qua.case_(int(ph)):
-#                 seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=int(ph))
-
-# def get_seq(base_scc_seq_args, step_vals, evol_time, num_reps=1):
-#     buffer = seq_utils.get_widefield_operation_buffer()
-#     allowed_cases = sorted({int(x % 360) for x in step_vals if int(x % 360) != 360})
-#     tau_ticks = seq_utils.convert_ns_to_cc(evol_time)
-#     two_tau_ticks = 2 * tau_ticks 
-
-#     with qua.program() as seq:
-#         seq_utils.init()
-#         seq_utils.macro_run_aods()
-#         step_val = qua.declare(int)
-        
-#         # def uwave_macro_sig(uwave_ind_list, phi):
-#         #     qua.align()
-#         #     seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=0)
-#         #     qua.wait(tau_ticks)
-#         #     seq_utils.macro_pi_pulse(uwave_ind_list, phase=0)
-#         #     qua.wait(tau_ticks)
-#         #     emit_phase_switch(uwave_ind_list, phi, allowed_cases)
-#         #     qua.wait(buffer)
-
-#         # def uwave_macro_sig(uwave_ind_list, phi):
-#         #     qua.align()
-#         #     seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=0)
-#         #     qua.wait(tau_ticks)
-#         #     seq_utils.macro_pi_pulse(uwave_ind_list, phase=0)
-#         #     qua.wait(two_tau_ticks)
-#         #     seq_utils.macro_pi_pulse(uwave_ind_list, phase=90)
-#         #     qua.wait(two_tau_ticks)
-#         #     seq_utils.macro_pi_pulse(uwave_ind_list, phase=0)
-#         #     qua.wait(two_tau_ticks)
-#         #     seq_utils.macro_pi_pulse(uwave_ind_list, phase=90)
-#         #     qua.wait(two_tau_ticks)
-#         #     seq_utils.macro_pi_pulse(uwave_ind_list, phase=90)
-#         #     qua.wait(two_tau_ticks)
-#         #     seq_utils.macro_pi_pulse(uwave_ind_list, phase=0)
-#         #     qua.wait(two_tau_ticks)
-#         #     seq_utils.macro_pi_pulse(uwave_ind_list, phase=90)
-#         #     qua.wait(two_tau_ticks)
-#         #     seq_utils.macro_pi_pulse(uwave_ind_list, phase=0)
-#         #     qua.wait(tau_ticks)
-#         #     emit_phase_switch(uwave_ind_list, phi, allowed_cases)
-#         #     qua.wait(buffer)
-            
-            
-#         def uwave_macro_sig(uwave_ind_list, phi):
-#             qua.align()
-#             seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=0)
-#             qua.wait(tau_ticks)
-#             seq_utils.macro_pi_pulse(uwave_ind_list, phase=0)
-#             qua.wait(two_tau_ticks)
-#             seq_utils.macro_pi_pulse(uwave_ind_list, phase=90)
-#             qua.wait(two_tau_ticks)
-#             seq_utils.macro_pi_pulse(uwave_ind_list, phase=0)
-#             qua.wait(two_tau_ticks)
-#             seq_utils.macro_pi_pulse(uwave_ind_list, phase=90)
-#             qua.wait(tau_ticks)
-#             emit_phase_switch(uwave_ind_list, phi, allowed_cases)
-#             qua.wait(buffer)
-        
-    
-#         with qua.for_each_(step_val, step_vals):
-#             base_scc_sequence.macro(
-#                 base_scc_seq_args,
-#                 [uwave_macro_sig],
-#                 step_val=step_val,
-#                 num_reps=num_reps,
-#             )
-
-#     seq_ret_vals = []
-#     return seq, seq_ret_vals
-
-import re
-from qm import qua
-from servers.timing.sequencelibrary.QM_opx import seq_utils
-from servers.timing.sequencelibrary.QM_opx.camera import base_scc_sequence
-
-
 def emit_phase_switch(uwave_ind_list, phi_var, allowed_phases):
+    # Build a QUA switch with the compile-time list of allowed phases
     with qua.switch_(phi_var):
         for ph in allowed_phases:
             with qua.case_(int(ph)):
                 seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=int(ph))
 
-
-def get_seq(base_scc_seq_args, step_vals, evol_time, seq_type="xy8-1", num_reps=1):
+def get_seq(base_scc_seq_args, step_vals, evol_time, seq_type, num_reps=1):
     buffer = seq_utils.get_widefield_operation_buffer()
-
-    # --- IMPORTANT: make 360 -> 0 so switch cases always match ---
-    step_vals_mod = [int(ph) % 360 for ph in step_vals]
-    allowed_cases = sorted(set(step_vals_mod))
-
+    allowed_cases = sorted({int(x % 360) for x in step_vals if int(x % 360) != 360})
     tau_ticks = seq_utils.convert_ns_to_cc(evol_time)
-    two_tau_ticks = 2 * tau_ticks
-
-    # Phase patterns (same as your working XY8 reference)
-    phase_dict = {
-        "ramsey": [],  # no pi pulses
-        "hahn": [0],   # spin echo = Hahn
-        "xy2": [0, 90],
-        "xy4": [0, 90, 0, 90],
-        "xy8": [0, 90, 0, 90, 90, 0, 90, 0],
-        "xy16": [0, 90, 0, 90, 90, 0, 90, 0, 180, 270, 180, 270, 270, 180, 270, 180],
-    }
-
-    # Parse seq_type, e.g. "xy8-4" → base="xy8", reps=4
-    m = re.match(r"([a-zA-Z_]+\d*)(?:-(\d+))?$", str(seq_type).lower())
-    if m is None:
-        raise ValueError(f"Bad seq_type format: {seq_type}")
-    base_seq = m.group(1)
-    num_blocks = int(m.group(2)) if m.group(2) else 1
-
-    if base_seq not in phase_dict:
-        raise ValueError(f"Unknown seq_type '{seq_type}'. Try: ramsey, hahn, xy4, xy8-2, xy16-1, ...")
-
-    pi_phases = phase_dict[base_seq] * num_blocks
+    two_tau_ticks = 2 * tau_ticks 
 
     with qua.program() as seq:
         seq_utils.init()
         seq_utils.macro_run_aods()
-        step_val = qua.declare(int)  # this is the FINAL π/2 PHASE (deg)
+        step_val = qua.declare(int)
+        
+        # def uwave_macro_sig(uwave_ind_list, phi):
+        #     qua.align()
+        #     seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=0)
+        #     qua.wait(tau_ticks)
+        #     seq_utils.macro_pi_pulse(uwave_ind_list, phase=0)
+        #     qua.wait(tau_ticks)
+        #     emit_phase_switch(uwave_ind_list, phi, allowed_cases)
+        #     qua.wait(buffer)
 
         def uwave_macro_sig(uwave_ind_list, phi):
             qua.align()
-
-            # π/2
             seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=0)
-
-            # First free evolution = τ
             qua.wait(tau_ticks)
-
-            # π pulse train (XY / Hahn)
-            # between π pulses: 2τ ; after last π: τ
-            for i, ph in enumerate(pi_phases):
-                seq_utils.macro_pi_pulse(uwave_ind_list, phase=int(ph))
-                if i < len(pi_phases) - 1:
-                    qua.wait(two_tau_ticks)
-                else:
-                    qua.wait(tau_ticks)
-
-            # final π/2 with phase scan
+            seq_utils.macro_pi_pulse(uwave_ind_list, phase=0)
+            qua.wait(two_tau_ticks)
+            seq_utils.macro_pi_pulse(uwave_ind_list, phase=90)
+            qua.wait(two_tau_ticks)
+            seq_utils.macro_pi_pulse(uwave_ind_list, phase=0)
+            qua.wait(two_tau_ticks)
+            seq_utils.macro_pi_pulse(uwave_ind_list, phase=90)
+            qua.wait(two_tau_ticks)
+            seq_utils.macro_pi_pulse(uwave_ind_list, phase=90)
+            qua.wait(two_tau_ticks)
+            seq_utils.macro_pi_pulse(uwave_ind_list, phase=0)
+            qua.wait(two_tau_ticks)
+            seq_utils.macro_pi_pulse(uwave_ind_list, phase=90)
+            qua.wait(two_tau_ticks)
+            seq_utils.macro_pi_pulse(uwave_ind_list, phase=0)
+            qua.wait(tau_ticks)
             emit_phase_switch(uwave_ind_list, phi, allowed_cases)
-
             qua.wait(buffer)
-
-        with qua.for_each_(step_val, step_vals_mod):
+            
+            
+        # def uwave_macro_sig(uwave_ind_list, phi):
+        #     qua.align()
+        #     seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=0)
+        #     qua.wait(tau_ticks)
+        #     seq_utils.macro_pi_pulse(uwave_ind_list, phase=0)
+        #     qua.wait(two_tau_ticks)
+        #     seq_utils.macro_pi_pulse(uwave_ind_list, phase=90)
+        #     qua.wait(two_tau_ticks)
+        #     seq_utils.macro_pi_pulse(uwave_ind_list, phase=0)
+        #     qua.wait(two_tau_ticks)
+        #     seq_utils.macro_pi_pulse(uwave_ind_list, phase=90)
+        #     qua.wait(tau_ticks)
+        #     emit_phase_switch(uwave_ind_list, phi, allowed_cases)
+        #     qua.wait(buffer)
+        
+    
+        with qua.for_each_(step_val, step_vals):
             base_scc_sequence.macro(
                 base_scc_seq_args,
                 [uwave_macro_sig],
@@ -179,7 +95,91 @@ def get_seq(base_scc_seq_args, step_vals, evol_time, seq_type="xy8-1", num_reps=
                 num_reps=num_reps,
             )
 
-    return seq, []
+    seq_ret_vals = []
+    return seq, seq_ret_vals
+
+# import re
+# from qm import qua
+# from servers.timing.sequencelibrary.QM_opx import seq_utils
+# from servers.timing.sequencelibrary.QM_opx.camera import base_scc_sequence
+
+
+# def emit_phase_switch(uwave_ind_list, phi_var, allowed_phases):
+#     with qua.switch_(phi_var):
+#         for ph in allowed_phases:
+#             with qua.case_(int(ph)):
+#                 seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=int(ph))
+
+
+# def get_seq(base_scc_seq_args, step_vals, evol_time, seq_type="xy8-1", num_reps=1):
+#     buffer = seq_utils.get_widefield_operation_buffer()
+
+#     # --- IMPORTANT: make 360 -> 0 so switch cases always match ---
+#     step_vals_mod = [int(ph) % 360 for ph in step_vals]
+#     allowed_cases = sorted(set(step_vals_mod))
+
+#     tau_ticks = seq_utils.convert_ns_to_cc(evol_time)
+#     two_tau_ticks = 2 * tau_ticks
+
+#     # Phase patterns (same as your working XY8 reference)
+#     phase_dict = {
+#         "ramsey": [],  # no pi pulses
+#         "hahn": [0],   # spin echo = Hahn
+#         "xy2": [0, 90],
+#         "xy4": [0, 90, 0, 90],
+#         "xy8": [0, 90, 0, 90, 90, 0, 90, 0],
+#         "xy16": [0, 90, 0, 90, 90, 0, 90, 0, 180, 270, 180, 270, 270, 180, 270, 180],
+#     }
+
+#     # Parse seq_type, e.g. "xy8-4" → base="xy8", reps=4
+#     m = re.match(r"([a-zA-Z_]+\d*)(?:-(\d+))?$", str(seq_type).lower())
+#     if m is None:
+#         raise ValueError(f"Bad seq_type format: {seq_type}")
+#     base_seq = m.group(1)
+#     num_blocks = int(m.group(2)) if m.group(2) else 1
+
+#     if base_seq not in phase_dict:
+#         raise ValueError(f"Unknown seq_type '{seq_type}'. Try: ramsey, hahn, xy4, xy8-2, xy16-1, ...")
+
+#     pi_phases = phase_dict[base_seq] * num_blocks
+
+#     with qua.program() as seq:
+#         seq_utils.init()
+#         seq_utils.macro_run_aods()
+#         step_val = qua.declare(int)  # this is the FINAL π/2 PHASE (deg)
+
+#         def uwave_macro_sig(uwave_ind_list, phi):
+#             qua.align()
+
+#             # π/2
+#             seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=0)
+
+#             # First free evolution = τ
+#             qua.wait(tau_ticks)
+
+#             # π pulse train (XY / Hahn)
+#             # between π pulses: 2τ ; after last π: τ
+#             for i, ph in enumerate(pi_phases):
+#                 seq_utils.macro_pi_pulse(uwave_ind_list, phase=int(ph))
+#                 if i < len(pi_phases) - 1:
+#                     qua.wait(two_tau_ticks)
+#                 else:
+#                     qua.wait(tau_ticks)
+
+#             # final π/2 with phase scan
+#             emit_phase_switch(uwave_ind_list, phi, allowed_cases)
+
+#             qua.wait(buffer)
+
+#         with qua.for_each_(step_val, step_vals_mod):
+#             base_scc_sequence.macro(
+#                 base_scc_seq_args,
+#                 [uwave_macro_sig],
+#                 step_val=step_val,
+#                 num_reps=num_reps,
+#             )
+
+#     return seq, []
 
 
 

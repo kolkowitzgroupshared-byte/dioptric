@@ -162,7 +162,10 @@ if __name__ == "__main__":
     D = 2.8785
     gamma = 2.8025
     # Your three after-lines (any order)
-    f_after3 = [2.7991, 2.8282, 2.8697]
+    # f_after3 = [2.7991, 2.8282, 2.8697]
+    # f_after3  = [2.7829, 2.771367, 2.8202, 2.810689] ### Coils off
+    f_after3  = [2.7829, 2.771367,  2.810689] ### Coils off
+    # f_after3  = [2.7829, 2.771367, 2.8202] ### Coils off
 
     out3 = solve_B_from_three_odmr(f_after3, D_GHz=D, gamma_e_MHz_per_G=gamma)
     print_three_line_summary(f_after3, D_GHz=D, gamma_e_MHz_per_G=gamma, out3=out3)

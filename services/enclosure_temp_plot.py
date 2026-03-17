@@ -3,7 +3,6 @@
 Created on June 16th, 2023
 @author: Saroj B Chand
 """
-
 import datetime
 import os
 
@@ -13,7 +12,6 @@ import numpy as np
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 from scipy import stats  # for linear regression drift estimate
-
 from utils import kplotlib as kplt
 
 kplt.init_kplotlib()
@@ -21,10 +19,9 @@ kplt.init_kplotlib()
 # User-configurable parameters
 # ----------------------------
 base_folder = "G:\\NV_Widefield_RT_Setup_Enclosure_Temp_Logs"
-hours = 150  # window to analyze & plot
+hours = 600  # window to analyze & plot
 temp_low, temp_high = 15, 35  # sanity filter limits
 PLOT_ADEV = True  # set False if you don't want the Allan plot refreshing
-
 # Define channels and corresponding filenames
 channels = {
     "4A": "temp_4A.csv",

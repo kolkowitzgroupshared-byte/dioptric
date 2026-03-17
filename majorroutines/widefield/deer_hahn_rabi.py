@@ -7,7 +7,7 @@ microwaves, saves raw data, and provides optional analysis/plots:
   - mean Rabi across all NVs (and by orientation groups)
   - per-NV Rabi fits and correlation plots (optional)
 
-Updated: Jan 6, 2025 (Saroj Chand)
+Created and Updated: Jan 6, 2025 (Saroj Chand)
 """
 
 
@@ -87,14 +87,12 @@ def create_mean_figure(data):
 
     ax.legend()
 
-
 def create_raw_data_figure(nv_list, taus, counts, counts_ste):
     fig, ax = plt.subplots()
     widefield.plot_raw_data(ax, nv_list, taus, counts, counts_ste)
     ax.set_xlabel("Pulse duration (ns)")
     ax.set_ylabel("Fraction in NV$^{-}$")
     return fig
-
 
 def create_fit_figure(nv_list, taus, counts, counts_ste, norms):
     ### Do the fitting
@@ -248,6 +246,7 @@ def main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_lis
     pulse_gen = tb.get_server_pulse_gen()
     seq_file = "deer_hahn_rabi.py"
     taus = np.linspace(min_tau, max_tau, num_steps)
+    taus = [int(4 * round(tau / 4)) for tau in taus]
 
     ### Collect the data
     def run_fn(shuffled_step_inds):
@@ -268,7 +267,7 @@ def main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_lis
         num_runs,
         run_fn=run_fn,
         uwave_ind_list=uwave_ind_list,
-        load_iq=True,
+        # load_iq=True,
     )
 
     ### save the raw data

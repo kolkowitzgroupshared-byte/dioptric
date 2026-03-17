@@ -32,10 +32,9 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
-
-calibration_coords_pixel = [[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
-calibration_coords_green = [[119.419, 119.481],[111.434, 95.675],[96.084, 118.836]]
-calibration_coords_red = [[82.294, 82.207],[76.605, 62.448],[63.242, 80.487]]
+calibration_coords_pixel = [[367.181, 25.354], [229.35, 379.51], [34.93, 44.916]]
+calibration_coords_green = [[70.549, 130.563], [101.642, 69.085], [130.588, 132.298],]
+calibration_coords_red = [[41.956, 88.71], [69.537, 40.334],[90.972, 93.197],]
 
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -56,10 +55,15 @@ calibration_coords_nv3 = {
     red_laser_aod: calibration_coords_red[2],
 }
 
+# pixel_to_sample_affine_transformation_matrix = [
+#     [0.01476835, -0.00148369, -1.42104908],
+#     [0.00140560, 0.01479702, -1.73286644],
+# ]
 pixel_to_sample_affine_transformation_matrix = [
-    [0.01476835, -0.00148369, -1.42104908],
-    [0.00140560, 0.01479702, -1.73286644],
+    [0.06108861, -0.00533755, -12.74624750],    
+    [0.00748424, 0.06162394, -16.62683414],  
 ]
+
 # endregion
 # region Base config
 # Add on to the default config
@@ -77,12 +81,12 @@ config |= {
     # Common durations are in ns
     "CommonDurations": {
         "default_pulse_duration": 1000,
-        "aod_access_time": 11e3,  # access time in specs is 10us
+        "aod_access_time":2.6e3,  # access time in specs is 10us
+        # "aod_access_time":8e3,  # access time in specs is 10us
         "widefield_operation_buffer": 1e3,
         "uwave_buffer": 0,
         "iq_buffer": 0,
-        # "iq_delay": 136,  # SBC measured using NVs 4/18/2025
-        "iq_delay": 140,  # 
+        "iq_delay": 140,
     },
     ###
     "DeviceIDs": {
@@ -102,6 +106,7 @@ config |= {
         "sig_gen_STAN_sg394_0_visa": "TCPIP::192.168.0.120::inst0::INSTR",
         "sig_gen_STAN_sg394_1_visa": "TCPIP::192.168.0.121::inst0::INSTR",
         "sig_gen_STAN_sg394_2_visa": "TCPIP::192.168.0.178::inst0::INSTR",
+        "sig_gen_STAN_sg394_3_visa": "TCPIP::192.168.0.177::inst0::INSTR",
         "sig_gen_TEKT_tsg4104a_visa": "TCPIP0::128.104.ramp_to_zero_duration.112::5025::SOCKET",
         "tagger_SWAB_20_1_serial": "1740000JEH",
         "tagger_SWAB_20_2_serial": "1948000SIP",
@@ -118,7 +123,7 @@ config |= {
             "sig_gen_BERK_bnc835": {"delay": 151, "fm_mod_bandwidth": 100000.0},
             "sig_gen_STAN_sg394_0": {"delay": 104, "fm_mod_bandwidth": 100000.0},
             "sig_gen_STAN_sg394_1": {"delay": 151, "fm_mod_bandwidth": 100000.0},
-            "sig_gen_STAN_sg394_2": {"delay": 151, "fm_mod_bandwidth": 100000.0}, ## need a work
+            "sig_gen_STAN_sg394_3": {"delay": 151, "fm_mod_bandwidth": 100000.0},
             "sig_gen_TEKT_tsg4104a": {"delay": 57},
         },
         "iq_comp_amp": 0.5,
@@ -127,41 +132,26 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_0",
                 "uwave_power": 11.0,
-                # "frequency": 2.7878,
-                # "frequency": 2.747151,
-                "frequency": 2.709799,
-                # "frequency":2.963189,
-                # "frequency": 2.917151,
-                # "frequency": 2.8082,
+                "frequency": 2.7752,
                 "rabi_period": 256,
                 "pi_pulse": 128,
-                # "pi_pulse": 240,
                 "pi_on_2_pulse": 64,
-                # "frequency": 2.935030,
-                # "rabi_period": 112,
-                # "pi_pulse": 56,
-                # "pi_on_2_pulse": 28,
             },
             1: {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
-                # "frequency": 2.917151,
-                # "frequency": 2.8408,
-                # "frequency": 2.982049,
-                # "frequency": 2.828210,
-                "frequency": 2.816912,
-                # "frequency": 2.8252,
-                "rabi_period": 192,
-                "pi_pulse": 88,
-                "pi_on_2_pulse": 44,
+                "frequency": 2.8137,
+                "rabi_period": 256,
+                "pi_pulse":128,
+                "pi_on_2_pulse": 64,
             },
             2: {
-                "physical_name": "sig_gen_STAN_sg394_2",
+                "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 11.0,
-                "frequency": 0.173,
-                "rabi_period": 176,
-                "pi_pulse": 88,
-                "pi_on_2_pulse": 44,
+                "frequency": 2.7700,
+                "rabi_period": 100,
+                "pi_pulse": 48,
+                "pi_on_2_pulse": 24,
             },
         },
     },
@@ -169,10 +159,10 @@ config |= {
     "Camera": {
         "server_name": "camera_NUVU_hnu512gamma",
         "resolution": (512, 512),
-        "spot_radius": 2.5,  # Radius for integrating NV counts in a camera image
+        "spot_radius": 3.0,  # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
-        "em_gain": 5000,
-        # "em_gain": 10,
+        # "em_gain": 5000,
+        "em_gain": 10,
         "temp": -60,
         "timeout": 60e3,  # ms
         # "timeout": -1,  # No timeout
@@ -180,7 +170,8 @@ config |= {
         # See camera server file for details
         "readout_mode": 1,  # 16 for double horizontal readout rate (em mode)
         # "readout_mode": 6,  # Fast conventional
-        "roi": (122, 126, 250, 250),  # offsetX, offsetY, width, height
+        # "roi": (122, 126, 250, 250),  # offsetX, offsetY, width, height
+        "roi": (55, 85, 400, 400),  # offsetX, offsetY, width, height
         # "roi": None,  # offsetX, offsetY, width, height
         "scale": 5 / 0.6,  # pixels / micron
     },
@@ -206,8 +197,8 @@ config |= {
             # LaserKey.IMAGING: {"physical_name": green_laser, "duration": 50e6},
             VirtualLaserKey.IMAGING: {
                 "physical_name": green_laser,
-                # "duration": 12e6,
-                "duration": 12e6,
+                # "duration": 60e6,
+                "duration": 6e6,
             },
             # SBC: created for calibration only
             VirtualLaserKey.RED_IMAGING: {
@@ -216,7 +207,7 @@ config |= {
             },
             VirtualLaserKey.SPIN_READOUT: {
                 "physical_name": green_laser,
-                "duration": 300,
+                "duration": 200,
             },
             # LaserKey.CHARGE_POL: {"physical_name": green_laser, "duration": 10e3},
             VirtualLaserKey.CHARGE_POL: {
@@ -249,7 +240,7 @@ config |= {
             },
             VirtualLaserKey.WIDEFIELD_IMAGING: {
                 "physical_name": yellow_laser,
-                "duration": 12e6,
+                "duration": 60e6,
                 # "duration": 24e6,
             },
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 10e3},
@@ -261,8 +252,8 @@ config |= {
             VirtualLaserKey.WIDEFIELD_CHARGE_READOUT: {
                 "physical_name": yellow_laser,
                 # "duration": 200e6,
-                # "duration": 60e6,
-                "duration": 50e6,
+                "duration": 60e6,
+                # "duration": 50e6,
                 # "duration": 24e6,  # for red calibration
             },
             # LaserKey.WIDEFIELD_CHARGE_READOUT: {"physical_name": yellow_laser, "duration": 100e6},
@@ -290,7 +281,7 @@ config |= {
                 "delay": int(1e6),  # 5 ms for PIFOC xyz
                 "nm_per_unit": 1000,
                 # "optimize_range": 0.09,
-                "optimize_range": 0.24,
+                "optimize_range": 0.8,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
@@ -298,7 +289,7 @@ config |= {
                 "control_mode": PosControlMode.SEQUENCE,
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
-                "optimize_range": 1.2,
+                "optimize_range": 1.6,
                 "units": "MHz",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
                 "aod": True,
@@ -313,6 +304,7 @@ config |= {
                 "aod": True,
             },
         },
+        "optimize_num_steps": 20,
         "calibration_coords_nv1": calibration_coords_nv1,
         "calibration_coords_nv2": calibration_coords_nv2,
         "calibration_coords_nv3": calibration_coords_nv3,
@@ -573,7 +565,6 @@ opx_config = {
             },
         },
         "do_sig_gen_STAN_sg394_0_dm": {
-            # "digitalInputs": {"chan": {"port": ("con1", 9), "delay": 0, "buffer": 0}},
             "digitalInputs": {"chan": {"port": ("con1", 9), "delay": iq_delay, "buffer": 0}},
             "operations": {
                 "on": "do_on",
@@ -583,7 +574,6 @@ opx_config = {
             },
         },
         "do_sig_gen_STAN_sg394_1_dm": {
-            # 230 ns I channel latency measured 3/26/25 MCC and Saroj using oscilloscope
             "digitalInputs": {
                 # "chan": {"port": ("con1", 10), "delay": 0, "buffer": 0}
                 "chan": {"port": ("con1", 10), "delay": iq_delay, "buffer": 0}
@@ -596,8 +586,8 @@ opx_config = {
                 "pi_on_2_pulse": "do_pi_on_2_pulse_1",
             },
         },
-        "do_sig_gen_STAN_sg394_2_dm": {
-            "digitalInputs": {"chan": {"port": ("con1", 3), "delay": 0, "buffer": 0}},
+        "do_sig_gen_STAN_sg394_3_dm": {
+            "digitalInputs": {"chan": {"port": ("con1", 3), "delay": iq_delay, "buffer": 0}},
             "operations": {
                 "on": "do_on",
                 "off": "do_off",
@@ -656,7 +646,7 @@ opx_config = {
         ### (con1,9) and (con1,10) already used by sg394_1.
         ### That means sg394_1 and sg394_2 cannot be active simultaneously.
         ### If you intend to use them independently, assign new AO ports.
-        "ao_sig_gen_STAN_sg394_2_i": {
+        "ao_sig_gen_STAN_sg394_3_i": {
             "singleInput": {"port": ("con1", 9)},
             "intermediate_frequency": 0,
             "operations": {
@@ -667,7 +657,7 @@ opx_config = {
                 "pi_on_2_pulse": "ao_iq_pi_on_2_pulse_2",
             },
         },
-        "ao_sig_gen_STAN_sg394_2_q": {
+        "ao_sig_gen_STAN_sg394_3_q": {
             "singleInput": {"port": ("con1", 10)},
             "intermediate_frequency": 0,
             "operations": {
@@ -946,7 +936,7 @@ opx_config = {
     ### Analog
     "waveforms": {
         # Green AOD
-        "green_aod_cw-opti": {"type": "constant", "sample": 0.11},
+        "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
         "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
@@ -957,14 +947,8 @@ opx_config = {
         "red_aod_cw-scc": {"type": "constant", "sample": 0.13},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.45},
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.2675},
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.2367}, #136NVs
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.2267}, #118NVs
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.34947}, ## 312NV johnson
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.313148}, ## 230NV johnson
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.3084}, ## 223NV johnson
-        "yellow_charge_readout": {"type": "constant", "sample": 0.299064}, ## 204NV johnson
-        "yellow_spin_pol": {"type": "constant", "sample": 0.31510},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.35}, ## 195NV johnson
+        "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other
         "aod_cw": {"type": "constant", "sample": 0.35},
@@ -980,29 +964,6 @@ opx_config = {
     # endregion
 }
 # endregion
-
-
-# def correct_pulse_params_by_phase(phase_deg, base_amp=0.5):
-#     # Centralized pulse error values from bootstrap
-#     pulse_errors = {
-#         "phi_prime": -0.031938,
-#         "chi_prime": -0.037178,
-#         "phi": 0.069222,
-#         "chi": 0.07584,
-#         "vz": -0.016646,
-#         "ez": 0.111846,
-#         "epsilon_z_prime": -0.011931,
-#         "nu_x_prime": -0.059049,
-#         "nu_z_prime": 0.007111,
-#         "epsilon_y": 0.048215,
-#         "nu_x": 0.017096,
-#     }
-
-#     # Y-aligned rotation
-#     tilt = pulse_errors.get("epsilon_y", 0)
-#     phase_corr = -np.degrees(tilt, 0.0)
-#     return phase_corr
-
 
 def correct_pulse_params_by_phase(phase_deg):
     # Centralized pulse error values from bootstrap
@@ -1050,12 +1011,6 @@ def generate_iq_pulses(pulse_names, phases):
     amp = 0.5
 
     for phase in phases:
-        # phase_corr = correct_pulse_params_by_phase(phase)
-        # corrected_phase = np.round(phase + phase_corr)
-        # corrected_phase = corrected_phase % 360
-        # i_comp = np.cos(np.deg2rad(corrected_phase)) * amp
-        # q_comp = np.sin(np.deg2rad(corrected_phase)) * amp
-        # print(f"phase (deg): {(corrected_phase):.2f}")
         i_comp = np.cos(np.deg2rad(phase)) * amp
         q_comp = np.sin(np.deg2rad(phase)) * amp
         opx_config["waveforms"][f"i_{phase}"] = {"type": "constant", "sample": i_comp}
@@ -1086,8 +1041,6 @@ def build_phase_sweep(min_deg=-360, max_deg=360, step_deg=9):
     phases_unwrapped = np.arange(min_deg, max_deg + 1e-9, step_deg, dtype=int)  # -360..360
     phases_cmd = (phases_unwrapped % 360)  # wrap to [0,360)
     return phases_unwrapped.tolist(), phases_cmd.tolist()
-
-
 
 # ref_img_array = np.array([])
 # generate_iq_pulses(["pi_pulse", "pi_on_2_pulse"], [0, 90, 180, 270])

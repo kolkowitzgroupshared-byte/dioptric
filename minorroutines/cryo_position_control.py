@@ -29,7 +29,7 @@ def get_sample_name() -> str:
 
 sample_xy = [0,0] # piezo XY voltage input (1.0=1V) (not coordinates, relative)
 coord_z = 0 # piezo z voltage (0 is the set midpoint, absolute) (negative is closer to smaple, move unit steps in sample; 37 is good surface focus with bs for Lovelace; 20 is good for dye)
-pixel_xy = [0,0]  # galvo ref #potential NV?: [0.123, 0.139]
+pixel_xy = [0.0,0.0]  # sgalvso ref #potential NV?: [0.123, 0.139]
 
 nv_sig = NVSig(
     name=f"({get_sample_name()})",

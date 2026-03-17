@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 Optimize SCC parameters
-
 Created on December 6th, 2023
-
 @author: mccambria
+Updated on Fall 2024
+@author: schand
 """
 
 import itertools
