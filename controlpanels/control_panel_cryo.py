@@ -980,7 +980,8 @@ if __name__ == "__main__":
     # pixel_xy = [0,0]  # galvo ref
     # pixel_xy = [-0.021, -0.052]s # zoom picture
     # pixel_xy = [0.093, 0.067] # NV Lovelace
-    pixel_xy = [-0.008, 0.009] # NV Lovelace
+    #pixel_xy = [-0.008, 0.009] # NV Lovelace
+    pixel_xy = [-0.037, -0.011]
     # pixel_xy = [-0.008, 0.003] # NV Lovelace
     # return
     nv_sig = NVSig(
@@ -1012,7 +1013,7 @@ if __name__ == "__main__":
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
     try:
         tool_belt.init_safe_stop()
-        # tool_belt.set_drift([0.0, 0.0, 0.0])  # Totally rneset
+        pos.set_drift([0.0, 0.0, 0.0])  # Reset drift to clean state
         # drift = tool_belt.get_drift()
         # tool_belt.set_drift([0.0, 0.0, drift[2]])  # Keep z
         # tool_belt.set_drifts([drift[0], drift[1], 0.0])  # Keep xy
@@ -1054,8 +1055,7 @@ if __name__ == "__main__":
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None):
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
         # do_image_sample(nv_sig)
-    
-        # do_image_sample_zoom(nv_sig)
+        do_image_sample_zoom(nv_sig)
 
         # # Quick NV area scans
         # for i in range(10):
@@ -1074,7 +1074,7 @@ if __name__ == "__main__":
         # region Optimize
         # do_optimize_z_PI(nv_sig, voltage_start=4.38, voltage_end=4.5, step_size=0.001)
         # do_optimize_z_atto(nv_sig) # z position optimize atto
-        do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
+        # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
 
         # do_optimize_green(nv_sig) # old optimize xy

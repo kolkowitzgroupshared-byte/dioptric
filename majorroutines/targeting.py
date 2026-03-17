@@ -579,14 +579,14 @@ def stationary_count_confocal_once(
     nv_sig,
     virtual_laser_key=VirtualLaserKey.IMAGING,
     coords_key=CoordsKey.SAMPLE,
-    move_to_nv=False,
+    move_to_nv=True,
     num_averages=10,
 ):
     """
     Measure counts at the current hardware position unless move_to_nv=True.
 
-    For 1D/2D sweeps, leave move_to_nv=False so the scan loop controls position.
-    For final verification after optimization, use move_to_nv=True.
+    For 1D/2D sweeps, pass move_to_nv=False so the scan loop controls position.
+    For final verification after optimization, use move_to_nv=True (default).
     """
     config = common.get_config_dict()
 
@@ -657,7 +657,7 @@ def stationary_count_lite(
     virtual_laser_key=VirtualLaserKey.IMAGING,
     ret_img_array=False,
     coords_key=CoordsKey.SAMPLE,
-    move_to_nv=False,
+    move_to_nv=True,
     num_averages=10,
 ):
     config = common.get_config_dict()
@@ -716,7 +716,7 @@ def compensate_for_drift(nv_sig: NVSig, no_crash=False):
 
     # Determine axes to adjust
     xy_coords_key = pos.get_drift_xy_coords_key()
-    passed_coords = pos.get_nv_coords(nv_sig, xy_coords_key, drift_adjust=False)
+    passed_coords = list(pos.get_nv_coords(nv_sig, xy_coords_key, drift_adjust=False))
     disable_z_drift_compensation = config.get("disable_z_drift_compensation", False)
 
     if disable_z_drift_compensation or not pos.has_z_positioner():
