@@ -369,15 +369,11 @@ def main(
     opti_counts = None
     if opti_x is not None and opti_y is not None and move_to_optimal:
         print(f"\nMoving to optimal position...")
-        # pixel_xy = [opti_x, opti_y]
-        # nv_sig.coords[CoordsKey.PIXEL] = pixel_xy
+        nv_sig.coords[CoordsKey.PIXEL] = [opti_x, opti_y]
         pos.set_xyz((opti_x, opti_y), positioner=CoordsKey.PIXEL)
-        print(f"Moved to X={opti_x:.4f}, Y={opti_y:.4f}")
-        galvo = pos.get_positioner_server(CoordsKey.PIXEL)
-        galvo.write_xy([opti_x, opti_y])
-        galvo.reset()
         time.sleep(0.05)  # Settling time
-        print(f"Current NV coordinates (PIXEL): {nv_sig.coords[CoordsKey.PIXEL]}")
+        print(f"Moved to X={opti_x:.4f}, Y={opti_y:.4f}")
+        print(f"Updated NV coordinates (PIXEL): {nv_sig.coords[CoordsKey.PIXEL]}")
 
         # Measure counts at optimal position
         counter.start_tag_stream()
