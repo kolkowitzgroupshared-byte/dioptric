@@ -376,7 +376,7 @@ class FourierSLM(CameraSLM):
 
         self.fourier_calibration = read_h5(file_path)
 
-        return file_path
+        return file_path, 
 
     def project_fourier_grid(
         self, array_shape=10, array_pitch=10, array_center=None, **kwargs
@@ -411,6 +411,7 @@ class FourierSLM(CameraSLM):
         shape = SpotHologram.calculate_padded_shape(
             self, padding_order=1, square_padding=True
         )
+        print(shape)
         hologram = SpotHologram.make_rectangular_array(
             shape,
             array_shape=array_shape,

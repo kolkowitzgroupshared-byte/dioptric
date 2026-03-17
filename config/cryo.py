@@ -27,8 +27,8 @@ home = Path.home()
 
 # region Widefield calibration coords
 
-green_laser = "laser_COBO_520" # make labrad server for COBOLT green laser
-tisapph_laser = "" #fill this in later (labrad server for Tisapph)
+green_laser = "laser_COBO_520"  # make labrad server for COBOLT green laser
+tisapph_laser = ""  # fill this in later (labrad server for Tisapph)
 thor_galvos = "pos_xy_THOR_gvs212"
 cryo_piezo = "pos_xyz_ATTO_piezos"
 
@@ -79,21 +79,19 @@ config |= {
     "disable_z_drift_compensation":True,
     ###
     # Common durations are in ns
+    ###
     "CommonDurations": {
-        "default_pulse_duration": 1000,
-        "aod_access_time": 11e3,  # access time in specs is 10us
-        "widefield_operation_buffer": 1e3,
-        "uwave_buffer": 0,
-        "iq_buffer": 0,
-        "iq_delay": 136,  # SBC measured using NVs 4/18/2025
-        "temp_reading_interval": 15 * 60,  # for PID
-        # "iq_delay": 140,  # SBC measured using NVs 4/18/2025
+        "cw_meas_buffer": 5000,
+        "pol_to_uwave_wait_dur": 5000,
+        "scc_ion_readout_buffer": 10000,
+        "uwave_buffer": 100,
+        "uwave_to_readout_wait_dur": 5000,
     },
     ###
     "DeviceIDs": {
         "arb_wave_gen_visa_address": "TCPIP0::128.104.ramp_to_zero_duration.119::5025::SOCKET",
         "daq0_name": "Dev1",
-        "filter_slider_THOR_ell9k_com": "COM13",
+        "filter_slider_THOR_ell9k_com": "COM8",
         "gcs_dll_path": home
         / "GitHub/dioptric/servers/outputs/GCSTranslator/PI_GCS2_DLL_x64.dll",
         "objective_piezo_model": "E709",
@@ -106,9 +104,10 @@ config |= {
         "sig_gen_BERK_bnc835_visa": "TCPIP::128.104.ramp_to_zero_duration.114::inst0::INSTR",
         "sig_gen_STAN_sg394_visa": "TCPIP::192.168.0.120::inst0::INSTR",
         "sig_gen_STAN_sg394_2_visa": "TCPIP::192.168.0.121::inst0::INSTR",
+        "sig_gen_STAN_sg394_3_visa": "TCPIP::192.168.0.177::inst0::INSTR",
         "sig_gen_TEKT_tsg4104a_visa": "TCPIP0::128.104.ramp_to_zero_duration.112::5025::SOCKET",
-        "tagger_SWAB_20_1_serial": "1740000JEH",
-        "tagger_SWAB_20_2_serial": "1948000SIP",
+        "tagger_SWAB_20_1_serial": "1948000SIP", # cryo
+        # "tagger_SWAB_20_1_serial": "1740000JEH", # nuclear
         "QM_opx_args": {
             "host": "192.168.0.117",
             "port": 9510,
@@ -117,30 +116,32 @@ config |= {
         "power_supply_RNS_ngc103_visa": "TCPIP::192.168.0.130::INSTR",
         "pos_xyz_ATTO_piezos_ip": "192.168.0.199",
         "filter_slider_THOR_ell9k_com": "COM5",
+        "multimeter_KEIT_daq6510_visa": "TCPIP::192.168.0.122::inst0::INSTR",
+
     },
     ###
     "Microwaves": {
         "PhysicalSigGens": {
             "sig_gen_BERK_bnc835": {"delay": 151, "fm_mod_bandwidth": 100000.0},
             "sig_gen_STAN_sg394": {"delay": 104, "fm_mod_bandwidth": 100000.0},
-            "sig_gen_STAN_sg394_2": {"delay": 151, "fm_mod_bandwidth": 100000.0},
+            "sig_gen_STAN_sg394_3": {"delay": 151, "fm_mod_bandwidth": 100000.0},
             "sig_gen_TEKT_tsg4104a": {"delay": 57},
         },
         "iq_comp_amp": 0.5,
         "iq_delay": 140,
         "VirtualSigGens": {
             0: {
-                "physical_name": "sig_gen_STAN_sg394",
-                "uwave_power": 9.6,
-                "frequency": 2.800,
+                "physical_name": "sig_gen_STAN_sg394_3",
+                "uwave_power": 6.0,
+                "frequency": 2.8785,
                 "rabi_period": 144,
                 "pi_pulse": 72,
                 "pi_on_2_pulse": 36,
             },
             # sig gen 1 is iq molulated
             1: {
-                "physical_name": "sig_gen_STAN_sg394_2",
-                "uwave_power": 9.6,
+                "physical_name": "sig_gen_STAN_sg394_4",
+                "uwave_power": 6.0,
                 "frequency": 2.8360,
                 "rabi_period": 144,
                 "pi_pulse": 72,
@@ -153,7 +154,7 @@ config |= {
         "server_name": "camera_NUVU_hnu512gamma",
         "resolution": (512, 512),
         "spot_radius": 2.5,
-          # Radius for integrating NV counts in a camera image
+        # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
         "em_gain": 5000,
         # "em_gain": 1000,
@@ -187,15 +188,13 @@ config |= {
             # LaserKey.IMAGING: {"physical_name": green_laser, "duration": 50e6},
             VirtualLaserKey.IMAGING: {
                 # "physical_name": green_laser,
-                "physical_name": green_laser, #this is the laser that appears on the imaging APD scan
-                "duration": 12e6, #this duration appears on the imaging APD scan, this value is overwritten?
+                "physical_name": green_laser,  # this is the laser that appears on the imaging APD scan
+                "duration": 12e6,  # this duration appears on the imaging APD scan
             },
-
             VirtualLaserKey.SINGLET_DRIVE: {
                 "physical_name": tisapph_laser,
-                "duration": 300, #this is a placeholder
+                "duration": 300,  # this is a placeholder
             },
-            
 
             VirtualLaserKey.SPIN_READOUT: {
                 "physical_name": green_laser,
@@ -215,7 +214,6 @@ config |= {
                 "physical_name": green_laser,
                 "duration": 60,
             },
-            
 
         },
         #
@@ -227,7 +225,7 @@ config |= {
     "Positioning": {
         "drift_xy_coords_key": CoordsKey.PIXEL,
         "Positioners": {
-            #update with correct piezos for cryo
+            # update with correct piezos for cryo
             CoordsKey.SAMPLE: {
                 "physical_name": "pos_xyz_ATTO_piezos", #xy atto
                 "control_mode": PosControlMode.STREAM,
@@ -238,11 +236,14 @@ config |= {
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
             CoordsKey.Z: {
-                "physical_name": "pos_xyz_ATTO_piezos", #z atto
+                # "physical_name": "pos_xyz_ATTO_piezos", #z atto
+                "physical_name": "pos_z_PI_pifoc", #z atto
                 "control_mode": PosControlMode.STREAM,
-                "delay": int(1e6),  # 5 ms for PIFOC xyz
+                # "delay": int(1e6),  # 1 ms for ATTO
+                "delay": int(5e6),  # 5 ms for PIFOC xyz
                 "nm_per_unit": 1000,
-                "optimize_range": 0.09,
+                # "optimize_range": 0.09,
+                "optimize_range": 0.1,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
@@ -251,41 +252,19 @@ config |= {
                 "control_mode": PosControlMode.STREAM,
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
-                "optimize_range": 0.015,
+                # "optimize_range": 0.02,
+                "optimize_range": 0.008,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
         },
-        # "calibration_coords_nv1": calibration_coords_nv1,
-        # "calibration_coords_nv2": calibration_coords_nv2,
-        # "calibration_coords_nv3": calibration_coords_nv3,
         "pixel_to_sample_affine_transformation_matrix": pixel_to_sample_affine_transformation_matrix,
-        "cryo_piezos_voltage": 30,  
+        "cryo_piezos_voltage": 33,
         "z_bias_adjust": 0.0,
-        "z_calibration": {
-            "max_position_steps": 20000,       # Steps to move up (1mm @ 50nm/step) - clears 0.5mm sample + margin
-            "scan_step_size": 10,              # Step increment during downward scan
-            "min_peak_prominence_ratio": 0.15, # Peak must be 15% higher than surrounding baseline
-            "scan_past_peak_steps": 200,       # Continue scanning past peak for profile mapping
-            "safety_min_counts": 150,          # Abort if counts drop below this (collision protection)
-            "verification_passes": 2,          # Number of approach/retract cycles for hysteresis
-            "verification_retract_steps": 500, # Steps to move away for verification
-            "settling_time_ms": 50,            # Wait time after each step
-            "max_scan_timeout_s": 300,         # Maximum scan duration before abort
-            "min_scan_points": 50,             # Minimum points needed before peak detection
-            # Asymmetry measurement parameters
-            "measure_asymmetry": True,         # Measure up/down step asymmetry before calibration
-            "asymmetry_test_steps": 100,       # Steps for each asymmetry test movement (start small!)
-            "asymmetry_test_cycles": 3,        # Number of up/down cycles to average
-            "asymmetry_count_tolerance": 50,   # Acceptable count difference for "return to start"
-            "asymmetry_safety_drop": 0.30,     # Abort if counts drop more than 30% during test
-        },
+        "optimize_num_steps": 40,
     },
     ###
     "Servers": {  # Bucket for miscellaneous servers not otherwise listed above
-        "pulse_gen": "QM_opx",
-        "camera": "camera_NUVU_hnu512gamma",
-        "thorslm": "slm_THOR_exulus_hd2",
         "pulse_streamer": "pulse_gen_SWAB_82",
         "counter": "tagger_SWAB_20",
     },
@@ -328,8 +307,8 @@ config |= {
             "do_laser_COBO_638_dm": 3,  # red TTL
             # microwaves (TTL gate to SGs)
             # "do_sig_gen_BERK_bnc835_gate": 4,
-            "do_sig_gen_STAN_sg394_2_dm": 4,
-            "do_sig_gen_STAN_sg394_dm": 5,
+            "do_sig_gen_STAN_sg394_3_dm": 4,
+            # "do_sig_gen_STAN_sg394_dm": 5,
             # analog (for the yellow AOM amplitude)
             "ao_laser_OPTO_589_am": 0,  # yellow analog modulation
         },
@@ -343,7 +322,6 @@ config |= {
 }
 
 # endregion
-
 
 
 if __name__ == "__main__":

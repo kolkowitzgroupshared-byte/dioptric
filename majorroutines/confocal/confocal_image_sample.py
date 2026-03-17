@@ -59,6 +59,7 @@ def confocal_scan(nv_sig: NVSig, x_range, y_range, num_steps, nv_minus_init=Fals
     # Build grid (1D coordinate axes + random-access XY)
     x0, y0 = pos.get_nv_coords(nv_sig, coords_key=CoordsKey.PIXEL)
     X, Y, x1d, y1d, extent = pos.get_scan_grid_2d(x0, y0, x_range, y_range, num_steps, num_steps)
+    # extent[0], extent[1] = extent[1], extent[0]
     h = w = num_steps
     total = h * w
     # --- UI throttling: update plot every N pixels (about ~8 updates/row) ---
@@ -112,7 +113,8 @@ def confocal_scan(nv_sig: NVSig, x_range, y_range, num_steps, nv_minus_init=Fals
             Xr = []
             Yr = []
             for row in range(h):
-                y = y1d[(h - 1) - row]   # bottom row first
+                y = y1d[(h - 1) - row]
+                # y = y1d[row]   # bottom row first
                 for col in range(w):
                     x = x1d[col]        # left -> right always
                     Xr.append(x); Yr.append(y)
@@ -205,8 +207,8 @@ def confocal_scan(nv_sig: NVSig, x_range, y_range, num_steps, nv_minus_init=Fals
     "x_coords_1d": x1d, "y_coords_1d": y1d,
     }
     path = dm.get_file_path(__file__, ts, getattr(nv_sig, "name", "nv"))
-    dm.save_figure(fig, path)
     dm.save_raw_data(raw, path)
+    dm.save_figure(fig, path)
     kpl.show()
     return img_out, x1d, y1d
 
@@ -218,8 +220,9 @@ def get_coord(coords, key):
     if hasattr(key, "name"):  # Enum
         return coords.get(key, coords.get(key.name))
     return coords.get(key)
+
 if __name__ == "__main__":
-    file_name = "2026_01_05-18_45_52-(Rubin)"
+    file_name = "2026_03_13-11_49_22-(lovelace)"
 
     data = dm.get_raw_data(file_name)
     print("Top-level keys in saved file:")

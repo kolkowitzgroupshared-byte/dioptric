@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Widefield Rabi experiment
+Widefield XY experiment
 
-Created on November 29th, 2023
+Created on November 29th, 2025
 
-@author: mccambria
 @author: sbchand
 """
 

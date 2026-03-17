@@ -8,17 +8,22 @@ Created on March 23th, 2025
 import numpy as np
 from itertools import product, permutations
 
+
 # ----------------- NV geometry -----------------
 def nv_axes():
     """Four NV <111> unit vectors in the cubic {x,y,z} basis."""
-    axes = np.array([
-        [ 1,  1,  1],
-        [-1,  1,  1],
-        [ 1, -1,  1],
-        [ 1,  1, -1],
-    ], dtype=float)
+    axes = np.array(
+        [
+            [1, 1, 1],
+            [-1, 1, 1],
+            [1, -1, 1],
+            [1, 1, -1],
+        ],
+        dtype=float,
+    )
     axes /= np.linalg.norm(axes, axis=1, keepdims=True)
     return axes
+
 
 # Must match the order in nv_axes()
 NV_LABELS = ["[1, 1, 1]", "[-1, 1, 1]", "[1, -1, 1]", "[1, 1, -1]"]
@@ -109,14 +114,14 @@ def solve_B_from_odmr_order_invariant(
         "B": B,
         "B_mag": B_mag,
         "B_hat": B_hat,
-        "projections": proj,            # n·B (signed), nv_axes order
+        "projections": proj,  # n·B (signed), nv_axes order
         "signs": s,
-        "b_magnitudes": b_mag,          # |n·B| from data, nv_axes order (per chosen perm)
-        "abs_nB_pred": abs_nB_pred,     # |n·B| from B, nv_axes order (prediction)
-        "f_minus_nvaxes_GHz": f_nvaxes, # predicted f_- in nv_axes order
+        "b_magnitudes": b_mag,  # |n·B| from data, nv_axes order (per chosen perm)
+        "abs_nB_pred": abs_nB_pred,  # |n·B| from B, nv_axes order (prediction)
+        "f_minus_nvaxes_GHz": f_nvaxes,  # predicted f_- in nv_axes order
         "residual_norm": res,
         "sign_consistent": True,
-        "perm": perm,                   # input idx -> nv_axes idx
+        "perm": perm,  # input idx -> nv_axes idx
     }
 
 
@@ -187,7 +192,7 @@ def solve_B_with_fixed_perm(
         "f_minus_nvaxes_GHz": f_nvaxes,
         "residual_norm": best_res,
         "sign_consistent": True,
-        "perm": tuple(perm_ref),    # always the same now
+        "perm": tuple(perm_ref),  # always the same now
     }
 
 
@@ -259,8 +264,10 @@ def print_full_summary(f_any_order, out, D_GHz=2.8785, gamma_e_MHz_per_G=2.8025)
 # (Optional) – If you still want a standalone "best assignment" helper
 # not used in print_full_summary anymore, but handy for debugging:
 def map_frequencies_to_orientations(
-    f_ms_minus_GHz, B_crystal,
-    D_GHz=2.8785, gamma_e_MHz_per_G=2.8025,
+    f_ms_minus_GHz,
+    B_crystal,
+    D_GHz=2.8785,
+    gamma_e_MHz_per_G=2.8025,
 ):
     """
     Given any-order f_- and a known B (crystal), find the permutation of
@@ -288,14 +295,16 @@ def map_frequencies_to_orientations(
     mapping = []
     for j in range(4):
         i = best_perm[j]
-        mapping.append({
-            "idx_meas": j,
-            "f_GHz": f[j],
-            "ori_idx": i,
-            "ori_label": NV_LABELS[i],
-            "abs_nB_meas_G": abs_nB_meas[j],
-            "abs_nB_pred_G": abs_nB_pred_all[i],
-        })
+        mapping.append(
+            {
+                "idx_meas": j,
+                "f_GHz": f[j],
+                "ori_idx": i,
+                "ori_label": NV_LABELS[i],
+                "abs_nB_meas_G": abs_nB_meas[j],
+                "abs_nB_pred_G": abs_nB_pred_all[i],
+            }
+        )
     return mapping, best_perm, rms_G
 
 
@@ -321,7 +330,7 @@ def align_f_new_to_reference(f_ref_nvaxes, f_new_raw):
 
     for perm in permutations(range(4)):
         f_candidate = f_new_raw[list(perm)]
-        err = np.sum((f_candidate - f_ref_nvaxes)**2)
+        err = np.sum((f_candidate - f_ref_nvaxes) ** 2)
         if err < best_err:
             best_err = err
             best_perm = perm
@@ -337,16 +346,19 @@ if __name__ == "__main__":
     # f_new = [2.7245, 2.7471,  2.8480, 2.8282]
     # f_ref = [2.7058, 2.7859,  2.8280, 2.8699]
     # f_new = [2.7081, 2.8083,  2.8536, 2.8251]
-    f_new = [2.7859, 2.7098,  2.8706, 2.8169]
-    
+    # f_new = [2.7859, 2.7098,  2.8706, 2.8169]
+
+    # f_ref = [2.7829, 2.771367, 2.8202, 2.810689] ### Coils off
+    f_new = [2.771367, 2.7825, 2.810689, 2.8220]  ### Coils off
+
     # For your *real* coil step, plug in the actual 4 numbers here.
 
     # --- Reference solve ---
     out_ref = solve_B_from_odmr_order_invariant(f_ref)
     print("=== Reference full solve (used to define perm_ref) ===")
     print_full_summary(f_ref, out_ref)
-    
-    perm_ref = out_ref["perm"]   # input idx -> nv_axes idx
+
+    perm_ref = out_ref["perm"]  # input idx -> nv_axes idx
 
     # --- New solve with fixed permutation ---
     out_new = solve_B_with_fixed_perm(f_new, perm_ref)
@@ -388,4 +400,3 @@ if __name__ == "__main__":
     print("B_ref (G):", np.round(out_ref["B"], 6))
     print("B_new (G):", np.round(out_new["B"], 6))
     print("ΔB (G)   :", np.round(dB, 6))
-

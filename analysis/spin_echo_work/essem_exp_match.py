@@ -22,6 +22,7 @@ from analysis.spin_echo_work.echo_plot_helpers import (
     plot_branch_pairs,
     compare_two_fields,
     plot_branch_correlation_by_orientation,
+    plot_c13_candidates_only,
 )
 from multiplicity_calculation import (
     find_c3v_orbits_from_nv2,
@@ -1127,7 +1128,7 @@ def make_echo_plus_matched_site_plot(
         tau_is_half_time=use_half_time_as_tau,
         default_rev_for_plot=39.2,
     )
-
+    plot_c13_candidates_only(aux)
     return fig
 
 
@@ -2732,15 +2733,19 @@ if __name__ == "__main__":
         ),
         dict(
             label="62G",
-            fit_file_stem="2025_12_25-04_45_34-sample_204nv_s1-752556",
-            counts_file_stem="2025_12_24-19_56_03-johnson_204nv_s6-ff5e17",
+            # fit_file_stem="2025_12_25-04_45_34-sample_204nv_s1-752556",
+            # counts_file_stem="2025_12_24-19_56_03-johnson_204nv_s6-ff5e17",
+            fit_file_stem="2026_01_07-22_29_55-sample_204nv_s1-c9580a",
+            counts_file_stem="2026_01_07-17_30_14-johnson_204nv_s12-06bcdd",
             B_G=np.array([-48.67047318, -32.07615947, 22.49657427]),
             catalog_json="analysis/spin_echo_work/essem_freq_kappa_catalog_22A_62G.json",
         ),
         dict(
             label="65G",
-            fit_file_stem="2025_11_30-04_35_04-sample_204nv_s1-d278ee",
-            counts_file_stem="2025_11_28-16_39_32-johnson_204nv_s6-902522",
+            # fit_file_stem="2025_11_30-04_35_04-sample_204nv_s1-d278ee",
+            # counts_file_stem="2025_11_28-16_39_32-johnson_204nv_s6-902522",
+            fit_file_stem="2026_01_07-23_43_15-sample_204nv_s1-27e4dc",
+            counts_file_stem="2026_01_07-17_48_21-johnson_204nv_s10-34f8b7",
             B_G=np.array([-31.61263115, -56.58135644, -6.5512002]),
             catalog_json="analysis/spin_echo_work/essem_freq_kappa_catalog_22A_65G.json",
         ),
@@ -2837,25 +2842,25 @@ if __name__ == "__main__":
         b = np.asarray(Bvec_G, float)
         overlay_points.append({"label": lab, "Bhat": b / np.linalg.norm(b)})
 
-    angle_map = compute_full_angle_map_lab_spherical_for_site(
-        hyperfine_path=HYPERFINE_PATH,
-        orientation=ori,
-        site_index=sid,
-        Bmag_G=62.0,  # pick a representative magnitude (or do one per field)
-        n_theta=91,
-        n_phi=181,
-        ms=-1,
-        phi_deg_nv=0.0,
-        phi_range="0_360",
-    )
+    # angle_map = compute_full_angle_map_lab_spherical_for_site(
+    #     hyperfine_path=HYPERFINE_PATH,
+    #     orientation=ori,
+    #     site_index=sid,
+    #     Bmag_G=62.0,  # pick a representative magnitude (or do one per field)
+    #     n_theta=91,
+    #     n_phi=181,
+    #     ms=-1,
+    #     phi_deg_nv=0.0,
+    #     phi_range="0_360",
+    # )
 
-    plot_full_angle_map_theta_phi_lab(
-        angle_map,
-        title_prefix=f"Site {sid}, ori={ori}",
-        contour=True,
-        add_kappa_contours=True,
-        overlay_points=overlay_points,
-    )
+    # plot_full_angle_map_theta_phi_lab(
+    #     angle_map,
+    #     title_prefix=f"Site {sid}, ori={ori}",
+    #     contour=True,
+    #     add_kappa_contours=True,
+    #     overlay_points=overlay_points,
+    # )
 
     # Example inputs (replace with your real ones)
     phi_deg_nv_used = 0.0  # or 120.0 — MUST match what your catalog/fitting used
@@ -2866,21 +2871,21 @@ if __name__ == "__main__":
     Bvec_G = cfg["B_G"]
     Bmag_G = float(np.linalg.norm(Bvec_G))
 
-    validate_site72_direct_vs_labmap(
-        hyperfine_path=HYPERFINE_PATH,
-        orientation=ori,  # must match the site72 orientation used in fit/catalog
-        site_index=72,
-        Bvec_G=Bvec_G,
-        Bmag_G=Bmag_G,
-        ms=-1,
-        phi_deg_nv=0.0,  # must match fit/catalog
-        phi_range="0_360",
-        n_theta=181,
-        n_phi=360,
-    )
+    # validate_site72_direct_vs_labmap(
+    #     hyperfine_path=HYPERFINE_PATH,
+    #     orientation=ori,  # must match the site72 orientation used in fit/catalog
+    #     site_index=72,
+    #     Bvec_G=Bvec_G,
+    #     Bmag_G=Bmag_G,
+    #     ms=-1,
+    #     phi_deg_nv=0.0,  # must match fit/catalog
+    #     phi_range="0_360",
+    #     n_theta=181,
+    #     n_phi=360,
+    # )
 
     plt.show(block=True)
-    sys.exit()
+    # sys.exit()
     # --- Magnetic field (crystal axes) ---
     # B_G = [-46.27557688 - 17.16599864 - 5.70139829]
     # B_G_mag = 49.685072884712
@@ -2898,23 +2903,30 @@ if __name__ == "__main__":
     catalog_json = "analysis/spin_echo_work/essem_freq_kappa_catalog_22A_49G.json"
 
     # --- Magnetic field (crystal axes) ---
-    # B_G =  [-31.61263115 -56.58135644  -6.5512002 ]
-    # B_G = 65.143891267575
-    # B_G =  [-0.48527391 -0.86855967 -0.10056507]
+    B_G = [-31.61263115 - 56.58135644 - 6.5512002]
+    B_G = 65.143891267575
+    B_G = [-0.48527391 - 0.86855967 - 0.10056507]
     # fit_file_stem = "2025_11_30-04_35_04-sample_204nv_s1-d278ee"  # site encoded, all freqs (nysq band)
     # counts_file_stem = "2025_11_28-16_39_32-johnson_204nv_s6-902522"
+    fit_file_stem = "2026_01_07-23_43_15-sample_204nv_s1-27e4dc"  # site encoded, all freqs (nysq band)
+    counts_file_stem = "2026_01_07-17_48_21-johnson_204nv_s10-34f8b7"
+    catalog_json = "analysis/spin_echo_work/essem_freq_kappa_catalog_22A_65G.json"
 
-    # --- Magnetic field (crystal axes) ---
+    # --- Magnetic field (crystal axes) ---"59G"
     # B_G = np.array([-41.57848995, -32.77145194, -27.5799348])
     # fit_file_stem = "2025_12_05-07_51_13-sample_204nv_s1-4cf818"
     # counts_file_stem = "2025_12_04-19_50_15-johnson_204nv_s9-2c83ab"
     # catalog_json = "analysis/spin_echo_work/essem_freq_kappa_catalog_22A_59G.json"
 
     # --- Magnetic field (crystal axes) ---
-    B_G = np.array([-48.67047318, -32.07615947, 22.49657427])
-    fit_file_stem = "2025_12_25-04_45_34-sample_204nv_s1-752556"
-    counts_file_stem = "2025_12_24-19_56_03-johnson_204nv_s6-ff5e17"
-    catalog_json = "analysis/spin_echo_work/essem_freq_kappa_catalog_22A_62G.json"
+    # B_G = np.array([-48.67047318, -32.07615947, 22.49657427])
+    # fit_file_stem = "2025_12_25-04_45_34-sample_204nv_s1-752556"
+    # counts_file_stem = "2025_12_24-19_56_03-johnson_204nv_s6-ff5e17"
+
+    # fit_file_stem = "2026_01_07-22_29_55-sample_204nv_s1-c9580a"
+    # counts_file_stem = "2026_01_07-17_30_14-johnson_204nv_s12-06bcdd"
+
+    # catalog_json = "analysis/spin_echo_work/essem_freq_kappa_catalog_22A_62G.json"
 
     ## ---- 2) global theory-vs-exp matching (use FIT file) ----##
     hf_df = load_hyperfine_table(distance_cutoff=15.0)  # or 15.0, etc.
@@ -2991,14 +3003,14 @@ if __name__ == "__main__":
         x_label="f_- (kHz)",
         y_label="f_+ (kHz)",
     )
-    site_stats = analyze_matched_c13_sites(matches_df, title_prefix="204 NVs")
+    # site_stats = analyze_matched_c13_sites(matches_df, title_prefix="204 NVs")
 
     # ---- 3) echo trace and corresponding matched site ----
 
     # nv_list = [0, 1, 2, 137]  # whatever NVs you care about
 
-    # nv_list = [0, 1, 2, 137, 196]  # whatever NVs you care about
-    nv_list = nv_kept
+    nv_list = [0, 1]  # whatever NVs you care about
+    # nv_list = nv_kept
     figs = make_echo_plus_matched_site_plots_batch(
         counts_file_stem=counts_file_stem,
         fit_file_stem=fit_file_stem,

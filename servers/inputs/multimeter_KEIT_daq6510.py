@@ -63,11 +63,17 @@ class MultimeterKeitDaq6510(LabradServer):
     #         logging.info("Recovered!")
     #     return float(value)
 
-    @setting(5, returns="v[]")
-    def read(self, c):
+    @setting(5, returns="v[]", channel="i")
+    def read_voltage(self, c, channel):
         """Return the value from the main display."""
-        value = self.multimeter.query(":MEASure:VOLTage:DC?")
-        return value
+        #value = self.multimeter.query(":MEASure:VOLTage:DC?")
+
+        multimeter = self.multimeter
+        multimeter.write("*RST")
+        multimeter.write("SENS:FUNC 'VOLT:DC', (@{})".format(channel))
+        multimeter.write(":ROUT:CLOS (@{})".format(channel))
+        output = float(multimeter.query(":READ?".format(channel)))
+        return output
 
     @setting(6)
     def reset_cfm_opt_out(self, c):
@@ -120,6 +126,18 @@ class MultimeterKeitDaq6510(LabradServer):
     def turn_off_averaging(self, c):
         self.multimeter.write("VOLT:AVER OFF")
 
+    @setting(14, returns="v[]", channel="i")
+    def read_temperature(self, c, channel):
+        multimeter = self.multimeter
+        multimeter.write("*RST")
+        multimeter.write(":FUNCtion 'TEMPerature', (@{})".format(channel))
+        multimeter.write(":SENSe:TEMPerature:TRANsducer TCouple, (@{})".format(channel))
+        multimeter.write(":SENSe:TEMPerature:TCouple:TYPE K,(@{})".format(channel))
+        multimeter.write(":SENSe:TEMPerature:TCouple:RJUNction:RSELect INTernal,(@{})".format(channel))
+        multimeter.write(":SENSe:TEMPerature:ODETector ON,(@{})".format(channel))
+        multimeter.write(":ROUT:CLOS (@{})".format(channel))
+        output = float(multimeter.query(":READ?".format(channel)))
+        return output
 
 __server__ = MultimeterKeitDaq6510()
 

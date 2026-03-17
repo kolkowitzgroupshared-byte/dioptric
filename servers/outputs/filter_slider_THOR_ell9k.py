@@ -22,14 +22,14 @@ timeout = 5
 ### END NODE INFO
 """
 
-
-from labrad.server import LabradServer
-from labrad.server import setting
-from twisted.internet.defer import ensureDeferred
-import serial
-import time
 import logging
 import socket
+import time
+
+import serial
+from labrad.server import LabradServer, setting
+from twisted.internet.defer import ensureDeferred
+
 from utils import common
 from utils import tool_belt as tb
 
@@ -39,18 +39,16 @@ class FilterSliderThorEll9k(LabradServer):
     pc_name = socket.gethostname()
 
     def initServer(self):
-        #filename = (
-        #    "G:/nvdata/pc_cryo/labrad_logging/pc_{}/labrad_logging/{}.log"
-        #)
-        #filename = filename.format(self.pc_name, self.name)
-        #logging.basicConfig(
-         #   level=logging.INFO,
-          #  format="%(asctime)s %(levelname)-8s %(message)s",
-           # datefmt="%y-%m-%d_%H-%M-%S",
-            #filename=filename,
-        #)
-        tb.configure_logging(self)
-
+        # filename = (
+        #     "E:/Shared drives/Kolkowitz Lab Group/nvdata/pc_{}/labrad_logging/{}.log"
+        # )
+        # filename = filename.format(self.pc_name, self.name)
+        # logging.basicConfig(
+        #     level=logging.INFO,
+        #     format="%(asctime)s %(levelname)-8s %(message)s",
+        #     datefmt="%y-%m-%d_%H-%M-%S",
+        #     filename=filename,
+        # )
         config = common.get_config_dict()
         device_id = config["DeviceIDs"][f"{self.name}_com"]
         try:

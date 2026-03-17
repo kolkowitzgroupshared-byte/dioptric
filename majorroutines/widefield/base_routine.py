@@ -254,6 +254,35 @@ def main(
                 f"No IQ Modulation: Rabi frequency {freq} GHz and period {rabi_period}ns "
             )
 
+    # Sig gen setup - all but turning on the output
+    # if isinstance(uwave_ind_list, int):
+    #     uwave_ind_list = [uwave_ind_list]
+
+    # for ind, uwave_ind in enumerate(uwave_ind_list):
+    #     uwave_dict = tb.get_virtual_sig_gen_dict(uwave_ind)
+    #     uwave_power = uwave_dict["uwave_power"]
+    #     rabi_period = uwave_dict.get("rabi_period", None)
+
+    #     if uwave_freq_list is None:
+    #         freq = uwave_dict["frequency"]
+    #     else:
+    #         freq = uwave_freq_list[uwave_ind]   # assumes uwave_freq_list indexed by uwave_ind
+
+    #     sig_gen = tb.get_server_sig_gen(uwave_ind)
+
+    #     # IQ only for first two SGs in uwave_ind_list
+    #     do_iq = (ind < 2)
+
+    #     if do_iq:
+    #         sig_gen.load_iq()
+    #         sig_gen.set_amp(uwave_power)
+    #         sig_gen.set_freq(freq)
+    #         print(f"[SG{uwave_ind}] IQ ON:  freq={freq}  amp={uwave_power} dBm")
+    #     else:
+    #         sig_gen.set_amp(uwave_power)
+    #         sig_gen.set_freq(freq)
+    #         print(f"[SG{uwave_ind}] IQ OFF: freq={freq}  rabi_period={rabi_period} ns  amp={uwave_power} dBm")
+
     ### Data tracking
 
     counts_dtype = np.float16

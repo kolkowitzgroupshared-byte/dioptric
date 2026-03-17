@@ -6,7 +6,7 @@ Runs a single-NV widefield sequence ("calibrate_green_red_delay.py") over a rang
 computes SNR from signal/reference counts, plots SNR vs delay, and saves raw_data + figure.
 
 Created: 2024-03-31 (mccambria)
-Updated: 2026-01-05 (Saroj Chand)
+Updated: 2025-01-05 (Saroj Chand)
 """
 
 import matplotlib.pyplot as plt

@@ -170,8 +170,6 @@ def get_laser_server(laser_name):
 
 # endregion
 # region Pulse generator utils
-
-
 def process_laser_seq(seq, virtual_laser_key, train):
     """
     Automatically process simple laser sequences. Simple here means that the modulation
@@ -489,7 +487,8 @@ def cosine_double_sum(t, offset, decay, amp_1, freq_1, amp_2, freq_2):
     two_pi = 2 * np.pi
 
     return offset + np.exp(-t / abs(decay)) * (
-        amp_1 * np.cos(two_pi * freq_1 * t) + amp_2 * np.cos(two_pi * freq_2 * t)
+        amp_1 * np.cos(two_pi * freq_1 * t)
+        + amp_2 * np.cos(two_pi * freq_2 * t)
         # + amp_3 * np.cos(two_pi * freq_3 * t)
     )
 
@@ -783,6 +782,39 @@ def get_server_sig_gen(virtual_sig_gen_ind):
 def get_server_magnet_rotation():
     """Get the signal generator that controls magnet rotation angle"""
     return common.get_server("magnet_rotation")
+
+
+def get_server_slider_1():
+    """Get the server for slider 1"""
+    return common.get_server("slider_1")
+
+
+def get_server_slider_2():
+    """Get the server for slider 2"""
+    return common.get_server("slider_2")
+
+
+def get_server_slider_3():
+    """Get the server for slider 3"""
+    return common.get_server("slider_3")
+
+
+def get_server_power_meter():
+    """Get server for powermeter"""
+    return common.get_server("power_meter")
+
+
+def get_server_rotation_mount():
+    """Get server for rotation mount"""
+    return common.get_server("rotation_mount")
+
+
+def get_tisapph():
+    return common.get_server_by_name("tisapph_M2_solstis")
+
+
+# def dummyfunc():
+#     return 0
 
 
 @cache
