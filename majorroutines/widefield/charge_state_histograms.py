@@ -379,24 +379,24 @@ def main(
         keys_to_compress = None
 
     # Histograms
-    try:
-        hist_figs = process_and_plot(raw_data, do_plot_histograms=do_plot_histograms)
-        # Save
-        if hist_figs is not None:
-            num_nvs = len(nv_list)
-            for nv_ind in range(num_nvs):
-                fig = hist_figs[nv_ind]
-                nv_sig = nv_list[nv_ind]
-                nv_name = nv_sig.name
-                file_path = dm.get_file_path(__file__, timestamp, nv_name)
-                dm.save_figure(fig, file_path)
-    except Exception:
-        print(traceback.format_exc())
+    # try:
+    #     hist_figs = process_and_plot(raw_data, do_plot_histograms=do_plot_histograms)
+    #     # Save
+    #     if hist_figs is not None:
+    #         num_nvs = len(nv_list)
+    #         for nv_ind in range(num_nvs):
+    #             fig = hist_figs[nv_ind]
+    #             nv_sig = nv_list[nv_ind]
+    #             nv_name = nv_sig.name
+    #             file_path = dm.get_file_path(__file__, timestamp, nv_name)
+    #             dm.save_figure(fig, file_path)
+    # except Exception:
+    #     print(traceback.format_exc())
 
-    try:
-        del raw_data["img_arrays"]
-    except Exception:
-        pass
+    # try:
+    #     del raw_data["img_arrays"]
+    # except Exception:
+    #     pass
 
     ### Save raw data
 
@@ -414,6 +414,121 @@ def main(
 
     return raw_data
 
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+from analysis.bimodal_histogram import (
+    ProbDist,
+    fit_bimodal_histogram,
+    determine_threshold,
+    analyze_charge_histogram_multinv_binomial,
+)
+
+def find_nv_index_by_nvnum(nv_list, nv_num_target=122):
+    # matches common dict keys; fallback treats nv_num_target as index
+    keys = ["nv_num", "nv_number", "nv_id", "id", "num"]
+    for i, nv in enumerate(nv_list):
+        if isinstance(nv, dict):
+            for k in keys:
+                if k in nv:
+                    try:
+                        if int(nv[k]) == int(nv_num_target):
+                            return i
+                    except Exception:
+                        pass
+    if 0 <= int(nv_num_target) < len(nv_list):
+        return int(nv_num_target)
+    raise ValueError(f"Could not find NV {nv_num_target} in nv_list")
+
+def analyze_nv122_ref_only(raw_data, nv_num=122, ref_axis=0, prob_dist=ProbDist.COMPOUND_POISSON, max_nvs=3):
+    nv_list = raw_data["nv_list"]
+    nv_ind = find_nv_index_by_nvnum(nv_list, nv_num)
+
+    # your 5D array: (exp, nv, rep, step, shot)
+    counts = np.asarray(raw_data["counts"], dtype=float)  # or raw_data["counts"] if that's the key
+    ref_counts = counts[ref_axis, nv_ind, :, :, :].reshape(-1)
+    ref_counts = ref_counts[np.isfinite(ref_counts)]
+
+    print(f"NV {nv_num} -> nv_ind={nv_ind}, #REF shots={ref_counts.size}")
+
+    # --- legacy bimodal fit ---
+    popt, _, red_chi_sq = fit_bimodal_histogram(ref_counts, prob_dist)
+    if popt is None:
+        print("[bimodal] fit failed")
+        thr_bi, fid_bi = np.nan, np.nan
+    else:
+        thr_bi, fid_bi = determine_threshold(popt, prob_dist, dark_mode_weight=0.5, ret_fidelity=True)
+        print(f"[bimodal] thr={thr_bi:.2f}, fid={fid_bi:.3f}, red_chi_sq={red_chi_sq}")
+
+    # --- binomial mult-NV structured model (tries N=1..max_nvs) ---
+    fitN = analyze_charge_histogram_multinv_binomial(
+        ref_counts,
+        prob_dist=prob_dist,
+        max_nvs=max_nvs,
+        force_nvs=None,
+        bic_extra_nv_penalty=2.0,
+        seed=0,
+    )
+    if not fitN.get("ok", False):
+        print("[binomial mult-NV] fit failed")
+    else:
+        N = fitN["n_nvs"]
+        p_minus, rate0, delta = [float(v) for v in fitN["popt"]]
+        print(
+            f"[binomial mult-NV] N={N}, p_minus={p_minus:.3f}, rate0={rate0:.2f}, delta={delta:.2f}\n"
+            f"  fidelity_any={fitN['fidelity_any']:.3f}, fidelity_multiclass={fitN['fidelity_multiclass']:.3f}\n"
+            f"  threshold_any={fitN['threshold_any']:.2f}"
+        )
+
+    # plot histogram
+    plt.figure(figsize=(6, 4))
+    bins = int(min(250, max(40, np.sqrt(ref_counts.size))))
+    plt.hist(ref_counts, bins=bins, density=True, alpha=0.7, label="REF counts (50 ms)")
+    if np.isfinite(thr_bi):
+        plt.axvline(thr_bi, ls="--", label=f"bimodal thr {thr_bi:.1f}")
+    if fitN.get("ok", False):
+        plt.axvline(fitN["threshold_any"], ls="--", label=f"any thr {fitN['threshold_any']:.1f}")
+    plt.xlabel("counts")
+    plt.ylabel("density")
+    plt.title(f"NV {nv_num} (REF axis {ref_axis})")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+    return {"nv_ind": nv_ind, "ref_counts": ref_counts, "bimodal": (popt, red_chi_sq), "binomial": fitN}
+
+def compare_readout_sets(file_stems, readout_ms, nv_num=122, ref_axis=0):
+    results = []
+
+    plt.figure(figsize=(7, 5))
+
+    for stem, ms in zip(file_stems, readout_ms):
+        data = dm.get_raw_data(file_stem=stem, load_npz=True)  # or file_id
+        out = analyze_nv122_ref_only(data, nv_num=nv_num, ref_axis=ref_axis)
+        ref_counts = out["ref_counts"]
+
+        bins = int(min(220, max(40, np.sqrt(ref_counts.size))))
+        plt.hist(ref_counts, bins=bins, density=True, alpha=0.25, label=f"{ms} ms")
+
+        results.append((ms, out))
+
+    plt.title(f"NV {nv_num} REF hist overlay")
+    plt.xlabel("counts")
+    plt.ylabel("density")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+    # Print key metrics vs duration
+    for ms, out in results:
+        b = out["binomial"]
+        if b.get("ok", False):
+            print(f"{ms} ms: N={b['n_nvs']}, fid_any={b['fidelity_any']:.3f}, fid_multi={b['fidelity_multiclass']:.3f}, p_minus={b['popt'][0]:.3f}")
+        else:
+            print(f"{ms} ms: binomial fit failed")
+
+    return results
 
 if __name__ == "__main__":
     kpl.init_kplotlib()
@@ -438,12 +553,20 @@ if __name__ == "__main__":
     # data = dm.get_raw_data(file_id=1806222218365, load_npz=False)
     # data = dm.get_raw_data(file_id=1806227898070, load_npz=False)
     # data = dm.get_raw_data(file_id=1806410973406, load_npz=False)
-    # data = dm.get_raw_data(
-    #     file_stem="2025_10_23-17_31_05-johnson-nv0_2025_10_21", load_npz=True
-    # )
-    # process_and_plot(data, do_plot_histograms=True)
     data = dm.get_raw_data(
-        file_stem="2025_10_26-17_45_04-johnson-nv0_2025_10_21", load_npz=True
+        # file_stem="2026_03_11-01_36_16-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_03_16-22_47_24-qnami-nv0_2026_02_20", load_npz=True
     )
+    # process_and_plot(data, do_plot_histograms=True)
+    # data = dm.get_raw_data(
+    #     file_stem="pti_x, opti_y", load_npz=True
+    # )
+    # out = analyze_nv122_ref_only(data, nv_num=122, ref_axis=1)
+    # compare_readout_sets(
+    #     file_stems=["2026_03_02-17_30_11-qnami-nv0_2026_02_20"],
+    #     readout_ms=[50],          # <-- must match length
+    #     nv_num=122,-
+    #     ref_axis=1,
+    # )
     process_and_plot(data, do_plot_histograms=True)
     kpl.show(block=True)

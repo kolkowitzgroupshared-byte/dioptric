@@ -79,15 +79,13 @@ config |= {
     "disable_z_drift_compensation":True,
     ###
     # Common durations are in ns
+    ###
     "CommonDurations": {
-        "default_pulse_duration": 1000,
-        "aod_access_time": 11e3,  # access time in specs is 10us
-        "widefield_operation_buffer": 1e3,
-        "uwave_buffer": 0,
-        "iq_buffer": 0,
-        "iq_delay": 136,  # SBC measured using NVs 4/18/2025
-        "temp_reading_interval": 15 * 60,  # for PID
-        # "iq_delay": 140,  # SBC measured using NVs 4/18/2025
+        "cw_meas_buffer": 5000,
+        "pol_to_uwave_wait_dur": 5000,
+        "scc_ion_readout_buffer": 10000,
+        "uwave_buffer": 100,
+        "uwave_to_readout_wait_dur": 5000,
     },
     ###
     "DeviceIDs": {
@@ -108,8 +106,8 @@ config |= {
         "sig_gen_STAN_sg394_2_visa": "TCPIP::192.168.0.121::inst0::INSTR",
         "sig_gen_STAN_sg394_3_visa": "TCPIP::192.168.0.177::inst0::INSTR",
         "sig_gen_TEKT_tsg4104a_visa": "TCPIP0::128.104.ramp_to_zero_duration.112::5025::SOCKET",
-        "tagger_SWAB_20_1_serial": "1740000JEH",
-        "tagger_SWAB_20_2_serial": "1948000SIP",
+        "tagger_SWAB_20_1_serial": "1948000SIP", # cryo
+        # "tagger_SWAB_20_1_serial": "1740000JEH", # nuclear
         "QM_opx_args": {
             "host": "192.168.0.117",
             "port": 9510,
@@ -118,6 +116,8 @@ config |= {
         "power_supply_RNS_ngc103_visa": "TCPIP::192.168.0.130::INSTR",
         "pos_xyz_ATTO_piezos_ip": "192.168.0.199",
         "filter_slider_THOR_ell9k_com": "COM5",
+        "multimeter_KEIT_daq6510_visa": "TCPIP::192.168.0.122::inst0::INSTR",
+
     },
     ###
     "Microwaves": {
@@ -133,7 +133,7 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 6.0,
-                "frequency": 2.800,
+                "frequency": 2.8785,
                 "rabi_period": 144,
                 "pi_pulse": 72,
                 "pi_on_2_pulse": 36,
@@ -242,7 +242,8 @@ config |= {
                 # "delay": int(1e6),  # 1 ms for ATTO
                 "delay": int(5e6),  # 5 ms for PIFOC xyz
                 "nm_per_unit": 1000,
-                "optimize_range": 0.09,
+                # "optimize_range": 0.09,
+                "optimize_range": 0.1,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
@@ -251,17 +252,16 @@ config |= {
                 "control_mode": PosControlMode.STREAM,
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
-                "optimize_range": 0.015,
+                # "optimize_range": 0.02,
+                "optimize_range": 0.008,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
         },
-        # "calibration_coords_nv1": calibration_coords_nv1,
-        # "calibration_coords_nv2": calibration_coords_nv2,
-        # "calibration_coords_nv3": calibration_coords_nv3,
         "pixel_to_sample_affine_transformation_matrix": pixel_to_sample_affine_transformation_matrix,
         "cryo_piezos_voltage": 33,
         "z_bias_adjust": 0.0,
+        "optimize_num_steps": 40,
     },
     ###
     "Servers": {  # Bucket for miscellaneous servers not otherwise listed above

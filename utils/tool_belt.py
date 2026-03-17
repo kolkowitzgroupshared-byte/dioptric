@@ -170,8 +170,6 @@ def get_laser_server(laser_name):
 
 # endregion
 # region Pulse generator utils
-
-
 def process_laser_seq(seq, virtual_laser_key, train):
     """
     Automatically process simple laser sequences. Simple here means that the modulation
@@ -489,7 +487,8 @@ def cosine_double_sum(t, offset, decay, amp_1, freq_1, amp_2, freq_2):
     two_pi = 2 * np.pi
 
     return offset + np.exp(-t / abs(decay)) * (
-        amp_1 * np.cos(two_pi * freq_1 * t) + amp_2 * np.cos(two_pi * freq_2 * t)
+        amp_1 * np.cos(two_pi * freq_1 * t)
+        + amp_2 * np.cos(two_pi * freq_2 * t)
         # + amp_3 * np.cos(two_pi * freq_3 * t)
     )
 
