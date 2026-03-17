@@ -369,11 +369,19 @@ def main(
     opti_counts = None
     if opti_x is not None and opti_y is not None and move_to_optimal:
         print(f"\nMoving to optimal position...")
+        # pixel_xy = [opti_x, opti_y]
+        # nv_sig.coords[CoordsKey.PIXEL] = pixel_xy
         pos.set_xyz((opti_x, opti_y), positioner=CoordsKey.PIXEL)
+        print(f"Moved to X={opti_x:.4f}, Y={opti_y:.4f}")
+        galvo = pos.get_positioner_server(CoordsKey.PIXEL)
+        galvo.write_xy([opti_x, opti_y])
+        galvo.reset()
         time.sleep(0.05)  # Settling time
+        print(f"Current NV coordinates (PIXEL): {nv_sig.coords[CoordsKey.PIXEL]}")
 
         # Measure counts at optimal position
         counter.start_tag_stream()
+        pulse_gen.stream_load(seq_file, tb.encode_seq_args(seq_args)) 
         samples = []
         for _ in range(5):  # Average 5 samples for verification
             pulse_gen.stream_start(1)

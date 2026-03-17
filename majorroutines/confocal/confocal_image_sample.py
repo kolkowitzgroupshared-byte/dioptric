@@ -59,6 +59,7 @@ def confocal_scan(nv_sig: NVSig, x_range, y_range, num_steps, nv_minus_init=Fals
     # Build grid (1D coordinate axes + random-access XY)
     x0, y0 = pos.get_nv_coords(nv_sig, coords_key=CoordsKey.PIXEL)
     X, Y, x1d, y1d, extent = pos.get_scan_grid_2d(x0, y0, x_range, y_range, num_steps, num_steps)
+    # extent[0], extent[1] = extent[1], extent[0]
     h = w = num_steps
     total = h * w
     # --- UI throttling: update plot every N pixels (about ~8 updates/row) ---
@@ -112,7 +113,8 @@ def confocal_scan(nv_sig: NVSig, x_range, y_range, num_steps, nv_minus_init=Fals
             Xr = []
             Yr = []
             for row in range(h):
-                y = y1d[(h - 1) - row]   # bottom row first
+                y = y1d[(h - 1) - row]
+                # y = y1d[row]   # bottom row first
                 for col in range(w):
                     x = x1d[col]        # left -> right always
                     Xr.append(x); Yr.append(y)
