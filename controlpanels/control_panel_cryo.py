@@ -808,7 +808,7 @@ if __name__ == "__main__":
     # region Postion and Time Control
     sample_xy = [0.0,0.0] # piezo XY voltage input (1.0=1V) (not coordinates, relative)
     coord_z = 0  # piezo z voltage (negative is closer to smaple)
-    pixel_xy = [0,0]  # galvo XY 
+    pixel_xy = [0.044, 0.046]  # galvo XY 
     # pixel_xy = [0.053, 0.045]  # NV canidate
 
 # return 
@@ -876,7 +876,7 @@ if __name__ == "__main__":
 
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
         # do_image_sample(nv_sig)
-        # do_image_sample_zoom(nv_sig)
+        do_image_sample_zoom(nv_sig)
 
         # Quick NV area scans
         # for i in range(27):
@@ -898,7 +898,7 @@ if __name__ == "__main__":
         # endregion Optimize
 
         # region Stationary count
-        do_stationary_count(nv_sig, disable_opt=True) #Note there is a slow response time w/ the APD
+        # do_stationary_count(nv_sig, disable_opt=True) #Note there is a slow response time w/ the APD
         # do_stationary_count(nv_sig, disable_opt=True, nv_minus_initialization=True)
         # do_stationary_count(nv_sig, disable_opt=True, nv_zero_initialization=True)
         # endregion Stationary count
@@ -910,7 +910,7 @@ if __name__ == "__main__":
         # do_pulsed_resonance(nv_sig, 2.87, 0.200)
         # do_pulsed_re2.sonance_state(nv_sig, States.LOW)
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
-        do_rabi(nv_sig)
+        # do_rabi(nv_sig)
         # do_rabi(nv_sig, States.HIGH, uwave_time_range=[0, 400])
         # do_spin_echo(nv_sig)
         # do_g2_measurement(nv_sig, 0, 1)
