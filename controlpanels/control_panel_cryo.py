@@ -781,7 +781,8 @@ def do_rabi(nv_sig):
         max_tau=500,  # 400,
         num_steps=31,
         uwave_ind=0,
-        uwave_freq_ghz=2.90,  # Change to target ms=+1 or ms=-1 transition
+        uwave_freq_ghz=2.8537,  # Change to target ms=+1 or ms=-1 transition
+        optimize_between_runs=True,
     )
 def do_resonance(nv_sig,freq_center_ghz=2.87845,freq_span_mhz=200.0,num_runs=40): #2.8786GHz
     resonance.main(nv_sig)
@@ -974,7 +975,7 @@ if __name__ == "__main__":
     # pixel_xy = [0,0]  # galvo ref
     # pixel_xy = [-0.021, -0.052]s # zoom picture
     # pixel_xy = [0.093, 0.067] # NV Lovelace
-    pixel_xy = [-0.003, 0.014] # NV Lovelace
+    pixel_xy = [-0.003, 0.015] # NV Lovelace
     # return
     nv_sig = NVSig(
         name=f"({get_sample_name()})",
