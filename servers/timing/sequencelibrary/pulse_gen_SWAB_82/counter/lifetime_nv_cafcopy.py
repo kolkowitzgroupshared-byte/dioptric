@@ -66,18 +66,12 @@ def get_seq(pulse_streamer, config, args):
     do_daq_laser = pulse_gen_wiring[f"do_laser_COBO_{int(laser_wavelength)}_dm"]
     do_daq_gate = pulse_gen_wiring["do_apd_gate"]
     laser_delay = config["Optics"]["PhysicalLasers"][laser_name]["delay"]
-    tail_pad = np.int64(500)
+    tail_pad = np.int64(300)
 
     seq = Sequence()
-    laser_delay = 1000
     period = laser_delay + pulse_time + readout_time + tail_pad
 
     ## LASER
-    # laser_train = [
-    #     (laser_delay, LOW),
-    #     (pulse_time, HIGH),
-    #     (readout_time + tail_pad, LOW),
-    # ]
     laser_train = [
         (laser_delay, LOW),
         (pulse_time, HIGH),
@@ -86,15 +80,10 @@ def get_seq(pulse_streamer, config, args):
     seq.setDigital(do_daq_laser, laser_train)
 
     ## APD
-    # apd_train = [
-    #     (laser_delay + pulse_time, LOW),
-    #     (readout_time, HIGH),
-    #     (tail_pad, LOW),
-    # ]
     apd_train = [
-        (laser_delay, LOW),
+        (laser_delay + pulse_time, LOW),
         (readout_time, HIGH),
-        (pulse_time + tail_pad, LOW),
+        (tail_pad, LOW),
     ]
     seq.setDigital(do_daq_gate, apd_train)
 

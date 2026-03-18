@@ -52,7 +52,7 @@ if __name__ == "__main__":
     # )
     file_stem="2026_03_11-22_09_46-qnami-nv0_2026_02_20",
     data = dm.get_raw_data(
-        file_stem="2026_03_13-15_37_26-qnami-nv0_2026_02_20",
+        file_stem="2026_03_16-14_56_37-qnami-nv0_2026_02_20",
         load_npz=True,
     )
 
