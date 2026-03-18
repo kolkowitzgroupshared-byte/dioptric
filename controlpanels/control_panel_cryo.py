@@ -266,15 +266,15 @@ def do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008
 
 
 
-# def do_optimize_green(nv_sig):
-#     # Use whatever coords key the imaging laser uses (PIXEL in cryo, AOD in widefield)
-#     coords_key = pos.get_laser_positioner(VirtualLaserKey.IMAGING)
-#     opti_coords, final_counts = targeting.optimize(nv_sig, coords_key=coords_key)
+def do_optimize_green(nv_sig):
+    # Use whatever coords key the imaging laser uses (PIXEL in cryo, AOD in widefield)
+    coords_key = pos.get_laser_positioner(VirtualLaserKey.IMAGING)
+    opti_coords, final_counts = targeting.optimize(nv_sig, coords_key=coords_key)
 
-#     if getattr(nv_sig, "expected_counts", None) is None:
-#         nv_sig.expected_counts = final_counts
+    if getattr(nv_sig, "expected_counts", None) is None:
+        nv_sig.expected_counts = final_counts
 
-#     return opti_coords
+    return opti_coords
 
 # def do_optimize_z(nv_sig):
 #     ret_vals = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
@@ -773,22 +773,15 @@ def do_z_scan_3d(nv_sig):
 
 
 def do_rabi(nv_sig):
-    num_steps = 31
-    num_reps = 2e4
-    num_runs = 30
-    min_tau = 8
-    max_tau = 400
-    uwave_ind_list = [0]
     rabi.main(
-        nv_sig,
-        num_steps,
-        num_reps,
-        num_runs,
-        min_tau,
-        max_tau,
-        uwave_ind_list,
+        nv_sig=nv_sig,
+        num_reps=int(2e4),
+        num_runs=30,
+        min_tau=20,
+        max_tau=400,
+        num_steps=31,
+        uwave_ind=0,
     )
-
 def do_resonance(nv_sig,freq_center_ghz=2.8786,freq_span_mhz=200.0,num_runs=40):
     resonance.main(nv_sig)
 
@@ -976,13 +969,13 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0,0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z =4.4840# atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z =4.4599# atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # pixel_xy = [0,0]  # galvo ref
     # pixel_xy = [-0.021, -0.052]s # zoom picture
     # pixel_xy = [0.093, 0.067] # NV Lovelace
     #pixel_xy = [-0.008, 0.009] # NV Lovelace
-    pixel_xy = [-0.037, -0.011]
-    # pixel_xy = [-0.008, 0.003] # NV Lovelace
+    # pixel_xy = [-0.0388, -0.0037]
+    pixel_xy = [-0.0070,0.0063] # NV Lovelace
     # return
     nv_sig = NVSig(
         name=f"({get_sample_name()})",
@@ -996,6 +989,7 @@ if __name__ == "__main__":
         expected_counts=13,       
         pulse_durations={
             VirtualLaserKey.IMAGING: int(10e6),  # readout is in ns (5e6 = 5ms)
+            VirtualLaserKey.SPIN_READOUT: int(300),  # readout is in ns (5e6 = 5ms)
             VirtualLaserKey.CHARGE_POL: int(1e4),
             VirtualLaserKey.SPIN_POL: 2000,
             VirtualLaserKey.SINGLET_DRIVE: 300,  # placeholder
@@ -1055,7 +1049,7 @@ if __name__ == "__main__":
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None):
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
         # do_image_sample(nv_sig)
-        do_image_sample_zoom(nv_sig)
+        # do_image_sample_zoom(nv_sig)
 
         # # Quick NV area scans
         # for i in range(10):
@@ -1072,7 +1066,7 @@ if __name__ == "__main__":
         # end region Image sample
 
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=4.38, voltage_end=4.5, step_size=0.001)
+        # do_optimize_z_PI(nv_sig, voltage_start=4.40, voltage_end=4.50, step_size=0.002)
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
@@ -1094,7 +1088,7 @@ if __name__ == "__main__":
         # do_pulsed_resonance(nv_sig, 2.87, 0.200)
         # do_pulsed_re2.sonance_state(nv_sig, States.LOW)
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
-        # do_rabi(nv_sig)
+        do_rabi(nv_sig)
         # do_resonance(nv_sig)
         # do_rabi(nv_sig, uwave_time_range=[0, 400])
         # do_spin_echo(nv_sig)

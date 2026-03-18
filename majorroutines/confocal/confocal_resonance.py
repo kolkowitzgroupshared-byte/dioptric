@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import majorroutines.targeting as targeting
+from utils import positioning as pos
 from utils import tool_belt as tb
 from utils import kplotlib as kpl
 from utils import data_manager as dm
@@ -33,7 +34,7 @@ def main(
     readout_ns= 10e6, #None, # if not NONE shows normalized plot
     uwave_power_dbm=None,
     laser_power=None,
-    do_targeting=True,
+    do_targeting=False,
     do_plot=True,
     do_save=True,
     shuffle=False,
@@ -116,7 +117,8 @@ def main(
         ## Drift correction / targeting to be implemented here
         if do_targeting:
             try:
-                opti_coords = targeting.main_with_cxn(nv_sig)
+                # opti_coords = targeting.main_with_cxn(nv_sig)
+                opti_coords = pos.set_xyz_on_nv(nv_sig)
                 opti_coords_list.append(opti_coords)
             except Exception as e:
                 print(f"Targeting failed on run {run_ind}: {e}")
@@ -153,7 +155,8 @@ def main(
         if do_plot:
             valid_runs = np.isfinite(sig_counts[: run_ind + 1]) & np.isfinite(ref_counts[: run_ind + 1])
             with np.errstate(divide="ignore", invalid="ignore"):
-                norm_runs = sig_counts[: run_ind + 1] / np.maximum(ref_counts[: run_ind + 1], 1)
+                # norm_runs = sig_counts[: run_ind + 1] / np.maximum(ref_counts[: run_ind + 1], 1)
+                norm_runs = sig_counts[: run_ind + 1] / ref_counts[: run_ind + 1]
             norm_mean = np.nanmean(norm_runs, axis=0)
 
             line.set_data(freqs_ghz, norm_mean)
