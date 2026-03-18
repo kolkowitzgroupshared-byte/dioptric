@@ -22,7 +22,7 @@ Returns:
 import matplotlib.pyplot as plt
 import numpy as np
 
-import majorroutines.targeting as targeting
+from majorroutines.calibration import optimize_xy
 from utils import tool_belt as tb
 from utils import kplotlib as kpl
 from utils import data_manager as dm
@@ -123,7 +123,8 @@ def main(
     uwave_power_dbm=None,
     uwave_freq_ghz=None,
     laser_power=None,
-    do_targeting=False,
+    optimize_between_runs=False,
+    optimize_xy_kwargs=None,
     do_plot=True,
     do_save=False,
     norm_mode=NormMode.SINGLE_VALUED,
@@ -160,7 +161,6 @@ def main(
 
     freq_ghz = uwave_freq_ghz if uwave_freq_ghz is not None else vsg["frequency"]
     sig_gen.set_freq(float(freq_ghz))
-    sig_gen.load_pulse_mod(6)  # Blank modulation with external TTL gate
     sig_gen.uwave_on()
 
     seq_file = "rabi.py"
@@ -168,7 +168,6 @@ def main(
     ref_counts = np.full((num_runs, len(tau_ns_list)), np.nan)
     sig_counts = np.full((num_runs, len(tau_ns_list)), np.nan)
 
-    opti_coords_list = []
     timestamp = dm.get_time_stamp()
 
     if do_plot:
@@ -190,13 +189,20 @@ def main(
         if tb.safe_stop():
             break
 
-        if do_targeting:
+        if optimize_between_runs:
             try:
-                opti_coords = targeting.main_with_cxn(nv_sig)
+                xy_kwargs = dict(optimize_xy_kwargs or {})
+                xy_kwargs.setdefault("num_steps", 8)
+                xy_kwargs.setdefault("scan_range", 0.008)
+                xy_kwargs.setdefault("move_to_optimal", True)
+                xy_kwargs.setdefault("save_data", False)
+                results = optimize_xy.main(nv_sig, **xy_kwargs)
+                opti_x = results.get("opti_x")
+                opti_y = results.get("opti_y")
+                if opti_x is not None and opti_y is not None:
+                    print(f"  Optimized: X={opti_x:.4f}, Y={opti_y:.4f}")
             except Exception as e:
-                print(f"Targeting failed on run {run_ind}: {e}")
-                opti_coords = None
-            opti_coords_list.append(opti_coords)
+                print(f"  XY optimization failed: {e}")
 
         # Open stream ONCE per run, not per tau step
         counter_server.start_tag_stream()
