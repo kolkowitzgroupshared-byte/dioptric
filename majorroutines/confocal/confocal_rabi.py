@@ -121,6 +121,7 @@ def main(
     uwave_ind=0,
     readout_ns=None,
     uwave_power_dbm=None,
+    uwave_freq_ghz=None,
     laser_power=None,
     do_targeting=False,
     do_plot=True,
@@ -157,7 +158,7 @@ def main(
     if uwave_power_dbm is not None:
         sig_gen.set_amp(float(uwave_power_dbm))
 
-    freq_ghz = vsg["frequency"]
+    freq_ghz = uwave_freq_ghz if uwave_freq_ghz is not None else vsg["frequency"]
     sig_gen.set_freq(float(freq_ghz))
     sig_gen.uwave_on()
 
@@ -217,11 +218,14 @@ def main(
                 pulsegen_server.stream_load(seq_file, seq_args_string)
                 counter_server.clear_buffer()
                 pulsegen_server.stream_start(int(num_reps))
-                new_counts = counter_server.read_counter_modulo_gates(2, 1)
+                new_counts = counter_server.read_counter_modulo_gates(
+                    2, int(num_reps)
+                )
 
-                sample_counts = new_counts[0]
-                ref_counts[run_ind, step_ind] = sample_counts[0]
-                sig_counts[run_ind, step_ind] = sample_counts[1]
+                # Sum across all reps (each entry is [ref, sig] for one rep)
+                count_arr = np.array(new_counts, dtype=np.int64)
+                ref_counts[run_ind, step_ind] = count_arr[:, 0].sum()
+                sig_counts[run_ind, step_ind] = count_arr[:, 1].sum()
 
                 print(
                     f"  tau={int(tau_ns):>4d} ns | "

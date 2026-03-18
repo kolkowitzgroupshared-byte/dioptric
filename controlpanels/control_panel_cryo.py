@@ -778,9 +778,10 @@ def do_rabi(nv_sig):
         num_reps=int(20e4),
         num_runs=50,
         min_tau=20,
-        max_tau=500, #400,
+        max_tau=500,  # 400,
         num_steps=31,
         uwave_ind=0,
+        uwave_freq_ghz=2.90,  # Change to target ms=+1 or ms=-1 transition
     )
 def do_resonance(nv_sig,freq_center_ghz=2.87845,freq_span_mhz=200.0,num_runs=40): #2.8786GHz
     resonance.main(nv_sig)
