@@ -163,6 +163,31 @@ class SigGenStanSg394(LabradServer, SigGenVector):
         # Turn on modulation
         self.sig_gen.write("MODL 1")
 
+    @setting(4, mod_type="i")
+    def load_pulse_mod(self, c, mod_type=6):
+        """Enable external pulse/blank modulation for TTL gating.
+
+        mod_type selects the SG394 modulation type:
+            5 = Pulse modulation  (uses PFNC 5 = external)
+            6 = Blank modulation  (uses BFNC 5 = external)
+
+        The external function (code 5) tells the SG394 to use the
+        rear-panel BNC input as the modulation source.
+        """
+        mod_type = int(mod_type)
+        self.sig_gen.write(f"TYPE {mod_type}")
+
+        # Each modulation type has its own function command
+        if mod_type == 5:
+            self.sig_gen.write("PFNC 5")  # External pulse source
+        elif mod_type == 6:
+            self.sig_gen.write("BFNC 5")  # External blank source
+        else:
+            self.sig_gen.write("MFNC 5")  # Generic external
+
+        self.sig_gen.write("MODL 1")
+        logging.info(f"Enabled modulation TYPE {mod_type} with external source")
+
     @setting(8, carrier_freq="v[]", deviation="v[]")
     def load_fm(self, c, carrier_freq, deviation):
         """

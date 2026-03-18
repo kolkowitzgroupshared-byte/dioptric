@@ -2,12 +2,12 @@
 """
 Single-point Rabi sequence.
 
-Two APD-gated experiments per repetition:
+Two gated measurements per repetition:
     gate 0 = reference  (no MW pulse)
     gate 1 = signal     (MW pulse of duration tau_ns)
 
 Args:
-    [tau_ns, polarization_ns, readout_ns, uwave_ind, readout_vkey, laser_power]
+    [tau_ns, polarization_ns, readout_ns, uwave_ind, pol_vkey, readout_vkey, laser_power]
 """
 
 from pulsestreamer import Sequence, OutputState
@@ -20,14 +20,14 @@ LOW = Digital.LOW
 HIGH = Digital.HIGH
 
 
-def _as_int64(name, v):
+def _as_int64(name, value):
     try:
-        iv = int(v)
+        value = int(value)
     except Exception:
-        raise TypeError(f"{name} must be int-like, got {type(v).__name__}: {v!r}")
-    if iv < 0:
-        raise ValueError(f"{name} must be >= 0, got {iv}")
-    return np.int64(iv)
+        raise TypeError(f"{name} must be int-like, got {value!r}")
+    if value < 0:
+        raise ValueError(f"{name} must be >= 0, got {value}")
+    return np.int64(value)
 
 
 def _vkey_from_arg(x):
@@ -35,42 +35,74 @@ def _vkey_from_arg(x):
         return x
     if isinstance(x, str):
         name = x.split(".")[-1]
-        try:
-            return VirtualLaserKey[name]
-        except Exception:
-            return VirtualLaserKey(x)
+        return VirtualLaserKey[name]
     raise TypeError(f"Bad virtual laser key: {x!r}")
 
 
+def _merge_trains(train_a, train_b):
+    """OR two trains with identical segment durations."""
+    if len(train_a) != len(train_b):
+        raise ValueError("Cannot merge trains with different lengths.")
+
+    merged = []
+    for (dur_a, val_a), (dur_b, val_b) in zip(train_a, train_b):
+        if int(dur_a) != int(dur_b):
+            raise ValueError("Cannot merge trains with different segment durations.")
+        merged_val = HIGH if (val_a == HIGH or val_b == HIGH) else LOW
+        merged.append((int(dur_a), merged_val))
+    return merged
+
+
+def _compress_train(train):
+    """Merge adjacent segments with same level."""
+    if len(train) == 0:
+        return train
+
+    out = [list(train[0])]
+    for dur, val in train[1:]:
+        if val == out[-1][1]:
+            out[-1][0] += int(dur)
+        else:
+            out.append([int(dur), val])
+    return [(dur, val) for dur, val in out]
+
+
 def get_seq(pulse_streamer, config, args):
-    # args = [tau_ns, polarization_ns, readout_ns, uwave_ind, readout_vkey, laser_power]
-    tau_ns, polarization_ns, readout_ns, uwave_ind, readout_vkey_arg, laser_power = args
+    # args = [tau_ns, polarization_ns, readout_ns, uwave_ind, pol_vkey, readout_vkey, laser_power]
+    tau_ns, polarization_ns, readout_ns, uwave_ind, pol_vkey_arg, readout_vkey_arg, laser_power = args
 
     tau_ns = _as_int64("tau_ns", tau_ns)
     polarization_ns = _as_int64("polarization_ns", polarization_ns)
     readout_ns = _as_int64("readout_ns", readout_ns)
     uwave_ind = int(uwave_ind)
+
+    pol_vkey = _vkey_from_arg(pol_vkey_arg)
     readout_vkey = _vkey_from_arg(readout_vkey_arg)
 
     pulser_wiring = config["Wiring"]["PulseGen"]
-
     do_sample_clock = pulser_wiring["do_sample_clock"]
     do_apd_gate = pulser_wiring["do_apd_gate"]
 
-    # MW source from virtual sig gen
+    # Microwave channel
     vsg = tb.get_virtual_sig_gen_dict(uwave_ind)
     sig_gen_name = vsg["physical_name"]
+    do_sig_gen_gate = pulser_wiring[f"do_{sig_gen_name}_dm"]
     uwave_delay = _as_int64(
         "uwave_delay",
         config["Microwaves"]["PhysicalSigGens"][sig_gen_name]["delay"],
     )
-    do_sig_gen_gate = pulser_wiring[f"do_{sig_gen_name}_dm"]
 
-    # Laser timing
-    laser_name = tb.get_physical_laser_name(readout_vkey)
-    laser_delay = _as_int64(
-        "laser_delay",
-        config["Optics"]["PhysicalLasers"][laser_name]["delay"],
+    # Laser channels
+    pol_laser_name = tb.get_physical_laser_name(pol_vkey)
+    readout_laser_name = tb.get_physical_laser_name(readout_vkey)
+
+    pol_delay = _as_int64(
+        "pol_delay",
+        config["Optics"]["PhysicalLasers"][pol_laser_name]["delay"],
+    )
+    readout_delay = _as_int64(
+        "readout_delay",
+        config["Optics"]["PhysicalLasers"][readout_laser_name]["delay"],
     )
 
     # Buffers
@@ -81,14 +113,7 @@ def get_seq(pulse_streamer, config, args):
         common_durations.get("uwave_buffer", common_durations["cw_meas_buffer"]),
     )
 
-    front_buffer = np.int64(max(uwave_delay, laser_delay))
-
-    # Each experiment:
-    #   laser init/polarize
-    #   dark buffer
-    #   dummy tau (ref) OR MW tau (sig)
-    #   laser readout + APD gate
-    #   meas buffer
+    front_buffer = np.int64(max(uwave_delay, pol_delay, readout_delay))
     exp_period = np.int64(
         polarization_ns + init_to_mw_buffer + tau_ns + readout_ns + meas_buffer
     )
@@ -96,26 +121,29 @@ def get_seq(pulse_streamer, config, args):
 
     seq = Sequence()
 
+    # ------------------------------------------------------------------
     # Sample clock
-    clk_train = (
-        [(int(period - 200), LOW), (100, HIGH), (100, LOW)]
-        if period >= 300
-        else [(int(period), LOW)]
-    )
+    # ------------------------------------------------------------------
+    if period >= 300:
+        clk_train = [(int(period - 200), LOW), (100, HIGH), (100, LOW)]
+    else:
+        clk_train = [(int(period), LOW)]
     seq.setDigital(do_sample_clock, clk_train)
 
+    # ------------------------------------------------------------------
     # APD gate
-    # gate 0 = reference readout
-    # gate 1 = signal readout
+    # ------------------------------------------------------------------
     apd_train = [
         (int(front_buffer), LOW),
-        # reference experiment
+
+        # Reference experiment
         (int(polarization_ns), LOW),
         (int(init_to_mw_buffer), LOW),
         (int(tau_ns), LOW),
         (int(readout_ns), HIGH),
         (int(meas_buffer), LOW),
-        # signal experiment
+
+        # Signal experiment
         (int(polarization_ns), LOW),
         (int(init_to_mw_buffer), LOW),
         (int(tau_ns), LOW),
@@ -124,13 +152,21 @@ def get_seq(pulse_streamer, config, args):
     ]
     seq.setDigital(do_apd_gate, apd_train)
 
-    # MW gate
-    # OFF during ref experiment, ON only for tau_ns in signal experiment
+    # ------------------------------------------------------------------
+    # Microwave gate
+    # OFF during reference, ON during signal tau only
+    # ------------------------------------------------------------------
     mw_train = [
         (int(front_buffer - uwave_delay), LOW),
-        # reference experiment: all LOW
-        (int(exp_period), LOW),
-        # signal experiment
+
+        # Reference experiment
+        (int(polarization_ns), LOW),
+        (int(init_to_mw_buffer), LOW),
+        (int(tau_ns), LOW),
+        (int(readout_ns), LOW),
+        (int(meas_buffer), LOW),
+
+        # Signal experiment
         (int(polarization_ns), LOW),
         (int(init_to_mw_buffer), LOW),
         (int(tau_ns), HIGH),
@@ -139,24 +175,55 @@ def get_seq(pulse_streamer, config, args):
     ]
     seq.setDigital(do_sig_gen_gate, mw_train)
 
-    # Laser train:
-    # init pulse + readout pulse for both ref and sig experiments
-    laser_train = [
-        (int(front_buffer), LOW),
-        # reference experiment
+    # ------------------------------------------------------------------
+    # Polarization laser train
+    # ------------------------------------------------------------------
+    pol_train = [
+        (int(front_buffer - pol_delay), LOW),
+
+        # Reference experiment
         (int(polarization_ns), HIGH),
         (int(init_to_mw_buffer), LOW),
         (int(tau_ns), LOW),
-        (int(readout_ns), HIGH),
+        (int(readout_ns), LOW),
         (int(meas_buffer), LOW),
-        # signal experiment
+
+        # Signal experiment
         (int(polarization_ns), HIGH),
         (int(init_to_mw_buffer), LOW),
         (int(tau_ns), LOW),
-        (int(readout_ns), HIGH),
-        (int(meas_buffer), LOW),
+        (int(readout_ns), LOW),
+        (int(meas_buffer + pol_delay), LOW),
     ]
-    tb.process_laser_seq(seq, readout_vkey, laser_train)
+
+    # ------------------------------------------------------------------
+    # Readout laser train
+    # ------------------------------------------------------------------
+    readout_train = [
+        (int(front_buffer - readout_delay), LOW),
+
+        # Reference experiment
+        (int(polarization_ns), LOW),
+        (int(init_to_mw_buffer), LOW),
+        (int(tau_ns), LOW),
+        (int(readout_ns), HIGH),
+        (int(meas_buffer), LOW),
+
+        # Signal experiment
+        (int(polarization_ns), LOW),
+        (int(init_to_mw_buffer), LOW),
+        (int(tau_ns), LOW),
+        (int(readout_ns), HIGH),
+        (int(meas_buffer + readout_delay), LOW),
+    ]
+
+    # If both virtual lasers map to same physical channel, merge them.
+    if pol_laser_name == readout_laser_name:
+        laser_train = _compress_train(_merge_trains(pol_train, readout_train))
+        tb.process_laser_seq(seq, pol_vkey, laser_train)
+    else:
+        tb.process_laser_seq(seq, pol_vkey, pol_train)
+        tb.process_laser_seq(seq, readout_vkey, readout_train)
 
     final = OutputState([], 0.0, 0.0)
     return seq, final, [int(period)]
@@ -166,10 +233,11 @@ if __name__ == "__main__":
     from utils import common
 
     cfg = common.get_config_dict()
-    args = [100, 30000, 30000, 0, "IMAGING", None]
+    args = [200, 3000, 300, 0, "SPIN_POL", "SPIN_READOUT", None]
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])
     seq.plot()
+
 
 
 # # -*- coding: utf-8 -*-

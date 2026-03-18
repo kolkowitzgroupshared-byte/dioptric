@@ -22,7 +22,7 @@ Returns:
 import matplotlib.pyplot as plt
 import numpy as np
 
-import majorroutines.targeting as targeting
+from majorroutines.calibration import optimize_xy
 from utils import tool_belt as tb
 from utils import kplotlib as kpl
 from utils import data_manager as dm
@@ -113,22 +113,20 @@ def _process_rabi_counts(sig_counts, ref_counts, num_reps, readout_ns, norm_mode
 
 def main(
     nv_sig,
-    freq_ghz,
     num_reps,
     num_runs,
-    uwave_dur_ns_list=None,
-    uwave_dur_min_ns=None,
-    uwave_dur_max_ns=None,
-    num_steps=None,
+    min_tau,
+    max_tau,
+    num_steps,
     uwave_ind=0,
-    readout_vkey=VirtualLaserKey.IMAGING,
-    polarization_ns=None,
     readout_ns=None,
     uwave_power_dbm=None,
+    uwave_freq_ghz=None,
     laser_power=None,
-    do_targeting=True,
+    optimize_between_runs=False,
+    optimize_xy_kwargs=None,
     do_plot=True,
-    do_save=True,
+    do_save=False,
     norm_mode=NormMode.SINGLE_VALUED,
 ):
     tb.reset_cfm()
@@ -137,27 +135,21 @@ def main(
     counter_server = tb.get_server_counter()
     pulsegen_server = tb.get_server_pulse_streamer()
 
-    tau_ns_list = _build_tau_ns_list(
-        uwave_dur_ns_list=uwave_dur_ns_list,
-        uwave_dur_min_ns=uwave_dur_min_ns,
-        uwave_dur_max_ns=uwave_dur_max_ns,
-        num_steps=num_steps,
-    )
+    tau_ns_list = np.linspace(min_tau, max_tau, num_steps)
+    tau_ns_list = np.rint(tau_ns_list).astype(int)
+    tau_ns_list = np.unique(tau_ns_list)
 
-    # Laser timing defaults
-    vld = tb.get_virtual_laser_dict(readout_vkey)
+    readout_vkey = VirtualLaserKey.SPIN_READOUT
+    pol_vkey = VirtualLaserKey.SPIN_POL
 
-    if polarization_ns is None:
-        polarization_ns = int(
-            nv_sig.pulse_durations.get(readout_vkey, int(vld["duration"]))
-        )
-    polarization_ns = int(polarization_ns)
+    pol_dict = tb.get_virtual_laser_dict(pol_vkey)
+    polarization_ns = int(nv_sig.pulse_durations.get(pol_vkey, pol_dict["duration"]))
 
     if readout_ns is None:
-        readout_ns = int(nv_sig.pulse_durations.get(readout_vkey, int(vld["duration"])))
+        readout_dict = tb.get_virtual_laser_dict(readout_vkey)
+        readout_ns = int(nv_sig.pulse_durations.get(readout_vkey, readout_dict["duration"]))
     readout_ns = int(readout_ns)
 
-    # MW setup
     sig_gen = tb.get_server_sig_gen(int(uwave_ind))
     vsg = tb.get_virtual_sig_gen_dict(int(uwave_ind))
 
@@ -167,56 +159,60 @@ def main(
     if uwave_power_dbm is not None:
         sig_gen.set_amp(float(uwave_power_dbm))
 
+    freq_ghz = uwave_freq_ghz if uwave_freq_ghz is not None else vsg["frequency"]
     sig_gen.set_freq(float(freq_ghz))
     sig_gen.uwave_on()
 
     seq_file = "rabi.py"
 
-    num_steps_actual = len(tau_ns_list)
-    ref_counts = np.full((num_runs, num_steps_actual), np.nan, dtype=float)
-    sig_counts = np.full((num_runs, num_steps_actual), np.nan, dtype=float)
+    ref_counts = np.full((num_runs, len(tau_ns_list)), np.nan)
+    sig_counts = np.full((num_runs, len(tau_ns_list)), np.nan)
 
-    opti_coords_list = []
     timestamp = dm.get_time_stamp()
 
-    # plotting
     if do_plot:
         fig, ax = plt.subplots()
         ax.set_xlabel("MW pulse duration τ (ns)")
         ax.set_ylabel("Normalized signal")
         ax.set_title("Rabi")
-        (line_norm,) = ax.plot([], [], marker="o", label="Norm")
-        ax.legend()
+        (line_norm,) = ax.plot([], [], marker="o")
     else:
         fig = None
         ax = None
         line_norm = None
 
     tb.init_safe_stop()
-    stop_requested = False
 
     for run_ind in range(num_runs):
         print(f"Run {run_ind + 1}/{num_runs}")
 
         if tb.safe_stop():
-            stop_requested = True
             break
 
-        if do_targeting:
+        if optimize_between_runs:
             try:
-                opti_coords = targeting.main_with_cxn(nv_sig)
-                opti_coords_list.append(opti_coords)
+                xy_kwargs = dict(optimize_xy_kwargs or {})
+                xy_kwargs.setdefault("num_steps", 8)
+                xy_kwargs.setdefault("scan_range", 0.008)
+                xy_kwargs.setdefault("move_to_optimal", True)
+                xy_kwargs.setdefault("save_data", False)
+                results = optimize_xy.main(nv_sig, **xy_kwargs)
+                opti_x = results.get("opti_x")
+                opti_y = results.get("opti_y")
+                if opti_x is not None and opti_y is not None:
+                    print(f"  Optimized: X={opti_x:.4f}, Y={opti_y:.4f}")
             except Exception as e:
-                print(f"Targeting failed on run {run_ind}: {e}")
-                opti_coords_list.append(None)
+                print(f"  XY optimization failed: {e}")
+            # Close optimize_xy plots without closing the Rabi figure
+            for f in plt.get_fignums():
+                if plt.figure(f) is not fig:
+                    plt.close(f)
 
+        # Open stream ONCE per run, not per tau step
+        counter_server.start_tag_stream()
         try:
-            counter_server.start_tag_stream()
-            counter_server.clear_buffer()
-
             for step_ind, tau_ns in enumerate(tau_ns_list):
                 if tb.safe_stop():
-                    stop_requested = True
                     break
 
                 seq_args = [
@@ -224,11 +220,8 @@ def main(
                     int(polarization_ns),
                     int(readout_ns),
                     int(uwave_ind),
-                    (
-                        readout_vkey.name
-                        if hasattr(readout_vkey, "name")
-                        else str(readout_vkey)
-                    ),
+                    pol_vkey.name,
+                    readout_vkey.name,
                     laser_power,
                 ]
                 seq_args_string = tb.encode_seq_args(seq_args)
@@ -236,66 +229,53 @@ def main(
                 pulsegen_server.stream_load(seq_file, seq_args_string)
                 counter_server.clear_buffer()
                 pulsegen_server.stream_start(int(num_reps))
-
-                new_counts = counter_server.read_counter_modulo_gates(2, 1)
-                sample_counts = new_counts[0]
-
-                # first gate = ref, second gate = sig
-                ref_counts[run_ind, step_ind] = sample_counts[0]
-                sig_counts[run_ind, step_ind] = sample_counts[1]
-
-                print(
-                    f"  tau={int(tau_ns):>6d} ns | "
-                    f"ref={int(ref_counts[run_ind, step_ind])}, "
-                    f"sig={int(sig_counts[run_ind, step_ind])}, "
-                    f"norm={sig_counts[run_ind, step_ind] / max(ref_counts[run_ind, step_ind], 1):.4f}"
+                new_counts = counter_server.read_counter_modulo_gates(
+                    2, int(num_reps)
                 )
 
+                # Sum across all reps (each entry is [ref, sig] for one rep)
+                count_arr = np.array(new_counts, dtype=np.int64)
+                ref_counts[run_ind, step_ind] = count_arr[:, 0].sum()
+                sig_counts[run_ind, step_ind] = count_arr[:, 1].sum()
+
+                ref_val = ref_counts[run_ind, step_ind]
+                sig_val = sig_counts[run_ind, step_ind]
+                norm_val = sig_val / ref_val if ref_val > 0 else float("nan")
+                print(
+                    f"  tau={int(tau_ns):>4d} ns | "
+                    f"ref={int(ref_val)}, sig={int(sig_val)}, "
+                    f"norm={norm_val:.4f}"
+                )
+
+                # Update plot after each tau step for responsiveness
+                if do_plot:
+                    proc_partial = _process_rabi_counts(
+                        sig_counts[: run_ind + 1, :],
+                        ref_counts[: run_ind + 1, :],
+                        int(num_reps),
+                        int(readout_ns),
+                        norm_mode,
+                    )
+                    line_norm.set_data(tau_ns_list, proc_partial["norm"])
+                    ax.relim()
+                    ax.autoscale_view()
+                    plt.pause(0.01)
         finally:
             try:
                 counter_server.stop_tag_stream()
             except Exception:
                 pass
 
-        # live plot using all finished data so far
-        if do_plot:
-            proc_partial = _process_rabi_counts(
-                sig_counts[: run_ind + 1, :],
-                ref_counts[: run_ind + 1, :],
-                int(num_reps),
-                int(readout_ns),
-                norm_mode,
-            )
-            line_norm.set_data(tau_ns_list, proc_partial["norm"])
-            ax.relim()
-            ax.autoscale_view()
-            plt.pause(0.01)
+            # sample_counts = new_counts[0]
+            # ref_counts[run_ind, step_ind] = sample_counts[0]
+            # sig_counts[run_ind, step_ind] = sample_counts[1]
 
-        if do_save:
-            raw_incremental = {
-                "timestamp": timestamp,
-                "nv_sig": nv_sig,
-                "freq_ghz": float(freq_ghz),
-                "num_reps": int(num_reps),
-                "num_runs": int(num_runs),
-                "uwave_ind": int(uwave_ind),
-                "uwave_power_dbm": uwave_power_dbm,
-                "polarization_ns": int(polarization_ns),
-                "readout_ns": int(readout_ns),
-                "tau_ns_list": tau_ns_list.tolist(),
-                "opti_coords_list": opti_coords_list,
-                "sig_counts": sig_counts.tolist(),
-                "ref_counts": ref_counts.tolist(),
-            }
-            file_path = dm.get_file_path(
-                __file__, timestamp, nv_sig["name"], "incremental"
-            )
-            dm.save_raw_data(raw_incremental, file_path)
+            # print(
+            #     f"  tau={int(tau_ns):>4d} ns | "
+            #     f"ref={int(ref_counts[run_ind, step_ind])}, "
+            #     f"sig={int(sig_counts[run_ind, step_ind])}"
+            # )
 
-        if stop_requested:
-            break
-
-    # process all valid data
     proc_arrays = _process_rabi_counts(
         sig_counts,
         ref_counts,
@@ -303,17 +283,6 @@ def main(
         int(readout_ns),
         norm_mode,
     )
-
-    proc_data = {
-        "freq_ghz": float(freq_ghz),
-        "tau_ns_list": tau_ns_list.tolist(),
-        "sig_kcps": proc_arrays["sig_kcps"].tolist(),
-        "ref_kcps": proc_arrays["ref_kcps"].tolist(),
-        "norm": proc_arrays["norm"].tolist(),
-        "norm_ste": proc_arrays["norm_ste"].tolist(),
-        "contrast": proc_arrays["contrast"].tolist(),
-        "num_valid_runs": proc_arrays["num_valid_runs"].tolist(),
-    }
 
     raw_data = {
         "timestamp": timestamp,
@@ -329,6 +298,11 @@ def main(
         "opti_coords_list": opti_coords_list,
         "sig_counts": sig_counts.tolist(),
         "ref_counts": ref_counts.tolist(),
+    }
+
+    proc_data = {
+        "freq_ghz": float(freq_ghz),
+        "tau_ns_list": tau_ns_list.tolist(),
         "sig_kcps": proc_arrays["sig_kcps"].tolist(),
         "ref_kcps": proc_arrays["ref_kcps"].tolist(),
         "norm": proc_arrays["norm"].tolist(),
@@ -336,22 +310,6 @@ def main(
         "contrast": proc_arrays["contrast"].tolist(),
         "num_valid_runs": proc_arrays["num_valid_runs"].tolist(),
     }
-
-    print("\nFinal results")
-    print(f"freq = {freq_ghz:.6f} GHz")
-    print(f"tau range = {int(tau_ns_list[0])} ns -> {int(tau_ns_list[-1])} ns")
-    print(f"num steps = {len(tau_ns_list)}")
-
-    if np.any(np.isfinite(proc_arrays["contrast"])):
-        best_ind = int(np.nanargmax(proc_arrays["contrast"]))
-        print(f"max contrast = {proc_arrays['contrast'][best_ind]:.6f}")
-        print(f"at tau = {tau_ns_list[best_ind]} ns")
-
-    if do_save:
-        file_path = dm.get_file_path(__file__, timestamp, nv_sig["name"])
-        if fig is not None:
-            dm.save_figure(fig, file_path)
-        dm.save_raw_data(raw_data, file_path)
 
     tb.reset_cfm()
     return raw_data, proc_data

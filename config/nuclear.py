@@ -122,6 +122,8 @@ config |= {
         "multimeter_KEIT_daq6510_visa": "TCPIP0::192.168.0.175::inst0::INSTR",
         "tisapph_M2_solstis_ip": "192.168.0.195",
         "tisapph_pump_COHE_verdi_com": "COM6",
+        # "awg_KEYS_33600A_com": "TCPIP0::192.168.0.139::5025::SOCKET",
+        "awg_KEYS_33600A_com": "TCPIP0::192.168.0.139::inst0::INSTR",
     },
     ###
     "Microwaves": {
@@ -269,6 +271,10 @@ config |= {
     "Servers": {  # Bucket for miscellaneous servers not otherwise listed above
         "pulse_streamer": "pulse_gen_SWAB_82",
         "counter": "tagger_SWAB_20",
+        "waveform_gen": "awg_KEYS_33600A",
+        "slider_1": "filter_slider_THOR_ell9k_4",
+        "slider_2": "filter_slider_THOR_ell9k_5",
+        "slider_3": "filter_slider_THOR_ell9k_6",
     },
     ###
     "Wiring": {
@@ -297,6 +303,8 @@ config |= {
             "do_laser_COBO_638_dm": 2,
             "do_apd_gate": 3,
             "do_sample_clock": 4,
+            "do_wavegen": 5,
+            # "do_sig_gen_STAN_sg394_gate": 10,  # This is to the Switch
         },
         "Tagger": {
             "di_clock": 3,

@@ -637,6 +637,7 @@ def get_scan_grid_2d(
         x_high + x_half_pixel,     # right
         y_high + y_half_pixel,     # bottom (origin='upper': img[h-1] here = y_max galvo)
         y_low - y_half_pixel,      # top (origin='upper': img[0] here = y_min galvo)
+
     ]
 
     return coords_1, coords_2, coords_1_1d, coords_2_1d, img_extent
