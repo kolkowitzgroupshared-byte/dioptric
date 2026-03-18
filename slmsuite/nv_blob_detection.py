@@ -1,14 +1,15 @@
 import os
-
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from skimage.draw import disk
 from skimage.feature import blob_log
 from skimage.filters import gaussian
-
 from utils import data_manager as dm
 from utils import kplotlib as kpl
+from scipy.ndimage import gaussian_filter, binary_dilation
+from scipy.spatial import cKDTree
+from skimage.feature import peak_local_max
 
 
 # Define the 2D Gaussian function
@@ -97,7 +98,7 @@ def detect_nv_coordinates_blob(
     sigma=2.0,
     lower_threshold=15.0,
     upper_threshold=None,
-    smoothing_sigma=1,
+    smoothing_sigma=0,
     integration_radius=2,
 ):
     smoothed_img = gaussian(img_array, sigma=smoothing_sigma)
@@ -125,18 +126,18 @@ def detect_nv_coordinates_blob(
             upper_threshold is None or integrated_intensity <= upper_threshold
         ):
             valid_blobs.append(blob)
-            fit_size = max(8, int(2 * integration_radius))   # good default
+            fit_size = max(2, int(integration_radius))   # good default
             # or: fit_size = max(10, int(2.5 * sigma))
 
             optimized_coord, fwhm, _ = fit_gaussian_2d(smoothed_img, (x, y), size=fit_size)
-
+            optimized_coord = (x,y)
             # Perform Gaussian fitting and get the FWHM
-            # optimized_coord, fwhm, _ = fit_gaussian_2d_local(img_array, (x, y), size=3)
             optimized_coords.append(optimized_coord)
             spot_sizes.append(fwhm)  # Append the FWHM for the spot
             integrated_counts.append(integrated_intensity)
 
     valid_blobs = np.array(valid_blobs)
+    print(valid_blobs)
     optimized_coords = np.array(optimized_coords)
 
     fig, ax = plt.subplots()
@@ -154,23 +155,12 @@ def detect_nv_coordinates_blob(
         ax.add_patch(circ)
 
         ax.text(
-            x, y - r - 2, f"{idx}", color="black", fontsize=8, ha="center", va="center"
+            x, y - r - 1, f"{idx}", color="black", fontsize=8, ha="center", va="center"
         )
 
     # kpl.show(block=True)
 
     return optimized_coords, integrated_counts, spot_sizes
-
-
-import numpy as np
-import matplotlib.pyplot as plt
-
-from scipy.ndimage import gaussian_filter, binary_dilation
-from scipy.spatial import cKDTree
-from skimage.draw import disk
-from skimage.feature import peak_local_max
-
-from utils import kplotlib as kpl
 
 
 def local_hex_metrics(points_xy, d_min=4.5, d_max=8.5):
@@ -513,7 +503,7 @@ def process_scan_file(file_stem):
         #     spot_weights.extend(integrated_counts)
 
         # Normalize image
-        img_array = (img_array - 300) / max(1, np.median(img_array))
+        img_array = (img_array) / max(1, np.median(img_array))
         # img_array = widefie
         # Store processed image
         img_arrays.append(img_array)
@@ -570,9 +560,9 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
     # Load the image data
     data = dm.get_raw_data(
-        file_stem="2026_03_07-18_40_05-combined_image_array", load_npz=True
+        file_stem="2026_03_11-01_36_16-qnami-nv0_2026_02_20", load_npz=True
     )
-    # img_array = np.array(data["ref_img_array"])
+    img_array = np.array(data["ref_img_array"])
     # img_array = np.array(data["img_array"])
     # final_xy, integrated_counts, spot_sizes, debug = detect_nv_coordinates_hex(
     #     img_array,
@@ -587,8 +577,8 @@ if __name__ == "__main__":
     #     show_debug=True,
     # )
     # Apply the blob detection and Gaussian fitting
-    # sigma = 2.0
-    # lower_threshold = 0.001
+    # sigma = 1.0
+    # lower_threshold = 0.0001
     # upper_threshold = None
     # smoothing_sigma = 0.0
     # integration_radius= 2
@@ -602,10 +592,11 @@ if __name__ == "__main__":
     # )
     # filtered_nv_coords = nv_coordinates
     # filtered_counts = integrated_counts
+    # print(f"Detected NV coordinates (optimized): {len(filtered_nv_coords)}")
     # List to store valid NV coordinates after filtering
     # filtered_nv_coords = []
     # filtered_counts = []
-    # # Iterate through detected NV coordinates and apply distance filtering
+    # Iterate through detected NV coordinates and apply distance filtering
     # for coord, count in zip(nv_coordinates, integrated_counts):
     #     # Assume the coordinate is valid initially
     #     keep_coord = True
@@ -650,7 +641,6 @@ if __name__ == "__main__":
     #         va="center",
     #     )
 
-    kpl.show(block=True)
 
     # print(f"Detected NV coordinates (optimized): {len(filtered_nv_coords)}")
 
@@ -659,9 +649,12 @@ if __name__ == "__main__":
     #     filtered_nv_coords,
     #     filtered_counts,
     #     path="slmsuite/nv_blob_detection",
-    #     filename="nv_blob_237nvs.npz",
+    #     filename="nv_blob_6904nvs.npz",
     # )
 
     # full ROI -- multiple images save in the same file
-    process_scan_file(file_stem="2026_03_07-19_18_36-qnami-nv0_2026_02_20")
+    process_scan_file(file_stem="2026_03_13-00_01_52-qnami-nv0_2026_02_20")
     # process_scan_file(file_stem="2026_03_05-09_46_19-qnami-nv0_2026_02_20")
+    
+    kpl.show(block=True)
+

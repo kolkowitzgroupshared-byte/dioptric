@@ -89,19 +89,26 @@ class Counter(LabradServer, ABC):
         # sum_lambda = lambda arg: np.sum(arg, 0, dtype=int).tolist()
         # with Pool() as p:
         #     separate_gate_counts = p.map(sum_lambda, complete_counts)
-        separate_gate_counts = [
-            np.sum(el, 0, dtype=int).tolist() for el in complete_counts
-        ]
+        separate_gate_counts = []
+        for el in complete_counts:
+            summed = np.sum(el, axis=0, dtype=np.int64)
+            separate_gate_counts.append(np.asarray(summed, dtype=np.int64).reshape(-1))
 
         # Run the modulus
         return_counts = []
         for sample in separate_gate_counts:
             sample_list = []
             for ind in range(modulus):
-                sample_list.append(np.sum(sample[ind::modulus]))
+                vals = sample[ind::modulus]
+                if vals.size == 0:
+                    total = 0
+                else:
+                    total = int(np.sum(vals, dtype=np.int64))
+                sample_list.append(total)
             return_counts.append(sample_list)
 
-        # logging.info(return_counts)
+        # Force plain Python ints for LabRAD
+        return_counts = [[int(a), int(b)] for a, b in return_counts]
 
         return return_counts
 

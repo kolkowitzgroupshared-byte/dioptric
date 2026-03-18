@@ -133,7 +133,7 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 6.0,
-                "frequency": 2.8785,
+                "frequency": 2.90,
                 "rabi_period": 144,
                 "pi_pulse": 72,
                 "pi_on_2_pulse": 36,
@@ -252,8 +252,8 @@ config |= {
                 "control_mode": PosControlMode.STREAM,
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
-                # "optimize_range": 0.02,
-                "optimize_range": 0.02,
+                "optimize_range": 0.0002,
+                # "optimize_range": 0.08,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },

@@ -3,7 +3,7 @@
 Image sampl
 @auhtor : Saroj Chand
 """
-
+import os
 import sys
 import traceback
 import warnings
@@ -28,30 +28,100 @@ if __name__ == "__main__":
     # data = dm.get_raw_data(
     #     file_stem="2026_02_25-14_17_38-qnami-nv0_2026_02_20", load_npz=True
     # )
+    # data = dm.get_raw_data(
+    #     file_stem="2026_03_03-17_50_36-qnami-nv0_2026_02_20", load_npz=True
+    # )
+    # data = dm.get_raw_data(
+    #     file_stem="2026_03_08-11_19_47-qnami-nv0_2026_02_20", load_npz=True
+    # )
+    
+    # img_adus = np.array(data["ref_img_array"], dtype=float)
+
+    # # 1) Convert ADUs -> photons (estimated)
+    # img_ph = widefield.adus_to_photons(img_adus)
+
+    # # 2) Saturate the top end to reveal low-level features
+    # vmin = np.nanpercentile(img_ph,0.5)      # or 0.5
+    # vmax = np.nanpercentile(img_ph, 99.9)     # try 99.0–99.8
+
+    # fig, ax = plt.subplots()
+    # kpl.imshow(
+    #     ax,
+    #     img_ph,
+    #     cbar_label="Estimated photons",
+    # )
+    file_stem="2026_03_11-22_09_46-qnami-nv0_2026_02_20",
     data = dm.get_raw_data(
-        file_stem="2026_03_03-17_50_36-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_03_16-14_56_37-qnami-nv0_2026_02_20",
+        load_npz=True,
     )
-    img_adus = np.array(data["img_array"], dtype=float)
 
-    # 1) Convert ADUs -> photons (estimated)
-    img_ph = widefield.adus_to_photons(img_adus)
+    img_ph = np.array(data["diff_img_array"], dtype=float)
 
-    # 2) Saturate the top end to reveal low-level features
-    vmin = np.nanpercentile(img_ph,96.0)      # or 0.5
-    vmax = np.nanpercentile(img_ph, 99)     # try 99.0–99.8
+    # save_dir = r"C:\Users\matth\Downloads"
+    # save_path = os.path.join(save_dir, f"{file_stem}_ref_img_array.svg")
 
+    # fig, ax = plt.subplots()
+    # kpl.imshow(
+    #     ax,
+    #     img_ph,   # or img_plot if that is your intended variable
+    #     cbar_label="Estimated photons",
+    # )
+
+    # fig.savefig(save_path, format="svg", bbox_inches="tight")
+    # plt.show()
+
+    # print(f"Saved to: {save_path}")
+    
+    # sys.exit()
+    # 1) Convert ADUs -> photons
+    # img_ph = widefield.adus_to_photons(img_adus)
+
+    # -------------------------------------------------
+    # Mask the bright center spot with NaN
+    # -------------------------------------------------
+    # img_plot = img_ph.copy()
+
+    # # Option A: use the image center
+    # y0 = 204.083
+    # x0 = 221.37
+
+    # # Option B: use the brightest pixel instead
+    # # y0, x0 = np.unravel_index(np.nanargmax(img_plot), img_plot.shape)
+
+    # radius = 12  # adjust as needed
+
+    # yy, xx = np.ogrid[:img_plot.shape[0], :img_plot.shape[1]]
+    # mask = (xx - x0) ** 2 + (yy - y0) ** 2 <= radius ** 2
+
+    # img_plot[mask] = np.nan
+
+    # 2) Compute display range after masking
+    # vmin = np.nanpercentile(img_plot, 0.5)
+    # vmax = np.nanpercentile(img_plot, 99.9)
+
+    # 3) Plot
     fig, ax = plt.subplots()
     kpl.imshow(
         ax,
         img_ph,
         cbar_label="Estimated photons",
-        vmin=vmin,
-        vmax=vmax,
-        interpolation="none",
-        no_cbar=True,
     )
-    
-    
+
+    # Optional: draw the removed region
+    # circ = plt.Circle((x0, y0), radius, edgecolor="None", facecolor="black", linewidth=1.5)
+    # ax.add_patch(circ)
+
+    # save high-resolution figure
+    # fig.savefig(
+    #     "center_spot_removed.png",
+    #     dpi=300,
+    #     bbox_inches="tight",
+    #     pad_inches=0.02,
+    # )
+    plt.show(block=True)
+
+    sys.exit()
     file_stems = [
         "2026_03_03-17_45_13-qnami-nv0_2026_02_20",
         "2026_03_03-17_37_30-qnami-nv0_2026_02_20",
@@ -61,6 +131,7 @@ if __name__ == "__main__":
         "2026_03_03-17_50_36-qnami-nv0_2026_02_20",
         "2026_03_03-18_26_27-qnami-nv0_2026_02_20"
     ]
+    
 
     img_list = []
 
