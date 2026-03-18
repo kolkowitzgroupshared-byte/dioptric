@@ -227,10 +227,13 @@ def main(
                 ref_counts[run_ind, step_ind] = count_arr[:, 0].sum()
                 sig_counts[run_ind, step_ind] = count_arr[:, 1].sum()
 
+                ref_val = ref_counts[run_ind, step_ind]
+                sig_val = sig_counts[run_ind, step_ind]
+                norm_val = sig_val / ref_val if ref_val > 0 else float("nan")
                 print(
                     f"  tau={int(tau_ns):>4d} ns | "
-                    f"ref={int(ref_counts[run_ind, step_ind])}, "
-                    f"sig={int(sig_counts[run_ind, step_ind])}"
+                    f"ref={int(ref_val)}, sig={int(sig_val)}, "
+                    f"norm={norm_val:.4f}"
                 )
 
                 # Update plot after each tau step for responsiveness
