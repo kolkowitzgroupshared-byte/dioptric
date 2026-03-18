@@ -203,6 +203,10 @@ def main(
                     print(f"  Optimized: X={opti_x:.4f}, Y={opti_y:.4f}")
             except Exception as e:
                 print(f"  XY optimization failed: {e}")
+            # Close optimize_xy plots without closing the Rabi figure
+            for f in plt.get_fignums():
+                if plt.figure(f) is not fig:
+                    plt.close(f)
 
         # Open stream ONCE per run, not per tau step
         counter_server.start_tag_stream()
