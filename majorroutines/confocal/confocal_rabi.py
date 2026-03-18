@@ -232,6 +232,20 @@ def main(
                     f"ref={int(ref_counts[run_ind, step_ind])}, "
                     f"sig={int(sig_counts[run_ind, step_ind])}"
                 )
+
+                # Update plot after each tau step for responsiveness
+                if do_plot:
+                    proc_partial = _process_rabi_counts(
+                        sig_counts[: run_ind + 1, :],
+                        ref_counts[: run_ind + 1, :],
+                        int(num_reps),
+                        int(readout_ns),
+                        norm_mode,
+                    )
+                    line_norm.set_data(tau_ns_list, proc_partial["norm"])
+                    ax.relim()
+                    ax.autoscale_view()
+                    plt.pause(0.01)
         finally:
             try:
                 counter_server.stop_tag_stream()
@@ -247,19 +261,6 @@ def main(
             #     f"ref={int(ref_counts[run_ind, step_ind])}, "
             #     f"sig={int(sig_counts[run_ind, step_ind])}"
             # )
-
-        if do_plot:
-            proc_partial = _process_rabi_counts(
-                sig_counts[: run_ind + 1, :],
-                ref_counts[: run_ind + 1, :],
-                int(num_reps),
-                int(readout_ns),
-                norm_mode,
-            )
-            line_norm.set_data(tau_ns_list, proc_partial["norm"])
-            ax.relim()
-            ax.autoscale_view()
-            plt.pause(0.01)
 
     proc_arrays = _process_rabi_counts(
         sig_counts,
