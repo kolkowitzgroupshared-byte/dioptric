@@ -884,12 +884,13 @@ if __name__ == "__main__":
     # file_id = "2026_02_07-20_07_20-johnson-nv0_2025_10_21"
     # file_id = "2026_02_10-03_18_17-johnson-nv0_2025_10_21"
     # file_id = "2026_03_02-20_10_14-qnami-nv0_2026_02_20"
+    file_id = "2026_03_17-06_00_50-qnami-nv0_2026_02_20"
 
     # dm.USE_NEW_CLOUD = False
     raw_data = dm.get_raw_data(file_stem=file_id, load_npz=True)
     # file_name = dm.get_file_name(file_id=file_id)
     # print(f"{file_name}_{file_id}")
-    process_and_plot(raw_data, do_plot=False)
-    # process_and_plot_charge(raw_data, do_plot=True)
+    # process_and_plot(raw_data, do_plot=False)
+    process_and_plot_charge(raw_data, do_plot=True)
     # print(dm.get_file_name(1717056176426))
     plt.show(block=True)
