@@ -85,98 +85,78 @@ def tags_to_counts(
     apd_channels,
     leftover_channels,
 ):
-    """This is the core counter function for the converting time tags to counts.
-    It needs to be fast - if it's not fast enough, we may encounter unexpected
-    behavior, like certain samples returning 0 counts when clearly they should
-    return something > 0. For that reason, this function lives outside the class
-    so that it can be compiled by numba. It's written in very basic (and slow,
-    natively) python so that the compiler has no trouble understanding what
-    to do.
-
-    Parameters
-    ----------
-    buffer_channels : _type_
-        List of channels returned by the read call on the tagger device
-    clock_channel : _type_
-        Tagger device's clock channel
-    apd_gate_channel : _type_
-        Tagger device's APD virtual gate channel
-    apd_channels : _type_
-        Tagger device's channels hooked up to the APDs
-    leftover_channels : _type_
-        List containing current leftover channels (i.e. any tags that didn't
-        have a clock pulse come after them the last rad request)
-
-    Returns
-    -------
-    3D array(int)
-        Main data structure (return_counts) - the first dimension is for samples,
-        the second is for APDs, and the third is for reps/gates.
-    array(int)
-        Updated leftover_channels
-    """
-
-    # Assume a single gate for both APDs: get all the gates once and then
-    # count for each APD individually
     open_channel = apd_gate_channel
     close_channel = -open_channel
 
-    # Find clock clicks (sample breaks)
     clock_click_inds = np.flatnonzero(buffer_channels == clock_channel)
 
     previous_sample_end_ind = None
     sample_end_ind = None
 
-    # Figure out the number of samples and APDs
-    num_samples = len(clock_click_inds)
+    num_samples_max = len(clock_click_inds)
     num_apds = len(apd_channels)
 
-    # Allocate the data structure inside the loop so we know we have a sample
     data_structure_allocated = False
+    valid_sample_count = 0
+    num_reps = 0
 
-    for dim1 in range(num_samples):
+    for dim1 in range(num_samples_max):
         clock_click_ind = clock_click_inds[dim1]
-
-        # Clock clicks end samples, so they should be included with the
-        # sample itself
         sample_end_ind = clock_click_ind + 1
 
-        # Get leftovers and make sure we've got an array for comparison
-        # to find click indices
         if previous_sample_end_ind is None:
-            join_tuple = (leftover_channels, buffer_channels[0:sample_end_ind])
-            sample_channels = np.concatenate(join_tuple)
+            n_left = len(leftover_channels)
+            n_new = sample_end_ind
+            sample_channels = np.empty(n_left + n_new, dtype=np.int32)
+            if n_left > 0:
+                sample_channels[:n_left] = leftover_channels
+            if n_new > 0:
+                sample_channels[n_left:] = buffer_channels[0:sample_end_ind]
         else:
             sample_channels = buffer_channels[previous_sample_end_ind:sample_end_ind]
 
-        # Find gate open and close clicks (gate close channel is negative of
-        # gate open channel, signifying the falling edge)
         open_inds = np.flatnonzero(sample_channels == open_channel)
         close_inds = np.flatnonzero(sample_channels == close_channel)
-        gates = np.column_stack((open_inds, close_inds))
+
+        num_reps_this_sample = min(len(open_inds), len(close_inds))
+        if num_reps_this_sample == 0:
+            previous_sample_end_ind = sample_end_ind
+            continue
 
         if not data_structure_allocated:
-            num_reps = len(open_inds)
-            return_counts = np.empty((num_samples, num_apds, num_reps), dtype=np.int32)
+            num_reps = num_reps_this_sample
+            return_counts = np.zeros((num_samples_max, num_apds, num_reps), dtype=np.int32)
             data_structure_allocated = True
+
+        reps_to_use = min(num_reps, num_reps_this_sample)
 
         for dim2 in range(num_apds):
             apd_channel = apd_channels[dim2]
-            for dim3 in range(num_reps):
-                gate = gates[dim3]
-                num_counts = np.count_nonzero(
-                    sample_channels[gate[0] : gate[1]] == apd_channel
-                )
-                return_counts[dim1, dim2, dim3] = num_counts
 
+            for dim3 in range(num_reps):
+                if dim3 < reps_to_use:
+                    start_ind = open_inds[dim3]
+                    stop_ind = close_inds[dim3]
+
+                    if stop_ind > start_ind:
+                        num_counts = np.count_nonzero(
+                            sample_channels[start_ind:stop_ind] == apd_channel
+                        )
+                    else:
+                        num_counts = 0
+                else:
+                    num_counts = 0
+
+                return_counts[valid_sample_count, dim2, dim3] = num_counts
+
+        valid_sample_count += 1
         previous_sample_end_ind = sample_end_ind
 
-    # No samples were clocked - make a dummy return_counts and add everything to leftovers
-    if sample_end_ind is None:
+    if not data_structure_allocated:
         return_counts = np.empty((0, 0, 0), dtype=np.int32)
         leftover_channels = np.append(leftover_channels, buffer_channels)
-    # Reset leftovers from the last sample clock
     else:
+        return_counts = return_counts[:valid_sample_count]
         leftover_channels = buffer_channels[sample_end_ind:]
 
     return return_counts, leftover_channels

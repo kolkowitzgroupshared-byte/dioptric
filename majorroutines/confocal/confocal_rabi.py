@@ -196,43 +196,53 @@ def main(
                 opti_coords = None
             opti_coords_list.append(opti_coords)
 
-        for step_ind, tau_ns in enumerate(tau_ns_list):
-            if tb.safe_stop():
-                break
+        # Open stream ONCE per run, not per tau step
+        counter_server.start_tag_stream()
+        try:
+            for step_ind, tau_ns in enumerate(tau_ns_list):
+                if tb.safe_stop():
+                    break
 
-            seq_args = [
-                int(tau_ns),
-                int(polarization_ns),
-                int(readout_ns),
-                int(uwave_ind),
-                pol_vkey.name,
-                readout_vkey.name,
-                laser_power,
-            ]
-            seq_args_string = tb.encode_seq_args(seq_args)
+                seq_args = [
+                    int(tau_ns),
+                    int(polarization_ns),
+                    int(readout_ns),
+                    int(uwave_ind),
+                    pol_vkey.name,
+                    readout_vkey.name,
+                    laser_power,
+                ]
+                seq_args_string = tb.encode_seq_args(seq_args)
 
-            pulsegen_server.stream_load(seq_file, seq_args_string)
-
-            counter_server.start_tag_stream()
-            try:
+                pulsegen_server.stream_load(seq_file, seq_args_string)
                 counter_server.clear_buffer()
                 pulsegen_server.stream_start(int(num_reps))
                 new_counts = counter_server.read_counter_modulo_gates(2, 1)
-            finally:
-                try:
-                    counter_server.stop_tag_stream()
-                except Exception:
-                    pass
 
-            sample_counts = new_counts[0]
-            ref_counts[run_ind, step_ind] = sample_counts[0]
-            sig_counts[run_ind, step_ind] = sample_counts[1]
+                sample_counts = new_counts[0]
+                ref_counts[run_ind, step_ind] = sample_counts[0]
+                sig_counts[run_ind, step_ind] = sample_counts[1]
 
-            print(
-                f"  tau={int(tau_ns):>4d} ns | "
-                f"ref={int(ref_counts[run_ind, step_ind])}, "
-                f"sig={int(sig_counts[run_ind, step_ind])}"
-            )
+                print(
+                    f"  tau={int(tau_ns):>4d} ns | "
+                    f"ref={int(ref_counts[run_ind, step_ind])}, "
+                    f"sig={int(sig_counts[run_ind, step_ind])}"
+                )
+        finally:
+            try:
+                counter_server.stop_tag_stream()
+            except Exception:
+                pass
+
+            # sample_counts = new_counts[0]
+            # ref_counts[run_ind, step_ind] = sample_counts[0]
+            # sig_counts[run_ind, step_ind] = sample_counts[1]
+
+            # print(
+            #     f"  tau={int(tau_ns):>4d} ns | "
+            #     f"ref={int(ref_counts[run_ind, step_ind])}, "
+            #     f"sig={int(sig_counts[run_ind, step_ind])}"
+            # )
 
         if do_plot:
             proc_partial = _process_rabi_counts(

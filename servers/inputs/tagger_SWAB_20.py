@@ -65,43 +65,85 @@ class TaggerSwab20(Tagger, LabradServer):
         self.reset(None)
         logging.info("init complete")
 
+    # def read_raw_stream(self):
+    #     if self.stream is None:
+    #         logging.error("read_raw_stream attempted while stream is None.")
+    #         return
+    #     buffer = self.stream.getData()
+    #     # Monitor overflows for both the Time Tagger's onboard buffer
+    #     # and the software buffer that the stream feeds into on our PC
+    #     num_hardware_overflows = self.tagger.getOverflowsAndClear()
+    #     has_software_overflows = buffer.hasOverflows
+    #     if (num_hardware_overflows > 0) or has_software_overflows:
+    #         logging.info(f"Num hardware overflows: {num_hardware_overflows}")
+    #         logging.info(f"Has software overflows: {has_software_overflows}")
+    #     timestamps = buffer.getTimestamps()
+    #     channels = buffer.getChannels()
+    #     return timestamps, channels
+    
+    # def read_counter_internal(self):
+    #     if self.stream is None:
+    #         logging.error("read_counter_internal attempted while stream is None.")
+    #         return
+    #     _, buffer_channels = self.read_raw_stream()
+
+    #     # Do the hard work in the fast sub function
+    #     apd_channels = [self.tagger_di_apd[val] for val in self.stream_apd_indices]
+    #     return_counts, leftover_channels = tags_to_counts(
+    #         buffer_channels,
+    #         self.tagger_di_clock,
+    #         self.tagger_di_apd_gate,
+    #         apd_channels,
+    #         self.leftover_channels,
+    #     )
+    #     # MCC: Bounce check
+    #     # if 0 in np.array(return_counts):
+    #     #     double_samples = [self.tagger_di_clock, self.tagger_di_clock]
+    #     #     errors = [(buffer_times[i], buffer_times[i+1]) for i in range(len(buffer_channels)) if buffer_channels[i:i+2].tolist() == double_samples]
+    #     #     logging.info(errors)
+    #     self.leftover_channels = leftover_channels
+    #     return return_counts
+
     def read_raw_stream(self):
         if self.stream is None:
             logging.error("read_raw_stream attempted while stream is None.")
             return
         buffer = self.stream.getData()
-        # Monitor overflows for both the Time Tagger's onboard buffer
-        # and the software buffer that the stream feeds into on our PC
+
         num_hardware_overflows = self.tagger.getOverflowsAndClear()
         has_software_overflows = buffer.hasOverflows
         if (num_hardware_overflows > 0) or has_software_overflows:
             logging.info(f"Num hardware overflows: {num_hardware_overflows}")
             logging.info(f"Has software overflows: {has_software_overflows}")
-        timestamps = buffer.getTimestamps()
-        channels = buffer.getChannels()
+
+        timestamps = np.asarray(buffer.getTimestamps(), dtype=np.int64).reshape(-1)
+        channels = np.asarray(buffer.getChannels(), dtype=np.int32).reshape(-1)
         return timestamps, channels
 
     def read_counter_internal(self):
         if self.stream is None:
             logging.error("read_counter_internal attempted while stream is None.")
             return
+
         _, buffer_channels = self.read_raw_stream()
 
-        # Do the hard work in the fast sub function
-        apd_channels = [self.tagger_di_apd[val] for val in self.stream_apd_indices]
+        buffer_channels = np.asarray(buffer_channels, dtype=np.int32).reshape(-1)
+        self.leftover_channels = np.asarray(self.leftover_channels, dtype=np.int32).reshape(-1)
+
+        apd_channels = np.asarray(
+            [self.tagger_di_apd[val] for val in self.stream_apd_indices],
+            dtype=np.int32,
+        )
+
         return_counts, leftover_channels = tags_to_counts(
             buffer_channels,
-            self.tagger_di_clock,
-            self.tagger_di_apd_gate,
+            np.int32(self.tagger_di_clock),
+            np.int32(self.tagger_di_apd_gate),
             apd_channels,
             self.leftover_channels,
         )
-        # MCC: Bounce check
-        # if 0 in np.array(return_counts):
-        #     double_samples = [self.tagger_di_clock, self.tagger_di_clock]
-        #     errors = [(buffer_times[i], buffer_times[i+1]) for i in range(len(buffer_channels)) if buffer_channels[i:i+2].tolist() == double_samples]
-        #     logging.info(errors)
-        self.leftover_channels = leftover_channels
+
+        self.leftover_channels = np.asarray(leftover_channels, dtype=np.int32).reshape(-1)
         return return_counts
 
     def stop_tag_stream_internal(self):
