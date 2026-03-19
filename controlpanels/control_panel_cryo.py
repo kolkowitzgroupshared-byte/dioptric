@@ -34,10 +34,13 @@ import majorroutines.confocal.confocal_image_sample as image_sample
 # import majorroutines.confocal.optimize_magnet_angle as optimize_magnet_angle
 # import majorroutines.confocal.pulsed_resonance as pulsed_resonance
 import majorroutines.confocal.confocal_rabi as rabi
+
 # import majorroutines.confocal.confocal_resonance as resonance
 
 # import majorroutines.confocal.ramsey as ramsey
 import majorroutines.confocal.confocal_resonance as resonance
+import majorroutines.confocal.confocal_apd_gate_overlap_scan as find_apd_gate_overlap
+
 # import majorroutines.confocal.spin_echo as spin_echo
 import majorroutines.confocal.confocal_stationary_count as stationary_count
 import majorroutines.confocal.z_scan_1d as z_scan_1d
@@ -76,6 +79,7 @@ def do_image_sample(nv_sig):
         num_steps,
     )
 
+
 def do_image_sample_zoom(nv_sig):
     scan_range = 0.05  # cryo iimage conversion: 37um/V; step size: x,y,z=30,30,40V
     num_steps = 30
@@ -86,6 +90,7 @@ def do_image_sample_zoom(nv_sig):
         scan_range,
         num_steps,
     )
+
 
 # def do_image_sample_Hahn( # From Hahn control panel, should not work with current version of image_sample
 #     nv_sig,
@@ -109,6 +114,7 @@ def do_image_sample_zoom(nv_sig):
 #         cmin=cbarmin,
 #         cmax=cbarmax,
 #     )
+
 
 def do_2D_xz_scan(nv_sig):
     """
@@ -136,7 +142,6 @@ def do_2D_xz_scan(nv_sig):
     )
 
     return counts, x_positions
-
 
 
 def do_optimize_z_atto(nv_sig, num_steps=20, step_size=1, scan_direction="down"):
@@ -185,7 +190,9 @@ def do_optimize_z_atto(nv_sig, num_steps=20, step_size=1, scan_direction="down")
     return opti_z
 
 
-def do_optimize_z_PI(nv_sig, voltage_start, voltage_end, step_size=0.01, num_averages=3):
+def do_optimize_z_PI(
+    nv_sig, voltage_start, voltage_end, step_size=0.01, num_averages=3
+):
     """
     Optimize Z position for PI E-709 piezo using voltage scan + Gaussian fit.
 
@@ -236,7 +243,10 @@ def do_optimize_z_PI(nv_sig, voltage_start, voltage_end, step_size=0.01, num_ave
 
     return opti_voltage
 
-def do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008, fit_method="gaussian"):
+
+def do_optimize_xy_loop(
+    nv_sig, num_iterations=3, num_steps=16, scan_range=0.008, fit_method="gaussian"
+):
     for i in range(num_iterations):
         if tool_belt.safe_stop():
             break
@@ -260,10 +270,12 @@ def do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008
 
         optimize_xy.plt.close("all")  # Close figure to prevent accumulation
 
-        print(f"Iteration {i+1}/{num_iterations}: X={opti_x:.4f}, Y={opti_y:.4f}, Counts={opti_counts}")
+        print(
+            f"Iteration {i+1}/{num_iterations}: X={opti_x:.4f}, Y={opti_y:.4f}, Counts={opti_counts}"
+        )
+
 
 # def do_optimize_z_PI(nv_sig, num_steps=20, step_size=1, scan_direction="down"):  # Old placeholder
-
 
 
 def do_optimize_green(nv_sig):
@@ -276,10 +288,12 @@ def do_optimize_green(nv_sig):
 
     return opti_coords
 
+
 # def do_optimize_z(nv_sig):
 #     ret_vals = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
 #     opti_coords = ret_vals[0]
 #     return opti_coords
+
 
 def do_optimize_xy(nv_sig, num_steps=15, scan_range=None, fit_method="gaussian"):
     """
@@ -326,7 +340,9 @@ def do_optimize_xy(nv_sig, num_steps=15, scan_range=None, fit_method="gaussian")
     return opti_x, opti_y
 
 
-def do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008, fit_method="gaussian"):
+def do_optimize_xy_loop(
+    nv_sig, num_iterations=3, num_steps=16, scan_range=0.008, fit_method="gaussian"
+):
     for i in range(num_iterations):
         if tool_belt.safe_stop():
             break
@@ -350,7 +366,9 @@ def do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008
 
         optimize_xy.plt.close("all")  # Close figure to prevent accumulation
 
-        print(f"Iteration {i+1}/{num_iterations}: X={opti_x:.4f}, Y={opti_y:.4f}, Counts={opti_counts}")
+        print(
+            f"Iteration {i+1}/{num_iterations}: X={opti_x:.4f}, Y={opti_y:.4f}, Counts={opti_counts}"
+        )
 
 
 # def do_optimize_pixel(nv_sig):
@@ -392,6 +410,7 @@ def do_compensate_for_drift(nv_sig):
 #         # nv_minus_initialization=nv_minus_initialization,
 #         # nv_zero_initialization=nv_zero_initialization,
 #     )
+
 
 def do_stationary_count(nv_sig, disable_opt=None):
     """
@@ -784,8 +803,13 @@ def do_rabi(nv_sig):
         uwave_freq_ghz=2.8573,  # Change to target ms=+1 or ms=-1 transition
         optimize_between_runs=False, # Set to false to turn off optimize between runs
     )
-def do_resonance(nv_sig,freq_center_ghz=2.8799,freq_span_mhz=200.0,num_runs=40): #2.8786GHz
+
+
+def do_resonance(
+    nv_sig, freq_center_ghz=2.87845, freq_span_mhz=200.0, num_runs=40
+):  # 2.8786GHz
     resonance.main(nv_sig)
+
 
 # def do_resonance(nv_sig):
 #     resonance.main(
@@ -899,11 +923,12 @@ def piezo_pest():
     for v in voltages_to_write:
         s.write_z(v)
         time.sleep(2)
-    
+
 
 def get_sample_name() -> str:
     sample = "lovelace"  # lovelace
     return sample
+
 
 def do_constant_ac(digital_channels=(4,), analog0=None, analog1=None):
     cxn = common.labrad_connect()
@@ -921,11 +946,10 @@ def do_constant_ac(digital_channels=(4,), analog0=None, analog1=None):
         analog_channels.append(1)
         analog_voltages.append(float(analog1))
 
-
     # Microwave test
     amp = 5
     sig_gen.set_amp(amp)  # 12
-    sig_gen.set_freq(2.87) #Ghz
+    sig_gen.set_freq(2.87)  # Ghz
     sig_gen.uwave_on()
     # Turn on constant outputs
     pulse_gen.constant(digital_channels, analog_channels, analog_voltages)
@@ -938,6 +962,20 @@ def do_constant_ac(digital_channels=(4,), analog0=None, analog1=None):
     # pulse_gen.reset()
 
 
+def do_find_apd_gate_overlap(nv_sig):
+    find_apd_gate_overlap.main(
+        nv_sig,
+        num_reps=int(2e5),
+        num_runs=3,
+        offset_min_ns=-1000,
+        offset_max_ns=1000,
+        num_steps=81,
+        laser_on_ns=500,  # or None to use nv_sig / virtual-laser default
+        gate_width_ns=300,
+        laser_vkey=VirtualLaserKey.SPIN_READOUT,
+    )
+
+
 if __name__ == "__main__":
     ### Shared parameters
 
@@ -946,7 +984,7 @@ if __name__ == "__main__":
     # red_laser = "cobolt_638"
 
     # fmt: off
-     #lovelace"
+    # lovelace"
     # nv_sig = {
     #     "coords": [0.240, -0.426, 1], "name": "{}-nv8_2022_11_14".format(sample_name),
     #     "disable_opt": False, "disable_z_opt": True, "expected_count_rate": 13,
@@ -970,12 +1008,12 @@ if __name__ == "__main__":
     # coords: SAMPLE (piezo) xyz
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
-    sample_xy = [0,0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z = 4.4256# atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
+    coord_z = 4.4599  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # pixel_xy = [0,0]  # galvo ref
     # pixel_xy = [-0.021, -0.052]s # zoom picture
     # pixel_xy = [0.093, 0.067] # NV Lovelace
-    pixel_xy = [-0.028, -0.004] # NV Lovelace
+    pixel_xy = [-0.003, 0.015]  # NV Lovelace
     # return
     nv_sig = NVSig(
         name=f"({get_sample_name()})",
@@ -986,7 +1024,7 @@ if __name__ == "__main__":
         },
         disable_opt=False,
         disable_z_opt=True,
-        expected_counts=13,       
+        expected_counts=13,
         pulse_durations={
             VirtualLaserKey.IMAGING: int(10e6),  # readout is in ns (5e6 = 5ms)
             VirtualLaserKey.SPIN_READOUT: int(440),  # readout is in ns (5e6 = 5ms)
@@ -1003,18 +1041,17 @@ if __name__ == "__main__":
     # sys.exit()
     # endregion
     ### Routines to execute
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+
     try:
         tool_belt.init_safe_stop()
         pos.set_drift([0.0, 0.0, 0.0])  # Reset drift to clean state
         # drift = tool_belt.get_drift()
         # tool_belt.set_drift([0.0, 0.0, drift[2]])  # Keep z
         # tool_belt.set_drifts([drift[0], drift[1], 0.0])  # Keep xy
-        
+
         # print("PIXEL coords going to galvo:", nv_sig.coords[CoordsKey.PIXEL])
         # print("SAMPLE coords going to piezo:", nv_sig.coords[CoordsKey.SAMPLE])
-        pos.set_xyz_on_nv(nv_sig) # Leave this line out when calibrating z
-        
+        pos.set_xyz_on_nv(nv_sig)  # Leave this line out when calibrating z
 
         # do_pulse_gen_constant()
         # do_pulse_gen_constant(digital_channels=(2,))
@@ -1025,7 +1062,7 @@ if __name__ == "__main__":
         # # print(piezo.get_z_position())
         # piezo.set_z_reference()
 
-        #region 1D scan + Calibrate
+        # region 1D scan + Calibrate
         # do_calibrate_z_axis(nv_sig)
         # do_z_scan_1d(nv_sig)
         # endregion 1D scan + Calibrate
@@ -1037,12 +1074,12 @@ if __name__ == "__main__":
         #     nv_sig.coords[CoordsKey.Z] = z
         #     pos.set_xyz_on_nv(nv_sig)
         #     # do_image_sample_zoom(nv_sig)
-            # do_image_sample(nv_sig)
-            # do_2D_xz_scan(nv_sig)
- 
+        # do_image_sample(nv_sig)
+        # do_2D_xz_scan(nv_sig)
+
         # endregion 2D scan
 
-        # region Image / 3D scan    
+        # region Image / 3D scan
         # do_constant_ac()
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None)
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None):
@@ -1052,13 +1089,13 @@ if __name__ == "__main__":
 
         # # Quick NV area scans
         # for i in range(10):
-            # do_image_sample_zoom(nv_sig)
-            # do_image_sample(nv_sig)
-            # coord_z = 0.00 + i * 0.005  # Start at 0.05V and increment by 0.02V for each scan
-            # nv_sig.coords[CoordsKey.Z] = coord_z
-            # pos.set_xyz_on_nv(nv_sig)
-            # do_image_sample_zoom(nv_sig)
-            # do_image_sample(nv_sig)
+        # do_image_sample_zoom(nv_sig)
+        # do_image_sample(nv_sig)
+        # coord_z = 0.00 + i * 0.005  # Start at 0.05V and increment by 0.02V for each scan
+        # nv_sig.coords[CoordsKey.Z] = coord_z
+        # pos.set_xyz_on_nv(nv_sig)
+        # do_image_sample_zoom(nv_sig)
+        # do_image_sample(nv_sig)
 
         # do_image_sample(nv_sig, nv_minus_initialization=True)
         # do_image_sample_zoom(nv_sig, nv_minus_initialization=True)
@@ -1089,11 +1126,11 @@ if __name__ == "__main__":
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
         do_rabi(nv_sig)
         # do_resonance(nv_sig)
+        # do_find_apd_gate_overlap(nv_sig)
         # do_rabi(nv_sig, uwave_time_range=[0, 400])
         # do_spin_echo(nv_sig)
         # do_g2_measurement(nv_sig, 0, 1)
         # do_determine_standard_readout_params(nv_sig)
-
         # SCC characterization
         # do_determine_charge_readout_params(nv_sig,nbins=200,nreps=100)
         # do_scc_pulsed_resonance(nv_sig)

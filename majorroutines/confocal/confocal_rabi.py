@@ -152,7 +152,9 @@ def main(
 
     if readout_ns is None:
         readout_dict = tb.get_virtual_laser_dict(readout_vkey)
-        readout_ns = int(nv_sig.pulse_durations.get(readout_vkey, readout_dict["duration"]))
+        readout_ns = int(
+            nv_sig.pulse_durations.get(readout_vkey, readout_dict["duration"])
+        )
     readout_ns = int(readout_ns)
 
     sig_gen = tb.get_server_sig_gen(int(uwave_ind))
@@ -234,9 +236,7 @@ def main(
                 pulsegen_server.stream_load(seq_file, seq_args_string)
                 counter_server.clear_buffer()
                 pulsegen_server.stream_start(int(num_reps))
-                new_counts = counter_server.read_counter_modulo_gates(
-                    2, int(num_reps)
-                )
+                new_counts = counter_server.read_counter_modulo_gates(2, int(num_reps))
 
                 # Sum across all reps (each entry is [ref, sig] for one rep)
                 count_arr = np.array(new_counts, dtype=np.int64)
