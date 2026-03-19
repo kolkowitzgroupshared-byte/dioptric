@@ -5,6 +5,10 @@ Interface for TTL pulse counters
 Created on August 29th, 2022
 
 @author: mccambria
+
+Updated on March 18th, 2026
+
+@author: sbchand
 """
 
 import logging

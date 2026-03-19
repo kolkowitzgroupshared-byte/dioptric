@@ -81,11 +81,11 @@ config |= {
     # Common durations are in ns
     ###
     "CommonDurations": {
-        "cw_meas_buffer": 5000,
-        "pol_to_uwave_wait_dur": 5000,
+        "cw_meas_buffer": 1000,
+        "pol_to_uwave_wait_dur": 1000,
         "scc_ion_readout_buffer": 10000,
         "uwave_buffer": 100,
-        "uwave_to_readout_wait_dur": 5000,
+        "uwave_to_readout_wait_dur": 1000,
     },
     ###
     "DeviceIDs": {
@@ -132,7 +132,7 @@ config |= {
         "VirtualSigGens": {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
-                "uwave_power": 6.0,
+                "uwave_power": 10.0, #dbm
                 "frequency": 2.90,
                 "rabi_period": 144,
                 "pi_pulse": 72,
@@ -174,7 +174,7 @@ config |= {
     "Optics": {
         "PhysicalLasers": {
             green_laser: {
-                "delay": 0,
+                "delay": 0, 
                 "mod_mode": ModMode.DIGITAL,
                 "positioner": CoordsKey.PIXEL,
             },
@@ -198,7 +198,7 @@ config |= {
 
             VirtualLaserKey.SPIN_READOUT: {
                 "physical_name": green_laser,
-                "duration": 300,
+                "duration": 440,
             },
             # LaserKey.CHARGE_POL: {"physical_name": green_laser, "duration": 10e3},
             VirtualLaserKey.CHARGE_POL: {
@@ -208,7 +208,7 @@ config |= {
             # LaserKey.CHARGE_POL: {"physical_name": green_laser, "duration": 60},
             VirtualLaserKey.SPIN_POL: {
                 "physical_name": green_laser,
-                "duration": 10e3,
+                "duration": 2e3,
             },
             VirtualLaserKey.SHELVING: {
                 "physical_name": green_laser,

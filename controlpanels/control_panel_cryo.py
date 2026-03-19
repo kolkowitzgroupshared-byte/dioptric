@@ -776,15 +776,15 @@ def do_rabi(nv_sig):
     rabi.main(
         nv_sig=nv_sig,
         num_reps=int(20e4),
-        num_runs=50,
-        min_tau=20,
-        max_tau=500,  # 400,
-        num_steps=31,
+        num_runs=20,  
+        min_tau=20, #ns
+        max_tau=500,  #ns (480+min_tau)
+        num_steps=31, # 1 step every ~5-10ns
         uwave_ind=0,
-        uwave_freq_ghz=2.8537,  # Change to target ms=+1 or ms=-1 transition
-        optimize_between_runs=True,
+        uwave_freq_ghz=2.8573,  # Change to target ms=+1 or ms=-1 transition
+        optimize_between_runs=False, # Set to false to turn off optimize between runs
     )
-def do_resonance(nv_sig,freq_center_ghz=2.87845,freq_span_mhz=200.0,num_runs=40): #2.8786GHz
+def do_resonance(nv_sig,freq_center_ghz=2.8799,freq_span_mhz=200.0,num_runs=40): #2.8786GHz
     resonance.main(nv_sig)
 
 # def do_resonance(nv_sig):
@@ -971,11 +971,11 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0,0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z =4.4599# atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z = 4.4256# atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # pixel_xy = [0,0]  # galvo ref
     # pixel_xy = [-0.021, -0.052]s # zoom picture
     # pixel_xy = [0.093, 0.067] # NV Lovelace
-    pixel_xy = [-0.003, 0.015] # NV Lovelace
+    pixel_xy = [-0.028, -0.004] # NV Lovelace
     # return
     nv_sig = NVSig(
         name=f"({get_sample_name()})",
@@ -989,8 +989,7 @@ if __name__ == "__main__":
         expected_counts=13,       
         pulse_durations={
             VirtualLaserKey.IMAGING: int(10e6),  # readout is in ns (5e6 = 5ms)
-            VirtualLaserKey.SPIN_READOUT: int(5000),  # readout is in ns (5e6 = 5ms)
-            VirtualLaserKey.CHARGE_POL: int(1e4),
+            VirtualLaserKey.SPIN_READOUT: int(440),  # readout is in ns (5e6 = 5ms)
             VirtualLaserKey.SPIN_POL: 2000,
             VirtualLaserKey.SINGLET_DRIVE: 300,  # placeholder
         },
@@ -1064,7 +1063,7 @@ if __name__ == "__main__":
         # do_image_sample(nv_sig, nv_minus_initialization=True)
         # do_image_sample_zoom(nv_sig, nv_minus_initialization=True)
         # end region Image sample
-
+# 
         # region Optimize
         # do_optimize_z_PI(nv_sig, voltage_start=4.40, voltage_end=4.50, step_size=0.002)
         # do_optimize_z_atto(nv_sig) # z position optimize atto
