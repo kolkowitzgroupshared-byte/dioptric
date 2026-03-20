@@ -81,11 +81,11 @@ config |= {
     # Common durations are in ns
     ###
     "CommonDurations": {
-        "cw_meas_buffer": 5000,
-        "pol_to_uwave_wait_dur": 5000,
+        "cw_meas_buffer": 1000,
+        "pol_to_uwave_wait_dur": 1000,
         "scc_ion_readout_buffer": 10000,
         "uwave_buffer": 100,
-        "uwave_to_readout_wait_dur": 5000,
+        "uwave_to_readout_wait_dur": 1000,
     },
     ###
     "DeviceIDs": {
@@ -113,6 +113,7 @@ config |= {
             "port": 9510,
             "cluster_name": "kolkowitz_nv_lab",
         },
+        "tisapph_M2_solstis_ip": "192.168.0.195",
         "power_supply_RNS_ngc103_visa": "TCPIP::192.168.0.130::INSTR",
         "pos_xyz_ATTO_piezos_ip": "192.168.0.199",
         "filter_slider_THOR_ell9k_com": "COM5",
@@ -132,10 +133,10 @@ config |= {
         "VirtualSigGens": {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
-                "uwave_power": 6.0,
+                "uwave_power": 10, #dbm
                 "frequency": 2.90,
-                "rabi_period": 144,
-                "pi_pulse": 72,
+                "rabi_period": 200,
+                "pi_pulse": 100,
                 "pi_on_2_pulse": 36,
             },
             # sig gen 1 is iq molulated
@@ -174,7 +175,7 @@ config |= {
     "Optics": {
         "PhysicalLasers": {
             green_laser: {
-                "delay": 0,
+                "delay": 0, 
                 "mod_mode": ModMode.DIGITAL,
                 "positioner": CoordsKey.PIXEL,
             },
@@ -198,7 +199,7 @@ config |= {
 
             VirtualLaserKey.SPIN_READOUT: {
                 "physical_name": green_laser,
-                "duration": 300,
+                "duration": 440,
             },
             # LaserKey.CHARGE_POL: {"physical_name": green_laser, "duration": 10e3},
             VirtualLaserKey.CHARGE_POL: {
@@ -208,7 +209,7 @@ config |= {
             # LaserKey.CHARGE_POL: {"physical_name": green_laser, "duration": 60},
             VirtualLaserKey.SPIN_POL: {
                 "physical_name": green_laser,
-                "duration": 10e3,
+                "duration": 2e3,
             },
             VirtualLaserKey.SHELVING: {
                 "physical_name": green_laser,
@@ -231,8 +232,8 @@ config |= {
                 "control_mode": PosControlMode.STREAM,
                 "delay": int(1e6),  # 5 ms for PIFOC xyz
                 "nm_per_unit": 1000,
-                "optimize_range": 0.09,
-                "units": "Voltage (V)",
+                # "optimize_range": 0.09,
+                "optimize_range": 0.1,
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
             CoordsKey.Z: {
@@ -322,7 +323,6 @@ config |= {
 }
 
 # endregion
-
 
 if __name__ == "__main__":
     key = "pixel_to_sample_affine_transformation_matrix"
