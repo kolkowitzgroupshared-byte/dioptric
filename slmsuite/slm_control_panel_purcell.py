@@ -323,7 +323,7 @@ def load_nv_coords(
     return nv_coordinates, spot_weights
 
 nuvu_pixel_coords, spot_weights = load_nv_coords()
-nuvu_pixel_coords = np.array([[215.025, 203.863], [308.628, 103.893], [238.142, 328.739], [63.706, 100.683]])
+# nuvu_pixel_coords = np.array([[215.025, 203.863], [308.628, 103.893], [238.142, 328.739], [63.706, 100.683]])
 thorcam_coords_xy = nuvu2thorcam_calibration(nuvu_pixel_coords).T
 
 def compute_and_write_nvs_phase():

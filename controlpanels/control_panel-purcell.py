@@ -261,8 +261,8 @@ def do_optimize_green(nv_sig):
 
 def do_optimize_red(nv_sig, ref_nv_sig):
     opti_coords = []
-    axes_list = [Axes.X, Axes.Y]
-    # axes_list = [Axes.Y, Axes.X]
+    # axes_list = [Axes.X, Axes.Y]
+    axes_list = [Axes.Y, Axes.X]
     # shuffle(axes_list)
     for ind in range(1):
         axes = axes_list[ind]
@@ -1659,12 +1659,12 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_3554nvs_reordered.npz",
         file_path="slmsuite/nv_blob_detection/nv_blob_3325nvs_reordered.npz",   
     ).tolist()
-    pixel_coords_list = [
-        [215.025, 203.863], 
-        [308.628, 103.893], 
-        [238.142, 328.739], 
-        [63.706, 100.683]
-        ]
+    # pixel_coords_list = [
+    #     [215.025, 203.863], 
+    #     [308.628, 103.893], 
+    #     [238.142, 328.739], 
+    #     [63.706, 100.683]
+    #     ]
 
     green_coords_list = [
         [
@@ -1685,18 +1685,18 @@ if __name__ == "__main__":
         ]
         for nv_pixel_coords in pixel_coords_list
     ]
-    green_coords_list =[
-    [101.12, 100.672],
-    [82.489, 117.273],
-    [99.113, 78.025],
-    [126.361, 121.723],
-    ]
-    red_coords_list = [
-    [66.169, 65.372],
-    [50.191, 77.354],
-    [65.911, 46.847],
-    [85.057, 84.00],
-    ]
+    # green_coords_list =[
+    # [101.12, 100.672],
+    # [82.489, 117.273],
+    # [99.113, 78.025],
+    # [126.361, 121.723],
+    # ]
+    # red_coords_list = [
+    # [66.146, 65.372],
+    # [50.219, 77.354],
+    # [65.911, 46.835],
+    # [85.425, 84.137],
+    # ]
 
     # print(red_coords_list)
     # print(green_coords_list)
@@ -1712,16 +1712,16 @@ if __name__ == "__main__":
     #     [34.93, 44.916],
     #     ]
     # green_coords_list = [
-    #     [101.092, 100.667],
-    #     [70.546, 130.492],
-    #     [101.628, 69.147],
-    #     [130.573, 132.308],
+    #     [101.097, 100.658],
+    #     [70.536, 130.558],
+    #     [101.674, 69.089],
+    #     [130.568, 132.321],
     # ]
     # red_coords_list = [
-    # [67.975, 65.976],
-    # [41.956, 88.653],
-    # [69.523, 40.383],
-    # [90.96, 93.205],
+    #     [66.214, 65.274],
+    #     [39.794, 87.225],
+    #     [68.494, 39.798],
+    #     [88.217, 93.009],
     # ]
 
     num_nvs = len(pixel_coords_list)
@@ -1859,7 +1859,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)
+        do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list:
@@ -1911,10 +1911,10 @@ if __name__ == "__main__":
         # optimize.optimize_pixel_and_z(nv_sig, do_plot=True)
         # coords_key = None
         # coords_key = green_laser
-        coords_key = red_laser
-        do_optimize_loop(np.array(nv_list), np.array(coords_key))
+        # coords_key = red_laser
+        # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        # do_charge_state_histograms(nv_list)
+        do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
