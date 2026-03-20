@@ -113,6 +113,7 @@ config |= {
             "port": 9510,
             "cluster_name": "kolkowitz_nv_lab",
         },
+        "tisapph_M2_solstis_ip": "192.168.0.195",
         "power_supply_RNS_ngc103_visa": "TCPIP::192.168.0.130::INSTR",
         "pos_xyz_ATTO_piezos_ip": "192.168.0.199",
         "filter_slider_THOR_ell9k_com": "COM5",
@@ -132,10 +133,10 @@ config |= {
         "VirtualSigGens": {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
-                "uwave_power": 10.0, #dbm
+                "uwave_power": 10, #dbm
                 "frequency": 2.90,
-                "rabi_period": 144,
-                "pi_pulse": 72,
+                "rabi_period": 200,
+                "pi_pulse": 100,
                 "pi_on_2_pulse": 36,
             },
             # sig gen 1 is iq molulated
@@ -231,8 +232,8 @@ config |= {
                 "control_mode": PosControlMode.STREAM,
                 "delay": int(1e6),  # 5 ms for PIFOC xyz
                 "nm_per_unit": 1000,
-                "optimize_range": 0.09,
-                "units": "Voltage (V)",
+                # "optimize_range": 0.09,
+                "optimize_range": 0.1,
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
             CoordsKey.Z: {
@@ -322,7 +323,6 @@ config |= {
 }
 
 # endregion
-
 
 if __name__ == "__main__":
     key = "pixel_to_sample_affine_transformation_matrix"

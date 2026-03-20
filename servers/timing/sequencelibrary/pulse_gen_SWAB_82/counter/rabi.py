@@ -184,7 +184,7 @@ if __name__ == "__main__":
     from utils import common
 
     cfg = common.get_config_dict()
-    args = [200, 3000, 300, 0, "SPIN_POL", "SPIN_READOUT", None]
+    args = [200, 2000, 440, 0, "SPIN_POL", "SPIN_READOUT", None]
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])
     seq.plot()

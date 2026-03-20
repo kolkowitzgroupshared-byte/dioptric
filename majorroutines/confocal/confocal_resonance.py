@@ -25,13 +25,12 @@ from utils.constants import VirtualLaserKey, NormMode
 
 def main(
     nv_sig,
-    freq_center_ghz=2.8786,
-    freq_span_mhz=200.0,
-    num_steps=51,
-    num_reps=1,
-    num_runs=40,
-    uwave_ind=0,
-    readout_ns=10e6,
+    freq_center_ghz,
+    freq_span_mhz,
+    num_steps,
+    num_reps,
+    num_runs,
+    uwave_ind,
     uwave_power_dbm=None,
     laser_power=None,
     do_targeting=False,
@@ -47,13 +46,14 @@ def main(
 
     readout_vkey = VirtualLaserKey.SPIN_READOUT
     vld = tb.get_virtual_laser_dict(readout_vkey)
-    if readout_ns is None:
-        readout_ns = int(nv_sig.pulse_durations.get(readout_vkey, int(vld["duration"])))
+    readout_ns = int(nv_sig.pulse_durations.get(readout_vkey, int(vld["duration"])))
+    print(f"Readout duration (ns): {readout_ns}")
     readout_ns = int(readout_ns)
 
     spin_pol_vkey = VirtualLaserKey.SPIN_POL
     vld_pol = tb.get_virtual_laser_dict(spin_pol_vkey)
     pol_ns = int(nv_sig.pulse_durations.get(spin_pol_vkey, int(vld_pol["duration"])))
+    print(f"Polarization duration (ns): {pol_ns}")
 
     sig_gen = tb.get_server_sig_gen(int(uwave_ind))
     vsg = tb.get_virtual_sig_gen_dict(int(uwave_ind))
@@ -66,9 +66,11 @@ def main(
 
     seq_file = "resonance.py"
     seq_args = [
+        int(pol_ns),
         int(readout_ns),
         int(uwave_ind),
-        readout_vkey.name,
+        spin_pol_vkey,
+        readout_vkey,
         laser_power,
     ]
     seq_args_string = tb.encode_seq_args(seq_args)
@@ -134,9 +136,10 @@ def main(
 
                 # Each row is [ref, sig] for one repetition
                 count_arr = np.array(new_counts, dtype=np.int64)
+                print(f"  count_arr shape: {count_arr.shape}")  # should be (num_reps, 2)
                 ref_counts[run_ind, step_ind] = count_arr[:, 0].sum()
                 sig_counts[run_ind, step_ind] = count_arr[:, 1].sum()
-
+    
                 ref_val = ref_counts[run_ind, step_ind]
                 sig_val = sig_counts[run_ind, step_ind]
                 norm_val = sig_val / ref_val if ref_val > 0 else float("nan")
@@ -161,6 +164,8 @@ def main(
             ax.relim()
             ax.autoscale_view()
             plt.pause(0.01)
+    
+    print(f"run {run_ind}: norm_mean min={norm_mean.min():.6f} max={norm_mean.max():.6f}, runs averaged={run_ind+1}")
 
     with np.errstate(divide="ignore", invalid="ignore"):
         norm_runs = sig_counts / ref_counts
