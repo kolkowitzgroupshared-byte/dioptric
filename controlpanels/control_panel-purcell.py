@@ -14,7 +14,7 @@ import random
 import sys
 import time
 from random import shuffle
-
+import re
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -124,10 +124,6 @@ def do_charge_state_histograms(nv_list):
     # 50 ms
     num_reps = 200
     num_runs = 10
-
-    # 100 ms
-    # num_reps = 100
-    # num_runs = 20
 
     # Test
     # num_runs = 2
@@ -268,7 +264,7 @@ def do_optimize_red(nv_sig, ref_nv_sig):
     axes_list = [Axes.X, Axes.Y]
     # axes_list = [Axes.Y, Axes.X]
     # shuffle(axes_list)
-    for ind in range(2):
+    for ind in range(1):
         axes = axes_list[ind]
         ret_vals = targeting.optimize(nv_sig, coords_key=red_laser_aod, axes=axes)
         opti_coords.append(ret_vals[0])
@@ -314,7 +310,7 @@ def do_optimize_pixel(nv_sig):
 
 def do_optimize_loop(nv_list, coords_key):
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
-
+    do_compensate_for_drift(repr_nv_sig)
     opti_coords_list = []
     for nv in nv_list:
         if coords_key == green_laser:
@@ -322,7 +318,6 @@ def do_optimize_loop(nv_list, coords_key):
         elif coords_key == red_laser:
             opti_coords = do_optimize_red(nv, repr_nv_sig)
         # Adjust for the drift that may have occurred since beginning the loop
-        do_compensate_for_drift(repr_nv_sig)
         opti_coords_list.append(opti_coords)
 
     # Report back
@@ -332,8 +327,8 @@ def do_optimize_loop(nv_list, coords_key):
 
 
 def optimize_slm_Phase_calibration(repr_nv_sig, target_coords):
-    repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
-    target_coords = np.array([[110.186, 129.281], [128.233, 88.007], [86.294, 103.0]])
+    widefield.get_repr_nv_sig(nv_list)
+    np.array([[110.186, 129.281], [128.233, 88.007], [86.294, 103.0]])
     # optimize_slm_calibration.main(repr_nv_sig, target_coords)
 
 
@@ -1004,7 +999,6 @@ def build_xy8_dip_taus(
 #         xy.main(nv_list, len(taus), num_reps, num_runs, taus, uwave_ind_list, xy_seq)
 
 
-import re
 import numpy as np
 
 def _quantize_ns(x_ns, q_ns=4):
@@ -1382,19 +1376,19 @@ def do_opx_constant_ac():
     #     [4, 1],  # Digital channels
     #     [3, 4, 2, 6],  # Analog channels
     #     [0.11, 0.11, 0.11, 0.11],  # Analog voltages;
-    #     [102, 102, 67, 67],
+    #     [82.511, 117.235, 66.068, 65.278],
     # )
-    # green_coords_list = [
-    #     [108.302, 107.046],
-    #     [122.658, 98.967],
-    #     [96.376, 95.86],
-    #     [106.999, 119.23],
+    # green_coords_list =[
+    # [101.086, 100.729],
+    # [82.511, 117.235],
+    # [99.165, 77.99],
+    # [126.369, 121.736],
     # ]
     # red_coords_list = [
-    #     [72.722, 71.926],
-    #     [84.601, 66.136],
-    #     [63.555, 62.304],
-    #     [71.244, 81.727],
+    # [66.068, 65.278],
+    # [49.953, 77.617],
+    # [65.656, 46.698],
+    # [85.0, 83.83],
     # ]
     # red
     # opx.constant_ac(
@@ -1535,7 +1529,6 @@ def scan_equilateral_triangle(nv_sig, center_coord=(0, 0), radius=0.2):
         # print(f"Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         do_scanning_image_sample(nv_sig)
 
-
 # ----------------------------
 # Empirical calibration data
 # ----------------------------
@@ -1666,12 +1659,12 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_3554nvs_reordered.npz",
         file_path="slmsuite/nv_blob_detection/nv_blob_3325nvs_reordered.npz",   
     ).tolist()
-    # pixel_coords_list = [
-    #     [214.998, 203.945], 
-    #     [63.98, 100.887], 
-    #     [238.084, 328.972], 
-    #     [308.461, 104.005],
-    #     ]
+    pixel_coords_list = [
+        [215.025, 203.863], 
+        [308.628, 103.893], 
+        [238.142, 328.739], 
+        [63.706, 100.683]
+        ]
 
     green_coords_list = [
         [
@@ -1692,15 +1685,19 @@ if __name__ == "__main__":
         ]
         for nv_pixel_coords in pixel_coords_list
     ]
-    # green_coords_list = [
-    #     [101.07, 100.883], 
-    #     [126.355, 121.798], 
-    #     [99.157, 78.076], 
-    #     [82.498, 117.319]]
-    # red_coords_list = [[68.408, 66.649], 
-    #                    [87.066, 84.623],
-    #                    [67.154, 47.3], 
-    #                    [51.451, 78.381]]
+    green_coords_list =[
+    [101.12, 100.672],
+    [82.489, 117.273],
+    [99.113, 78.025],
+    [126.361, 121.723],
+    ]
+    red_coords_list = [
+    [66.169, 65.372],
+    [50.191, 77.354],
+    [65.911, 46.847],
+    [85.057, 84.00],
+    ]
+
     # print(red_coords_list)
     # print(green_coords_list)
     # sys.exit()
@@ -1708,25 +1705,25 @@ if __name__ == "__main__":
     print(f"Reference NV:{pixel_coords_list[0]}")
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
-#     pixel_coords_list = [
-#         [214.998, 203.945], 
-#         [367.181, 25.354], 
-#         [229.35, 379.51], 
-#         [34.93, 44.916],
-#         ]
-#     green_coords_list = [
-#         [101.092, 100.667],
-#         [70.546, 130.492],
-#         [101.628, 69.147],
-#         [130.573, 132.308],
-#     ]
-#     red_coords_list = [
-#     [67.975, 65.976],
-#     [41.956, 88.653],
-#     [69.523, 40.383],
-#     [90.96, 93.205],
-# ]
-    ###
+    # pixel_coords_list = [
+    #     [214.998, 203.945], 
+    #     [367.181, 25.354], 
+    #     [229.35, 379.51], 
+    #     [34.93, 44.916],
+    #     ]
+    # green_coords_list = [
+    #     [101.092, 100.667],
+    #     [70.546, 130.492],
+    #     [101.628, 69.147],
+    #     [130.573, 132.308],
+    # ]
+    # red_coords_list = [
+    # [67.975, 65.976],
+    # [41.956, 88.653],
+    # [69.523, 40.383],
+    # [90.96, 93.205],
+    # ]
+
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
     # fmt: off
@@ -1842,7 +1839,7 @@ if __name__ == "__main__":
         # widefield.reset_all_drift()
         # do_optimize_z(nv_sig)
         # do_optimize_xyz(nv_sig)
-        # pos.set_xyz_on_nv(nv_sig)1
+        # pos.set_xyz_on_nv(nv_sig)
         # piezo_voltage_to_pixel_calibration()
 
         ### warning: this direclty iamge the laser spo, boftfor starign this makesure the red laser so set to 1mw on GUI
@@ -1854,7 +1851,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.RED_IMAGIN,
         # )
         
-        # do_compensate_for_drift(nv_sig)
+        do_compensate_for_drift(nv_sig)
         
         # do_red_calibration_image(
         #     nv_sig,
@@ -1862,8 +1859,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_compensate_for_drift(nv_sig)
-        do_widefield_image_sample(nv_sig, 50)
+        # do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list:
@@ -1915,9 +1911,9 @@ if __name__ == "__main__":
         # optimize.optimize_pixel_and_z(nv_sig, do_plot=True)
         # coords_key = None
         # coords_key = green_laser
-        # coords_key = red_laser
-        # do_optimize_loop(np.array(nv_list), np.array(coords_key))
-
+        coords_key = red_laser
+        do_optimize_loop(np.array(nv_list), np.array(coords_key))
+ 
         # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)

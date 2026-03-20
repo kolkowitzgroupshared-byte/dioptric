@@ -281,7 +281,7 @@ def nuvu2thorcam_calibration(coords):
     )
 
     cal_coords_nuvu = np.array(
-        [[342.936, 362.803], [316.864, 12.465], [23.195, 211.043]], dtype="float32"
+        [[342.93, 363.406], [316.812, 12.277], [22.399, 211.561]], dtype="float32"
     )
     # Compute the affine transformation matrix
     M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
@@ -323,6 +323,7 @@ def load_nv_coords(
     return nv_coordinates, spot_weights
 
 nuvu_pixel_coords, spot_weights = load_nv_coords()
+nuvu_pixel_coords = np.array([[215.025, 203.863], [308.628, 103.893], [238.142, 328.739], [63.706, 100.683]])
 thorcam_coords_xy = nuvu2thorcam_calibration(nuvu_pixel_coords).T
 
 def compute_and_write_nvs_phase():
@@ -353,38 +354,6 @@ def compute_and_write_nvs_phase():
     save(initial_phase, file_path, filename)
     slm.write(initial_phase, settle=True)
     # cam_plot()
-
-# def compute_and_write_nvs_phase(spot_vectors_ij, nuvu_pixel_coords, spot_weights, comp_shape):
-#     print("Inside compute_and_write_nvs_phase")
-#     print("spot_vectors_ij shape:", spot_vectors_ij.shape)
-#     print("i min/max:", spot_vectors_ij[0].min(), spot_vectors_ij[0].max())
-#     print("j min/max:", spot_vectors_ij[1].min(), spot_vectors_ij[1].max())
-
-#     hologram = SpotHologram(
-#         shape=comp_shape,
-#         spot_vectors=spot_vectors_ij,
-#         basis="ij",
-#         # spot_amp=spot_weights,
-#         cameraslm=fs,
-#     )
-
-#     hologram.optimize(
-#         "WGS-Kim",
-#         maxiter=30,
-#         feedback="computational_spot",
-#         stat_groups=["computational_spot"],
-#     )
-
-#     initial_phase = hologram.extract_phase()
-
-#     file_path = r"slmsuite\computed_phase"
-#     num_nvs = len(nuvu_pixel_coords)
-#     now = datetime.now()
-#     date_time_str = now.strftime("%Y%m%d_%H%M%S")
-#     filename = f"slm_phase_{num_nvs}nvs_{date_time_str}.npy"
-
-#     save(initial_phase, file_path, filename)
-#     slm.write(initial_phase, settle=True)
     
 def write_pre_computed_nvs_phase():
     phase = np.load("slmsuite\computed_phase\slm_phase_75nvs_20250605_181402.npy")

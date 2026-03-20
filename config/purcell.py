@@ -32,10 +32,28 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
-calibration_coords_pixel = [[367.181, 25.354], [229.35, 379.51], [34.93, 44.916]]
-calibration_coords_green = [[70.546, 130.492],[101.628, 69.147],[130.573, 132.308]]
-calibration_coords_red = [[41.956, 88.653],[69.523, 40.383],[90.96, 93.205]]
+# calibration_coords_pixel = [[367.181, 25.354], [229.35, 379.51], [34.93, 44.916]]
+# calibration_coords_green = [[70.546, 130.492],[101.628, 69.147],[130.573, 132.308]]
+# calibration_coords_red = [[41.956, 88.653],[69.523, 40.383],[90.96, 93.205]]
 
+calibration_coords_pixel = [
+        # [215.025, 203.863], 
+        [308.628, 103.893], 
+        [238.142, 328.739], 
+        [63.706, 100.683]
+        ]
+calibration_coords_green =[
+    # [101.086, 100.729],
+    [82.511, 117.235],
+    [99.165, 77.99],
+    [126.369, 121.736],
+    ]
+calibration_coords_red = [
+    # [66.169, 65.356],
+    [50.191, 77.414],
+    [65.911, 46.83],
+    [85.057, 84.00],
+    ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
     CoordsKey.PIXEL: calibration_coords_pixel[0],
@@ -251,9 +269,9 @@ config |= {
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 1e6},
             VirtualLaserKey.WIDEFIELD_CHARGE_READOUT: {
                 "physical_name": yellow_laser,
-                "duration": 60e6,
+                # "duration": 60e6,
                 # "duration": 50e6,
-                # "duration": 24e6,  # for red calibration
+                "duration": 24e6,  # for red calibration
             },
             # LaserKey.WIDEFIELD_CHARGE_READOUT: {"physical_name": yellow_laser, "duration": 100e6},
         },
@@ -945,8 +963,8 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.45},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.40}, 
+        "yellow_imaging": {"type": "constant", "sample": 0.11},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.11}, 
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other
