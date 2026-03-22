@@ -868,10 +868,10 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_03_13-00_03_54-combined_image_array", load_npz=True
+        file_stem="2026_03_20-22_16_09-qnami-nv0_2026_02_20", load_npz=True
     )
-    # img_array = np.array(data["ref_img_array"])
-    img_array = data["img_array"]
+    img_array = np.array(data["ref_img_array"])
+    # img_array = data["img_array"]
     nv_coordinates, spot_weights = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_327nvs.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_308nvs_reordered.npz"
@@ -891,7 +891,10 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_6904nvs.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_3986nvs_reordered.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_3554nvs_reordered.npz"
-        file_path="slmsuite/nv_blob_detection/nv_blob_3366nvs_reordered.npz"
+        # file_path="slmsuite/nv_blob_detection/nv_blob_3366nvs_reordered.npz"
+        # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs.npz"
+        # file_path="slmsuite/nv_blob_detection/nv_blob_1487nvs_reordered.npz"
+        file_path="slmsuite/nv_blob_detection/nv_blob_1462nvs_reordered.npz"
     )
     
     # calibration_coords_pixel = [
@@ -922,29 +925,26 @@ if __name__ == "__main__":
     # nv_coordinates = [[coord[0] - 3, coord[1] + 3] for coord in nv_coordinates]
     # nv_coordinates = [list(coord) for coord in nv_coordinates]
     # Filter NV coordinates: Keep only those where both x and y are in [0, 250]
-    # nv_coordinates_filtered = [
-    #     coord
-    #     for coord in nv_coordinates
-    #     if isinstance(coord, (list, tuple))
-    #     and len(coord) == 2
-    #     and all(5 <= x <= 445 for x in coord)
-    # ]
-
-    # # Ensure spot weights are filtered accordingly
-    # spot_weights_filtered = [
-    #     weight
-    #     for coord, weight in zip(nv_coordinates, spot_weights)
-    #     if isinstance(coord, (list, tuple))
-    #     and len(coord) == 2
-    #     and all(5 <= x <= 445 for x in coord)
-    # ]
     
-    nv_coordinates = np.asarray([list(coord) for coord in nv_coordinates], dtype=float)
+    mask = (
+        (nv_coordinates[:, 0] >= 5) & (nv_coordinates[:, 0] < 380) &
+        (nv_coordinates[:, 1] >= 0) & (nv_coordinates[:, 1] < 375)
+    )
+
+    nv_coordinates = nv_coordinates[mask]
+    spot_weights = spot_weights[mask]
+    # nv_coordinates = np.asarray([list(coord) for coord in nv_coordinates], dtype=float)
+    # spot_weights = np.ones(nv_coordinates.shape[0], dtype=float)
+    # nv_coordinates = np.array([
+    #     [214.573, 203.991], 
+    #     [360.977, 57.633], 
+    #     [225.414, 361.866], 
+    #     [30.961, 57.878],
+    #     ])
     spot_weights = np.ones(nv_coordinates.shape[0], dtype=float)
-
     # old_roi = (40, 45, 450, 450)
-    # new_roi = (55, 85, 400, 400)
-
+    # old_roi = (55, 85, 400, 400)
+    # new_roi = (60, 87, 375, 375)
     # nv_coordinates, spot_weights, keep_indices, keep_mask, global_coords_kept = (
     #     filter_and_rescale_coords_for_new_roi(
     #         nv_coordinates,
@@ -956,23 +956,27 @@ if __name__ == "__main__":
     #     )
     # )
     
-    dx = 214.999 - 216.4199
-    dy = 203.945 - 195.96799
+    
+    filtered_reordered_coords = np.round(nv_coordinates, 3)
+    filtered_reordered_spot_weights = np.round(spot_weights,3)
+    # print(filtered_reordered_coords)
+    # sys.exit()
+    # dx = 214.573 - 216.4199
+    # dy = 203.991 - 195.96799
 
-    nv_coordinates = np.asarray(nv_coordinates, dtype=float)
-    nv_coordinates[:, 0] += dx
-    nv_coordinates[:, 1] += dy
+    # nv_coordinates = np.asarray(nv_coordinates, dtype=float)
+    # nv_coordinates[:, 0] += dx
+    # nv_coordinates[:, 1] += dy
 
-    mask = (
-        (nv_coordinates[:, 0] >= 0) & (nv_coordinates[:, 0] < 400) &
-        (nv_coordinates[:, 1] >= 0) & (nv_coordinates[:, 1] < 400)
-    )
+    
+    # reference_nv = [214.573, 203.991]
+    # filtered_reordered_coords, filtered_reordered_spot_weights, include_indices = (
+    #     filter_and_reorder_nv_coords(
+    #         nv_coordinates, spot_weights, reference_nv, min_distance=4.0
+    #     )
+    # )
 
-    nv_coordinates = nv_coordinates[mask]
-    spot_weights = spot_weights[mask]
-
-    print(f"After filtering: {len(nv_coordinates)} NVs")
-    filtered_reordered_coords, filtered_reordered_spot_weights = nv_coordinates, spot_weights
+    # print(f"After filtering: {len(nv_coordinates)} NVs")
     # cx, cy = 215, 230
     # r = 220
 
@@ -994,7 +998,7 @@ if __name__ == "__main__":
     # reference_nv = remap_single_coord(reference_nv_old, old_roi, new_roi, rescale=False)
 
     # print("New reference_nv:", reference_nv)
-    # reference_nv = [230.994, 236.014]
+    # reference_nv = [214.573, 203.991]
     # filtered_reordered_coords, filtered_reordered_spot_weights, include_indices = (
     #     filter_and_reorder_nv_coords(
     #         nv_coordinates, spot_weights, reference_nv, min_distance=4.0
@@ -1028,8 +1032,6 @@ if __name__ == "__main__":
             [130.063, 311.115],
         ],
     }
-
-    
     # Add more bars / regions here
     regions = [
         bar_region,
@@ -1096,7 +1098,6 @@ if __name__ == "__main__":
     # print("Filter:", filtered_reordered_counts)
     # print("Filtered and Reordered NV Coordinates:", filtered_reordered_coords)
     # print("Filtered and Reordered NV Coordinates:", integrated_intensities)
-
 
     # -----------------------------
     # Your usage pattern
@@ -1363,7 +1364,7 @@ if __name__ == "__main__":
     # save_results(
     #     filtered_reordered_coords,
     #     filtered_reordered_spot_weights,
-    #     filename="slmsuite/nv_blob_detection/nv_blob_3325nvs_reordered.npz",
+    #     filename="slmsuite/nv_blob_detection/nv_blob_1462nvs_reordered.npz",
     # )
 
     # # Plot the original image with circles around each NV

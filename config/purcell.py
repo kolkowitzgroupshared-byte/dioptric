@@ -37,22 +37,22 @@ red_laser_aod = "laser_COBO_638_aod"
 # calibration_coords_red = [[41.956, 88.653],[69.523, 40.383],[90.96, 93.205]]
 
 calibration_coords_pixel = [
-        # [215.025, 203.863], 
-        [367.181, 25.354], 
-        [229.35, 379.51], 
-        [34.93, 44.916],
+        # [209.573, 201.991],
+        [355.977,  55.633],
+        [220.414, 359.866],
+        [ 25.961,  55.878],
         ]
 calibration_coords_green =[
     # [101.086, 100.729],
-    [70.536, 130.558],
-    [101.674, 69.089],
-    [130.568, 132.321],
+    [72.281, 124.875],
+    [102.017, 72.304],
+    [131.638, 130.054],
     ]
 calibration_coords_red = [
     # [66.169, 65.356],
-    [39.794, 87.225],
-    [68.494, 39.798],
-    [88.217, 93.009],
+    [41.538, 82.817], 
+    [68.623, 42.267], 
+    [89.244, 91.244],
     ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -189,7 +189,7 @@ config |= {
         "readout_mode": 1,  # 16 for double horizontal readout rate (em mode)
         # "readout_mode": 6,  # Fast conventional
         # "roi": (122, 126, 250, 250),  # offsetX, offsetY, width, height
-        "roi": (55, 85, 400, 400),  # offsetX, offsetY, width, height
+        "roi": (60, 87, 375, 375),  # offsetX, offsetY, width, height
         # "roi": None,  # offsetX, offsetY, width, height
         "scale": 5 / 0.6,  # pixels / micron
     },

@@ -559,9 +559,10 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
     # Load the image data
     data = dm.get_raw_data(
-        file_stem="2026_03_16-22_47_24-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_03_20-18_05_10-qnami-nv0_2026_02_20", load_npz=True
     )
-    img_array = np.array(data["diff_img_array"])
+    img_array = np.array(data["ref_img_array"])
+    # img_array = -np.array(data["diff_img_array"])
     # img_array = np.array(data["img_array"])
     # final_xy, integrated_counts, spot_sizes, debug = detect_nv_coordinates_hex(
     #     img_array,
@@ -577,7 +578,7 @@ if __name__ == "__main__":
     # )
     # Apply the blob detection and Gaussian fitting
     sigma = 1.0
-    lower_threshold = 0.0001
+    lower_threshold = 0.1
     upper_threshold = None
     smoothing_sigma = 0.0
     integration_radius= 2
@@ -643,12 +644,12 @@ if __name__ == "__main__":
     print(f"Detected NV coordinates (optimized): {len(filtered_nv_coords)}")
 
     # Save the results
-    # save_results(
-    #     filtered_nv_coords,
-    #     filtered_counts,
-    #     path="slmsuite/nv_blob_detection",
-    #     filename="nv_blob_6904nvs.npz",
-    # )
+    save_results(
+        filtered_nv_coords,
+        filtered_counts,
+        path="slmsuite/nv_blob_detection",
+        filename="nv_blob_1487nvs.npz",
+    )
 
     # full ROI -- multiple images save in the same file
     # process_scan_file(file_stem="2026_03_13-00_01_52-qnami-nv0_2026_02_20")

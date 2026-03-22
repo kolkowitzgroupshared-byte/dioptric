@@ -180,8 +180,8 @@ def do_optimize_readout_amp(nv_list):
     # num_reps = 150
     # num_runs = 5
     num_reps = 12
-    num_runs = 200
-    # num_runs = 400
+    # num_runs = 200
+    num_runs = 400
     min_amp = 0.8
     max_amp = 1.2
     return optimize_charge_state_histograms.optimize_readout_amp(
@@ -1657,14 +1657,10 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_4966nvs_reordered.npz",
         # file_path="slmsuite/nv_blob_detection/nv_blob_3986nvs_reordered.npz",
         # file_path="slmsuite/nv_blob_detection/nv_blob_3554nvs_reordered.npz",
-        file_path="slmsuite/nv_blob_detection/nv_blob_3325nvs_reordered.npz",   
+        # file_path="slmsuite/nv_blob_detection/nv_blob_3325nvs_reordered.npz",   
+        # file_path="slmsuite/nv_blob_detection/nv_blob_1487nvs_reordered.npz",   
+        file_path="slmsuite/nv_blob_detection/nv_blob_1462nvs_reordered.npz",   
     ).tolist()
-    # pixel_coords_list = [
-    #     [215.025, 203.863], 
-    #     [308.628, 103.893], 
-    #     [238.142, 328.739], 
-    #     [63.706, 100.683]
-    #     ]
 
     green_coords_list = [
         [
@@ -1685,18 +1681,6 @@ if __name__ == "__main__":
         ]
         for nv_pixel_coords in pixel_coords_list
     ]
-    # green_coords_list =[
-    # [101.12, 100.672],
-    # [82.489, 117.273],
-    # [99.113, 78.025],
-    # [126.361, 121.723],
-    # ]
-    # red_coords_list = [
-    # [66.146, 65.372],
-    # [50.219, 77.354],
-    # [65.911, 46.835],
-    # [85.425, 84.137],
-    # ]
 
     # print(red_coords_list)
     # print(green_coords_list)
@@ -1705,24 +1689,24 @@ if __name__ == "__main__":
     print(f"Reference NV:{pixel_coords_list[0]}")
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
-    # pixel_coords_list = [
-    #     [214.998, 203.945], 
-    #     [367.181, 25.354], 
-    #     [229.35, 379.51], 
-    #     [34.93, 44.916],
-    #     ]
-    # green_coords_list = [
-    #     [101.097, 100.658],
-    #     [70.536, 130.558],
-    #     [101.674, 69.089],
-    #     [130.568, 132.321],
-    # ]
-    # red_coords_list = [
-    #     [66.214, 65.274],
-    #     [39.794, 87.225],
-    #     [68.494, 39.798],
-    #     [88.217, 93.009],
-    # ]
+    pixel_coords_list = [
+        [209.573, 201.991],
+        [355.977,  55.633],
+        [209.483, 367.977],
+        [ 25.961,  55.878],
+        ]
+    green_coords_list = [
+        [101.263, 100.634],
+        [72.281, 124.875],
+        [102.017, 72.304],
+        [131.638, 130.054],
+        ]
+    red_coords_list = [
+        [66.193, 65.378], 
+        [41.538, 82.817], 
+        [68.623, 42.267], 
+        [89.244, 91.244],
+        ]
 
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
@@ -1819,7 +1803,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts = 1100.0
-    # nv_sig.expected_counts = 1700
+    # nv_sig.expected_counts = 1500
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:2]
     # print(f"length of NVs list:{len(nv_list)}")
@@ -1859,7 +1843,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_widefield_image_sample(nv_sig, 50)
+        # do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list:
