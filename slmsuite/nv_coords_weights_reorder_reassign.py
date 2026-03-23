@@ -868,7 +868,7 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_03_20-22_16_09-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_03_22-13_36_45-qnami-nv0_2026_02_20", load_npz=True
     )
     img_array = np.array(data["ref_img_array"])
     # img_array = data["img_array"]
@@ -1006,20 +1006,15 @@ if __name__ == "__main__":
     # )
     
     # # Initialize lists to store the results
-    # fitted_amplitudes = []
-    # fitted_coords = []
-    # for coord in filtered_reordered_coords:
-    #     fitted_x, fitted_y, amplitude = fit_gaussian(img_array, coord, window_size=1)
-    #     fitted_coords.append([fitted_x, fitted_y])
-    #     fitted_amplitudes.append(amplitude)
+    fitted_amplitudes = []
+    fitted_coords = []
+    for coord in filtered_reordered_coords:
+        fitted_x, fitted_y, amplitude = fit_gaussian(img_array, coord, window_size=1)
+        fitted_coords.append([fitted_x, fitted_y])
+        fitted_amplitudes.append(amplitude)
         
-    # filtered_reordered_coords = fitted_coords
-    
-    # filtered_reordered_coords, filtered_reordered_spot_weights, include_indices = (
-    #     filter_and_reorder_nv_coords(
-    #         filtered_reordered_coords, filtered_reordered_spot_weights, reference_nv, min_distance=4.0
-    #     )
-    # )
+    filtered_reordered_coords = fitted_coords
+
     # -----------------------------
     # Example: your bar as polygon
     # -----------------------------
@@ -1035,7 +1030,6 @@ if __name__ == "__main__":
     # Add more bars / regions here
     regions = [
         bar_region,
-        
         # # Example rectangle
         # {
         #     "type": "rect",
@@ -1364,7 +1358,7 @@ if __name__ == "__main__":
     # save_results(
     #     filtered_reordered_coords,
     #     filtered_reordered_spot_weights,
-    #     filename="slmsuite/nv_blob_detection/nv_blob_1462nvs_reordered.npz",
+    #     filename="slmsuite/nv_blob_detection/nv_blob_1460nvs_reordered.npz",
     # )
 
     # # Plot the original image with circles around each NV

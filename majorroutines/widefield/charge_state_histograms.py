@@ -556,7 +556,7 @@ if __name__ == "__main__":
     data = dm.get_raw_data(
         # file_stem="2026_03_11-01_36_16-qnami-nv0_2026_02_20", load_npz=True,
         # file_stem="2026_03_17-20_16_39-qnami-nv0_2026_02_20", load_npz=True,
-        file_stem="2026_03_20-18_58_49-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_03_22-14_30_42-qnami-nv0_2026_02_20", load_npz=True
     )
     # process_and_plot(data, do_plot_histograms=True)
     # data = dm.get_raw_data(
@@ -569,5 +569,5 @@ if __name__ == "__main__":
     #     nv_num=122,-
     #     ref_axis=1,
     # )
-    process_and_plot(data, do_plot_histograms=False)
+    process_and_plot(data, do_plot_histograms= True)
     kpl.show(block=True)

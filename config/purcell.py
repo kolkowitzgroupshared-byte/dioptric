@@ -37,22 +37,22 @@ red_laser_aod = "laser_COBO_638_aod"
 # calibration_coords_red = [[41.956, 88.653],[69.523, 40.383],[90.96, 93.205]]
 
 calibration_coords_pixel = [
-        # [209.573, 201.991],
-        [355.977,  55.633],
-        [220.414, 359.866],
-        [ 25.961,  55.878],
+    # [209.573, 201.991],
+    [355.977,  55.633],
+    [220.414, 359.866],
+    [ 25.961,  55.878],
         ]
 calibration_coords_green =[
     # [101.086, 100.729],
-    [72.281, 124.875],
-    [102.017, 72.304],
-    [131.638, 130.054],
+    [72.257, 124.894],
+    [102.022, 72.288],
+    [131.647, 130.014],
     ]
 calibration_coords_red = [
     # [66.169, 65.356],
-    [41.538, 82.817], 
-    [68.623, 42.267], 
-    [89.244, 91.244],
+    [41.511, 82.771],
+    [68.592, 42.409],
+    [89.221, 91.223],
     ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -269,9 +269,9 @@ config |= {
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 1e6},
             VirtualLaserKey.WIDEFIELD_CHARGE_READOUT: {
                 "physical_name": yellow_laser,
-                # "duration": 60e6,
+                "duration": 60e6,
                 # "duration": 50e6,
-                "duration": 24e6,  # for red calibration
+                # "duration": 24e6,  # for red calibration
             },
             # LaserKey.WIDEFIELD_CHARGE_READOUT: {"physical_name": yellow_laser, "duration": 100e6},
         },
