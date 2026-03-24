@@ -307,8 +307,8 @@ def process_and_plot(raw_data, do_plot=False):
     timestamp = dm.get_time_stamp()
     file_name = f"optimal_values_{file_id}"
     file_path = dm.get_file_path(__file__, timestamp, file_name)
-    # dm.save_raw_data(results, file_path)
-    print(results)
+    dm.save_raw_data(results, file_path)
+    # print(results)
     # Get NV indices where readout fidelity is greater than 0.5
     count_above_threshold = sum(
         1 for val in optimal_values if val[2] > 0.4 and val[3] > 0.8
@@ -854,7 +854,9 @@ if __name__ == "__main__":
     # file_id = "2026_03_03-02_22_47-qnami-nv0_2026_02_20"
     # file_id = "2026_03_18-03_53_55-qnami-nv0_2026_02_20"
     # file_id = "2026_03_18-11_46_55-qnami-nv0_2026_02_20"
-    file_id = "2026_03_20-18_58_49-qnami-nv0_2026_02_20"
+    # file_id = "2026_03_20-18_58_49-qnami-nv0_2026_02_20"
+    file_id = "2026_03_22-21_49_52-qnami-nv0_2026_02_20"
+    
     
 
     ### pol amp var
