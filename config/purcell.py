@@ -44,15 +44,15 @@ calibration_coords_pixel = [
         ]
 calibration_coords_green =[
     # [101.086, 100.729],
-    [72.257, 124.894],
-    [102.022, 72.288],
-    [131.647, 130.014],
+    [72.212, 124.911],
+    [101.969, 72.318],
+    [131.568, 130.047],
     ]
 calibration_coords_red = [
     # [66.169, 65.356],
-    [41.511, 82.771],
-    [68.592, 42.409],
-    [89.221, 91.223],
+    [41.479, 82.788],
+    [68.549, 42.424],
+    [89.177, 91.253],
     ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -954,14 +954,14 @@ opx_config = {
     "waveforms": {
         # Green AOD
         "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
-        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
+        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.13},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.15},
         # Red AOD
-        "red_aod_cw-opti": {"type": "constant", "sample": 0.11},
-        "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
-        "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
+        "red_aod_cw-opti": {"type": "constant", "sample": 0.15},
+        "red_aod_cw-ion": {"type": "constant", "sample": 0.15},
+        "red_aod_cw-scc": {"type": "constant", "sample": 0.15},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.40},
         "yellow_charge_readout": {"type": "constant", "sample": 0.344}, 

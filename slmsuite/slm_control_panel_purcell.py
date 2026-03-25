@@ -281,7 +281,7 @@ def nuvu2thorcam_calibration(coords):
     )
 
     cal_coords_nuvu = np.array(
-        [[337.781, 361.244], [311.623, 10.851], [18.034, 209.457]], dtype="float32"
+        [[337.757, 361.598], [311.461, 10.853], [17.792, 209.653]], dtype="float32"
     )
     # Compute the affine transformation matrix
     M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
@@ -293,30 +293,9 @@ def nuvu2thorcam_calibration(coords):
     return thorcam_coords
 
 
-def load_nv_coords(
-    # file_path="slmsuite/nv_blob_detection/nv_blob_308nvs_reordered.npz",
-    # file_path="slmsuite/nv_blob_detection/nv_blob_254nvs_reordered.npz",
-    # file_path="slmsuite/nv_blob_detection/nv_blob_151nvs_reordered.npz",
-    # file_path="slmsuite/nv_blob_detection/nv_blob_136nvs_reordered.npz",
-    # file_path="slmsuite/nv_blob_detection/nv_blob_118nvs_reordered.npz",
-    # file_path="slmsuite/nv_blob_detection/nv_blob_312nvs_reordered.npz", #johnson
-    # file_path="slmsuite/nv_blob_detection/nv_blob_230nvs_reordered.npz", #johnson
-    # file_path="slmsuite/nv_blob_detection/nv_blob_223nvs_reordered.npz", #johnson
-    # file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz",  # johnson
-    # file_path="slmsuite/nv_blob_detection/nv_blob_205nvs_reordered.npz",  # johnson
-    # file_path="slmsuite/nv_blob_detection/nv_blob_195nvs_reordered.npz",  # johnson
-    # file_path="slmsuite/nv_blob_detection/nv_blob_276nvs_reordered.npz",  # johnson
-    # file_path="slmsuite/nv_blob_detection/nv_blob_41nvs_reordered.npz",  # cL
-    # file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",  # cal
-    # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",  # 
-    # file_path="slmsuite/nv_blob_detection/nv_blob_4966nvs_reordered.npz",  # 
-    # file_path="slmsuite/nv_blob_detection/nv_blob_3986nvs_reordered.npz",  # 
-    # file_path="slmsuite/nv_blob_detection/nv_blob_3554nvs_reordered.npz",  # 
-    # file_path="slmsuite/nv_blob_detection/nv_blob_3546nvs_reordered.npz",  # 
-    # file_path="slmsuite/nv_blob_detection/nv_blob_3325nvs_reordered.npz",   
+def load_nv_coords( 
     # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_reordered.npz",   
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1487nvs_reordered.npz",   
-    file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_reordered.npz",   
+    file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz",   
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
@@ -421,17 +400,20 @@ try:
     # cam = DummyCamera(shape=thorcam_shape, name="26438")
     cam = ThorCam(serial="26438", verbose=True)
     fs = FourierSLM(cam, slm)
+    
     # cam = tb.get_server_thorcam()
     # slm = tb.get_server_thorslm()
     # fourier_calibration()
     load_fourier_calibration()
+    
     # test_wavefront_calibration()
     # wavefront_calibration()
     # load_wavefront_calibration()
+    
     compute_and_write_nvs_phase()
     # calibration_triangle()
+    
     # circles()
-    # write_pre_computed_circles()
     # smiley()
     # cam_plot()
 finally:
