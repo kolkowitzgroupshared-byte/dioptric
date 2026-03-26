@@ -45,17 +45,11 @@ from utils.constants import NVSig, VirtualLaserKey
 def plot_histograms(
     sig_counts_list, ref_counts_list, no_title=True, ax=None, density=False
 ):
-    laser_key = VirtualLaserKey.WIDEFIELD_CHARGE_READOUT
-    # laser_dict = tb.get_virtual_laser_dict(laser_key)
-    # readout = laser_dict["duration"]
-    # readout_ms = int(readout / 1e6)
-    # readout_s = readout / 1e9
 
     ### Histograms
     num_reps = len(ref_counts_list)
     labels = ["With ionization pulse", "Without ionization pulse"]
-    # colors = [kpl.KplColors.RED, kpl.KplColors.GREEN]
-    colors = [kpl.KplColors.RED, kpl.KplColors.BLUE]  # MCC
+    colors = [kpl.KplColors.RED, kpl.KplColors.GREEN]
     counts_lists = [sig_counts_list, ref_counts_list]
 
     if ax is None:
@@ -71,8 +65,6 @@ def plot_histograms(
         ax.set_ylabel("Number of occurrences")
 
     for ind in range(2):
-        # if ind == 0:
-        #     continue
         if counts_lists is None or len(counts_lists) == 0:
             continue
         counts_list = counts_lists[ind]
@@ -84,11 +76,9 @@ def plot_histograms(
     # ax.legend() # MCC
     # ax.tick_params(axis="y", rotation=90)
     ax.set_xlim(-0.5, None)
-    # ax.set_yticks([0, 0.04, 0.08])
 
     if fig is not None:
         return fig
-
 
 def process_and_plot(
     raw_data,
@@ -100,13 +90,20 @@ def process_and_plot(
 
     nv_list = raw_data["nv_list"]
     num_nvs = len(nv_list)
-    weak_esr = [72, 64, 55, 96, 112, 87, 12, 58, 36]
     counts = np.array(raw_data["counts"])
-    sig_counts_lists = [counts[0, nv_ind].flatten() for nv_ind in range(num_nvs)]
-    ref_counts_lists = [counts[1, nv_ind].flatten() for nv_ind in range(num_nvs)]
+
+    sig_counts_lists = [np.asarray(counts[0, nv_ind].flatten()) for nv_ind in range(num_nvs)]
+    ref_counts_lists = [np.asarray(counts[1, nv_ind].flatten()) for nv_ind in range(num_nvs)]
+
     num_reps = raw_data["num_reps"]
     num_runs = raw_data["num_runs"]
     num_shots = num_reps * num_runs
+
+    # Robust stem for analyzed output file name
+    base_file_stem = raw_data.get("file_stem") or raw_data.get("file_name") or "raw_data"
+    if isinstance(base_file_stem, (list, tuple)):
+        base_file_stem = "_".join(map(str, base_file_stem))
+    base_file_stem = str(base_file_stem).replace(" ", "_")
 
     ### Histograms and thresholding
 
@@ -115,11 +112,15 @@ def process_and_plot(
     prep_fidelity_list = []
     ion_prob_list = []
     red_chi_sq_list = []
+
+    # Save-all containers for later histogram-only plotting from analyzed file
+    fit_params_list = []
+    fit_success_list = []
+    nv_num_list = []
+
     hist_figs = []
 
     for ind in range(num_nvs):
-        if ind in weak_esr:
-            continue
         sig_counts_list = sig_counts_lists[ind]
         ref_counts_list = ref_counts_lists[ind]
 
@@ -127,33 +128,40 @@ def process_and_plot(
         popt, _, red_chi_sq = fit_bimodal_histogram(
             ref_counts_list, prob_dist, no_print=False
         )
-        threshold, readout_fidelity = determine_threshold(
-            popt, prob_dist, dark_mode_weight=0.5, do_print=True, ret_fidelity=True
-        )
-        threshold_list.append(threshold)
-        readout_fidelity_list.append(readout_fidelity)
+
         if popt is not None:
+            threshold, readout_fidelity = determine_threshold(
+                popt, prob_dist, dark_mode_weight=0.5, do_print=True, ret_fidelity=True
+            )
             prep_fidelity = 1 - popt[0]
             ion_prob = popt[-1]
+            fit_success = True
+            fit_params_to_save = np.asarray(popt, dtype=float)
         else:
+            threshold = np.nan
+            readout_fidelity = np.nan
             prep_fidelity = np.nan
             ion_prob = np.nan
-        # prep_fidelity = (
-        #     np.count_nonzero(np.array(ref_counts_list) > threshold) / num_shots
-        # )  # MCC
+            fit_success = False
+            fit_params_to_save = np.array([], dtype=float)
+
+        threshold_list.append(threshold)
+        readout_fidelity_list.append(readout_fidelity)
         prep_fidelity_list.append(prep_fidelity)
         red_chi_sq_list.append(red_chi_sq)
         ion_prob_list.append(ion_prob)
+        fit_params_list.append(fit_params_to_save)
+        fit_success_list.append(fit_success)
 
-        # Plot histograms with NV index and SNR included
         nv_num = widefield.get_nv_num(nv_list[ind])
-        # if do_plot_histograms and nv_num in [37, 71, 74]:
+        nv_num_list.append(nv_num)
+
+        # Plot histograms with NV index and fidelity included
         if do_plot_histograms:
-            # if False:
             fig = plot_histograms(sig_counts_list, ref_counts_list, density=True)
             ax = fig.gca()
 
-            # Ref counts fit line
+            # Ref-count fit line
             if popt is not None:
                 x_vals = np.linspace(0, np.max(ref_counts_list), 1000)
 
@@ -161,22 +169,13 @@ def process_and_plot(
                     prob_dist
                 )
                 single_mode_pdf = bimodal_histogram.get_single_mode_pdf(prob_dist)
+
                 dark_mode_line = popt[0] * single_mode_pdf(
                     x_vals, *popt[1 : 1 + single_mode_num_params]
                 )
                 bright_mode_line = (1 - popt[0]) * single_mode_pdf(
                     x_vals, *popt[1 + single_mode_num_params :]
                 )
-
-                # # MCC hack for including ionization
-                # dark_mode_pdf = bimodal_histogram.get_single_mode_pdf(
-                #     ProbDist.COMPOUND_POISSON
-                # )
-                # bright_mode_pdf = bimodal_histogram.get_single_mode_pdf(
-                #     ProbDist.COMPOUND_POISSON
-                # )
-                # dark_mode_line = popt[0] * dark_mode_pdf(x_vals, popt[1])
-                # bright_mode_line = (1 - popt[0]) * bright_mode_pdf(x_vals, *popt[1:])
 
                 bimodal_pdf = bimodal_histogram.get_bimodal_pdf(prob_dist)
                 bimodal_line = bimodal_pdf(x_vals, *popt)
@@ -186,7 +185,7 @@ def process_and_plot(
                     x_vals,
                     dark_mode_line,
                     color=kpl.KplColors.RED,
-                    label="NV$^{0}$ mode",  # MCC
+                    label="NV$^{0}$ mode",
                 )
                 kpl.plot_line(
                     ax,
@@ -196,25 +195,25 @@ def process_and_plot(
                     label="NV$^{-}$ mode",
                 )
                 kpl.plot_line(
-                    ax, x_vals, bimodal_line, color=kpl.KplColors.BLUE, label="Combined"
+                    ax,
+                    x_vals,
+                    bimodal_line,
+                    color=kpl.KplColors.BLUE,
+                    label="Combined",
                 )
                 ax.legend(loc=kpl.Loc.UPPER_RIGHT)
 
             # Threshold line
-            if threshold is not None:
+            if np.isfinite(threshold):
                 ax.axvline(threshold, color=kpl.KplColors.GRAY, ls="dashed")
 
-            # Add text of the fidelities
-            snr_str = (
+            info_str = (
                 f"NV{nv_num}\n"
-                f"Readout fidelity: {round(readout_fidelity, 3)}\n"
-                f"Charge prep. fidelity {round(prep_fidelity, 3)}"
+                f"Readout fidelity: {round(readout_fidelity, 3) if np.isfinite(readout_fidelity) else 'nan'}\n"
+                f"Charge prep. fidelity: {round(prep_fidelity, 3) if np.isfinite(prep_fidelity) else 'nan'}"
             )
-            kpl.anchored_text(ax, snr_str, kpl.Loc.CENTER_RIGHT, size=kpl.Size.SMALL)
+            kpl.anchored_text(ax, info_str, kpl.Loc.CENTER_RIGHT, size=kpl.Size.SMALL)
 
-            # if readout_fidelity < 0.8:
-            #     kpl.show(block=True)
-            # plt.close(fig)
             kpl.show(block=True)
             fig = None
 
@@ -226,10 +225,19 @@ def process_and_plot(
     print(f"red_chi_sq_list: {red_chi_sq_list}")
     print(f"thresholds: {threshold_list}")
 
-    # Report out the results
-    threshold_list = np.array(threshold_list)
-    readout_fidelity_list = np.array(readout_fidelity_list)
-    prep_fidelity_list = np.array(prep_fidelity_list)
+    # Convert to arrays
+    # threshold_list = np.asarray(threshold_list, dtype=float)
+    # readout_fidelity_list = np.asarray(readout_fidelity_list, dtype=float)
+    # prep_fidelity_list = np.asarray(prep_fidelity_list, dtype=float)
+    # red_chi_sq_list = np.asarray(red_chi_sq_list, dtype=float)
+    # ion_prob_list = np.asarray(ion_prob_list, dtype=float)
+    # fit_success_list = np.asarray(fit_success_list, dtype=bool)
+    # nv_num_list = np.asarray(nv_num_list)
+
+    # Store counts in object arrays so each NV's histogram data is preserved exactly
+    # sig_counts_array = np.asarray(sig_counts_lists, dtype=object)
+    # ref_counts_array = np.asarray(ref_counts_lists, dtype=object)
+    # fit_params_array = np.asarray(fit_params_list, dtype=object)
 
     # Scatter readout vs prep fidelity
     fig, ax = plt.subplots()
@@ -237,36 +245,113 @@ def process_and_plot(
     ax.set_xlabel("Readout fidelity")
     ax.set_ylabel("NV- preparation fidelity")
 
-    # Plot prep fidelity vs distance from center
-    # coords_key = "laser_INTE_520_aod"
-    # distances = []
-    # for nv in nv_list:
-    #     coords = pos.get_nv_coords(nv, coords_key, drift_adjust=False)
-    #     dist = np.sqrt((110 - coords[0]) ** 2 + (110 - coords[1]) ** 2)
-    #     distances.append(dist)
-    # fig, ax = plt.subplots()
-    # kpl.plot_points(ax, distances, prep_fidelity_list)
-    # ax.set_xlabel("Distance from center frequencies (MHz)")
-    # ax.set_ylabel("NV- preparation fidelity")
-
     # Report averages
     avg_readout_fidelity = np.nanmean(readout_fidelity_list)
     std_readout_fidelity = np.nanstd(readout_fidelity_list)
     avg_prep_fidelity = np.nanmean(prep_fidelity_list)
     std_prep_fidelity = np.nanstd(prep_fidelity_list)
+
     str_readout_fidelity = tb.round_for_print(
         avg_readout_fidelity, std_readout_fidelity
     )
     print(f"Average readout fidelity: {str_readout_fidelity}")
+
     str_prep_fidelity = tb.round_for_print(avg_prep_fidelity, std_prep_fidelity)
     print(f"Average NV- preparation fidelity: {str_prep_fidelity}")
-    avg_ion_prob = round(np.mean(ion_prob_list), 6)
-    print(f"Average ionization during readout probability: {avg_ion_prob}")
-    var_ion_prob = round(np.var(ion_prob_list), 6)
-    print(f"Variance ionization during readout probability: {var_ion_prob}")
 
-    return hist_figs
+    avg_ion_prob = np.nanmean(ion_prob_list)
+    print(f"Average ionization during readout probability: {round(avg_ion_prob, 6)}")
 
+    var_ion_prob = np.nanvar(ion_prob_list)
+    print(f"Variance ionization during readout probability: {round(var_ion_prob, 6)}")
+
+    results = {
+        # identity / indexing
+        "nv_inds": np.arange(num_nvs),
+        "nv_nums": nv_num_list,
+        "num_nvs": num_nvs,
+
+        # raw histogram data needed for later replotting
+        "sig_counts_list": sig_counts_list,
+        "ref_counts_list": ref_counts_list,
+
+        # fit outputs
+        "fit_params_list": fit_params_list,
+        "fit_success_list": fit_success_list,
+        "threshold_list": threshold_list,
+        "prep_fidelity_list": prep_fidelity_list,
+        "readout_fidelity_list": readout_fidelity_list,
+        "red_chi_sq_list": red_chi_sq_list,
+        "ion_prob_list": ion_prob_list,
+
+        # acquisition metadata
+        "num_reps": num_reps,
+        "num_runs": num_runs,
+        "num_shots": num_shots,
+        "prob_dist_name": prob_dist.name if hasattr(prob_dist, "name") else str(prob_dist),
+
+        # summaries
+        "avg_readout_fidelity": avg_readout_fidelity,
+        "std_readout_fidelity": std_readout_fidelity,
+        "avg_prep_fidelity": avg_prep_fidelity,
+        "std_prep_fidelity": std_prep_fidelity,
+        "avg_ion_prob": avg_ion_prob,
+        "var_ion_prob": var_ion_prob,
+    }
+
+    timestamp = dm.get_time_stamp()
+    file_name = f"charge_state_analysis_hist_data_{base_file_stem}"
+    file_path = dm.get_file_path(__file__, timestamp, file_name)
+    dm.save_raw_data(results, file_path)
+
+def plot_histograms_from_analysis(analyzed_data, nv_index, density=True):
+    sig_counts = np.asarray(analyzed_data["sig_counts_array"][nv_index])
+    ref_counts = np.asarray(analyzed_data["ref_counts_array"][nv_index])
+
+    fig = plot_histograms(sig_counts, ref_counts, density=density)
+    ax = fig.gca()
+
+    fit_success = analyzed_data["fit_success_list"][nv_index]
+    threshold = analyzed_data["threshold_list"][nv_index]
+    nv_num = analyzed_data["nv_nums"][nv_index]
+    readout_fidelity = analyzed_data["readout_fidelity_list"][nv_index]
+    prep_fidelity = analyzed_data["prep_fidelity_list"][nv_index]
+
+    if fit_success:
+        popt = np.asarray(analyzed_data["fit_params_array"][nv_index], dtype=float)
+        prob_dist_name = analyzed_data.get("prob_dist_name", "COMPOUND_POISSON")
+        prob_dist_local = getattr(ProbDist, prob_dist_name)
+
+        x_vals = np.linspace(0, np.max(ref_counts), 1000)
+
+        single_mode_num_params = bimodal_histogram.get_single_mode_num_params(prob_dist_local)
+        single_mode_pdf = bimodal_histogram.get_single_mode_pdf(prob_dist_local)
+        bimodal_pdf = bimodal_histogram.get_bimodal_pdf(prob_dist_local)
+
+        dark_mode_line = popt[0] * single_mode_pdf(
+            x_vals, *popt[1 : 1 + single_mode_num_params]
+        )
+        bright_mode_line = (1 - popt[0]) * single_mode_pdf(
+            x_vals, *popt[1 + single_mode_num_params :]
+        )
+        bimodal_line = bimodal_pdf(x_vals, *popt)
+
+        kpl.plot_line(ax, x_vals, dark_mode_line, color=kpl.KplColors.RED, label="NV$^{0}$ mode")
+        kpl.plot_line(ax, x_vals, bright_mode_line, color=kpl.KplColors.GREEN, label="NV$^{-}$ mode")
+        kpl.plot_line(ax, x_vals, bimodal_line, color=kpl.KplColors.BLUE, label="Combined")
+        ax.legend(loc=kpl.Loc.UPPER_RIGHT)
+
+    if np.isfinite(threshold):
+        ax.axvline(threshold, color=kpl.KplColors.GRAY, ls="dashed")
+
+    info_str = (
+        f"NV{nv_num}\n"
+        f"Readout fidelity: {round(readout_fidelity, 3) if np.isfinite(readout_fidelity) else 'nan'}\n"
+        f"Charge prep. fidelity: {round(prep_fidelity, 3) if np.isfinite(prep_fidelity) else 'nan'}"
+    )
+    kpl.anchored_text(ax, info_str, kpl.Loc.CENTER_RIGHT, size=kpl.Size.SMALL)
+
+    return fig
 
 def plot_avg_images(raw_data):
     laser_key = VirtualLaserKey.WIDEFIELD_CHARGE_READOUT
@@ -295,133 +380,20 @@ def plot_avg_images(raw_data):
 
     return img_arrays_to_save, img_figs
 
-
-def main(
-    nv_list,
-    num_reps,
-    num_runs,
-    ion_do_target_inds=None,
-    verify_charge_states=False,
-    do_plot_histograms=False,
-):
-    ### Initial setup
-    seq_file = "charge_state_histograms.py"
-    num_steps = 1
-
-    # Turn the list of NV indices to ionize into a list of True/False for
-    # each NV according to whether it should be targeted
-    if ion_do_target_inds is None:
-        ion_do_target_list = None
-    else:
-        num_nvs = len(nv_list)
-        ion_do_target_list = [ind in ion_do_target_inds for ind in range(num_nvs)]
-
-    if verify_charge_states:
-        charge_prep_fn = base_routine.charge_prep_loop
-    else:
-        charge_prep_fn = None
-
-    pulse_gen = tb.get_server_pulse_gen()
-
-    ### Collect the data
-
-    def run_fn(shuffled_step_inds):
-        pol_coords_list, pol_duration_list, pol_amp_list = (
-            widefield.get_pulse_parameter_lists(nv_list, VirtualLaserKey.CHARGE_POL)
-        )
-        ion_coords_list = widefield.get_coords_list(nv_list, VirtualLaserKey.ION)
-        seq_args = [
-            pol_coords_list,
-            pol_duration_list,
-            pol_amp_list,
-            ion_coords_list,
-            ion_do_target_list,
-            verify_charge_states,
-        ]
-        # print("seq_args:", seq_args)
-        seq_args_string = tb.encode_seq_args(seq_args)
-        pulse_gen.stream_load(seq_file, seq_args_string, num_reps)
-
-    raw_data = base_routine.main(
-        nv_list,
-        num_steps,
-        num_reps,
-        num_runs,
-        run_fn=run_fn,
-        save_images=True,
-        save_images_avg_reps=False,
-        charge_prep_fn=charge_prep_fn,
-    )
-
-    ### Processing
-
-    timestamp = dm.get_time_stamp()
-    repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
-    repr_nv_name = repr_nv_sig.name
-
-    # Images
-    try:
-        imgs, img_figs = plot_avg_images(raw_data)
-        # Save
-        sig_img_array, ref_img_array, diff_img_array = imgs
-        keys_to_compress = ["sig_img_array", "ref_img_array", "diff_img_array"]
-        title_suffixes = ["sig", "ref", "diff"]
-        num_figs = len(img_figs)
-        for ind in range(num_figs):
-            fig = img_figs[ind]
-            title = title_suffixes[ind]
-            file_path = dm.get_file_path(__file__, timestamp, f"{repr_nv_name}-{title}")
-            dm.save_figure(fig, file_path)
-    except Exception:
-        print(traceback.format_exc())
-        sig_img_array = None
-        ref_img_array = None
-        diff_img_array = None
-        keys_to_compress = None
-
-    # Histograms
-    # try:
-    #     hist_figs = process_and_plot(raw_data, do_plot_histograms=do_plot_histograms)
-    #     # Save
-    #     if hist_figs is not None:
-    #         num_nvs = len(nv_list)
-    #         for nv_ind in range(num_nvs):
-    #             fig = hist_figs[nv_ind]
-    #             nv_sig = nv_list[nv_ind]
-    #             nv_name = nv_sig.name
-    #             file_path = dm.get_file_path(__file__, timestamp, nv_name)
-    #             dm.save_figure(fig, file_path)
-    # except Exception:
-    #     print(traceback.format_exc())
-
-    # try:
-    #     del raw_data["img_arrays"]
-    # except Exception:
-    #     pass
-
-    ### Save raw data
-
-    file_path = dm.get_file_path(__file__, timestamp, repr_nv_name)
-    raw_data |= {
-        "timestamp": timestamp,
-        "sig_img_array": sig_img_array,
-        "ref_img_array": ref_img_array,
-        "diff_img_array": diff_img_array,
-        "img_array-units": "photons",
-    }
-    dm.save_raw_data(raw_data, file_path, keys_to_compress)
-
-    tb.reset_cfm()
-
-    return raw_data
-
-
-
 if __name__ == "__main__":
     kpl.init_kplotlib()
+    # file_stem="2026_03_17-20_16_39-qnami-nv0_2026_02_20", load_npz=True,
+    file_stem="2026_03_25-15_36_29-qnami-nv0_2026_02_20"
     data = dm.get_raw_data(
-        # file_stem="2026_03_17-20_16_39-qnami-nv0_2026_02_20", load_npz=True,
-        file_stem="2026_03_25-14_10_27-qnami-nv0_2026_02_20", load_npz=True
+        file_stem=file_stem, load_npz=True
     )
     process_and_plot(data, do_plot_histograms=False)
+    
+#     analyzed = dm.get_raw_data(
+#     file_stem="charge_state_analysis_hist_data_your_original_file_stem",
+#     load_npz=True,
+# )
+
+    # fig = plot_histograms_from_analysis(analyzed, nv_index=0, density=True)
+    # kpl.show(block=True)
     kpl.show(block=True)

@@ -50,9 +50,9 @@ if __name__ == "__main__":
     #     img_ph,
     #     cbar_label="Estimated photons",
     # )
-    file_stem="2026_03_11-22_09_46-qnami-nv0_2026_02_20",
+    # file_stem="2026_03_11-22_09_46-qnami-nv0_2026_02_20",
     data = dm.get_raw_data(
-        file_stem="2026_03_16-14_56_37-qnami-nv0_2026_02_20",
+        file_stem="2026_03_20-21_49_25-qnami-nv0_2026_02_20",
         load_npz=True,
     )
 
