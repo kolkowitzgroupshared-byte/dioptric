@@ -865,7 +865,7 @@ def do_resonance(nv_sig):
 #     return angle
 
 
-def do_pulse_gen_constant(digital_channels=(2,), analog0=None, analog1=None):
+def do_pulse_gen_constant(digital_channels=(3,), analog0=None, analog1=None):
     pulse_gen = tool_belt.get_server_pulse_streamer()
     # Build args for the LabRAD setting
     digital_channels = [int(ch) for ch in digital_channels]
@@ -982,9 +982,9 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z = 4.3161  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z = 4.2596  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # pixel_xy = [0,0]  # galvo ref
-    pixel_xy = [0.009, 0.02] # alignment test
+    pixel_xy = [0.052, 0.077] # alignment test
     # pixel_xy = [0.093, 0.067] # NV Lovelace
     # pixel_xy = [0.006, -0.001]  # NV Lovelace
     # return
@@ -1060,7 +1060,7 @@ if __name__ == "__main__":
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
         # do_image_sample(nv_sig)
         # do_image_sample_zoom(nv_sig)
-# 
+ 
         # # Quick NV area scans
         # for i in range(10):
         # do_image_sample_zoom(nv_sig)
@@ -1076,15 +1076,15 @@ if __name__ == "__main__":
         # end region Image sample
 # 
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=4.2, voltage_end=4.4, step_size=0.002)
+        # do_optimize_z_PI(nv_sig, voltage_start=4.2, voltage_end=4.3, step_size=0.002)
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
 
+        do_compensate_for_drift(nv_sig)
         # do_optimize_galvo(nv_sig) # optimize xy for drift
         # do_optimize_z(nv_sig) # optimize z for drift
-        do_compensate_for_drift(nv_sig)
-        do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
+        # do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
         # 
         # endregion Optimize
 

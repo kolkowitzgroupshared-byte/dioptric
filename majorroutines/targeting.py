@@ -981,26 +981,26 @@ def compensate_for_drift(nv_sig: NVSig, no_crash=False):
 
 #     print()
 
-# def optimize_pixel(nv_sig, img_array=None):
-#     do_plot = True
-#     if img_array is not None:
-#         opti_coords = _find_center_pixel_coords_with_img_array(
-#             img_array, nv_sig, do_plot=do_plot
-#         )
-#     else:
-#         opti_coords = _find_center_pixel_coords(nv_sig, do_plot=do_plot)
+def optimize_pixel(nv_sig, img_array=None):
+    do_plot = True
+    if img_array is not None:
+        opti_coords = _find_center_pixel_coords_with_img_array(
+            img_array, nv_sig, do_plot=do_plot
+        )
+    else:
+        opti_coords = _find_center_pixel_coords(nv_sig, do_plot=do_plot)
 
-#     # Make a copy of the passed NV, but with coords updated so that the
-#     # positioner is set to the opti_coords after adjusting for drift
-#     opti_nv_sig = _create_opti_nv_sig(nv_sig, opti_coords, CoordsKey.PIXEL)
+    # Make a copy of the passed NV, but with coords updated so that the
+    # positioner is set to the opti_coords after adjusting for drift
+    opti_nv_sig = _create_opti_nv_sig(nv_sig, opti_coords, CoordsKey.PIXEL)
 
-#     virtual_laser_key = VirtualLaserKey.IMAGING
-#     final_counts = stationary_count_lite(opti_nv_sig, virtual_laser_key)
+    virtual_laser_key = VirtualLaserKey.IMAGING
+    final_counts = stationary_count_lite(opti_nv_sig, virtual_laser_key)
 
-#     print(f"Optimized coordinates: {opti_coords}")
-#     print(f"Counts at optimized coordinates: {final_counts}")
+    print(f"Optimized coordinates: {opti_coords}")
+    print(f"Counts at optimized coordinates: {final_counts}")
 
-#     return opti_coords, final_counts
+    return opti_coords, final_counts
 
 
 def optimize(

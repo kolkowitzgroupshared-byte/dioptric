@@ -76,7 +76,7 @@ config |= {
     # "charge_state_estimation_mode": ChargeStateEstimationMode.MLE,
     "charge_state_estimation_mode": ChargeStateEstimationMode.THRESHOLDING,
     "windows_repo_path": home / "GitHub/dioptric",
-    "disable_z_drift_compensation":False,
+    "disable_z_drift_compensation": True,
     ###
     # Common durations are in ns
     ###
