@@ -12,6 +12,8 @@ from skimage.draw import disk
 from utils import data_manager as dm
 from utils import kplotlib as kpl
 
+from matplotlib.path import Path
+
 # -----------------------------
 # 2D rotated Gaussian model
 # -----------------------------
@@ -215,24 +217,6 @@ def refine_coords_after_fitting(
                 new_weights.append(w)
 
     return new_coords, new_weights, fitted_amplitudes, fitted_gaussian_weights
-
-
-def integrate_intensity(image_array, nv_coords, sigma):
-    """
-    Integrate the intensity around each NV coordinate within a circular region
-    defined by sigma, with a Gaussian weighting if needed.
-    """
-    intensities = []
-    for coord in nv_coords:
-        # Define a larger radius to ensure full capture of intensity around bright spots
-        rr, cc = disk((coord[0], coord[1]), radius=sigma, shape=image_array.shape)
-
-        # Integrate (sum) the intensity values within the disk
-        intensity = np.sum(image_array[rr, cc])
-
-        # Append integrated intensity to the list
-        intensities.append(intensity)
-    return intensities
 
 
 def remove_outliers(intensities, nv_coords):
@@ -516,9 +500,6 @@ def select_half_left_side_nvs_and_plot(nv_coordinates):
 
     return
 
-import numpy as np
-from matplotlib.path import Path
-
 
 def points_in_region(points, region):
     """
@@ -563,11 +544,6 @@ def remove_coords_in_regions(coords, regions):
     kept = coords[~remove_mask]
     removed = coords[remove_mask]
     return kept, removed, remove_mask
-
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.path import Path
-
 
 class ManualPolygonSelector:
     def __init__(self, ax):
@@ -789,7 +765,7 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_03_25-13_05_25-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_03_25-17_02_10-qnami-nv0_2026_02_20", load_npz=True
     )
     img_array = np.array(data["ref_img_array"])
     # img_array = data["img_array"]
@@ -801,7 +777,7 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_3366nvs_reordered.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_1487nvs_reordered.npz"
-        file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_reordered.npz"
+        file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz"
     )
     
     fitted_data = dm.get_raw_data(file_stem="2026_03_23-16_39_03-optimal_values_2026_03_22-21_49_52-qnami-nv0_2026_02_20")
@@ -1064,7 +1040,8 @@ if __name__ == "__main__":
     # include_indices =  [i for i, val in enumerate(snr_float) if val >= 0.02]
     
     data = dm.get_raw_data(
-        file_stem="2026_03_25-16_28_08-charge_state_analysis_hist_data_raw_data", load_npz=True
+        # file_stem="2026_03_25-16_28_08-charge_state_analysis_hist_data_raw_data", load_npz=True
+        file_stem="2026_03_25-18_15_53-charge_state_analysis_hist_data_raw_data", load_npz=True
     )
     readout_fidelity_list = data["readout_fidelity_list"]
     include_indices = [
@@ -1104,7 +1081,7 @@ if __name__ == "__main__":
     # aom_voltage = 0.3084 ### 223NVs
     # aom_voltage = 0.299064 ###204NVs
     # aom_voltage = 0.3707 ### 279NVs
-    aom_voltage = 0.344 ### 279NVs
+    aom_voltage = 0.3344 ### 279NVs
     # a, b, c = [3.7e5, 6.97, 8e-14]
     # a, b, c = 161266.751, 6.617, -19.492
     a, b, c = 1.5133e04, 2.6976, -38.63  # UPDATED 2025-09-17
@@ -1197,11 +1174,11 @@ if __name__ == "__main__":
     # filtered_reordered_spot_weights = filtered_reordered_spot_weights[:4094]
     # filtered_reordered_coords = filtered_reordered_coords[:4094]
     # # Save the filtered results
-    save_results(
-        filtered_reordered_coords,
-        filtered_reordered_spot_weights,
-        filename="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz",
-    )
+    # save_results(
+    #     filtered_reordered_coords,
+    #     filtered_reordered_spot_weights,
+    #     filename="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",
+    # )
 
     # # Plot the original image with circles around each NV
     fig, ax = plt.subplots()

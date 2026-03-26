@@ -304,54 +304,75 @@ def process_and_plot(
     file_path = dm.get_file_path(__file__, timestamp, file_name)
     dm.save_raw_data(results, file_path)
 
-def plot_histograms_from_analysis(analyzed_data, nv_index, density=True):
-    sig_counts = np.asarray(analyzed_data["sig_counts_array"][nv_index])
-    ref_counts = np.asarray(analyzed_data["ref_counts_array"][nv_index])
+def plot_histograms_from_analysis(analyzed_data, nv_indices=None, density=True):
+    sig_counts_list_all = analyzed_data["sig_counts_list"]
+    ref_counts_list_all = analyzed_data["ref_counts_list"]
 
-    fig = plot_histograms(sig_counts, ref_counts, density=density)
-    ax = fig.gca()
+    if nv_indices is None:
+        nv_indices = range(len(sig_counts_list_all))
 
-    fit_success = analyzed_data["fit_success_list"][nv_index]
-    threshold = analyzed_data["threshold_list"][nv_index]
-    nv_num = analyzed_data["nv_nums"][nv_index]
-    readout_fidelity = analyzed_data["readout_fidelity_list"][nv_index]
-    prep_fidelity = analyzed_data["prep_fidelity_list"][nv_index]
+    figs = []
 
-    if fit_success:
-        popt = np.asarray(analyzed_data["fit_params_array"][nv_index], dtype=float)
-        prob_dist_name = analyzed_data.get("prob_dist_name", "COMPOUND_POISSON")
-        prob_dist_local = getattr(ProbDist, prob_dist_name)
+    prob_dist_name = analyzed_data.get("prob_dist_name", "COMPOUND_POISSON")
+    prob_dist_local = getattr(ProbDist, prob_dist_name)
 
-        x_vals = np.linspace(0, np.max(ref_counts), 1000)
+    single_mode_num_params = bimodal_histogram.get_single_mode_num_params(prob_dist_local)
+    single_mode_pdf = bimodal_histogram.get_single_mode_pdf(prob_dist_local)
+    bimodal_pdf = bimodal_histogram.get_bimodal_pdf(prob_dist_local)
 
-        single_mode_num_params = bimodal_histogram.get_single_mode_num_params(prob_dist_local)
-        single_mode_pdf = bimodal_histogram.get_single_mode_pdf(prob_dist_local)
-        bimodal_pdf = bimodal_histogram.get_bimodal_pdf(prob_dist_local)
+    for nv_index in nv_indices:
+        sig_counts = np.asarray(sig_counts_list_all[nv_index])
+        ref_counts = np.asarray(ref_counts_list_all[nv_index])
 
-        dark_mode_line = popt[0] * single_mode_pdf(
-            x_vals, *popt[1 : 1 + single_mode_num_params]
+        fig = plot_histograms(sig_counts, ref_counts, density=density)
+        ax = fig.gca()
+
+        fit_success = analyzed_data["fit_success_list"][nv_index]
+        threshold = analyzed_data["threshold_list"][nv_index]
+        nv_num = analyzed_data["nv_nums"][nv_index]
+        readout_fidelity = analyzed_data["readout_fidelity_list"][nv_index]
+        prep_fidelity = analyzed_data["prep_fidelity_list"][nv_index]
+
+        if fit_success:
+            popt = np.asarray(analyzed_data["fit_params_list"][nv_index], dtype=float)
+
+            x_vals = np.linspace(0, np.max(ref_counts), 1000)
+
+            dark_mode_line = popt[0] * single_mode_pdf(
+                x_vals, *popt[1 : 1 + single_mode_num_params]
+            )
+            bright_mode_line = (1 - popt[0]) * single_mode_pdf(
+                x_vals, *popt[1 + single_mode_num_params :]
+            )
+            bimodal_line = bimodal_pdf(x_vals, *popt)
+
+            kpl.plot_line(
+                ax, x_vals, dark_mode_line,
+                color=kpl.KplColors.RED, label="NV$^{0}$ mode"
+            )
+            kpl.plot_line(
+                ax, x_vals, bright_mode_line,
+                color=kpl.KplColors.GREEN, label="NV$^{-}$ mode"
+            )
+            kpl.plot_line(
+                ax, x_vals, bimodal_line,
+                color=kpl.KplColors.BLUE, label="Combined"
+            )
+            ax.legend(loc=kpl.Loc.UPPER_RIGHT)
+
+        if np.isfinite(threshold):
+            ax.axvline(threshold, color=kpl.KplColors.GRAY, ls="dashed")
+
+        info_str = (
+            f"NV{nv_num}\n"
+            f"Readout fidelity: {round(readout_fidelity, 3) if np.isfinite(readout_fidelity) else 'nan'}\n"
+            f"Charge prep. fidelity: {round(prep_fidelity, 3) if np.isfinite(prep_fidelity) else 'nan'}"
         )
-        bright_mode_line = (1 - popt[0]) * single_mode_pdf(
-            x_vals, *popt[1 + single_mode_num_params :]
-        )
-        bimodal_line = bimodal_pdf(x_vals, *popt)
+        kpl.anchored_text(ax, info_str, kpl.Loc.CENTER_RIGHT, size=kpl.Size.SMALL)
 
-        kpl.plot_line(ax, x_vals, dark_mode_line, color=kpl.KplColors.RED, label="NV$^{0}$ mode")
-        kpl.plot_line(ax, x_vals, bright_mode_line, color=kpl.KplColors.GREEN, label="NV$^{-}$ mode")
-        kpl.plot_line(ax, x_vals, bimodal_line, color=kpl.KplColors.BLUE, label="Combined")
-        ax.legend(loc=kpl.Loc.UPPER_RIGHT)
+        figs.append(fig)
 
-    if np.isfinite(threshold):
-        ax.axvline(threshold, color=kpl.KplColors.GRAY, ls="dashed")
-
-    info_str = (
-        f"NV{nv_num}\n"
-        f"Readout fidelity: {round(readout_fidelity, 3) if np.isfinite(readout_fidelity) else 'nan'}\n"
-        f"Charge prep. fidelity: {round(prep_fidelity, 3) if np.isfinite(prep_fidelity) else 'nan'}"
-    )
-    kpl.anchored_text(ax, info_str, kpl.Loc.CENTER_RIGHT, size=kpl.Size.SMALL)
-
-    return fig
+    return figs
 
 def plot_avg_images(raw_data):
     laser_key = VirtualLaserKey.WIDEFIELD_CHARGE_READOUT
@@ -383,17 +404,15 @@ def plot_avg_images(raw_data):
 if __name__ == "__main__":
     kpl.init_kplotlib()
     # file_stem="2026_03_17-20_16_39-qnami-nv0_2026_02_20", load_npz=True,
-    file_stem="2026_03_25-15_36_29-qnami-nv0_2026_02_20"
+    file_stem="2026_03_25-19_54_55-qnami-nv0_2026_02_20"
     data = dm.get_raw_data(
         file_stem=file_stem, load_npz=True
     )
-    process_and_plot(data, do_plot_histograms=False)
+    process_and_plot(data, do_plot_histograms=True)
     
-#     analyzed = dm.get_raw_data(
-#     file_stem="charge_state_analysis_hist_data_your_original_file_stem",
-#     load_npz=True,
-# )
-
-    # fig = plot_histograms_from_analysis(analyzed, nv_index=0, density=True)
-    # kpl.show(block=True)
+    # analyzed_data = dm.get_raw_data(
+    # file_stem="2026_03_25-16_28_08-charge_state_analysis_hist_data_raw_data",
+    # load_npz=True)
+    
+    # figs = plot_histograms_from_analysis(analyzed_data, density=True)
     kpl.show(block=True)
