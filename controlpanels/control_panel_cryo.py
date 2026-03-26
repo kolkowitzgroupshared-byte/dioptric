@@ -1025,7 +1025,7 @@ if __name__ == "__main__":
 
         # print("PIXEL coords going to galvo:", nv_sig.coords[CoordsKey.PIXEL])
         # print("SAMPLE coords going to piezo:", nv_sig.coords[CoordsKey.SAMPLE])
-        pos.set_xyz_on_nv(nv_sig)  # Leave this line out when calibrating z
+        # pos.set_xyz_on_nv(nv_sig)  # Leave this line out when calibrating z
 
         # do_pulse_gen_constant()
         # do_pulse_gen_constant(digital_channels=(2,))
@@ -1059,7 +1059,7 @@ if __name__ == "__main__":
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None):
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
         # do_image_sample(nv_sig)
-        # do_image_sample_zoom(nv_sig)
+        do_image_sample_zoom(nv_sig)
  
         # # Quick NV area scans
         # for i in range(10):
@@ -1081,7 +1081,7 @@ if __name__ == "__main__":
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
 
-        do_compensate_for_drift(nv_sig)
+        # do_compensate_for_drift(nv_sig)
         # do_optimize_galvo(nv_sig) # optimize xy for drift
         # do_optimize_z(nv_sig) # optimize z for drift
         # do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
