@@ -108,7 +108,7 @@ from utils import common
 #         task.close()
 
 
-# # Start raster scan
+# # Start raster scan 
 # stop_event = threading.Event()
 # thread = threading.Thread(target=raster_scan, args=(stop_event,))
 # thread.start()

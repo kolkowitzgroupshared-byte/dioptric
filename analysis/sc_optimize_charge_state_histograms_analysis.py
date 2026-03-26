@@ -111,6 +111,7 @@ def process_and_plot(raw_data, do_plot=False):
 
     min_step_val = raw_data["min_step_val"]
     max_step_val = raw_data["max_step_val"]
+    max_step_val = raw_data["max_step_val"]
     num_steps = raw_data["num_steps"]
     step_vals_raw = np.linspace(min_step_val, max_step_val, num_steps)
 
@@ -618,7 +619,7 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
     ### readout amp
     # file_id = "2026_03_22-21_49_52-qnami-nv0_2026_02_20"
-    
+
     ### pol amp var
     # file_id = "2026_03_24-21_11_43-qnami-nv0_2026_02_20" ## 1460
     file_id = "2026_03_25-23_32_41-qnami-nv0_2026_02_20" ## 1306

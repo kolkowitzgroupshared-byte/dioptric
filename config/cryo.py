@@ -76,7 +76,7 @@ config |= {
     # "charge_state_estimation_mode": ChargeStateEstimationMode.MLE,
     "charge_state_estimation_mode": ChargeStateEstimationMode.THRESHOLDING,
     "windows_repo_path": home / "GitHub/dioptric",
-    "disable_z_drift_compensation":True,
+    "disable_z_drift_compensation": True,
     ###
     # Common durations are in ns
     ###
@@ -229,7 +229,8 @@ config |= {
             # update with correct piezos for cryo
             CoordsKey.SAMPLE: {
                 "physical_name": "pos_xyz_ATTO_piezos", #xy atto
-                "control_mode": PosControlMode.STREAM,
+                # "control_mode": PosControlMode.STREAM,
+                "control_mode": PosControlMode.STEP,
                 "delay": int(1e6),  # 5 ms for PIFOC xyz
                 "nm_per_unit": 1000,
                 # "optimize_range": 0.09,
@@ -239,7 +240,7 @@ config |= {
             CoordsKey.Z: {
                 # "physical_name": "pos_xyz_ATTO_piezos", #z atto
                 "physical_name": "pos_z_PI_pifoc", #z atto
-                "control_mode": PosControlMode.STREAM,
+                "control_mode": PosControlMode.STEP,
                 # "delay": int(1e6),  # 1 ms for ATTO
                 "delay": int(5e6),  # 5 ms for PIFOC xyz
                 "nm_per_unit": 1000,
@@ -250,10 +251,10 @@ config |= {
             },
             CoordsKey.PIXEL: {
                 "physical_name": "pos_xy_THOR_gvs212",
-                "control_mode": PosControlMode.STREAM,
+                "control_mode": PosControlMode.STEP,
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
-                "optimize_range": 0.0002,
+                "optimize_range": 0.01,
                 # "optimize_range": 0.08,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
