@@ -274,11 +274,36 @@ def do_optimize_xy_loop(
             f"Iteration {i+1}/{num_iterations}: X={opti_x:.4f}, Y={opti_y:.4f}, Counts={opti_counts}"
         )
 
+def do_green_optimize_loop(nv_sig, num_iterations=3):
+    for i in range(num_iterations):
+        if tool_belt.safe_stop():
+            break
+        
+        piezo = pos.get_positioner_server(CoordsKey.Z)
+        galvo= pos.get_positioner_server(CoordsKey.PIXEL)
+
+        print(f"Starting position: Z={piezo.read_z()}, XY={galvo.read_xy()}")
+        do_optimize_z(nv_sig)  # Optimize Z using piezo
+        piezo.read_z()
+        piezo.write_z(piezo.read_z()) 
+        print(f"Z position: {piezo.read_z()}") # Write current Z back to trigger any necessary updates
+
+        do_optimize_galvo(nv_sig)
+        galvo.read_xy()
+        galvo.write_xy(galvo.read_xy())
+        print(f"Galvo position: {galvo.read_xy()}") # Write current XY back to trigger any necessary updates
+
+        print(f"Optimized position: Z={piezo.read_z()}, XY={galvo.read_xy()}")
+
+        
+
+
+
 
 # def do_optimize_z_PI(nv_sig, num_steps=20, step_size=1, scan_direction="down"):  # Old placeholder
 
 
-def do_optimize_green(nv_sig):
+def do_optimize_galvo(nv_sig):
     # Use whatever coords key the imaging laser uses (PIXEL in cryo, AOD in widefield)
     coords_key = pos.get_laser_positioner(VirtualLaserKey.IMAGING)
     opti_coords, final_counts = targeting.optimize(nv_sig, coords_key=coords_key)
@@ -289,10 +314,10 @@ def do_optimize_green(nv_sig):
     return opti_coords
 
 
-# def do_optimize_z(nv_sig):
-#     ret_vals = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
-#     opti_coords = ret_vals[0]
-#     return opti_coords
+def do_optimize_z(nv_sig):
+    ret_vals = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
+    opti_coords = ret_vals[0]
+    return opti_coords
 
 
 def do_optimize_xy(nv_sig, num_steps=15, scan_range=None, fit_method="gaussian"):
@@ -761,7 +786,7 @@ def do_rabi(nv_sig):
         max_tau=500,  #ns (480+min_tau)
         num_steps=31, # 1 step every ~5-10ns
         uwave_ind=0,
-        uwave_freq_ghz=2.8573,  # Change to target ms=+1 or ms=-1 transition
+        uwave_freq_ghz=2.8548, #2.8573,  # Change to target ms=+1 or ms=-1 transition
         optimize_between_runs=False, # Set to false to turn off optimize between runs
     )
 
@@ -770,9 +795,9 @@ def do_resonance(nv_sig):
     resonance.main(nv_sig,
     freq_center_ghz=2.8786,
     freq_span_mhz=200.0,
-    num_steps=51,
+    num_steps=30,
     num_reps=20e4,
-    num_runs=10,
+    num_runs=3,
     uwave_ind=0)
 
 # def do_t1_dq(nv_sig):
@@ -957,11 +982,11 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z = 4.3827  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z = 4.3161  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # pixel_xy = [0,0]  # galvo ref
-    # pixel_xy = [-0.021, -0.052]s # zoom picture
+    pixel_xy = [0.009, 0.02] # alignment test
     # pixel_xy = [0.093, 0.067] # NV Lovelace
-    pixel_xy = [-0.0240,0.0033]  # NV Lovelace
+    # pixel_xy = [0.006, -0.001]  # NV Lovelace
     # return
     nv_sig = NVSig(
         name=f"({get_sample_name()})",
@@ -972,7 +997,7 @@ if __name__ == "__main__":
         },
         disable_opt=False,
         disable_z_opt=True,
-        expected_counts=13,
+        # expected_counts=13,
         pulse_durations={
             VirtualLaserKey.IMAGING: int(10e6),  # readout is in ns (5e6 = 5ms)
             VirtualLaserKey.SPIN_READOUT: int(440),  # readout is in ns (5e6 = 5ms)
@@ -981,7 +1006,8 @@ if __name__ == "__main__":
         },
     )
 
-    nv_sig.expected_counts = None  # raw counts, none when unknown
+    nv_sig.expected_counts = None
+    # nv_sig.expected_counts = 360
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifoc
@@ -992,7 +1018,7 @@ if __name__ == "__main__":
 
     try:
         tool_belt.init_safe_stop()
-        pos.set_drift([0.0, 0.0, 0.0])  # Reset drift to clean state
+        # pos.set_drift([0.0, 0.0, 0.0])  # Reset drift to clean state
         # drift = tool_belt.get_drift()
         # tool_belt.set_drift([0.0, 0.0, drift[2]])  # Keep z
         # tool_belt.set_drifts([drift[0], drift[1], 0.0])  # Keep xy
@@ -1034,7 +1060,7 @@ if __name__ == "__main__":
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
         # do_image_sample(nv_sig)
         # do_image_sample_zoom(nv_sig)
-
+# 
         # # Quick NV area scans
         # for i in range(10):
         # do_image_sample_zoom(nv_sig)
@@ -1050,13 +1076,16 @@ if __name__ == "__main__":
         # end region Image sample
 # 
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=4.35, voltage_end=4.45, step_size=0.002)
+        # do_optimize_z_PI(nv_sig, voltage_start=4.2, voltage_end=4.4, step_size=0.002)
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
 
-        do_optimize_green(nv_sig) # old optimize xy
-        # do_compensate_for_drift(nv_sig)
+        # do_optimize_galvo(nv_sig) # optimize xy for drift
+        # do_optimize_z(nv_sig) # optimize z for drift
+        do_compensate_for_drift(nv_sig)
+        do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
+        # 
         # endregion Optimize
 
         # region Stationary count
@@ -1066,7 +1095,14 @@ if __name__ == "__main__":
         # endregion Stationary count
 
         # region Resonance and SCC
-        # do_resonance(nv_sig, 2.87845, 0.200)
+        # do_resonance(nv_sig)
+        
+        # for i in range(3):
+        #     do_resonance(nv_sig)
+        #     do_green_optimize_loop(nv_sig, num_iterations=1)
+        #     print(f"Completed resonance scan {i+1}/3, optimizing Z and galvo before next scan")
+        #     do_green_optimize_loop(nv_sig, num_iterations=2)  # Optimize after each resonance scan to keep on target
+
         # do_resonance_state(nv_sig , States.LOW)
         # do_resonance_state(nv_sig, States.HIGH)
         # do_pulsed_resonance(nv_sig, 2.87, 0.200)
