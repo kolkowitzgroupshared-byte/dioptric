@@ -274,30 +274,31 @@ def do_optimize_xy_loop(
             f"Iteration {i+1}/{num_iterations}: X={opti_x:.4f}, Y={opti_y:.4f}, Counts={opti_counts}"
         )
 
+
 def do_green_optimize_loop(nv_sig, num_iterations=3):
     for i in range(num_iterations):
         if tool_belt.safe_stop():
             break
-        
+
         piezo = pos.get_positioner_server(CoordsKey.Z)
-        galvo= pos.get_positioner_server(CoordsKey.PIXEL)
+        galvo = pos.get_positioner_server(CoordsKey.PIXEL)
 
         print(f"Starting position: Z={piezo.read_z()}, XY={galvo.read_xy()}")
         do_optimize_z(nv_sig)  # Optimize Z using piezo
         piezo.read_z()
-        piezo.write_z(piezo.read_z()) 
-        print(f"Z position: {piezo.read_z()}") # Write current Z back to trigger any necessary updates
+        piezo.write_z(piezo.read_z())
+        print(
+            f"Z position: {piezo.read_z()}"
+        )  # Write current Z back to trigger any necessary updates
 
         do_optimize_galvo(nv_sig)
         galvo.read_xy()
         galvo.write_xy(galvo.read_xy())
-        print(f"Galvo position: {galvo.read_xy()}") # Write current XY back to trigger any necessary updates
+        print(
+            f"Galvo position: {galvo.read_xy()}"
+        )  # Write current XY back to trigger any necessary updates
 
         print(f"Optimized position: Z={piezo.read_z()}, XY={galvo.read_xy()}")
-
-        
-
-
 
 
 # def do_optimize_z_PI(nv_sig, num_steps=20, step_size=1, scan_direction="down"):  # Old placeholder
@@ -781,24 +782,27 @@ def do_rabi(nv_sig):
     rabi.main(
         nv_sig=nv_sig,
         num_reps=int(20e4),
-        num_runs=10,  
-        min_tau=20, #ns
-        max_tau=500,  #ns (480+min_tau)
-        num_steps=31, # 1 step every ~5-10ns
+        num_runs=10,
+        min_tau=20,  # ns
+        max_tau=500,  # ns (480+min_tau)
+        num_steps=31,  # 1 step every ~5-10ns
         uwave_ind=0,
-        uwave_freq_ghz=2.8548, #2.8573,  # Change to target ms=+1 or ms=-1 transition
-        optimize_between_runs=False, # Set to false to turn off optimize between runs
+        uwave_freq_ghz=2.8548,  # 2.8573,  # Change to target ms=+1 or ms=-1 transition
+        optimize_between_runs=False,  # Set to false to turn off optimize between runs
     )
 
 
 def do_resonance(nv_sig):
-    resonance.main(nv_sig,
-    freq_center_ghz=2.8786,
-    freq_span_mhz=200.0,
-    num_steps=30,
-    num_reps=20e4,
-    num_runs=3,
-    uwave_ind=0)
+    resonance.main(
+        nv_sig,
+        freq_center_ghz=2.8786,
+        freq_span_mhz=200.0,
+        num_steps=30,
+        num_reps=20e4,
+        num_runs=3,
+        uwave_ind=0,
+    )
+
 
 # def do_t1_dq(nv_sig):
 #     # T1 experiment parameters, formatted:
@@ -984,7 +988,7 @@ if __name__ == "__main__":
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
     coord_z = 4.2596  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # pixel_xy = [0,0]  # galvo ref
-    pixel_xy = [0.052, 0.077] # alignment test
+    pixel_xy = [0.052, 0.077]  # alignment test
     # pixel_xy = [0.093, 0.067] # NV Lovelace
     # pixel_xy = [0.006, -0.001]  # NV Lovelace
     # return
@@ -1025,6 +1029,7 @@ if __name__ == "__main__":
 
         # print("PIXEL coords going to galvo:", nv_sig.coords[CoordsKey.PIXEL])
         # print("SAMPLE coords going to piezo:", nv_sig.coords[CoordsKey.SAMPLE])
+        # pos.set_xyz_on_nv(nv_sig)  # Leave this line out when calibrating z
         # pos.set_xyz_on_nv(nv_sig)  # Leave this line out when calibrating z
 
         # do_pulse_gen_constant()
@@ -1074,7 +1079,7 @@ if __name__ == "__main__":
         # do_image_sample(nv_sig, nv_minus_initialization=True)
         # do_image_sample_zoom(nv_sig, nv_minus_initialization=True)
         # end region Image sample
-# 
+        #
         # region Optimize
         # do_optimize_z_PI(nv_sig, voltage_start=4.2, voltage_end=4.3, step_size=0.002)
         # do_optimize_z_atto(nv_sig) # z position optimize atto
@@ -1085,7 +1090,7 @@ if __name__ == "__main__":
         # do_optimize_galvo(nv_sig) # optimize xy for drift
         # do_optimize_z(nv_sig) # optimize z for drift
         # do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
-        # 
+        #
         # endregion Optimize
 
         # region Stationary count
@@ -1096,7 +1101,7 @@ if __name__ == "__main__":
 
         # region Resonance and SCC
         # do_resonance(nv_sig)
-        
+
         # for i in range(3):
         #     do_resonance(nv_sig)
         #     do_green_optimize_loop(nv_sig, num_iterations=1)

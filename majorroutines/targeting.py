@@ -141,6 +141,7 @@ def _read_counts_counter_stream(nv_sig, positioner=None, axis_ind=None, scan_val
     counter.stop_tag_stream()
     return [np.array(counts, dtype=int)]
 
+
 def _read_counts_counter_step(nv_sig, positioner=None, axis_ind=None, scan_vals=None):
     """
     Step scan: move positioner one value at a time and read counts.
@@ -148,10 +149,10 @@ def _read_counts_counter_step(nv_sig, positioner=None, axis_ind=None, scan_vals=
     """
     counter = tb.get_server_counter()
     pulse_gen = tb.get_server_pulse_streamer()
-    
-    #go to NV center before starting the scan
+
+    # go to NV center before starting the scan
     pos.set_xyz_on_nv(nv_sig)
-    
+
     axis_write_fn = None
     if axis_ind is not None:
         axis_write_fn = pos.get_positioner_write_fn(positioner, axis_ind)
@@ -173,7 +174,7 @@ def _read_counts_counter_step(nv_sig, positioner=None, axis_ind=None, scan_vals=
                 counts.append(new_samples[0])
             else:
                 counts.append(0)
-    finally:       
+    finally:
         counter.stop_tag_stream()
 
     return [np.array(counts, dtype=int)]
@@ -203,7 +204,7 @@ def _read_counts_camera_step(nv_sig, axis_ind=None, scan_vals=None):
 
 
 def _get_opti_virtual_laser_key(positioner):
-    if positioner is CoordsKey.SAMPLE: #may need to make this z for cryo
+    if positioner is CoordsKey.SAMPLE:  # may need to make this z for cryo
         laser_key = VirtualLaserKey.IMAGING
     else:
         config = common.get_config_dict()
@@ -315,7 +316,8 @@ def _read_counts_camera_sequence(
 
     return [np.array(counts, dtype=int), img_array]
 
-def _find_center_coords(nv_sig: NVSig, positioner, axis_ind, fig=None, num_steps = 20):
+
+def _find_center_coords(nv_sig: NVSig, positioner, axis_ind, fig=None, num_steps=20):
     """Optimize on just one axis (0, 1, 2) for (x, y, z)."""
 
     scan_range = pos.get_positioner_optimize_range(positioner)
@@ -335,7 +337,9 @@ def _find_center_coords(nv_sig: NVSig, positioner, axis_ind, fig=None, num_steps
 
     # Perform Gaussian fit on the counts
     laser_key = _get_opti_virtual_laser_key(positioner)
-    positive_amplitude = laser_key != VirtualLaserKey.ION #Find out if ok this is imaging, or add ion
+    positive_amplitude = (
+        laser_key != VirtualLaserKey.ION
+    )  # Find out if ok this is imaging, or add ion
     opti_coord = _fit_gaussian(scan_vals, counts, axis_ind, positive_amplitude, fig)
 
     return opti_coord, scan_vals, counts
@@ -450,6 +454,7 @@ def _find_center_pixel_coords_with_img_array(
     else:
         return opti_pixel_coords
 
+
 def _read_counts(
     nv_sig, positioner=None, axis_ind=None, scan_vals=None, virtual_laser_key=None
 ):
@@ -492,12 +497,15 @@ def _read_counts(
         pulse_gen.stream_load(seq_file_name, seq_args_string)
 
         if control_mode == PosControlMode.STEP:
-            ret_vals = _read_counts_counter_step(nv_sig, positioner, axis_ind, scan_vals)
+            ret_vals = _read_counts_counter_step(
+                nv_sig, positioner, axis_ind, scan_vals
+            )
         elif control_mode == PosControlMode.STREAM:
-            ret_vals = _read_counts_counter_stream(nv_sig, positioner, axis_ind, scan_vals)
+            ret_vals = _read_counts_counter_stream(
+                nv_sig, positioner, axis_ind, scan_vals
+            )
 
     return ret_vals
-
 
 
 def _create_opti_nv_sig(nv_sig, opti_coords, coords_key):
@@ -589,6 +597,7 @@ def _optimize_pixel_cost_jac(fit_params, x_crop_mesh, y_crop_mesh, img_array_cro
 
 # endregion
 # region General public functions
+
 
 def stationary_count_confocal_once(
     nv_sig,
@@ -693,136 +702,29 @@ def stationary_count_lite(
         return ret_vals[1]
     return avg_counts
 
+
 def check_expected_counts(nv_sig, counts):
     expected_counts = nv_sig.expected_counts
     lower_bound = 0.95 * expected_counts
     upper_bound = 1.1 * expected_counts
     return lower_bound < counts < upper_bound
 
-def compensate_for_drift(nv_sig: NVSig, no_crash=False):
-    """Compensate for drift either by adjusting the sample position to recenter the sample
-    or by adjusting the laser positioners to account for the drift
-
-    Parametersss
-    ----------
-    nv_sig : NVSig
-        NV to optimize on
-    no_crash : bool, optional
-        flag to disable RuntimeError raised if drift compensation fails, by default False
-
-    Raises
-    ------
-    RuntimeError
-        Crashes out if drift compensation fails - disable by setting the no_crash flag
-    """
-
-    config = common.get_config_dict()
-    disable_drift_compensation = config.get("disable_drift_compensation", False)
-    if disable_drift_compensation:
-        return
-
-    collection_mode = config["collection_mode"]
-
-    # Check expected counts and current counts
-    expected_counts = nv_sig.expected_counts
-    print(f"Expected counts: {expected_counts}")
-    current_counts = stationary_count_lite(nv_sig)
-    print(f"Counts at initial coordinates: {current_counts}")
-
-    # Determine axes to adjust
-    xy_coords_key = pos.get_drift_xy_coords_key()
-    passed_coords = list(pos.get_nv_coords(nv_sig, xy_coords_key, drift_adjust=False))
-    disable_z_drift_compensation = config.get("disable_z_drift_compensation", False)
-
-    if disable_z_drift_compensation or not pos.has_z_positioner():
-        axes = Axes.XY.value
-    else:
-        axes = Axes.XYZ.value
-        passed_z_coord = pos.get_nv_coords(nv_sig, CoordsKey.Z, drift_adjust=False)
-        passed_coords.append(passed_z_coord)
-
-    opti_succeeded = False
-    num_attempts = 5
-
-    # Loop through attempts until we succeed or give up
-    for ind in range(num_attempts):
-        if opti_succeeded or tb.safe_stop():
-            break
-        print(f"Attempt number {ind + 1}")
-        axis_failed = False
-
-        for axis_ind in axes:
-            # Always adjust x and y
-            if axis_ind <= 1:
-                if collection_mode == CollectionMode.CAMERA:
-                    # Widefield: use image-based pixel optimizer
-                    if axis_ind == 0:
-                        opti_xy_coords = _find_center_pixel_coords(nv_sig)
-                    opti_coord = opti_xy_coords[axis_ind]
-                else:
-                    # Confocal / COUNTER: use 1D scans in xy_coords_key
-                    ret_vals = _find_center_coords(nv_sig, xy_coords_key, axis_ind)
-                    opti_coord = ret_vals[0]
-
-            # Adjust z only if expected counts are None or do not meet criteria
-            elif axis_ind == 2:
-                if expected_counts is not None and check_expected_counts(
-                    nv_sig, current_counts
-                ):
-                    print("Z drift compensation unnecessary.")
-                    continue
-                ret_vals = _find_center_coords(nv_sig, CoordsKey.Z, axis_ind)
-                opti_coord = ret_vals[0]
-
-            # Set drift if optimization succeeded
-            if opti_coord is None:
-                axis_failed = True
-            else:
-                cumulative = (
-                    pos.has_sample_positioner()
-                    and xy_coords_key is not CoordsKey.SAMPLE
-                    and axis_ind in [0, 1]
-                )
-
-                drift_val = opti_coord - passed_coords[axis_ind]
-                pos.set_drift_val(drift_val, axis_ind, cumulative)
-
-        if axis_failed:
-            continue
-
-        # Check counts after adjustment
-        current_counts = stationary_count_lite(nv_sig)
-
-        print(f"Counts after drift compensation: {round(current_counts, 1)}")
-        if expected_counts is None or check_expected_counts(nv_sig, current_counts):
-            opti_succeeded = True
-            break
-        else:
-            print("Counts after drift compensation out of bounds.")
-
-    # Cleanup and return
-    pos.set_xyz_on_nv(nv_sig)
-
-    if opti_succeeded:
-        print("Drift compensation succeeded!")
-    elif not no_crash:
-        raise RuntimeError("Maxed out number of attempts. Drift compensation failed.")
-
-    print()
 
 # def compensate_for_drift(nv_sig: NVSig, no_crash=False):
 #     """Compensate for drift either by adjusting the sample position to recenter the sample
-#     or by adjusting the laser positioners to account for the drift.
+#     or by adjusting the laser positioners to account for the drift
 
-#     Desired logic:
-#     - If expected_counts is given and current counts already meet criterion:
-#         do no compensation.
-#     - CAMERA mode:
-#         keep existing behavior.
-#     - COUNTER mode:
-#         * if expected_counts is None: always do XY, then Z
-#         * if expected_counts is given and not met: do XY first, recheck counts,
-#           and only do Z if the criterion is still not met
+#     Parametersss
+#     ----------
+#     nv_sig : NVSig
+#         NV to optimize on
+#     no_crash : bool, optional
+#         flag to disable RuntimeError raised if drift compensation fails, by default False
+
+#     Raises
+#     ------
+#     RuntimeError
+#         Crashes out if drift compensation fails - disable by setting the no_crash flag
 #     """
 
 #     config = common.get_config_dict()
@@ -832,72 +734,61 @@ def compensate_for_drift(nv_sig: NVSig, no_crash=False):
 
 #     collection_mode = config["collection_mode"]
 
+#     # Check expected counts and current counts
 #     expected_counts = nv_sig.expected_counts
 #     print(f"Expected counts: {expected_counts}")
 #     current_counts = stationary_count_lite(nv_sig)
 #     print(f"Counts at initial coordinates: {current_counts}")
 
-#     # If counts are already good, skip compensation entirely
-#     if expected_counts is not None and check_expected_counts(nv_sig, current_counts):
-#         print("Counts already within expected range. No drift compensation needed.")
-#         pos.set_xyz_on_nv(nv_sig)
-#         print("Drift compensation succeeded!")
-#         print()
-#         return
-
+#     # Determine axes to adjust
 #     xy_coords_key = pos.get_drift_xy_coords_key()
-#     passed_xy_coords = list(pos.get_nv_coords(nv_sig, xy_coords_key, drift_adjust=False))
-
+#     passed_coords = list(pos.get_nv_coords(nv_sig, xy_coords_key, drift_adjust=False))
 #     disable_z_drift_compensation = config.get("disable_z_drift_compensation", False)
-#     do_z = (not disable_z_drift_compensation) and pos.has_z_positioner()
 
-#     print(f"collection_mode: {collection_mode}")
-#     print(f"xy_coords_key: {xy_coords_key}")
-
-#     if do_z:
+#     if disable_z_drift_compensation or not pos.has_z_positioner():
+#         axes = Axes.XY.value
+#     else:
+#         axes = Axes.XYZ.value
 #         passed_z_coord = pos.get_nv_coords(nv_sig, CoordsKey.Z, drift_adjust=False)
+#         passed_coords.append(passed_z_coord)
 
 #     opti_succeeded = False
 #     num_attempts = 5
 
+#     # Loop through attempts until we succeed or give up
 #     for ind in range(num_attempts):
 #         if opti_succeeded or tb.safe_stop():
 #             break
-
 #         print(f"Attempt number {ind + 1}")
 #         axis_failed = False
 
-#         # ==========================================================
-#         # CAMERA MODE: keep existing behavior
-#         # ==========================================================
-#         if collection_mode == CollectionMode.CAMERA:
-#             axes = Axes.XY.value if not do_z else Axes.XYZ.value
-#             passed_coords = passed_xy_coords.copy()
-#             if do_z:
-#                 passed_coords.append(passed_z_coord)
-
-#             for axis_ind in axes:
-#                 if axis_ind <= 1:
+#         for axis_ind in axes:
+#             # Always adjust x and y
+#             if axis_ind <= 1:
+#                 if collection_mode == CollectionMode.CAMERA:
+#                     # Widefield: use image-based pixel optimizer
 #                     if axis_ind == 0:
 #                         opti_xy_coords = _find_center_pixel_coords(nv_sig)
 #                     opti_coord = opti_xy_coords[axis_ind]
-
-#                 elif axis_ind == 2:
-#                     current_counts = stationary_count_lite(nv_sig)
-#                     if expected_counts is not None and check_expected_counts(
-#                         nv_sig, current_counts
-#                     ):
-#                         print("Z drift compensation unnecessary.")
-#                         continue
-
-#                     print("Running Z drift compensation in CAMERA mode...")
-#                     ret_vals = _find_center_coords(nv_sig, CoordsKey.Z, 2)
+#                 else:
+#                     # Confocal / COUNTER: use 1D scans in xy_coords_key
+#                     ret_vals = _find_center_coords(nv_sig, xy_coords_key, axis_ind)
 #                     opti_coord = ret_vals[0]
 
-#                 if opti_coord is None:
-#                     axis_failed = True
-#                     break
+#             # Adjust z only if expected counts are None or do not meet criteria
+#             elif axis_ind == 2:
+#                 if expected_counts is not None and check_expected_counts(
+#                     nv_sig, current_counts
+#                 ):
+#                     print("Z drift compensation unnecessary.")
+#                     continue
+#                 ret_vals = _find_center_coords(nv_sig, CoordsKey.Z, axis_ind)
+#                 opti_coord = ret_vals[0]
 
+#             # Set drift if optimization succeeded
+#             if opti_coord is None:
+#                 axis_failed = True
+#             else:
 #                 cumulative = (
 #                     pos.has_sample_positioner()
 #                     and xy_coords_key is not CoordsKey.SAMPLE
@@ -907,71 +798,20 @@ def compensate_for_drift(nv_sig: NVSig, no_crash=False):
 #                 drift_val = opti_coord - passed_coords[axis_ind]
 #                 pos.set_drift_val(drift_val, axis_ind, cumulative)
 
-#             if axis_failed:
-#                 continue
+#         if axis_failed:
+#             continue
 
-#         # ==========================================================
-#         # COUNTER MODE
-#         # ==========================================================
-#         else:
-#             # Step 1: always do XY first
-#             for axis_ind in [0, 1]:
-#                 print(f"Running XY drift compensation on axis {axis_ind}...")
-#                 ret_vals = _find_center_coords(nv_sig, xy_coords_key, axis_ind)
-#                 opti_coord = ret_vals[0]
-
-#                 if opti_coord is None:
-#                     axis_failed = True
-#                     break
-
-#                 cumulative = (
-#                     pos.has_sample_positioner()
-#                     and xy_coords_key is not CoordsKey.SAMPLE
-#                 )
-
-#                 drift_val = opti_coord - passed_xy_coords[axis_ind]
-#                 pos.set_drift_val(drift_val, axis_ind, cumulative)
-
-#             if axis_failed:
-#                 continue
-
-#             current_counts = stationary_count_lite(nv_sig)
-#             print(f"Counts after XY drift compensation: {round(current_counts, 1)}")
-
-#             # If expected_counts exists and XY fixed it, stop.
-#             # If expected_counts is None, do not stop here.
-#             if expected_counts is not None and check_expected_counts(
-#                 nv_sig, current_counts
-#             ):
-#                 opti_succeeded = True
-#                 break
-
-#             # Step 2: do Z if needed
-#             # - always do Z if expected_counts is None
-#             # - do Z after XY if expected_counts exists but still not met
-#             if do_z:
-#                 print("Running Z drift compensation in COUNTER mode...")
-#                 ret_vals = _find_center_coords(nv_sig, CoordsKey.Z, 2)
-#                 opti_coord = ret_vals[0]
-
-#                 if opti_coord is None:
-#                     axis_failed = True
-#                     continue
-
-#                 drift_val = opti_coord - passed_z_coord
-#                 pos.set_drift_val(drift_val, 2, cumulative=False)
-#             else:
-#                 print("Skipping Z drift compensation because do_z is False.")
-
+#         # Check counts after adjustment
 #         current_counts = stationary_count_lite(nv_sig)
-#         print(f"Counts after drift compensation: {round(current_counts, 1)}")
 
+#         print(f"Counts after drift compensation: {round(current_counts, 1)}")
 #         if expected_counts is None or check_expected_counts(nv_sig, current_counts):
 #             opti_succeeded = True
 #             break
 #         else:
 #             print("Counts after drift compensation out of bounds.")
 
+#     # Cleanup and return
 #     pos.set_xyz_on_nv(nv_sig)
 
 #     if opti_succeeded:
@@ -980,6 +820,201 @@ def compensate_for_drift(nv_sig: NVSig, no_crash=False):
 #         raise RuntimeError("Maxed out number of attempts. Drift compensation failed.")
 
 #     print()
+
+
+def compensate_for_drift(nv_sig: NVSig, no_crash=False):
+    """Compensate drift by adjusting the sample/laser positioners.
+
+    Logic
+    -----
+    - If expected_counts is given and already in range, do nothing.
+    - CAMERA mode:
+        keep the old behavior.
+    - COUNTER mode:
+        * if expected_counts is None: do XY, then Z
+        * if expected_counts is given and not met: do XY first, check again,
+          then do Z only if still needed
+
+    Important confocal fix
+    ----------------------
+    In COUNTER mode, write ABSOLUTE drift values (cumulative=False), so the drift
+    is always "optimized_coord - saved_nv_coord" rather than repeatedly adding
+    the same-sign correction.
+    """
+
+    config = common.get_config_dict()
+    disable_drift_compensation = config.get("disable_drift_compensation", False)
+    if disable_drift_compensation:
+        return
+
+    collection_mode = config["collection_mode"]
+
+    expected_counts = nv_sig.expected_counts
+    print(f"Expected counts: {expected_counts}")
+    current_counts = stationary_count_lite(nv_sig)
+    print(f"Counts at initial coordinates: {current_counts}")
+
+    # If counts are already in range, skip compensation entirely
+    if expected_counts is not None and check_expected_counts(nv_sig, current_counts):
+        print("Counts already within expected range. No drift compensation needed.")
+        if collection_mode == CollectionMode.COUNTER:
+            xy_coords_key = pos.get_drift_xy_coords_key()
+            pos.set_xyz_on_nv(nv_sig, positioner=xy_coords_key, drift_adjust=True)
+            if pos.has_z_positioner():
+                pos.set_xyz_on_nv(nv_sig, positioner=CoordsKey.Z, drift_adjust=True)
+        else:
+            pos.set_xyz_on_nv(nv_sig)
+        print("Drift compensation succeeded!")
+        print()
+        return
+
+    xy_coords_key = pos.get_drift_xy_coords_key()
+    passed_xy_coords = list(
+        pos.get_nv_coords(nv_sig, xy_coords_key, drift_adjust=False)
+    )
+
+    disable_z_drift_compensation = config.get("disable_z_drift_compensation", False)
+    do_z = (not disable_z_drift_compensation) and pos.has_z_positioner()
+
+    if do_z:
+        passed_z_coord = pos.get_nv_coords(nv_sig, CoordsKey.Z, drift_adjust=False)
+
+    print(f"collection_mode: {collection_mode}")
+    print(f"xy_coords_key: {xy_coords_key}")
+    print(f"disable_z_drift_compensation: {disable_z_drift_compensation}")
+    print(f"has_z_positioner: {pos.has_z_positioner()}")
+    print(f"do_z: {do_z}")
+
+    opti_succeeded = False
+    num_attempts = 5
+
+    for ind in range(num_attempts):
+        if opti_succeeded or tb.safe_stop():
+            break
+
+        print(f"Attempt number {ind + 1}")
+        axis_failed = False
+
+        # ==========================================================
+        # CAMERA MODE: keep existing behavior
+        # ==========================================================
+        if collection_mode == CollectionMode.CAMERA:
+            axes = Axes.XY.value if not do_z else Axes.XYZ.value
+            passed_coords = passed_xy_coords.copy()
+            if do_z:
+                passed_coords.append(passed_z_coord)
+
+            for axis_ind in axes:
+                if axis_ind <= 1:
+                    if axis_ind == 0:
+                        opti_xy_coords = _find_center_pixel_coords(nv_sig)
+                    opti_coord = opti_xy_coords[axis_ind]
+
+                elif axis_ind == 2:
+                    current_counts = stationary_count_lite(nv_sig)
+                    if expected_counts is not None and check_expected_counts(
+                        nv_sig, current_counts
+                    ):
+                        print("Z drift compensation unnecessary.")
+                        continue
+
+                    print("Running Z drift compensation in CAMERA mode...")
+                    ret_vals = _find_center_coords(nv_sig, CoordsKey.Z, 2)
+                    opti_coord = ret_vals[0]
+
+                if opti_coord is None:
+                    axis_failed = True
+                    break
+
+                cumulative = (
+                    pos.has_sample_positioner()
+                    and xy_coords_key is not CoordsKey.SAMPLE
+                    and axis_ind in [0, 1]
+                )
+
+                drift_val = opti_coord - passed_coords[axis_ind]
+                pos.set_drift_val(drift_val, axis_ind, cumulative)
+
+            if axis_failed:
+                continue
+
+        # ==========================================================
+        # COUNTER MODE: XY first, absolute drift update
+        # ==========================================================
+        else:
+            # Step 1: XY always first
+            for axis_ind in [0, 1]:
+                print(f"Running XY drift compensation on axis {axis_ind}...")
+                ret_vals = _find_center_coords(nv_sig, xy_coords_key, axis_ind)
+                opti_coord = ret_vals[0]
+
+                if opti_coord is None:
+                    axis_failed = True
+                    break
+
+                # CONFocal fix:
+                # use absolute drift from saved NV coords, NOT cumulative addition
+                drift_val = opti_coord - passed_xy_coords[axis_ind]
+                pos.set_drift_val(drift_val, axis_ind, cumulative=False)
+
+            if axis_failed:
+                continue
+
+            current_counts = stationary_count_lite(nv_sig)
+            print(f"Counts after XY drift compensation: {round(current_counts, 1)}")
+
+            # If expected_counts exists and XY fixed it, stop here
+            if expected_counts is not None and check_expected_counts(
+                nv_sig, current_counts
+            ):
+                opti_succeeded = True
+                break
+
+            # Step 2: Z
+            # - always do Z if expected_counts is None
+            # - do Z after XY if expected_counts exists but still not met
+            if do_z:
+                print("Running Z drift compensation in COUNTER mode...")
+                ret_vals = _find_center_coords(nv_sig, CoordsKey.Z, 2)
+                opti_coord = ret_vals[0]
+
+                if opti_coord is None:
+                    axis_failed = True
+                    continue
+
+                # absolute drift from saved NV z coord
+                drift_val = opti_coord - passed_z_coord
+                pos.set_drift_val(drift_val, 2, cumulative=False)
+            else:
+                print("Skipping Z drift compensation because do_z is False.")
+
+            if axis_failed:
+                continue
+
+        current_counts = stationary_count_lite(nv_sig)
+        print(f"Counts after drift compensation: {round(current_counts, 1)}")
+
+        if expected_counts is None or check_expected_counts(nv_sig, current_counts):
+            opti_succeeded = True
+            break
+        else:
+            print("Counts after drift compensation out of bounds.")
+
+    # Final move to drift-adjusted coordinates
+    if collection_mode == CollectionMode.COUNTER:
+        pos.set_xyz_on_nv(nv_sig, positioner=xy_coords_key, drift_adjust=True)
+        if do_z:
+            pos.set_xyz_on_nv(nv_sig, positioner=CoordsKey.Z, drift_adjust=True)
+    else:
+        pos.set_xyz_on_nv(nv_sig)
+
+    if opti_succeeded:
+        print("Drift compensation succeeded!")
+    elif not no_crash:
+        raise RuntimeError("Maxed out number of attempts. Drift compensation failed.")
+
+    print()
+
 
 def optimize_pixel(nv_sig, img_array=None):
     do_plot = True
@@ -1031,9 +1066,11 @@ def optimize(
     config = common.get_config_dict()
     num_steps = config["Positioning"]["optimize_num_steps"]
     # Use image-based optimizer only in widefield CAMERA mode
-    if coords_key == CoordsKey.PIXEL and config["collection_mode"] == CollectionMode.CAMERA:
+    if (
+        coords_key == CoordsKey.PIXEL
+        and config["collection_mode"] == CollectionMode.CAMERA
+    ):
         return optimize_pixel(nv_sig)
-    
 
     ### Setup
 
