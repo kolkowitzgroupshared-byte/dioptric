@@ -630,4 +630,9 @@ if __name__ == "__main__":
     raw_data = dm.get_raw_data(file_stem=file_id, load_npz=True)
     process_and_plot(raw_data, do_plot=False)
     # process_and_plot_charge(raw_data, do_plot=True)
+    
+    
+    ### analysed
+    file_id = "2026_03_26-15_04_19-optimization_processed_full_raw_data"
+    
     plt.show(block=True)
