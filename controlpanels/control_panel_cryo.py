@@ -988,7 +988,7 @@ if __name__ == "__main__":
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
     coord_z = 4.2596  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # pixel_xy = [0,0]  # galvo ref
-    pixel_xy = [0.052, 0.077]  # alignment test
+    pixel_xy = [0.04, 0.083]  # alignment test
     # pixel_xy = [0.093, 0.067] # NV Lovelace
     # pixel_xy = [0.006, -0.001]  # NV Lovelace
     # return
@@ -1010,8 +1010,8 @@ if __name__ == "__main__":
         },
     )
 
-    nv_sig.expected_counts = None
-    # nv_sig.expected_counts = 360
+    # nv_sig.expected_counts = None
+    nv_sig.expected_counts = 200
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifoc
@@ -1030,7 +1030,7 @@ if __name__ == "__main__":
         # print("PIXEL coords going to galvo:", nv_sig.coords[CoordsKey.PIXEL])
         # print("SAMPLE coords going to piezo:", nv_sig.coords[CoordsKey.SAMPLE])
         # pos.set_xyz_on_nv(nv_sig)  # Leave this line out when calibrating z
-        # pos.set_xyz_on_nv(nv_sig)  # Leave this line out when calibrating z
+        pos.set_xyz_on_nv(nv_sig)  # Leave this line out when calibrating z
 
         # do_pulse_gen_constant()
         # do_pulse_gen_constant(digital_channels=(2,))
@@ -1064,7 +1064,7 @@ if __name__ == "__main__":
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None):
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
         # do_image_sample(nv_sig)
-        do_image_sample_zoom(nv_sig)
+        # do_image_sample_zoom(nv_sig)
  
         # # Quick NV area scans
         # for i in range(10):
