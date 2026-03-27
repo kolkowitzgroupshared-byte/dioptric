@@ -180,8 +180,7 @@ def do_optimize_readout_amp(nv_list):
     # num_reps = 150
     # num_runs = 5
     num_reps = 12
-    # num_runs = 200
-    num_runs = 400
+    num_runs = 200
     min_amp = 0.8
     max_amp = 1.2
     return optimize_charge_state_histograms.optimize_readout_amp(
@@ -310,15 +309,16 @@ def do_optimize_pixel(nv_sig):
 
 def do_optimize_loop(nv_list, coords_key):
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
-    do_compensate_for_drift(repr_nv_sig)
     opti_coords_list = []
     for nv in nv_list:
         if coords_key == green_laser:
             opti_coords = do_optimize_green(nv)
         elif coords_key == red_laser:
             opti_coords = do_optimize_red(nv, repr_nv_sig)
-        # Adjust for the drift that may have occurred since beginning the loop
         opti_coords_list.append(opti_coords)
+        
+        do_compensate_for_drift(repr_nv_sig)
+
 
     # Report back
     for opti_coords in opti_coords_list:
@@ -563,7 +563,7 @@ def do_resonance(nv_list):
     freq_range = 0.260
     num_steps = 45
     num_reps = 4
-    num_runs = 200
+    num_runs = 400
     freqs = calculate_freqs(freq_center, freq_range, num_steps)
     ##
     # Remove duplicates and sort
@@ -1660,7 +1660,8 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_3325nvs_reordered.npz",   
         # file_path="slmsuite/nv_blob_detection/nv_blob_1487nvs_reordered.npz",   
         # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_reordered.npz",   
-        file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz",   
+        # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz",   
+        file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
     ).tolist()
 
     green_coords_list = [
@@ -1697,10 +1698,10 @@ if __name__ == "__main__":
     #     [25.961,  55.878],
     #     ]
     # green_coords_list = [
-    #     [101.139, 100.702],
-    #     [72.212, 124.911],
-    #     [101.969, 72.318],
-    #     [131.568, 130.047],
+    #     [101.147, 100.685],
+    #     [72.219, 124.914],
+    #     [101.984, 72.327],
+    #     [131.57, 130.055],
     #     ]
     # red_coords_list = [
     #     [66.29, 65.306],
@@ -1791,8 +1792,8 @@ if __name__ == "__main__":
                 VirtualLaserKey.CHARGE_POL: pol_duration_list[ind],
             },
             pulse_amps={
-                VirtualLaserKey.SCC: scc_amp_list[ind],
-                VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
+                # VirtualLaserKey.SCC: scc_amp_list[ind],
+                # VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
             },
         )
         nv_list.append(nv_sig)
@@ -1803,8 +1804,8 @@ if __name__ == "__main__":
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
-    # nv_sig.expected_counts = 1100.0
-    # nv_sig.expected_counts = 1700
+    nv_sig.expected_counts = 1100.0
+    # nv_sig.expected_counts = 1800
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:2]
     # print(f"length of NVs list:{len(nv_list)}")
@@ -1899,7 +1900,7 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        do_charge_state_histograms(nv_list)
+        # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
