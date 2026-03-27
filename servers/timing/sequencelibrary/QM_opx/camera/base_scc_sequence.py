@@ -141,16 +141,16 @@ def macro(
     ### QUA stuff
     def one_exp(rep_ind, exp_ind):
         # exp_ind = num_exps_per_rep - 1  # MCC
-        macro_polarize_sub()
+        # macro_polarize_sub()
         
         #SBC: qua variable for randomize Pol and SCC order
         random_order = qua.declare(int)
         qua.assign(random_order, qua.Random().rand_int(2))
 
-        # with qua.if_(random_order == 1):
-        #     macro_polarize_sub()
-        # with qua.else_():
-        #      macro_polarize_sub_reversed()
+        with qua.if_(random_order == 1):
+            macro_polarize_sub()
+        with qua.else_():
+             macro_polarize_sub_reversed()
         
         qua.align()
         
@@ -162,12 +162,12 @@ def macro(
         # Signal experiment
         if not ref_exp:
             if spin_flip_do_target_list is None or True not in spin_flip_do_target_list:
-                macro_scc_sub()  # do scc alwayd in the order of NVs
-                # # SBC randomize the order of the scc by alterntively reversing the order
-                # with qua.if_(random_order == 1):
-                #     macro_scc_sub()
-                # with qua.else_():
-                #     macro_scc_sub_reversed()
+                # macro_scc_sub()  # do scc alwayd in the order of NVs
+                # SBC randomize the order of the scc by alterntively reversing the order
+                with qua.if_(random_order == 1):
+                    macro_scc_sub()
+                with qua.else_():
+                    macro_scc_sub_reversed()
             else:
                 spin_flip_do_not_target_list = [
                     not val for val in spin_flip_do_target_list
@@ -191,12 +191,12 @@ def macro(
             with qua.if_(qua.Cast.unsafe_cast_bool(rep_ind)):
                 # seq_utils.macro_pi_pulse(uwave_ind_list, phase=0)
                 seq_utils.macro_pi_pulse(uwave_ind_list)
-            macro_scc_sub()
-            # #  SBC randomize the order of the scc by alterntively reversing the order
-            # with qua.if_(random_order == 1):
-            #     macro_scc_sub()
-            # with qua.else_():
-            #     macro_scc_sub_reversed()
+            # macro_scc_sub()
+            #  SBC randomize the order of the scc by alterntively reversing the order
+            with qua.if_(random_order == 1):
+                macro_scc_sub()
+            with qua.else_():
+                macro_scc_sub_reversed()
 
         seq_utils.macro_charge_state_readout(
             readout_duration_override, readout_amp_override

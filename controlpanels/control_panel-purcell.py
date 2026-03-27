@@ -1661,7 +1661,8 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_1487nvs_reordered.npz",   
         # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_reordered.npz",   
         # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz",   
-        file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
+        # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
+        file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz",   
     ).tolist()
 
     green_coords_list = [
@@ -1698,10 +1699,10 @@ if __name__ == "__main__":
     #     [25.961,  55.878],
     #     ]
     # green_coords_list = [
-    #     [101.147, 100.685],
-    #     [72.219, 124.914],
-    #     [101.984, 72.327],
-    #     [131.57, 130.055],
+    #     [101.058, 100.75],
+    #     [72.2, 124.948],
+    #     [101.955, 72.349],
+    #     [131.548, 130.073],
     #     ]
     # red_coords_list = [
     #     [66.29, 65.306],
@@ -1804,7 +1805,7 @@ if __name__ == "__main__":
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
-    nv_sig.expected_counts = 1100.0
+    # nv_sig.expected_counts = 1100.0
     # nv_sig.expected_counts = 1800
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:2]
@@ -1845,7 +1846,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_widefield_image_sample(nv_sig, 50)
+        # do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list:
@@ -1905,7 +1906,7 @@ if __name__ == "__main__":
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
         # do_optimize_pol_amp(nv_list)
-        # do_optimize_pol_duration(nv_list)
+        do_optimize_pol_duration(nv_list)
         # do_optimize_readout_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
     
