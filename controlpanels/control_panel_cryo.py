@@ -39,6 +39,7 @@ import majorroutines.confocal.confocal_rabi as rabi
 
 # import majorroutines.confocal.ramsey as ramsey
 import majorroutines.confocal.confocal_resonance as resonance
+import majorroutines.confocal.confocal_resonance_singlet_scan as resonance_tisapph_singlet_scan
 import majorroutines.confocal.confocal_apd_gate_overlap_scan as find_apd_gate_overlap
 
 # import majorroutines.confocal.spin_echo as spin_echo
@@ -804,6 +805,22 @@ def do_resonance(nv_sig):
     )
 
 
+def do_tisapph_singlet_scan(nv_sig):
+    resonance_tisapph_singlet_scan.main(
+        nv_sig,
+        wavelength_start_nm=805.0,
+        wavelength_stop_nm=825.0,
+        num_steps=81,
+        num_reps=20e4,
+        num_runs=3,
+        uwave_ind=0,
+        uwave_freq_ghz=2.8786,
+        uwave_power_dbm=5.0,
+        probe_ns=500,
+        do_plot=True,
+        shuffle=True,
+        settle_s=0.3,
+    )
 # def do_t1_dq(nv_sig):
 #     # T1 experiment parameters, formatted:
 #     # [[init state, read state], relaxation_time_range, num_steps, num_reps]
@@ -1057,8 +1074,8 @@ if __name__ == "__main__":
         # do_pulse_gen_constant()
         # do_pulse_gen_constant(digital_channels=(2,))
         # do_pulse_gen_constant(digital_channels=(3,))
-        
-        # do_tisapph_constant_wavelength(wavelength_nm=800.0)
+
+        # do_tisapph_constant_wavelength(wavelength_nm=780.0)
 
         # # # Manually set Z reference to current position
         # piezo = pos.get_positioner_server(CoordsKey.Z)
@@ -1138,7 +1155,8 @@ if __name__ == "__main__":
         # do_pulsed_re2.sonance_state(nv_sig, States.LOW)
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
         # do_rabi(nv_sig)
-        do_resonance(nv_sig)
+        # do_resonance(nv_sig)
+        # do_tisapph_singlet_scan(nv_sig)
         # do_find_apd_gate_overlap(nv_sig)
         # do_rabi(nv_sig, uwave_time_range=[0, 400])
         # do_spin_echo(nv_sig)
