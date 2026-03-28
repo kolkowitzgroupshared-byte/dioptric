@@ -39,6 +39,7 @@ import majorroutines.confocal.confocal_rabi as rabi
 
 # import majorroutines.confocal.ramsey as ramsey
 import majorroutines.confocal.confocal_resonance as resonance
+import majorroutines.confocal.confocal_resonance_singlet_scan as resonance_tisapph_singlet_scan
 import majorroutines.confocal.confocal_apd_gate_overlap_scan as find_apd_gate_overlap
 
 # import majorroutines.confocal.spin_echo as spin_echo
@@ -804,6 +805,22 @@ def do_resonance(nv_sig):
     )
 
 
+def do_tisapph_singlet_scan(nv_sig):
+    resonance_tisapph_singlet_scan.main(
+        nv_sig,
+        wavelength_start_nm=805.0,
+        wavelength_stop_nm=825.0,
+        num_steps=81,
+        num_reps=20e4,
+        num_runs=3,
+        uwave_ind=0,
+        uwave_freq_ghz=2.8786,
+        uwave_power_dbm=5.0,
+        probe_ns=500,
+        do_plot=True,
+        shuffle=True,
+        settle_s=0.3,
+    )
 # def do_t1_dq(nv_sig):
 #     # T1 experiment parameters, formatted:
 #     # [[init state, read state], relaxation_time_range, num_steps, num_reps]
@@ -939,6 +956,28 @@ def do_constant_ac(digital_channels=(4,), analog0=None, analog1=None):
     # pulse_gen.reset()
 
 
+def do_tisapph_constant_wavelength(wavelength_nm=780.0):
+    cxn = common.labrad_connect()
+    tisapph = cxn.tisapph_m2_solstis
+
+    try:
+        current_wavelength = tisapph.get_wavelength_nm()
+        print(f"Current wavelength: {current_wavelength:.6f} nm")
+
+        print(f"Setting wavelength to {wavelength_nm:.6f} nm...")
+        tisapph.set_wavelength_nm(wavelength_nm)
+
+        time.sleep(1.0)
+
+        new_wavelength = tisapph.get_wavelength_nm()
+        print(f"Updated wavelength: {new_wavelength:.6f} nm")
+
+        input("Ti:Sapph wavelength set. Press Enter to finish...")
+
+    finally:
+        # No hard reset here unless you really want it
+        pass
+
 def do_find_apd_gate_overlap(nv_sig):
     find_apd_gate_overlap.main(
         nv_sig,
@@ -1036,6 +1075,8 @@ if __name__ == "__main__":
         # do_pulse_gen_constant(digital_channels=(2,))
         # do_pulse_gen_constant(digital_channels=(3,))
 
+        # do_tisapph_constant_wavelength(wavelength_nm=780.0)
+
         # # # Manually set Z reference to current position
         # piezo = pos.get_positioner_server(CoordsKey.Z)
         # # print(piezo.get_z_position())
@@ -1115,6 +1156,7 @@ if __name__ == "__main__":
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
         # do_rabi(nv_sig)
         # do_resonance(nv_sig)
+        # do_tisapph_singlet_scan(nv_sig)
         # do_find_apd_gate_overlap(nv_sig)
         # do_rabi(nv_sig, uwave_time_range=[0, 400])
         # do_spin_echo(nv_sig)

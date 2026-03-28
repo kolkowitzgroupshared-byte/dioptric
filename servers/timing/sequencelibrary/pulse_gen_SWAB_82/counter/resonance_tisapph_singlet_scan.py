@@ -59,7 +59,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
 
     do_sample_clock = pulser_wiring["do_sample_clock"]
     do_apd_gate = pulser_wiring["do_apd_gate"]
-    do_tisapph_aom = pulser_wiring["do_tisapph_aom"]   # add this to config
+    do_tisapph_aom = pulser_wiring["do_laser_TISAPPH_dm"]
 
     # MW source from virtual sig gen
     vsg = tb.get_virtual_sig_gen_dict(uwave_ind)
@@ -71,7 +71,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
     )
     do_sig_gen_gate = pulser_wiring[f"do_{sig_gen_name}_dm"]
 
-    # Laser delays
+    # Laser delays / physical names
     spin_pol_laser_name = tb.get_physical_laser_name(spin_pol_vkey)
     readout_laser_name = tb.get_physical_laser_name(readout_vkey)
 
@@ -84,7 +84,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
         config["Optics"]["PhysicalLasers"][readout_laser_name]["delay"],
     )
 
-    # Ti:sapph AOM timing offset, optional
+    # Ti:sapph AOM timing offset
     tisapph_aom_delay = _as_int64(
         "tisapph_aom_delay",
         pulser_wiring.get("do_tisapph_aom_delay", 0),
@@ -101,8 +101,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
     block_ns = np.int64(
         pol_ns + transient +
         uwave_ns + transient +
-        probe_ns + transient +
-        readout_ns + meas_buffer
+        probe_ns + readout_ns + meas_buffer
     )
 
     period = np.int64(front_buffer + 4 * block_ns)
@@ -117,7 +116,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
     )
     seq.setDigital(do_sample_clock, clk_train)
 
-    # Helper flags for the 4 gates
+    # block logic
     block_use_mw = [False, False, True, True]
     block_use_tisapph = [False, True, False, True]
 
@@ -130,7 +129,6 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
             (int(uwave_ns), LOW),
             (int(transient), LOW),
             (int(probe_ns), LOW),
-            (int(transient), LOW),
             (int(readout_ns), HIGH),
             (int(meas_buffer), LOW),
         ])
@@ -145,44 +143,11 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
             (int(uwave_ns), HIGH if use_mw else LOW),
             (int(transient), LOW),
             (int(probe_ns), LOW),
-            (int(transient), LOW),
             (int(readout_ns), LOW),
             (int(meas_buffer), LOW),
         ])
     mw_train.append((int(uwave_delay), LOW))
     seq.setDigital(do_sig_gen_gate, mw_train)
-
-    # ---------------- Spin polarization laser ----------------
-    spin_pol_train = [(int(front_buffer - spin_pol_delay), LOW)]
-    for _ in range(4):
-        spin_pol_train.extend([
-            (int(pol_ns), HIGH),
-            (int(transient), LOW),
-            (int(uwave_ns), LOW),
-            (int(transient), LOW),
-            (int(probe_ns), LOW),
-            (int(transient), LOW),
-            (int(readout_ns), LOW),
-            (int(meas_buffer), LOW),
-        ])
-    spin_pol_train.append((int(spin_pol_delay), LOW))
-    tb.process_laser_seq(seq, spin_pol_vkey, spin_pol_train)
-
-    # ---------------- Readout laser ----------------
-    readout_train = [(int(front_buffer - readout_delay), LOW)]
-    for _ in range(4):
-        readout_train.extend([
-            (int(pol_ns), LOW),
-            (int(transient), LOW),
-            (int(uwave_ns), LOW),
-            (int(transient), LOW),
-            (int(probe_ns), LOW),
-            (int(transient), LOW),
-            (int(readout_ns), HIGH),
-            (int(meas_buffer), LOW),
-        ])
-    readout_train.append((int(readout_delay), LOW))
-    tb.process_laser_seq(seq, readout_vkey, readout_train)
 
     # ---------------- Ti:sapph AOM gate ----------------
     tisapph_train = [(int(front_buffer - tisapph_aom_delay), LOW)]
@@ -193,22 +158,70 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
             (int(uwave_ns), LOW),
             (int(transient), LOW),
             (int(probe_ns), HIGH if use_tisapph else LOW),
-            (int(transient), LOW),
             (int(readout_ns), LOW),
             (int(meas_buffer), LOW),
         ])
     tisapph_train.append((int(tisapph_aom_delay), LOW))
     seq.setDigital(do_tisapph_aom, tisapph_train)
 
+    # ---------------- Spin/readout laser(s) ----------------
+    # If spin polarization and readout use the same physical laser channel,
+    # combine them into one train so the second call does not overwrite the first.
+    if spin_pol_laser_name == readout_laser_name:
+        shared_delay = max(spin_pol_delay, readout_delay)
+
+        combined_laser_train = [(int(front_buffer - shared_delay), LOW)]
+        for _ in range(4):
+            combined_laser_train.extend([
+                (int(pol_ns), HIGH),   # polarization pulse
+                (int(transient), LOW),
+                (int(uwave_ns), LOW),
+                (int(transient), LOW),
+                (int(probe_ns), LOW),
+                (int(readout_ns), HIGH),  # readout pulse
+                (int(meas_buffer), LOW),
+            ])
+        combined_laser_train.append((int(shared_delay), LOW))
+
+        tb.process_laser_seq(seq, readout_vkey, combined_laser_train)
+
+    else:
+        spin_pol_train = [(int(front_buffer - spin_pol_delay), LOW)]
+        for _ in range(4):
+            spin_pol_train.extend([
+                (int(pol_ns), HIGH),
+                (int(transient), LOW),
+                (int(uwave_ns), LOW),
+                (int(transient), LOW),
+                (int(probe_ns), LOW),
+                (int(readout_ns), LOW),
+                (int(meas_buffer), LOW),
+            ])
+        spin_pol_train.append((int(spin_pol_delay), LOW))
+        tb.process_laser_seq(seq, spin_pol_vkey, spin_pol_train)
+
+        readout_train = [(int(front_buffer - readout_delay), LOW)]
+        for _ in range(4):
+            readout_train.extend([
+                (int(pol_ns), LOW),
+                (int(transient), LOW),
+                (int(uwave_ns), LOW),
+                (int(transient), LOW),
+                (int(probe_ns), LOW),
+                (int(readout_ns), HIGH),
+                (int(meas_buffer), LOW),
+            ])
+        readout_train.append((int(readout_delay), LOW))
+        tb.process_laser_seq(seq, readout_vkey, readout_train)
+
     final = OutputState([], 0.0, 0.0)
     return seq, final, [int(period)]
-
 
 if __name__ == "__main__":
     from utils import common
 
     cfg = common.get_config_dict()
-    args = [5000, 5000, 5000, 0, "SPIN_POL", "SPIN_READOUT"]
+    args = [2000, 500, 440, 0, "SPIN_POL", "SPIN_READOUT"]
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])
     seq.plot()

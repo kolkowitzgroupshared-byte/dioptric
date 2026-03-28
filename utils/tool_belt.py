@@ -814,7 +814,7 @@ def get_server_rotation_mount():
     return common.get_server("rotation_mount")
 
 
-def get_tisapph():
+def get_server_tisapph():
     return common.get_server_by_name("tisapph_M2_solstis")
 
 
