@@ -28,7 +28,7 @@ home = Path.home()
 # region Widefield calibration coords
 
 green_laser = "laser_COBO_520"  # make labrad server for COBOLT green laser
-tisapph_laser = ""  # fill this in later (labrad server for Tisapph)
+tisapph_laser = "laser_TISAPPH"  # fill this in later (labrad server for Tisapph)
 thor_galvos = "pos_xy_THOR_gvs212"
 cryo_piezo = "pos_xyz_ATTO_piezos"
 
@@ -306,13 +306,14 @@ config |= {
             # "do_camera_trigger": 6,  # optional
             # "do_laser_INTE_520_dm": 2,  # green  TTL
             "do_laser_COBO_520_dm": 2,
-            "do_laser_COBO_638_dm": 3,  # red TTL
+            # "do_laser_COBO_638_dm": 3,  # red TTL
             # microwaves (TTL gate to SGs)
             # "do_sig_gen_BERK_bnc835_gate": 4,
             "do_sig_gen_STAN_sg394_3_dm": 4,
             # "do_sig_gen_STAN_sg394_dm": 5,
             # analog (for the yellow AOM amplitude)
             "ao_laser_OPTO_589_am": 0,  # yellow analog modulation
+            "do_laser_TISAPPH_dm":3,  # Tisapph TTL modulation
         },
         "Tagger": {
             "di_clock": 1,
