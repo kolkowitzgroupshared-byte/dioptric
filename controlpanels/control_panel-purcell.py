@@ -569,7 +569,7 @@ def do_resonance(nv_list):
     # Remove duplicates and sort
     freqs = sorted(set(freqs))
     num_steps = len(freqs)
-    for _ in range(2):
+    for _ in range(1):
         resonance.main(
             nv_list,
             num_steps,
@@ -1806,7 +1806,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts = 1100.0
-    # nv_sig.expected_counts = 1700
+    nv_sig.expected_counts = 1700
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:150]
     print(f"length of NVs list:{len(nv_list)}")
@@ -1838,7 +1838,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.RED_IMAGIN,
         # )
         
-        # do_compensate_for_drift(nv_sig)
+        do_compensate_for_drift(nv_sig)
         
         # do_red_calibration_image(
         #     nv_sig,

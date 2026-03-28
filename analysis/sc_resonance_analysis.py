@@ -958,6 +958,9 @@ if __name__ == "__main__":
         "2026_03_27-13_38_36-qnami-nv0_2026_02_20",
         "2026_03_27-18_02_25-qnami-nv0_2026_02_20"
     ]
+    file_ids = [
+        "2026_03_28-07_17_36-qnami-nv0_2026_02_20"
+    ]
     # Load the first dataset as a base
     combined_data = dm.get_raw_data(
         file_stem=file_ids[0], load_npz=True, use_cache=True
@@ -1035,40 +1038,40 @@ if __name__ == "__main__":
         file_path = dm.get_file_path(__file__, "combined_plot", file_name)
         print(f"Combined plot saved to {file_path}")
         # Plot combined data
-        # plot_nv_resonance(
-        #     nv_list,
-        #     freqs,
-        #     combined_sig_counts,
-        #     combined_ref_counts,
-        #     file_id=combined_file_id,
-        #     num_cols=8,
-        # )
+        plot_nv_resonance(
+            nv_list,
+            freqs,
+            combined_sig_counts,
+            combined_ref_counts,
+            file_id=combined_file_id,
+            num_cols=8,
+        )
         
         # quick histogram check before combining
-        nv_check = 10
-        freq_check = None   # use None to pool all freqs, or set e.g. 5
+        # nv_check = 10
+        # freq_check = None   # use None to pool all freqs, or set e.g. 5
 
-        plot_raw_count_histograms_for_nv(
-            sig_counts_0,
-            sig_counts_1,
-            ref_counts_0,
-            ref_counts_1,
-            nv_ind=nv_check,
-            freq_ind=freq_check,
-            density=True,
-            bins=50,
-        )
+        # plot_raw_count_histograms_for_nv(
+        #     sig_counts_0,
+        #     sig_counts_1,
+        #     ref_counts_0,
+        #     ref_counts_1,
+        #     nv_ind=nv_check,
+        #     freq_ind=freq_check,
+        #     density=True,
+        #     bins=50,
+        # )
 
-        plot_raw_count_histograms_overlay(
-            sig_counts_0,
-            sig_counts_1,
-            ref_counts_0,
-            ref_counts_1,
-            nv_ind=nv_check,
-            freq_ind=freq_check,
-            density=True,
-            bins=60,
-        )
+        # plot_raw_count_histograms_overlay(
+        #     sig_counts_0,
+        #     sig_counts_1,
+        #     ref_counts_0,
+        #     ref_counts_1,
+        #     nv_ind=nv_check,
+        #     freq_ind=freq_check,
+        #     density=True,
+        #     bins=60,
+        # )
         
     else:
         print("No valid data available for plotting.")
