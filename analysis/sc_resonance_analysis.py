@@ -640,6 +640,116 @@ def classify_nv_by_ms_minus_targets(
         "units": units,
     }
 
+def plot_raw_count_histograms_for_nv(
+    sig_counts_0,
+    sig_counts_1,
+    ref_counts_0,
+    ref_counts_1,
+    nv_ind,
+    freq_ind=None,
+    density=True,
+    bins=50,
+):
+    """
+    Plot raw count histograms for one NV to compare the four pulse blocks.
+
+    Parameters
+    ----------
+    sig_counts_0, sig_counts_1, ref_counts_0, ref_counts_1 : arrays
+        Shape expected: [nv, run, freq, rep]
+    nv_ind : int
+        NV index
+    freq_ind : int or None
+        If None, pool over all frequencies.
+        If int, only use that microwave frequency index.
+    density : bool
+        Whether to normalize histogram.
+    bins : int
+        Number of histogram bins.
+    """
+
+    def extract_counts(arr):
+        if freq_ind is None:
+            vals = np.asarray(arr[nv_ind]).ravel()
+        else:
+            vals = np.asarray(arr[nv_ind, :, freq_ind, :]).ravel()
+        vals = vals[np.isfinite(vals)]
+        return vals
+
+    sig0 = extract_counts(sig_counts_0)
+    sig1 = extract_counts(sig_counts_1)
+    ref0 = extract_counts(ref_counts_0)
+    ref1 = extract_counts(ref_counts_1)
+
+    fig, axes = plt.subplots(2, 2, figsize=(10, 7), sharex=True, sharey=True)
+    axes = axes.flatten()
+
+    data_blocks = [
+        (sig0, "sig_counts_0"),
+        (sig1, "sig_counts_1"),
+        (ref0, "ref_counts_0"),
+        (ref1, "ref_counts_1"),
+    ]
+
+    for ax, (vals, label) in zip(axes, data_blocks):
+        ax.hist(vals, bins=bins, density=density, alpha=0.75, edgecolor="black")
+        ax.set_title(f"{label} | NV {nv_ind}")
+        ax.set_xlabel("Integrated counts")
+        ax.set_ylabel("Probability" if density else "Occurrences")
+        ax.grid(True, linestyle="--", alpha=0.5)
+
+        ax.axvline(np.mean(vals), color="red", linestyle="--", label=f"mean={np.mean(vals):.1f}")
+        ax.axvline(np.median(vals), color="green", linestyle=":", label=f"median={np.median(vals):.1f}")
+        ax.legend(fontsize=8)
+
+    if freq_ind is None:
+        fig.suptitle(f"Raw count histograms for NV {nv_ind} (all frequencies pooled)")
+    else:
+        fig.suptitle(f"Raw count histograms for NV {nv_ind}, freq index {freq_ind}")
+
+    plt.tight_layout()
+    return fig
+
+def plot_raw_count_histograms_overlay(
+    sig_counts_0,
+    sig_counts_1,
+    ref_counts_0,
+    ref_counts_1,
+    nv_ind,
+    freq_ind=None,
+    density=True,
+    bins=60,
+):
+    def extract_counts(arr):
+        if freq_ind is None:
+            vals = np.asarray(arr[nv_ind]).ravel()
+        else:
+            vals = np.asarray(arr[nv_ind, :, freq_ind, :]).ravel()
+        vals = vals[np.isfinite(vals)]
+        return vals
+
+    sig0 = extract_counts(sig_counts_0)
+    sig1 = extract_counts(sig_counts_1)
+    ref0 = extract_counts(ref_counts_0)
+    ref1 = extract_counts(ref_counts_1)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    ax.hist(sig0, bins=bins, density=density, alpha=0.35, label="sig_counts_0", histtype="stepfilled")
+    ax.hist(sig1, bins=bins, density=density, alpha=0.35, label="sig_counts_1", histtype="stepfilled")
+    ax.hist(ref0, bins=bins, density=density, alpha=0.35, label="ref_counts_0", histtype="stepfilled")
+    ax.hist(ref1, bins=bins, density=density, alpha=0.35, label="ref_counts_1", histtype="stepfilled")
+
+    ax.set_xlabel("Integrated counts")
+    ax.set_ylabel("Probability" if density else "Occurrences")
+    ax.set_title(
+        f"Overlay raw histograms | NV {nv_ind}"
+        + ("" if freq_ind is None else f", freq index {freq_ind}")
+    )
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.legend()
+    plt.tight_layout()
+    return fig
 
 if __name__ == "__main__":
     kpl.init_kplotlib()
@@ -845,7 +955,8 @@ if __name__ == "__main__":
         "2026_03_21-22_26_49-qnami-nv0_2026_02_20"
     ]
     file_ids = [
-        "2026_03_26-15_23_00-qnami-nv0_2026_02_20"
+        "2026_03_27-13_38_36-qnami-nv0_2026_02_20",
+        "2026_03_27-18_02_25-qnami-nv0_2026_02_20"
     ]
     # Load the first dataset as a base
     combined_data = dm.get_raw_data(
@@ -924,14 +1035,41 @@ if __name__ == "__main__":
         file_path = dm.get_file_path(__file__, "combined_plot", file_name)
         print(f"Combined plot saved to {file_path}")
         # Plot combined data
-        plot_nv_resonance(
-            nv_list,
-            freqs,
-            combined_sig_counts,
-            combined_ref_counts,
-            file_id=combined_file_id,
-            num_cols=8,
+        # plot_nv_resonance(
+        #     nv_list,
+        #     freqs,
+        #     combined_sig_counts,
+        #     combined_ref_counts,
+        #     file_id=combined_file_id,
+        #     num_cols=8,
+        # )
+        
+        # quick histogram check before combining
+        nv_check = 10
+        freq_check = None   # use None to pool all freqs, or set e.g. 5
+
+        plot_raw_count_histograms_for_nv(
+            sig_counts_0,
+            sig_counts_1,
+            ref_counts_0,
+            ref_counts_1,
+            nv_ind=nv_check,
+            freq_ind=freq_check,
+            density=True,
+            bins=50,
         )
+
+        plot_raw_count_histograms_overlay(
+            sig_counts_0,
+            sig_counts_1,
+            ref_counts_0,
+            ref_counts_1,
+            nv_ind=nv_check,
+            freq_ind=freq_check,
+            density=True,
+            bins=60,
+        )
+        
     else:
         print("No valid data available for plotting.")
 

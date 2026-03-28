@@ -310,7 +310,7 @@ def do_optimize_pixel(nv_sig):
 def do_optimize_loop(nv_list, coords_key):
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     opti_coords_list = []
-    for nv in nv_list:
+    for nv in nv_list[1:2]:
         if coords_key == green_laser:
             opti_coords = do_optimize_green(nv)
         elif coords_key == red_laser:
@@ -563,7 +563,7 @@ def do_resonance(nv_list):
     freq_range = 0.260
     num_steps = 45
     num_reps = 4
-    num_runs = 400
+    num_runs = 200
     freqs = calculate_freqs(freq_center, freq_range, num_steps)
     ##
     # Remove duplicates and sort
@@ -576,7 +576,7 @@ def do_resonance(nv_list):
             num_reps,
             num_runs,
             freqs=freqs,
-            uwave_ind_list=[0],
+            uwave_ind_list=[1],
         )
     # for _ in range(2):
     #     resonance.main(nv_list, num_steps, num_reps, num_runs, freqs=freqs)
@@ -631,7 +631,6 @@ def do_deer_hahn(nv_list):
                 freqs=freqs,
                 uwave_ind_list=[0, 1, 2],
             )
-
 
 def do_deer_hahn_rabi(nv_list):
     min_tau = 16
@@ -1664,7 +1663,8 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
         file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz",   
     ).tolist()
-
+    # pixel_coords_list = [[209.573, 201.991],
+    #     [355.977,  55.633],]
     green_coords_list = [
         [
             round(coord, 3)
@@ -1699,16 +1699,16 @@ if __name__ == "__main__":
     #     [25.961,  55.878],
     #     ]
     # green_coords_list = [
-    #     [101.058, 100.75],
+    #     [101.114, 100.916], 
     #     [72.2, 124.948],
     #     [101.955, 72.349],
     #     [131.548, 130.073],
     #     ]
     # red_coords_list = [
-    #     [66.29, 65.306],
-    #     [41.479, 82.788],
-    #     [68.549, 42.424],
-    #     [89.177, 91.253],
+    #     [66.063, 65.329],
+    #     [41.465, 82.8],
+    #     [68.524, 42.346],
+    #     [89.124, 91.245],
     #     ]
 
     num_nvs = len(pixel_coords_list)
@@ -1806,10 +1806,10 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts = 1100.0
-    # nv_sig.expected_counts = 1800
+    # nv_sig.expected_counts = 1700
     # nv_list = nv_list[::-1]  # flipping the order of NVs
-    # nv_list = nv_list[:2]
-    # print(f"length of NVs list:{len(nv_list)}")
+    # nv_list = nv_list[:150]
+    print(f"length of NVs list:{len(nv_list)}")
     # sys.exit()
     # endregion
 
@@ -1838,7 +1838,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.RED_IMAGIN,
         # )
         
-        do_compensate_for_drift(nv_sig)
+        # do_compensate_for_drift(nv_sig)
         
         # do_red_calibration_image(
         #     nv_sig,
@@ -1901,12 +1901,12 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        # do_charge_state_histograms(nv_list)
+        do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
         # do_optimize_pol_amp(nv_list)
-        do_optimize_pol_duration(nv_list)
+        # do_optimize_pol_duration(nv_list)
         # do_optimize_readout_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
     
@@ -1955,7 +1955,7 @@ if __name__ == "__main__":
         # do_two_block_hahn_spatial_correlation(nv_list)
         # do_T2_correlation_test(nv_list)
         # do_two_block_hahn_correlation(nv_list)
-        # do_resonance(nv_list)
+        # do_reson1ance(nv_list)
         # do_sq_relaxation(nv_list)
         # do_dq_relaxation(nv_list)
         # do_detect_cosmic_rays(nv_list)

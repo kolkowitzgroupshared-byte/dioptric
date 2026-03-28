@@ -404,12 +404,9 @@ def plot_avg_images(raw_data):
 if __name__ == "__main__":
     kpl.init_kplotlib()
     # file_stem="2026_03_17-20_16_39-qnami-nv0_2026_02_20", load_npz=True,
-    file_stem="2026_03_26-20_47_00-qnami-nv0_2026_02_20"
-    data = dm.get_raw_data(
-        file_stem=file_stem, load_npz=True
-    )
-    process_and_plot(data, do_plot_histograms=False)
-    
+    file_stem="2026_03_27-23_20_43-qnami-nv0_2026_02_20"
+    data = dm.get_raw_data(file_stem=file_stem, load_npz=True)
+    process_and_plot(data, do_plot_histograms=True)
     # analyzed_data = dm.get_raw_data(
     # file_stem="2026_03_25-16_28_08-charge_state_analysis_hist_data_raw_data",
     # load_npz=True)

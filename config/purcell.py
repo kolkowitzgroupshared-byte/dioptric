@@ -49,10 +49,10 @@ calibration_coords_green =[
     [131.548, 130.073],
     ]
 calibration_coords_red = [
-    # [66.169, 65.356],
-    [41.479, 82.788],
-    [68.549, 42.424],
-    [89.177, 91.253],
+    # [66.063, 65.329],
+    [41.465, 82.8],
+    [68.524, 42.346],
+    [89.124, 91.245],
     ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -269,9 +269,9 @@ config |= {
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 1e6},
             VirtualLaserKey.WIDEFIELD_CHARGE_READOUT: {
                 "physical_name": yellow_laser,
-                "duration": 60e6,
+                # "duration": 60e6,
                 # "duration": 50e6,
-                # "duration": 24e6,  # for red calibration
+                "duration": 24e6,  # for red calibration
             },
             # LaserKey.WIDEFIELD_CHARGE_READOUT: {"physical_name": yellow_laser, "duration": 100e6},
         },
@@ -959,9 +959,9 @@ opx_config = {
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.15},
         # Red AOD
-        "red_aod_cw-opti": {"type": "constant", "sample": 0.15},
-        "red_aod_cw-ion": {"type": "constant", "sample": 0.15},
-        "red_aod_cw-scc": {"type": "constant", "sample": 0.15},
+        "red_aod_cw-opti": {"type": "constant", "sample": 0.11},
+        "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
+        "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.40},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.344}, #1460NVs 

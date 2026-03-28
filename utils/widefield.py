@@ -196,6 +196,51 @@ def integrate_counts(img_array, pixel_coords, radius=None):
 
     return counts
 
+def integrate_counts_bg_subtracted(
+    img_array,
+    pixel_coords,
+    radius=None,
+    bg_inner_radius=None,
+    bg_outer_radius=None,
+):
+    """
+    Integrate counts in a disk around the NV and subtract local background
+    estimated from an annulus around the same NV.
+    """
+    pixel_x = pixel_coords[0]
+    pixel_y = pixel_coords[1]
+
+    if radius is None:
+        radius = _get_camera_spot_radius()
+
+    if bg_inner_radius is None:
+        bg_inner_radius = radius + 1.0
+    if bg_outer_radius is None:
+        bg_outer_radius = radius + 3.0
+
+    half_width = int(np.ceil(bg_outer_radius))
+    left = max(0, round(pixel_x - half_width))
+    right = min(img_array.shape[1] - 1, round(pixel_x + half_width))
+    top = max(0, round(pixel_y - half_width))
+    bottom = min(img_array.shape[0] - 1, round(pixel_y + half_width))
+
+    img_crop = img_array[top : bottom + 1, left : right + 1]
+
+    y_coords, x_coords = np.ogrid[top : bottom + 1, left : right + 1]
+    dist = np.sqrt((x_coords - pixel_x) ** 2 + (y_coords - pixel_y) ** 2)
+
+    sig_mask = dist < radius
+    bg_mask = (dist >= bg_inner_radius) & (dist < bg_outer_radius)
+
+    sig_sum = np.sum(img_crop[sig_mask])
+
+    if np.count_nonzero(bg_mask) == 0:
+        return sig_sum
+
+    bg_mean = np.mean(img_crop[bg_mask])
+    bg_subtracted_counts = sig_sum - bg_mean * np.count_nonzero(sig_mask)
+
+    return bg_subtracted_counts
 
 def fit_max_counts(img_array, pixel_coords, radius=None):
     """
