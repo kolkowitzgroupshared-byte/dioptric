@@ -93,14 +93,16 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
 
     meas_buffer = _as_int64("meas_buffer", config["CommonDurations"]["cw_meas_buffer"])
     transient = np.int64(1000)
+    # Buffer after Ti:Sapph probe to let AOM fully close before readout
+    probe_buffer = np.int64(5000)  # 5 μs — adjust if Ti:Sapph AOM is slower
 
     front_buffer = np.int64(
         max(uwave_delay, spin_pol_delay, readout_delay, tisapph_aom_delay)
     )
 
-    # One block: pol → transient → MW pi → transient → probe → readout → meas_buffer
+    # One block: pol → transient → MW pi → transient → probe → probe_buffer → readout → meas_buffer
     block_ns = np.int64(
-        pol_ns + transient + uwave_ns + transient + probe_ns + readout_ns + meas_buffer
+        pol_ns + transient + uwave_ns + transient + probe_ns + probe_buffer + readout_ns + meas_buffer
     )
 
     period = np.int64(front_buffer + 2 * block_ns)
@@ -128,6 +130,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
             (int(uwave_ns), LOW),
             (int(transient), LOW),
             (int(probe_ns), LOW),
+            (int(probe_buffer), LOW),
             (int(readout_ns), HIGH),
             (int(meas_buffer), LOW),
         ])
@@ -142,6 +145,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
             (int(uwave_ns), HIGH),
             (int(transient), LOW),
             (int(probe_ns), LOW),
+            (int(probe_buffer), LOW),
             (int(readout_ns), LOW),
             (int(meas_buffer), LOW),
         ])
@@ -157,6 +161,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
             (int(uwave_ns), LOW),
             (int(transient), LOW),
             (int(probe_ns), HIGH if use_tisapph else LOW),
+            (int(probe_buffer), LOW),
             (int(readout_ns), LOW),
             (int(meas_buffer), LOW),
         ])
@@ -174,6 +179,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
                 (int(uwave_ns), LOW),
                 (int(transient), LOW),
                 (int(probe_ns), LOW),
+                (int(probe_buffer), LOW),
                 (int(readout_ns), HIGH),
                 (int(meas_buffer), LOW),
             ])
@@ -188,6 +194,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
                 (int(uwave_ns), LOW),
                 (int(transient), LOW),
                 (int(probe_ns), LOW),
+                (int(probe_buffer), LOW),
                 (int(readout_ns), LOW),
                 (int(meas_buffer), LOW),
             ])
@@ -202,6 +209,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
                 (int(uwave_ns), LOW),
                 (int(transient), LOW),
                 (int(probe_ns), LOW),
+                (int(probe_buffer), LOW),
                 (int(readout_ns), HIGH),
                 (int(meas_buffer), LOW),
             ])
