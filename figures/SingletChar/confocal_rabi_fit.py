@@ -12,40 +12,27 @@ def rabi_oscillation(t, amp, freq, phase, decay, offset):
 def main():
     data_dir = r"G:\nvdata\pc_cryo\branch_master\confocal_rabi\2026_01"
     base_name = "2026_01_07-13_49_03-(Wu)"
-    npz_file = f"{data_dir}\\{base_name}.npz"
     txt_file = f"{data_dir}\\{base_name}.txt"
 
-    # Load taus from the text file (JSON format)
+    # Load all data from the text file (JSON with sig_counts, ref_counts, tau_ns_list)
     with open(txt_file, "r") as f:
-        config = json.load(f)
-    taus_ns = np.array(config["taus_ns"])
+        raw = json.load(f)
 
-    # Load raw data from npz - find the 4D array (gates x runs x taus x reps)
-    npz = np.load(npz_file)
-    raw_data = None
-    for key in npz.files:
-        arr = npz[key]
-        if arr.ndim == 4:
-            raw_data = arr
-            break
-    if raw_data is None:
-        raw_data = npz[npz.files[0]]
+    taus_ns = np.array(raw["tau_ns_list"], dtype=float)
+    sig_counts = np.array(raw["sig_counts"], dtype=float)  # (num_runs, num_steps)
+    ref_counts = np.array(raw["ref_counts"], dtype=float)  # (num_runs, num_steps)
 
-    # Only 10 runs were actually completed; the rest are zeros
-    num_runs = 10
-    raw_data = raw_data[:, :num_runs, :, :]
-    print(f"Loaded data with shape {raw_data.shape}, using {num_runs} completed runs")
+    # Drop incomplete runs (rows that are all NaN)
+    valid_runs = ~np.all(np.isnan(sig_counts), axis=1)
+    sig_counts = sig_counts[valid_runs]
+    ref_counts = ref_counts[valid_runs]
+    num_runs = sig_counts.shape[0]
+    print(f"Using {num_runs} completed runs, {len(taus_ns)} tau points")
 
-    # Gate 0 = reference, Gate 1 = signal; sum over runs and reps
-    ref_counts = np.sum(raw_data[0], axis=(0, 2))
-    sig_counts = np.sum(raw_data[1], axis=(0, 2))
-
-    # Avoid division by zero, then drop any NaN points
-    with np.errstate(divide="ignore", invalid="ignore"):
-        counts = sig_counts / ref_counts
-    valid = np.isfinite(counts)
-    taus_ns = taus_ns[valid]
-    counts = counts[valid]
+    # Average over runs, then normalize signal by reference
+    sig_avg = np.nanmean(sig_counts, axis=0)
+    ref_avg = np.nanmean(ref_counts, axis=0)
+    counts = sig_avg / ref_avg
 
     # Initial parameter guesses
     offset_guess = np.mean(counts)
