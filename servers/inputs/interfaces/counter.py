@@ -77,7 +77,7 @@ class Counter(LabradServer, ABC):
 
         return return_counts
 
-    @setting(210, modulus="i", num_to_read="i", returns="*2w")
+    @setting(210, modulus="i", num_to_read="i", returns="*?")
     def read_counter_modulo_gates(self, c, modulus, num_to_read=None):
         complete_counts = self.read_counter_setting_internal(num_to_read)
 
@@ -97,7 +97,7 @@ class Counter(LabradServer, ABC):
                 sample_list.append(total)
             return_counts.append(sample_list)
 
-        return_counts = [[int(a), int(b)] for a, b in return_counts]
+        return_counts = [[int(v) for v in sample] for sample in return_counts]
         return return_counts
 
     @setting(211, num_to_read="i", returns="*2w")
