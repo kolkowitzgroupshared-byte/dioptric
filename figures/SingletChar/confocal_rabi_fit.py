@@ -31,15 +31,21 @@ def main():
     if raw_data is None:
         raw_data = npz[npz.files[0]]
 
-    # Use num_runs from config (only that many runs were actually completed)
-    num_runs = config.get("num_runs", raw_data.shape[1])
+    # Only 10 runs were actually completed; the rest are zeros
+    num_runs = 10
     raw_data = raw_data[:, :num_runs, :, :]
     print(f"Loaded data with shape {raw_data.shape}, using {num_runs} completed runs")
 
     # Gate 0 = reference, Gate 1 = signal; sum over runs and reps
     ref_counts = np.sum(raw_data[0], axis=(0, 2))
     sig_counts = np.sum(raw_data[1], axis=(0, 2))
-    counts = sig_counts / ref_counts
+
+    # Avoid division by zero, then drop any NaN points
+    with np.errstate(divide="ignore", invalid="ignore"):
+        counts = sig_counts / ref_counts
+    valid = np.isfinite(counts)
+    taus_ns = taus_ns[valid]
+    counts = counts[valid]
 
     # Initial parameter guesses
     offset_guess = np.mean(counts)
