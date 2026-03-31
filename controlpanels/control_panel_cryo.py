@@ -40,6 +40,7 @@ import majorroutines.confocal.confocal_rabi as rabi
 # import majorroutines.confocal.ramsey as ramsey
 import majorroutines.confocal.confocal_resonance as resonance
 import majorroutines.confocal.confocal_resonance_singlet_scan as resonance_tisapph_singlet_scan
+import majorroutines.confocal.confocal_odmr_tisapph_short as odmr_tisapph_short
 import majorroutines.confocal.confocal_apd_gate_overlap_scan as find_apd_gate_overlap
 
 # import majorroutines.confocal.spin_echo as spin_echo
@@ -828,6 +829,22 @@ def do_tisapph_singlet_scan(nv_sig):
         settle_s=0.3,
         optimize_between_runs=True,
     )
+
+
+def do_odmr_tisapph_short(nv_sig):
+    odmr_tisapph_short.main(
+        nv_sig,
+        freq_center_ghz=2.87,
+        freq_span_mhz=200.0,
+        num_steps=30,
+        num_reps=int(20e4),
+        num_runs=10,
+        uwave_ind=0,
+        probe_ns=100e3,
+        optimize_between_runs=True,
+    )
+
+
 # def do_t1_dq(nv_sig):
 #     # T1 experiment parameters, formatted:
 #     # [[init state, read state], relaxation_time_range, num_steps, num_reps]
