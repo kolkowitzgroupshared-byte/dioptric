@@ -141,7 +141,6 @@ def main(
         readout_vkey,
     ]
     seq_args_string = tb.encode_seq_args(seq_args)
-    pulsegen_server.stream_load(seq_file, seq_args_string)
 
     wavelengths_nm = np.linspace(wavelength_start_nm, wavelength_stop_nm, num_steps)
 
@@ -196,6 +195,11 @@ def main(
             sweep_order = np.arange(num_steps)
             if shuffle:
                 np.random.shuffle(sweep_order)
+
+            # Reload sequence each run (optimization resets servers between runs)
+            pulsegen_server.stream_load(seq_file, seq_args_string)
+            sig_gen.set_freq(float(uwave_freq_ghz)) if uwave_freq_ghz is not None else None
+            sig_gen.uwave_on()
 
             counter_server.start_tag_stream()
             try:

@@ -206,6 +206,11 @@ def main(
             for f_num in plt.get_fignums():
                 if plt.figure(f_num) is not fig:
                     plt.close(f_num)
+            # Re-init sig gen after optimization (reset_cfm turns it off)
+            if uwave_power_dbm is not None:
+                sig_gen.set_amp(float(uwave_power_dbm))
+            sig_gen.set_freq(float(freq_ghz))
+            sig_gen.uwave_on()
 
         # Open stream ONCE per run, not per tau step
         counter_server.start_tag_stream()

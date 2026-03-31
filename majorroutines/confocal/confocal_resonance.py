@@ -112,6 +112,12 @@ def main(
         if shuffle:
             np.random.shuffle(sweep_order)
 
+        # Reload sequence each run (optimization resets servers between runs)
+        pulsegen_server.stream_load(seq_file, seq_args_string)
+        sig_gen.set_amp(float(uwave_power_dbm)) if uwave_power_dbm is not None else None
+        sig_gen.set_freq(float(freq_center_ghz))
+        sig_gen.uwave_on()
+
         counter_server.start_tag_stream()
         try:
             for step_ind in sweep_order:
