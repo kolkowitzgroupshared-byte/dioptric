@@ -77,7 +77,7 @@ class Counter(LabradServer, ABC):
 
         return return_counts
 
-    @setting(210, modulus="i", num_to_read="i", returns="*?")
+    @setting(210, modulus="i", num_to_read="i", returns="**w")
     def read_counter_modulo_gates(self, c, modulus, num_to_read=None):
         complete_counts = self.read_counter_setting_internal(num_to_read)
 
