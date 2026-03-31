@@ -214,7 +214,7 @@ def integrate_counts_bg_subtracted(
         radius = _get_camera_spot_radius()
 
     if bg_inner_radius is None:
-        bg_inner_radius = radius + 1.0
+        bg_inner_radius = radius + 2.0
     if bg_outer_radius is None:
         bg_outer_radius = radius + 3.0
 
