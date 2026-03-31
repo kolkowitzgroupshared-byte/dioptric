@@ -263,9 +263,8 @@ def main(
                 line_ms1.set_data(wavelengths_nm, contrast_ms1_mean)
                 # line_delta.set_data(wavelengths_nm, delta_contrast_mean)
 
-                for ax in axes:
-                    ax.relim()
-                    ax.autoscale_view()
+                ax1.relim()
+                ax1.autoscale_view()
 
                 plt.pause(0.01)
 
