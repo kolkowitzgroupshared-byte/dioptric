@@ -31,8 +31,10 @@ def main():
     if raw_data is None:
         raw_data = npz[npz.files[0]]
 
-    num_runs = raw_data.shape[1]
-    print(f"Loaded data with shape {raw_data.shape}, using all {num_runs} runs")
+    # Use num_runs from config (only that many runs were actually completed)
+    num_runs = config.get("num_runs", raw_data.shape[1])
+    raw_data = raw_data[:, :num_runs, :, :]
+    print(f"Loaded data with shape {raw_data.shape}, using {num_runs} completed runs")
 
     # Gate 0 = reference, Gate 1 = signal; sum over runs and reps
     ref_counts = np.sum(raw_data[0], axis=(0, 2))
