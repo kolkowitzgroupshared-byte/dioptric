@@ -40,7 +40,7 @@ def _safe_ratio(num, den):
     den = np.asarray(den, dtype=float)
     with np.errstate(divide="ignore", invalid="ignore"):
         out = num / den
-    out[~np.isfinite(out)] = np.nan
+    out = np.where(np.isfinite(out), out, np.nan)
     return out
 
 
