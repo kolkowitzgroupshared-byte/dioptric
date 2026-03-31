@@ -229,24 +229,16 @@ def main(
                     (
                         _,
                         _,
-                        _,
-                        _,
-                        contrast_ms0_val,
                         contrast_ms1_val,
-                        delta_contrast_val,
                     ) = _compute_contrasts(
-                        # ms0_off_val,
-                        # ms0_on_val,
                         ms1_off_val,
                         ms1_on_val,
                     )
 
                     print(
                         f"  wl={wl_nm:.3f} nm | "
-                        # f"ms0_off={int(ms0_off_val)}, ms0_on={int(ms0_on_val)}, "
-                        # f"ms1_off={int(ms1_off_val)}, ms1_on={int(ms1_on_val)}, "
-                        f"c0={contrast_ms0_val:.5e}, c1={contrast_ms1_val:.5e}, "
-                        # f"delta={delta_contrast_val:.5e}"
+                        f"ms1_off={int(ms1_off_val)}, ms1_on={int(ms1_on_val)}, "
+                        f"c1={contrast_ms1_val:.5e}"
                     )
 
             finally:
@@ -259,21 +251,13 @@ def main(
                 (
                     _,
                     _,
-                    _,
-                    _,
-                    contrast_ms0_runs,
                     contrast_ms1_runs,
-                    delta_contrast_runs,
                 ) = _compute_contrasts(
-                    # ms0_off_counts[: run_ind + 1],
-                    # ms0_on_counts[: run_ind + 1],
                     ms1_off_counts[: run_ind + 1],
                     ms1_on_counts[: run_ind + 1],
                 )
 
-                contrast_ms0_mean = np.nanmean(contrast_ms0_runs, axis=0)
                 contrast_ms1_mean = np.nanmean(contrast_ms1_runs, axis=0)
-                delta_contrast_mean = np.nanmean(delta_contrast_runs, axis=0)
 
                 # line_ms0.set_data(wavelengths_nm, contrast_ms0_mean)
                 line_ms1.set_data(wavelengths_nm, contrast_ms1_mean)
@@ -309,16 +293,10 @@ def main(
         tb.reset_cfm()
 
     (
-        norm_ms0_off,
-        norm_ms0_on,
         norm_ms1_off,
         norm_ms1_on,
-        contrast_ms0_runs,
         contrast_ms1_runs,
-        delta_contrast_runs,
     ) = _compute_contrasts(
-        # ms0_off_counts,
-        # ms0_on_counts,
         ms1_off_counts,
         ms1_on_counts,
     )
