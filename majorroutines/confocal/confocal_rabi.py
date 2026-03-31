@@ -192,25 +192,18 @@ def main(
 
         if optimize_between_runs:
             try:
+                # 1D Z optimization
                 z_coords, z_counts = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
-                print(f"  Optimized Z: {z_coords}, counts={z_counts}")
-            except Exception as e:
-                print(f"  Z optimization failed on run {run_ind}: {e}")
-            try:
+                # 1D XY galvo optimization
                 galvo_key = pos.get_laser_positioner(VirtualLaserKey.IMAGING)
                 xy_coords, xy_counts = targeting.optimize(nv_sig, coords_key=galvo_key)
-                print(f"  Optimized XY: {xy_coords}, counts={xy_counts}")
+                print(f"  Optimized: Z={z_coords}, XY={xy_coords}, counts={xy_counts}")
             except Exception as e:
-                print(f"  XY optimization failed on run {run_ind}: {e}")
+                print(f"  Optimization failed on run {run_ind}: {e}")
             # Close optimize plots without closing the Rabi figure
             for f_num in plt.get_fignums():
                 if plt.figure(f_num) is not fig:
                     plt.close(f_num)
-            # Re-init sig gen after optimization (reset_cfm turns it off)
-            if uwave_power_dbm is not None:
-                sig_gen.set_amp(float(uwave_power_dbm))
-            sig_gen.set_freq(float(freq_ghz))
-            sig_gen.uwave_on()
 
         # Open stream ONCE per run, not per tau step
         counter_server.start_tag_stream()
@@ -334,7 +327,7 @@ if __name__ == "__main__":
     pass
 
 
-# # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 # """
 # majorroutines/confocal/confocal_rabi.py
 

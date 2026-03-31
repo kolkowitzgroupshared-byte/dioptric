@@ -794,8 +794,8 @@ def do_rabi(nv_sig):
         max_tau=500,  # ns (480+min_tau)
         num_steps=31,  # 1 step every ~5-10ns
         uwave_ind=0,
-        uwave_freq_ghz=2.8548,  # 2.8573,  # Change to target ms=+1 or ms=-1 transition
-        optimize_between_runs=False,  # Set to false to turn off optimize between runs
+        uwave_freq_ghz=2.8258,  # Change to target ms=+1 or ms=-1 transition
+        optimize_between_runs=True,  # Set to false to turn off optimize between runs
     )
 
 
@@ -1049,9 +1049,9 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z = 4.3714  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z = 4.3519  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # pixel_xy = [0,0]  # galvo ref
-    pixel_xy = [0.014, 0.056]  # alignment test
+    pixel_xy = [0.0069,0.0667]  # alignment test
     # pixel_xy = [0.093, 0.067] # NV Lovelace
     # pixel_xy = [0.006, -0.001]  # NV Lovelace
     # return
@@ -1146,7 +1146,7 @@ if __name__ == "__main__":
         # end region Image sample
         #
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=4.3, voltage_end=4.5, step_size=0.005)
+        do_optimize_z_PI(nv_sig, voltage_start=4.3, voltage_end=4.5, step_size=0.005)
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
@@ -1178,9 +1178,9 @@ if __name__ == "__main__":
         # do_pulsed_resonance(nv_sig, 2.87, 0.200)
         # do_pulsed_re2.sonance_state(nv_sig, States.LOW)
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
-        # do_rabi(nv_sig)
+        do_rabi(nv_sig)
         # do_resonance(nv_sig)
-        do_tisapph_singlet_scan(nv_sig)
+        # do_tisapph_singlet_scan(nv_sig)
         # do_find_apd_gate_overlap(nv_sig)
         # do_rabi(nv_sig, uwave_time_range=[0, 400])
         # do_spin_echo(nv_sig)

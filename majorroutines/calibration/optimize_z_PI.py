@@ -7,7 +7,9 @@ fits a 1D Gaussian to find the optimal Z position, and moves to the peak.
 
 Uses GCS qPOS() command to read actual piezo position for accurate data logging.
 
+Created by: chemistatcode
 Created on March 5th, 2026
+
 
 """
 
