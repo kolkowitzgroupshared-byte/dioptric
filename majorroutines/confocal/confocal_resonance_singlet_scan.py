@@ -27,6 +27,8 @@ import traceback
 import matplotlib.pyplot as plt
 import numpy as np
 
+from majorroutines import targeting
+from majorroutines import targeting
 from utils import positioning as pos
 from utils import tool_belt as tb
 from utils import kplotlib as kpl
@@ -43,7 +45,8 @@ def _safe_ratio(num, den):
     return out
 
 
-def _compute_contrasts(ms0_off, ms0_on, ms1_off, ms1_on):
+def _compute_contrasts(ms1_off, ms1_on):
+# def _compute_contrasts(ms0_off, ms0_on, ms1_off, ms1_on):
     """
     Inputs can be scalars, 1D arrays, or 2D arrays.
 
@@ -52,41 +55,41 @@ def _compute_contrasts(ms0_off, ms0_on, ms1_off, ms1_on):
     norm_ms0_off, norm_ms0_on, norm_ms1_off, norm_ms1_on,
     contrast_ms0, contrast_ms1, delta_contrast
     """
-    norm_ms0_off = np.asarray(ms0_off, dtype=float)
-    norm_ms0_on = np.asarray(ms0_on, dtype=float)
+    # norm_ms0_off = np.asarray(ms0_off, dtype=float)
+    # norm_ms0_on = np.asarray(ms0_on, dtype=float)
     norm_ms1_off = np.asarray(ms1_off, dtype=float)
     norm_ms1_on = np.asarray(ms1_on, dtype=float)
 
-    contrast_ms0 = _safe_ratio(norm_ms0_on - norm_ms0_off, norm_ms0_off)
+    # contrast_ms0 = _safe_ratio(norm_ms0_on - norm_ms0_off, norm_ms0_off)
     contrast_ms1 = _safe_ratio(norm_ms1_on - norm_ms1_off, norm_ms1_off)
-    delta_contrast = contrast_ms1 - contrast_ms0
+    # delta_contrast = contrast_ms1 - contrast_ms0
 
     return (
-        norm_ms0_off,
-        norm_ms0_on,
+        # norm_ms0_off,
+        # norm_ms0_on,
         norm_ms1_off,
         norm_ms1_on,
-        contrast_ms0,
+        # contrast_ms0,
         contrast_ms1,
-        delta_contrast,
+        # delta_contrast,
     )
 
 
 def main(
     nv_sig,
     wavelength_start_nm=805.0,
-    wavelength_stop_nm=825.0,
-    num_steps=101,
-    num_reps=1000,
+    wavelength_stop_nm=807.0,
+    num_steps=3,
+    num_reps=20e4,
     num_runs=10,
     uwave_ind=0,
     uwave_freq_ghz=None,
     uwave_power_dbm=None,
-    probe_ns=5000,
+    probe_ns=100e3,
     readout_ns=None,
     pol_ns=None,
     laser_power=None,
-    do_targeting=False,
+    do_targeting=True, #test
     do_plot=True,
     shuffle=False,
     settle_s=0.25,
@@ -144,8 +147,8 @@ def main(
     wavelengths_nm = np.linspace(wavelength_start_nm, wavelength_stop_nm, num_steps)
 
     # Raw counts per run / step
-    ms0_off_counts = np.full((num_runs, num_steps), np.nan, dtype=float)
-    ms0_on_counts = np.full((num_runs, num_steps), np.nan, dtype=float)
+    # ms0_off_counts = np.full((num_runs, num_steps), np.nan, dtype=float)
+    # ms0_on_counts = np.full((num_runs, num_steps), np.nan, dtype=float)
     ms1_off_counts = np.full((num_runs, num_steps), np.nan, dtype=float)
     ms1_on_counts = np.full((num_runs, num_steps), np.nan, dtype=float)
 
@@ -153,32 +156,34 @@ def main(
     opti_coords_list = []
 
     if do_plot:
-        fig, axes = plt.subplots(3, 1, figsize=(7, 9), sharex=True)
+        fig, axes = plt.subplots(1, 1, figsize=(7, 9), sharex=True)
 
-        ax0, ax1, ax2 = axes
-        ax0.set_ylabel("ms0 contrast")
+        # ax0, ax1, ax2 = axes
+        ax1 = axes
+
+        # ax0.set_ylabel("ms0 contrast")
         ax1.set_ylabel("ms±1 contrast")
-        ax2.set_ylabel("Δ contrast")
-        ax2.set_xlabel("Ti:sapph wavelength (nm)")
+        # ax2.set_ylabel("Δ contrast")
+        ax1.set_xlabel("Ti:sapph wavelength (nm)")
 
-        ax0.set_title("Ti:sapph singlet scan")
+        ax1.set_title("Ti:sapph singlet scan")
 
-        (line_ms0,) = ax0.plot([], [], "o-", label="(ON-OFF)/OFF")
+        # (line_ms0,) = ax0.plot([], [], "o-", label="(ON-OFF)/OFF")
         (line_ms1,) = ax1.plot([], [], "o-", label="(ON-OFF)/OFF")
-        (line_delta,) = ax2.plot([], [], "o-", label="ms±1 - ms0")
+        # (line_delta,) = ax2.plot([], [], "o-", label="ms±1 - ms0")
 
-        ax0.grid(True, linestyle="--", alpha=0.5)
+        # ax0.grid(True, linestyle="--", alpha=0.5)
         ax1.grid(True, linestyle="--", alpha=0.5)
-        ax2.grid(True, linestyle="--", alpha=0.5)
+        # ax2.grid(True, linestyle="--", alpha=0.5)
 
-        ax0.legend()
+        # ax0.legend()
         ax1.legend()
-        ax2.legend()
+        # ax2.legend()
     else:
         fig = None
-        line_ms0 = None
+        # line_ms0 = None
         line_ms1 = None
-        line_delta = None
+        # line_delta = None
 
     tb.init_safe_stop()
 
@@ -212,13 +217,13 @@ def main(
 
                     print(f" count_arr shape: {count_arr.shape}")  # should be (num_reps, 4)
 
-                    ms0_off_counts[run_ind, step_ind] = count_arr[:, 0].sum()
-                    ms0_on_counts[run_ind, step_ind] = count_arr[:, 1].sum()
-                    ms1_off_counts[run_ind, step_ind] = count_arr[:, 2].sum()
-                    ms1_on_counts[run_ind, step_ind] = count_arr[:, 3].sum()
+                    # ms0_off_counts[run_ind, step_ind] = count_arr[:, 0].sum()
+                    # ms0_on_counts[run_ind, step_ind] = count_arr[:, 1].sum()
+                    ms1_off_counts[run_ind, step_ind] = count_arr[:, 0].sum()
+                    ms1_on_counts[run_ind, step_ind] = count_arr[:, 1].sum()
 
-                    ms0_off_val = ms0_off_counts[run_ind, step_ind]
-                    ms0_on_val = ms0_on_counts[run_ind, step_ind]
+                    # ms0_off_val = ms0_off_counts[run_ind, step_ind]
+                    # ms0_on_val = ms0_on_counts[run_ind, step_ind]
                     ms1_off_val = ms1_off_counts[run_ind, step_ind]
                     ms1_on_val = ms1_on_counts[run_ind, step_ind]
 
@@ -231,18 +236,18 @@ def main(
                         contrast_ms1_val,
                         delta_contrast_val,
                     ) = _compute_contrasts(
-                        ms0_off_val,
-                        ms0_on_val,
+                        # ms0_off_val,
+                        # ms0_on_val,
                         ms1_off_val,
                         ms1_on_val,
                     )
 
                     print(
                         f"  wl={wl_nm:.3f} nm | "
-                        f"ms0_off={int(ms0_off_val)}, ms0_on={int(ms0_on_val)}, "
-                        f"ms1_off={int(ms1_off_val)}, ms1_on={int(ms1_on_val)}, "
+                        # f"ms0_off={int(ms0_off_val)}, ms0_on={int(ms0_on_val)}, "
+                        # f"ms1_off={int(ms1_off_val)}, ms1_on={int(ms1_on_val)}, "
                         f"c0={contrast_ms0_val:.5e}, c1={contrast_ms1_val:.5e}, "
-                        f"delta={delta_contrast_val:.5e}"
+                        # f"delta={delta_contrast_val:.5e}"
                     )
 
             finally:
@@ -261,8 +266,8 @@ def main(
                     contrast_ms1_runs,
                     delta_contrast_runs,
                 ) = _compute_contrasts(
-                    ms0_off_counts[: run_ind + 1],
-                    ms0_on_counts[: run_ind + 1],
+                    # ms0_off_counts[: run_ind + 1],
+                    # ms0_on_counts[: run_ind + 1],
                     ms1_off_counts[: run_ind + 1],
                     ms1_on_counts[: run_ind + 1],
                 )
@@ -271,9 +276,9 @@ def main(
                 contrast_ms1_mean = np.nanmean(contrast_ms1_runs, axis=0)
                 delta_contrast_mean = np.nanmean(delta_contrast_runs, axis=0)
 
-                line_ms0.set_data(wavelengths_nm, contrast_ms0_mean)
+                # line_ms0.set_data(wavelengths_nm, contrast_ms0_mean)
                 line_ms1.set_data(wavelengths_nm, contrast_ms1_mean)
-                line_delta.set_data(wavelengths_nm, delta_contrast_mean)
+                # line_delta.set_data(wavelengths_nm, delta_contrast_mean)
 
                 for ax in axes:
                     ax.relim()
@@ -283,6 +288,8 @@ def main(
 
             if do_targeting:
                 try:
+
+                    targeting.compensate_for_drift(nv_sig, no_crash=True) #test
                     opti_coords = pos.set_xyz_on_nv(nv_sig)
                     opti_coords_list.append(opti_coords)
                 except Exception as e:
@@ -309,25 +316,25 @@ def main(
         contrast_ms1_runs,
         delta_contrast_runs,
     ) = _compute_contrasts(
-        ms0_off_counts,
-        ms0_on_counts,
+        # ms0_off_counts,
+        # ms0_on_counts,
         ms1_off_counts,
         ms1_on_counts,
     )
 
-    contrast_ms0_mean = np.nanmean(contrast_ms0_runs, axis=0)
+    # contrast_ms0_mean = np.nanmean(contrast_ms0_runs, axis=0)
     contrast_ms1_mean = np.nanmean(contrast_ms1_runs, axis=0)
-    delta_contrast_mean = np.nanmean(delta_contrast_runs, axis=0)
+    # delta_contrast_mean = np.nanmean(delta_contrast_runs, axis=0)
 
-    contrast_ms0_ste = np.nanstd(contrast_ms0_runs, axis=0, ddof=1) / np.sqrt(
-        np.sum(np.isfinite(contrast_ms0_runs), axis=0)
-    )
+    # contrast_ms0_ste = np.nanstd(contrast_ms0_runs, axis=0, ddof=1) / np.sqrt(
+        # np.sum(np.isfinite(contrast_ms0_runs), axis=0)
+    # )
     contrast_ms1_ste = np.nanstd(contrast_ms1_runs, axis=0, ddof=1) / np.sqrt(
         np.sum(np.isfinite(contrast_ms1_runs), axis=0)
     )
-    delta_contrast_ste = np.nanstd(delta_contrast_runs, axis=0, ddof=1) / np.sqrt(
-        np.sum(np.isfinite(delta_contrast_runs), axis=0)
-    )
+    # delta_contrast_ste = np.nanstd(delta_contrast_runs, axis=0, ddof=1) / np.sqrt(
+    # #     # np.sum(np.isfinite(delta_contrast_runs), axis=0)
+    # )
 
     raw_data = {
         "timestamp": timestamp,
@@ -342,16 +349,16 @@ def main(
         "probe_ns": int(probe_ns),
         "readout_ns": int(readout_ns),
         "laser_power": laser_power,
-        "ms0_off_counts": ms0_off_counts.tolist(),
-        "ms0_on_counts": ms0_on_counts.tolist(),
+        # "ms0_off_counts": ms0_off_counts.tolist(),
+        # "ms0_on_counts": ms0_on_counts.tolist(),
         "ms1_off_counts": ms1_off_counts.tolist(),
         "ms1_on_counts": ms1_on_counts.tolist(),
-        "contrast_ms0_mean": contrast_ms0_mean.tolist(),
-        "contrast_ms0_ste": contrast_ms0_ste.tolist(),
+        # "contrast_ms0_mean": contrast_ms0_mean.tolist(),
+        # "contrast_ms0_ste": contrast_ms0_ste.tolist(),
         "contrast_ms1_mean": contrast_ms1_mean.tolist(),
         "contrast_ms1_ste": contrast_ms1_ste.tolist(),
-        "delta_contrast_mean": delta_contrast_mean.tolist(),
-        "delta_contrast_ste": delta_contrast_ste.tolist(),
+        # "delta_contrast_mean": delta_contrast_mean.tolist(),
+        # "delta_contrast_ste": delta_contrast_ste.tolist(),
         "opti_coords_list": opti_coords_list,
     }
 
