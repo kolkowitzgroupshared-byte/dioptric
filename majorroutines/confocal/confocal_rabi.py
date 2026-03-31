@@ -192,14 +192,16 @@ def main(
 
         if optimize_between_runs:
             try:
-                # 1D Z optimization
                 z_coords, z_counts = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
-                # 1D XY galvo optimization
+                print(f"  Optimized Z: {z_coords}, counts={z_counts}")
+            except Exception as e:
+                print(f"  Z optimization failed on run {run_ind}: {e}")
+            try:
                 galvo_key = pos.get_laser_positioner(VirtualLaserKey.IMAGING)
                 xy_coords, xy_counts = targeting.optimize(nv_sig, coords_key=galvo_key)
-                print(f"  Optimized: Z={z_coords}, XY={xy_coords}, counts={xy_counts}")
+                print(f"  Optimized XY: {xy_coords}, counts={xy_counts}")
             except Exception as e:
-                print(f"  Optimization failed on run {run_ind}: {e}")
+                print(f"  XY optimization failed on run {run_ind}: {e}")
             # Close optimize plots without closing the Rabi figure
             for f_num in plt.get_fignums():
                 if plt.figure(f_num) is not fig:
