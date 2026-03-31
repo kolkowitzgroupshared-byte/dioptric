@@ -24,9 +24,10 @@ import numpy as np
 
 import majorroutines.targeting as targeting
 from utils import tool_belt as tb
+from utils import positioning as pos
 from utils import kplotlib as kpl
 from utils import data_manager as dm
-from utils.constants import VirtualLaserKey, NormMode
+from utils.constants import VirtualLaserKey, NormMode, CoordsKey
 
 
 def _build_tau_ns_list(
@@ -123,7 +124,7 @@ def main(
     uwave_power_dbm=None,
     uwave_freq_ghz=None,
     laser_power=None,
-    do_targeting=False,
+    optimize_between_runs=False,
     do_plot=True,
     do_save=False,
     norm_mode=NormMode.SINGLE_VALUED,
@@ -168,7 +169,6 @@ def main(
     ref_counts = np.full((num_runs, len(tau_ns_list)), np.nan)
     sig_counts = np.full((num_runs, len(tau_ns_list)), np.nan)
 
-    opti_coords_list = []
     timestamp = dm.get_time_stamp()
 
     if do_plot:
@@ -190,13 +190,20 @@ def main(
         if tb.safe_stop():
             break
 
-        if do_targeting:
+        if optimize_between_runs:
             try:
-                opti_coords = targeting.main_with_cxn(nv_sig)
+                # 1D Z optimization
+                z_coords, z_counts = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
+                # 1D XY galvo optimization
+                galvo_key = pos.get_laser_positioner(VirtualLaserKey.IMAGING)
+                xy_coords, xy_counts = targeting.optimize(nv_sig, coords_key=galvo_key)
+                print(f"  Optimized: Z={z_coords}, XY={xy_coords}, counts={xy_counts}")
             except Exception as e:
-                print(f"Targeting failed on run {run_ind}: {e}")
-                opti_coords = None
-            opti_coords_list.append(opti_coords)
+                print(f"  Optimization failed on run {run_ind}: {e}")
+            # Close optimize plots without closing the Rabi figure
+            for f_num in plt.get_fignums():
+                if plt.figure(f_num) is not fig:
+                    plt.close(f_num)
 
         # Open stream ONCE per run, not per tau step
         counter_server.start_tag_stream()

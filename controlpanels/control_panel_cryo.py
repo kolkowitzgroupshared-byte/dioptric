@@ -807,6 +807,7 @@ def do_resonance(nv_sig):
         num_reps=20e4,
         num_runs=10,
         uwave_ind=0,
+        optimize_between_runs=True,
     )
 
 
@@ -819,12 +820,13 @@ def do_tisapph_singlet_scan(nv_sig):
         num_reps=20e4,
         num_runs=3,
         uwave_ind=0,
-        uwave_freq_ghz=2.8262, #ms=-1
+        uwave_freq_ghz=2.8262,  # ms=-1
         uwave_power_dbm=10.0,
         probe_ns=100e3,
         do_plot=True,
         shuffle=False,
         settle_s=0.3,
+        optimize_between_runs=True,
     )
 # def do_t1_dq(nv_sig):
 #     # T1 experiment parameters, formatted:

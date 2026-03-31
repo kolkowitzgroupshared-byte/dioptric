@@ -45,13 +45,23 @@ class TisapphM2Solstis(LabradServer):
         tb.configure_logging(self)
         config = common.get_config_dict()
         device_id = config["DeviceIDs"][f"{self.name}_ip"]
-        self.tisapph = M2.Solstis(device_id, 62566, use_websocket=True)
+        self.tisapph = M2.Solstis(device_id, 62566, use_websocket=True, timeout=60)
         logging.info("Init complete")
 
     @setting(0, wavelength_nm="v[]")
     def set_wavelength_nm(self, c, wavelength_nm):
         wavelength = wavelength_nm * 1e-9
-        self.tisapph.coarse_tune_wavelength(wavelength=wavelength)
+        for attempt in range(3):
+            try:
+                self.tisapph.coarse_tune_wavelength(wavelength=wavelength)
+                return
+            except Exception as e:
+                if attempt == 2:
+                    raise
+                logging.warning(
+                    f"Wavelength tune attempt {attempt + 1} failed: {e}, retrying..."
+                )
+                time.sleep(1)
 
     @setting(1, returns="v[]")
     def get_wavelength_nm(self, c):
