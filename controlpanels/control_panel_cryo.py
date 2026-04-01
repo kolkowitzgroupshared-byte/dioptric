@@ -1049,9 +1049,9 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z = 4.3240  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z = 4.3030  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # pixel_xy = [0,0]  # galvo ref
-    pixel_xy = [0.011, 0.064]  # alignment test
+    pixel_xy = [0.013, 0.065]  # alignment test
     # pixel_xy = [0.093, 0.067] # NV Lovelace
     # pixel_xy = [0.006, -0.001]  # NV Lovelace
     # return

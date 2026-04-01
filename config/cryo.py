@@ -134,7 +134,7 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 10, #dbm
-                "frequency": 2.8258,
+                "frequency": 2.8262,
                 "rabi_period": 204,
                 "pi_pulse": 102,
                 "pi_on_2_pulse": 51, #Half of pi pulse, for use in Ramsey and SE

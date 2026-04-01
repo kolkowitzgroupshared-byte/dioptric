@@ -1,3 +1,11 @@
+# -*- coding: utf-8 -*-
+"""
+Fitting program for Single-NV / single-pixel Rabi sweep without base routine.
+
+Creator: chemistatcode
+Created on: March 31st, 2026
+"""
+
 import json
 import numpy as np
 import matplotlib.pyplot as plt
@@ -53,8 +61,8 @@ def load_data(data_dir, base_name):
 
 
 def main():
-    data_dir = r"G:\nvdata\pc_cryo\branch_master\confocal_rabi\2026_01"
-    base_name = "2026_01_07-13_49_03-(Wu)"
+    data_dir = r"G:\nvdata\pc_cryo\branch_master\confocal_rabi\2026_03"
+    base_name = "2026_03_18-16_19_29-(lovelace)"
 
     taus_ns, counts = load_data(data_dir, base_name)
 
