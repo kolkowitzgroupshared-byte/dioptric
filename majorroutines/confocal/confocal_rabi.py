@@ -161,7 +161,7 @@ def main(
 
     freq_ghz = uwave_freq_ghz if uwave_freq_ghz is not None else vsg["frequency"]
     sig_gen.set_freq(float(freq_ghz))
-    sig_gen.load_pulse_mod(5)  # Blank modulation with external TTL gate
+    sig_gen.mod_off()
     sig_gen.uwave_on()
 
     seq_file = "rabi.py"
