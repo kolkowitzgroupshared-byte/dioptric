@@ -42,11 +42,24 @@ def main():
         ref_counts = all_counts[0, :num_valid_runs, :]
         sig_counts = all_counts[1, :num_valid_runs, :]
 
+    # Debug: inspect the data
+    print(f"ref_counts shape: {ref_counts.shape}, min: {np.min(ref_counts)}, max: {np.max(ref_counts)}")
+    print(f"sig_counts shape: {sig_counts.shape}, min: {np.min(sig_counts)}, max: {np.max(sig_counts)}")
+    print(f"ref_counts[0, :5]: {ref_counts[0, :5]}")
+    print(f"sig_counts[0, :5]: {sig_counts[0, :5]}")
+    print(f"Number of zero ref_avg entries: {np.sum(np.mean(ref_counts, axis=0) == 0)}")
+
+    # Also check: what does all_counts look like for run 0, step 0?
+    print(f"all_counts[0, 0, 0, :20]: {all_counts[0, 0, 0, :20]}")
+    print(f"all_counts[1, 0, 0, :20]: {all_counts[1, 0, 0, :20]}")
+    print(f"Nonzero in all_counts[0,0,0,:]: {np.count_nonzero(all_counts[0, 0, 0, :])}")
+
     # Average over runs, then normalize signal by reference
     ref_avg = np.mean(ref_counts, axis=0)
     sig_avg = np.mean(sig_counts, axis=0)
     counts = sig_avg / ref_avg
     print(f"Using {num_valid_runs} completed runs, {len(taus_ns)} tau points")
+    print(f"counts[:5]: {counts[:5]}, NaN count: {np.sum(np.isnan(counts))}")
 
     # Initial parameter guesses
     offset_guess = np.mean(counts)
