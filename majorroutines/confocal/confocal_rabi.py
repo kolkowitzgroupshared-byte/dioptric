@@ -233,7 +233,9 @@ def main(
                 ]
                 seq_args_string = tb.encode_seq_args(seq_args)
 
-                pulsegen_server.stream_load(seq_file, seq_args_string)
+                ret_vals = pulsegen_server.stream_load(seq_file, seq_args_string)
+                if step_ind == 0 and run_ind == 0:
+                    print(f"  Sequence period: {ret_vals} ns (new rabi.py loaded)")
                 counter_server.clear_buffer()
                 pulsegen_server.stream_start(int(num_reps))
                 new_counts = counter_server.read_counter_modulo_gates(2, int(num_reps))
