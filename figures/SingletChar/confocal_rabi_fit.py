@@ -13,18 +13,34 @@ def main():
     data_dir = r"G:\nvdata\pc_cryo\branch_master\confocal_rabi\2026_01"
     base_name = "2026_01_07-13_49_03-(Wu)"
     txt_file = f"{data_dir}\\{base_name}.txt"
+    npz_file = f"{data_dir}\\{base_name}.npz"
 
-    # Load all data from the text file (JSON with sig_counts, ref_counts, tau_ns_list)
+    # Load metadata from JSON
     with open(txt_file, "r") as f:
         raw = json.load(f)
 
     taus_ns = np.array(raw["taus_ns"], dtype=float)
-    norm = np.array(raw["norm"], dtype=float)
-    norm_ste = np.array(raw["norm_ste"], dtype=float)
-    num_runs = raw["num_runs"]
-    print(f"Using {num_runs} runs, {len(taus_ns)} tau points")
 
-    counts = norm
+    # Load counts — may be an inline array or a string reference to the .npz
+    counts_raw = raw["counts"]
+    if isinstance(counts_raw, str) and counts_raw.endswith(".npz"):
+        npz = np.load(npz_file)
+        all_counts = npz["counts"]  # (num_exps, num_runs, num_steps)
+    else:
+        all_counts = np.array(counts_raw, dtype=float)
+
+    print(f"Raw counts shape: {all_counts.shape}")
+
+    # Only 10 runs were completed; the rest are empty zeros
+    num_valid_runs = 10
+    ref_counts = all_counts[0, :num_valid_runs, :]  # (10, num_steps)
+    sig_counts = all_counts[1, :num_valid_runs, :]  # (10, num_steps)
+
+    # Average over runs, then normalize signal by reference
+    ref_avg = np.mean(ref_counts, axis=0)
+    sig_avg = np.mean(sig_counts, axis=0)
+    counts = sig_avg / ref_avg
+    print(f"Using {num_valid_runs} completed runs, {len(taus_ns)} tau points")
 
     # Initial parameter guesses
     offset_guess = np.mean(counts)
