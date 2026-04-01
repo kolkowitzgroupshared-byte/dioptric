@@ -33,8 +33,14 @@ def main():
 
     # Only 10 runs were completed; the rest are empty zeros
     num_valid_runs = 10
-    ref_counts = all_counts[0, :num_valid_runs, :]  # (10, num_steps)
-    sig_counts = all_counts[1, :num_valid_runs, :]  # (10, num_steps)
+
+    # Shape is (2, num_runs, num_steps, num_reps) — sum over reps first
+    if all_counts.ndim == 4:
+        ref_counts = np.sum(all_counts[0, :num_valid_runs, :, :], axis=-1)  # (10, num_steps)
+        sig_counts = np.sum(all_counts[1, :num_valid_runs, :, :], axis=-1)  # (10, num_steps)
+    else:
+        ref_counts = all_counts[0, :num_valid_runs, :]
+        sig_counts = all_counts[1, :num_valid_runs, :]
 
     # Average over runs, then normalize signal by reference
     ref_avg = np.mean(ref_counts, axis=0)
