@@ -126,7 +126,7 @@ def main(
     laser_power=None,
     optimize_between_runs=False,
     do_plot=True,
-    do_save=False,
+    do_save=True,
     norm_mode=NormMode.SINGLE_VALUED,
 ):
     tb.reset_cfm()
@@ -183,6 +183,7 @@ def main(
         line_norm = None
 
     tb.init_safe_stop()
+    opti_coords_list = []
 
     for run_ind in range(num_runs):
         print(f"Run {run_ind + 1}/{num_runs}")
@@ -198,8 +199,10 @@ def main(
                 galvo_key = pos.get_laser_positioner(VirtualLaserKey.IMAGING)
                 xy_coords, xy_counts = targeting.optimize(nv_sig, coords_key=galvo_key)
                 print(f"  Optimized: Z={z_coords}, XY={xy_coords}, counts={xy_counts}")
+                opti_coords_list.append({"z": z_coords, "xy": xy_coords})
             except Exception as e:
                 print(f"  Optimization failed on run {run_ind}: {e}")
+                opti_coords_list.append(None)
             # Close optimize plots without closing the Rabi figure
             for f_num in plt.get_fignums():
                 if plt.figure(f_num) is not fig:
@@ -307,6 +310,23 @@ def main(
         "contrast": proc_arrays["contrast"].tolist(),
         "num_valid_runs": proc_arrays["num_valid_runs"].tolist(),
     }
+
+    if do_save:
+        file_path = dm.get_file_path(__file__, timestamp, getattr(nv_sig, "name", "nv"))
+        dm.save_raw_data(raw_data, file_path)
+        dm.save_raw_data(proc_data, file_path.parent / (file_path.stem + "-proc"))
+        if fig is not None:
+            dm.save_figure(fig, file_path)
+        # Save a simple analysis npz for easy loading in fit scripts
+        np.savez(
+            file_path.with_name(file_path.stem + "-analysis.npz"),
+            taus_ns=tau_ns_list,
+            norm=np.array(proc_arrays["norm"]),
+            norm_ste=np.array(proc_arrays["norm_ste"]),
+            sig_counts=sig_counts,
+            ref_counts=ref_counts,
+        )
+        print(f"Saved Rabi data to {file_path}")
 
     tb.reset_cfm()
     return raw_data, proc_data

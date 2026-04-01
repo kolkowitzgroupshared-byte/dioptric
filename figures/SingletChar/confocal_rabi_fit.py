@@ -2,6 +2,7 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
+from pathlib import Path
 
 
 def rabi_oscillation(t, amp, freq, phase, decay, offset):
@@ -9,30 +10,64 @@ def rabi_oscillation(t, amp, freq, phase, decay, offset):
     return amp * np.exp(-t / decay) * np.cos(2 * np.pi * freq * t + phase) + offset
 
 
+def load_data(data_dir, base_name):
+    """Load Rabi data, trying analysis npz first, then proc JSON, then raw JSON."""
+    data_dir = Path(data_dir)
+
+    # Option 1: analysis npz (saved by updated confocal_rabi.py)
+    analysis_npz = data_dir / f"{base_name}-analysis.npz"
+    if analysis_npz.exists():
+        npz = np.load(analysis_npz)
+        print(f"Loaded from {analysis_npz.name}")
+        return npz["taus_ns"], npz["norm"]
+
+    # Option 2: proc JSON (saved by updated confocal_rabi.py)
+    proc_txt = data_dir / f"{base_name}-proc.txt"
+    if proc_txt.exists():
+        with open(proc_txt, "r") as f:
+            proc = json.load(f)
+        print(f"Loaded from {proc_txt.name}")
+        return np.array(proc["tau_ns_list"]), np.array(proc["norm"])
+
+    # Option 3: raw JSON with inline sig_counts/ref_counts
+    raw_txt = data_dir / f"{base_name}.txt"
+    with open(raw_txt, "r") as f:
+        raw = json.load(f)
+    taus = np.array(raw.get("tau_ns_list", raw.get("taus_ns")), dtype=float)
+    # Try pre-computed norm first
+    if "norm" in raw:
+        norm = np.array(raw["norm"], dtype=float)
+        if np.any(np.isfinite(norm)):
+            print(f"Loaded norm from {raw_txt.name}")
+            return taus, norm
+    # Fall back to raw counts
+    sig = np.array(raw["sig_counts"], dtype=float)
+    ref = np.array(raw["ref_counts"], dtype=float)
+    # Drop incomplete runs (all-NaN rows)
+    valid = ~np.all(np.isnan(sig), axis=1)
+    sig_avg = np.nanmean(sig[valid], axis=0)
+    ref_avg = np.nanmean(ref[valid], axis=0)
+    norm = sig_avg / ref_avg
+    print(f"Loaded raw counts from {raw_txt.name}, {valid.sum()} valid runs")
+    return taus, norm
+
+
 def main():
     data_dir = r"G:\nvdata\pc_cryo\branch_master\confocal_rabi\2026_01"
     base_name = "2026_01_07-13_49_03-(Wu)"
-    txt_file = f"{data_dir}\\{base_name}.txt"
-    npz_file = f"{data_dir}\\{base_name}.npz"
 
-    # Load metadata from JSON
-    with open(txt_file, "r") as f:
-        raw = json.load(f)
+    taus_ns, counts = load_data(data_dir, base_name)
 
-    taus_ns = np.array(raw["taus_ns"], dtype=float)
+    # Drop any NaN/Inf points
+    valid = np.isfinite(counts)
+    taus_ns = taus_ns[valid]
+    counts = counts[valid]
 
-    # Diagnostic: print shape/value of the processed data keys in the JSON
-    for key in ['sig_kcps', 'ref_kcps', 'norm', 'norm_ste', 'sig_counts_sum', 'ref_counts_sum']:
-        val = raw.get(key)
-        if val is None:
-            print(f"  {key}: MISSING")
-        else:
-            try:
-                arr = np.array(val, dtype=float)
-                print(f"  {key}: shape={arr.shape}, min={arr.min():.4f}, max={arr.max():.4f}, nonzero={np.count_nonzero(arr)}")
-            except Exception as e:
-                print(f"  {key}: error converting - {e}")
-    import sys; sys.exit(0)
+    if len(counts) == 0:
+        print("ERROR: No valid data points found. Check the data file.")
+        return
+
+    print(f"Fitting {len(counts)} data points")
 
     # Initial parameter guesses
     offset_guess = np.mean(counts)
