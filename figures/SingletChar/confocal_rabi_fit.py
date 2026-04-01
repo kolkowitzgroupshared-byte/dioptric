@@ -20,11 +20,21 @@ def main():
 
     taus_ns = np.array(raw["taus_ns"], dtype=float)
 
-    # The npz counts array is empty; actual data is in the JSON directly
-    sig_counts = np.array(raw["sig_counts_sum"], dtype=float)  # (num_steps,)
-    ref_counts = np.array(raw["ref_counts_sum"], dtype=float)  # (num_steps,)
-    counts = sig_counts / ref_counts
-    print(f"Using {len(taus_ns)} tau points, sig range: [{sig_counts.min():.0f}, {sig_counts.max():.0f}]")
+    # Print shape/type of every key to understand the data
+    for key in raw:
+        val = raw[key]
+        if isinstance(val, (list,)):
+            arr = np.array(val)
+            print(f"  {key}: list -> array shape {arr.shape}, dtype {arr.dtype}")
+            if arr.size > 0 and np.issubdtype(arr.dtype, np.number):
+                print(f"    min={np.nanmin(arr)}, max={np.nanmax(arr)}, nonzero={np.count_nonzero(arr)}")
+        elif isinstance(val, str):
+            print(f"  {key}: str = '{val[:80]}'")
+        elif isinstance(val, (int, float)):
+            print(f"  {key}: {type(val).__name__} = {val}")
+        else:
+            print(f"  {key}: {type(val).__name__}")
+    import sys; sys.exit(0)
 
     # Initial parameter guesses
     offset_guess = np.mean(counts)
