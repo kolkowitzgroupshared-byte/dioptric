@@ -21,12 +21,17 @@ def main():
 
     taus_ns = np.array(raw["taus_ns"], dtype=float)
 
-    # Load the per-file npz directly and inspect contents
-    npz = np.load(npz_file, allow_pickle=True)
-    print(f"NPZ keys: {npz.files}")
-    for key in npz.files:
-        arr = npz[key]
-        print(f"  {key}: shape={arr.shape}, dtype={arr.dtype}, nonzero={np.count_nonzero(arr)}")
+    # Diagnostic: print shape/value of the processed data keys in the JSON
+    for key in ['sig_kcps', 'ref_kcps', 'norm', 'norm_ste', 'sig_counts_sum', 'ref_counts_sum']:
+        val = raw.get(key)
+        if val is None:
+            print(f"  {key}: MISSING")
+        else:
+            try:
+                arr = np.array(val, dtype=float)
+                print(f"  {key}: shape={arr.shape}, min={arr.min():.4f}, max={arr.max():.4f}, nonzero={np.count_nonzero(arr)}")
+            except Exception as e:
+                print(f"  {key}: error converting - {e}")
     import sys; sys.exit(0)
 
     # Initial parameter guesses
