@@ -70,18 +70,15 @@ def get_seq(pulse_streamer, config, args):
         config["Optics"]["PhysicalLasers"][laser_name]["delay"],
     )
 
-    # Buffers
+    # Buffers — match resonance.py exactly
     common_durations = config["CommonDurations"]
     meas_buffer = _as_int64("meas_buffer", common_durations["cw_meas_buffer"])
-    transient = _as_int64(
-        "transient",
-        common_durations.get("pol_to_uwave_wait_dur", 1000),
-    )
+    transient = np.int64(1e3)  # Hardcoded 1000 ns, same as resonance.py
 
-    # Same front_buffer approach as resonance.py
+    # Same front_buffer and alignment as resonance.py
     front_buffer = np.int64(max(uwave_delay, laser_delay))
     period = np.int64(
-        front_buffer + 2 * (polarization_ns + transient + tau_ns + transient + readout_ns + meas_buffer)
+        front_buffer + 2 * (polarization_ns + tau_ns + transient + transient + readout_ns + meas_buffer)
     )
 
     print(f"[rabi.py] tau={tau_ns}, pol={polarization_ns}, read={readout_ns}, period={period}")
@@ -99,10 +96,10 @@ def get_seq(pulse_streamer, config, args):
     seq.setDigital(do_sample_clock, clk_train)
 
     # ------------------------------------------------------------------
-    # APD gate  (same structure as resonance.py)
+    # APD gate — ALL channels use same starting delay (resonance.py style)
     # ------------------------------------------------------------------
     apd_train = [
-        (int(front_buffer), LOW),
+        (int(front_buffer - uwave_delay), LOW),
 
         # Reference experiment
         (int(polarization_ns), LOW),
@@ -118,13 +115,12 @@ def get_seq(pulse_streamer, config, args):
         (int(tau_ns), LOW),
         (int(transient), LOW),
         (int(readout_ns), HIGH),
-        (int(meas_buffer), LOW),
+        (int(meas_buffer + uwave_delay), LOW),
     ]
     seq.setDigital(do_apd_gate, apd_train)
 
     # ------------------------------------------------------------------
     # Microwave gate — OFF in reference, ON during signal tau
-    # (same structure as resonance.py)
     # ------------------------------------------------------------------
     mw_train = [
         (int(front_buffer - uwave_delay), LOW),
@@ -148,10 +144,10 @@ def get_seq(pulse_streamer, config, args):
     seq.setDigital(do_sig_gen_gate, mw_train)
 
     # ------------------------------------------------------------------
-    # Laser train  (same structure as resonance.py)
+    # Laser train — same alignment as APD and MW
     # ------------------------------------------------------------------
     laser_train = [
-        (int(front_buffer), LOW),
+        (int(front_buffer - uwave_delay), LOW),
 
         # Reference experiment
         (int(polarization_ns), HIGH),
@@ -167,7 +163,7 @@ def get_seq(pulse_streamer, config, args):
         (int(tau_ns), LOW),
         (int(transient), LOW),
         (int(readout_ns), HIGH),
-        (int(meas_buffer), LOW),
+        (int(meas_buffer + uwave_delay), LOW),
     ]
 
     tb.process_laser_seq(seq, readout_vkey, laser_train)
