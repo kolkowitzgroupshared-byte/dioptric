@@ -13,6 +13,7 @@ def main():
     data_dir = r"G:\nvdata\pc_cryo\branch_master\confocal_rabi\2026_01"
     base_name = "2026_01_07-13_49_03-(Wu)"
     txt_file = f"{data_dir}\\{base_name}.txt"
+    npz_file = f"{data_dir}\\{base_name}.npz"
 
     # Load metadata from JSON
     with open(txt_file, "r") as f:
@@ -20,14 +21,12 @@ def main():
 
     taus_ns = np.array(raw["taus_ns"], dtype=float)
 
-    # counts is a string path to a shared npz file
-    counts_path = raw["counts"]
-    print(f"Loading counts from: {counts_path}")
-    npz = np.load(counts_path)
+    # Load the per-file npz directly and inspect contents
+    npz = np.load(npz_file, allow_pickle=True)
     print(f"NPZ keys: {npz.files}")
     for key in npz.files:
         arr = npz[key]
-        print(f"  {key}: shape={arr.shape}, dtype={arr.dtype}, min={arr.min()}, max={arr.max()}, nonzero={np.count_nonzero(arr)}")
+        print(f"  {key}: shape={arr.shape}, dtype={arr.dtype}, nonzero={np.count_nonzero(arr)}")
     import sys; sys.exit(0)
 
     # Initial parameter guesses
