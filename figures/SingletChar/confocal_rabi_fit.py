@@ -20,20 +20,14 @@ def main():
 
     taus_ns = np.array(raw["taus_ns"], dtype=float)
 
-    # Print shape/type of every key to understand the data
-    for key in raw:
-        val = raw[key]
-        if isinstance(val, (list,)):
-            arr = np.array(val)
-            print(f"  {key}: list -> array shape {arr.shape}, dtype {arr.dtype}")
-            if arr.size > 0 and np.issubdtype(arr.dtype, np.number):
-                print(f"    min={np.nanmin(arr)}, max={np.nanmax(arr)}, nonzero={np.count_nonzero(arr)}")
-        elif isinstance(val, str):
-            print(f"  {key}: str = '{val[:80]}'")
-        elif isinstance(val, (int, float)):
-            print(f"  {key}: {type(val).__name__} = {val}")
-        else:
-            print(f"  {key}: {type(val).__name__}")
+    # counts is a string path to a shared npz file
+    counts_path = raw["counts"]
+    print(f"Loading counts from: {counts_path}")
+    npz = np.load(counts_path)
+    print(f"NPZ keys: {npz.files}")
+    for key in npz.files:
+        arr = npz[key]
+        print(f"  {key}: shape={arr.shape}, dtype={arr.dtype}, min={arr.min()}, max={arr.max()}, nonzero={np.count_nonzero(arr)}")
     import sys; sys.exit(0)
 
     # Initial parameter guesses
