@@ -18,21 +18,13 @@ def main():
     with open(txt_file, "r") as f:
         raw = json.load(f)
 
-    taus_ns = np.array(raw["tau_ns_list"], dtype=float)
-    sig_counts = np.array(raw["sig_counts"], dtype=float)  # (num_runs, num_steps)
-    ref_counts = np.array(raw["ref_counts"], dtype=float)  # (num_runs, num_steps)
+    taus_ns = np.array(raw["taus_ns"], dtype=float)
+    norm = np.array(raw["norm"], dtype=float)
+    norm_ste = np.array(raw["norm_ste"], dtype=float)
+    num_runs = raw["num_runs"]
+    print(f"Using {num_runs} runs, {len(taus_ns)} tau points")
 
-    # Drop incomplete runs (rows that are all NaN)
-    valid_runs = ~np.all(np.isnan(sig_counts), axis=1)
-    sig_counts = sig_counts[valid_runs]
-    ref_counts = ref_counts[valid_runs]
-    num_runs = sig_counts.shape[0]
-    print(f"Using {num_runs} completed runs, {len(taus_ns)} tau points")
-
-    # Average over runs, then normalize signal by reference
-    sig_avg = np.nanmean(sig_counts, axis=0)
-    ref_avg = np.nanmean(ref_counts, axis=0)
-    counts = sig_avg / ref_avg
+    counts = norm
 
     # Initial parameter guesses
     offset_guess = np.mean(counts)
