@@ -30,8 +30,10 @@ from figures.zfs_vs_t.deconvolve_spectral_function import fig
 from majorroutines.calibration import optimize_xy
 from utils import tool_belt as tb
 from utils import kplotlib as kpl
+import majorroutines.targeting as targeting
+from utils import positioning as pos
 from utils import data_manager as dm
-from utils.constants import VirtualLaserKey, NormMode
+from utils.constants import VirtualLaserKey, NormMode, CoordsKey
 
 
 def _build_tau_ns_list(
@@ -125,10 +127,10 @@ def main(
     num_steps,
     uwave_ind=0,
     readout_ns=None,
-    uwave_power_dbm=None,
-    uwave_freq_ghz=None,
+    uwave_power_dbm=10,
+    uwave_freq_ghz=2.8262,
     laser_power=None,
-    optimize_between_runs=False,
+    optimize_between_runs=True,
     optimize_xy_kwargs=None,
     do_plot=True,
     do_save=False,
@@ -196,24 +198,40 @@ def main(
         if tb.safe_stop():
             break
 
+
         if optimize_between_runs:
             try:
-                xy_kwargs = dict(optimize_xy_kwargs or {})
-                xy_kwargs.setdefault("num_steps", 8)
-                xy_kwargs.setdefault("scan_range", 0.008)
-                xy_kwargs.setdefault("move_to_optimal", True)
-                xy_kwargs.setdefault("save_data", False)
-                results = optimize_xy.main(nv_sig, **xy_kwargs)
-                opti_x = results.get("opti_x")
-                opti_y = results.get("opti_y")
-                if opti_x is not None and opti_y is not None:
-                    print(f"  Optimized: X={opti_x:.4f}, Y={opti_y:.4f}")
+                # 1D Z optimization
+                z_coords, z_counts = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
+                # 1D XY galvo optimization
+                galvo_key = pos.get_laser_positioner(VirtualLaserKey.IMAGING)
+                xy_coords, xy_counts = targeting.optimize(nv_sig, coords_key=galvo_key)
+                print(f"  Optimized: Z={z_coords}, XY={xy_coords}, counts={xy_counts}")
             except Exception as e:
-                print(f"  XY optimization failed: {e}")
-            # Close optimize_xy plots without closing the Rabi figure
-            for f in plt.get_fignums():
-                if plt.figure(f) is not fig:
-                    plt.close(f)
+                print(f"  Optimization failed on run {run_ind}: {e}")
+            # Close optimize plots without closing the Rabi figure
+            for f_num in plt.get_fignums():
+                if plt.figure(f_num) is not fig:
+                    plt.close(f_num)
+
+        # if optimize_between_runs:
+        #     try:
+        #         xy_kwargs = dict(optimize_xy_kwargs or {})
+        #         xy_kwargs.setdefault("num_steps", 8)
+        #         xy_kwargs.setdefault("scan_range", 0.008)
+        #         xy_kwargs.setdefault("move_to_optimal", True)
+        #         xy_kwargs.setdefault("save_data", False)
+        #         results = optimize_xy.main(nv_sig, **xy_kwargs)
+        #         opti_x = results.get("opti_x")
+        #         opti_y = results.get("opti_y")
+        #         if opti_x is not None and opti_y is not None:
+        #             print(f"  Optimized: X={opti_x:.4f}, Y={opti_y:.4f}")
+        #     except Exception as e:
+        #         print(f"  XY optimization failed: {e}")
+        #     # Close optimize_xy plots without closing the Rabi figure
+        #     for f in plt.get_fignums():
+        #         if plt.figure(f) is not fig:
+        #             plt.close(f)
 
         # Open stream ONCE per run, not per tau step
         counter_server.start_tag_stream()
@@ -233,7 +251,9 @@ def main(
                 ]
                 seq_args_string = tb.encode_seq_args(seq_args)
 
-                pulsegen_server.stream_load(seq_file, seq_args_string)
+                ret_vals = pulsegen_server.stream_load(seq_file, seq_args_string)
+                if step_ind == 0 and run_ind == 0:
+                    print(f"  Sequence period: {ret_vals} ns (new rabi.py loaded)")
                 counter_server.clear_buffer()
                 pulsegen_server.stream_start(int(num_reps))
                 new_counts = counter_server.read_counter_modulo_gates(2, int(num_reps))
