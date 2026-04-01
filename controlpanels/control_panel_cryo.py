@@ -975,13 +975,13 @@ if __name__ == "__main__":
     # coords: SAMPLE (piezo) xyz
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
-    sample_xy = [0,0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z =4.4840# atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
-    # pixel_xy = [0,0]  # galvo ref
-    # pixel_xy = [-0.021, -0.052]s # zoom picture
+    sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
+    coord_z = 4.3632  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    # pixel_xy = [0,0]  # galvo refs
+    pixel_xy = [0.009,0.0667]  # alignment test
     # pixel_xy = [0.093, 0.067] # NV Lovelace
     #pixel_xy = [-0.008, 0.009] # NV Lovelace
-    pixel_xy = [-0.037, -0.011]
+    # pixel_xy = [-0.037, -0.011]
     # pixel_xy = [-0.008, 0.003] # NV Lovelace
     # return
     nv_sig = NVSig(
@@ -1054,9 +1054,9 @@ if __name__ == "__main__":
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None)
         # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None):
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
-        # do_image_sample(nv_sig)
+        # do_image_sample(nv_sig)ss
         do_image_sample_zoom(nv_sig)
-
+ 
         # # Quick NV area scans
         # for i in range(10):
             # do_image_sample_zoom(nv_sig)
