@@ -48,7 +48,6 @@ def get_seq(pulse_streamer, config, args):
     readout_ns = _as_int64("readout_ns", readout_ns)
     uwave_ind = int(uwave_ind)
 
-    pol_vkey = _vkey_from_arg(pol_vkey_arg)
     readout_vkey = _vkey_from_arg(readout_vkey_arg)
 
     pulser_wiring = config["Wiring"]["PulseGen"]
@@ -64,117 +63,110 @@ def get_seq(pulse_streamer, config, args):
         config["Microwaves"]["PhysicalSigGens"][sig_gen_name]["delay"],
     )
 
-    # Laser channels
-    pol_laser_name = tb.get_physical_laser_name(pol_vkey)
-    readout_laser_name = tb.get_physical_laser_name(readout_vkey)
-
-    pol_delay = _as_int64(
-        "pol_delay",
-        config["Optics"]["PhysicalLasers"][pol_laser_name]["delay"],
-    )
-    readout_delay = _as_int64(
-        "readout_delay",
-        config["Optics"]["PhysicalLasers"][readout_laser_name]["delay"],
+    # Laser timing — use readout_vkey (same approach as working resonance.py)
+    laser_name = tb.get_physical_laser_name(readout_vkey)
+    laser_delay = _as_int64(
+        "laser_delay",
+        config["Optics"]["PhysicalLasers"][laser_name]["delay"],
     )
 
-    # Buffers
+    # Buffers — match resonance.py exactly
     common_durations = config["CommonDurations"]
     meas_buffer = _as_int64("meas_buffer", common_durations["cw_meas_buffer"])
-    init_to_mw_buffer = _as_int64(
-        "pol_to_uwave_wait_dur",
-        common_durations.get("pol_to_uwave_wait_dur", common_durations["pol_to_uwave_wait_dur"]),
+    transient = np.int64(1e3)  # Hardcoded 1000 ns, same as resonance.py
+
+    # Same front_buffer and alignment as resonance.py
+    front_buffer = np.int64(max(uwave_delay, laser_delay))
+    period = np.int64(
+        front_buffer + 2 * (polarization_ns + tau_ns + transient + transient + readout_ns + meas_buffer)
     )
 
-    front_buffer = np.int64(max(uwave_delay, pol_delay, readout_delay))
-    exp_period = np.int64(
-        polarization_ns + 2*init_to_mw_buffer + tau_ns + readout_ns + meas_buffer
-    )
-    period = np.int64(front_buffer + 2 * exp_period)
+    print(f"[rabi.py] tau={tau_ns}, pol={polarization_ns}, read={readout_ns}, period={period}")
 
     seq = Sequence()
 
     # ------------------------------------------------------------------
     # Sample clock
     # ------------------------------------------------------------------
-    if period >= 300:
-        clk_train = [(int(period - 200), LOW), (100, HIGH), (100, LOW)]
-    else:
-        clk_train = [(int(period), LOW)]
+    clk_train = (
+        [(int(period - 200), LOW), (100, HIGH), (100, LOW)]
+        if period >= 300
+        else [(int(period), LOW)]
+    )
     seq.setDigital(do_sample_clock, clk_train)
 
     # ------------------------------------------------------------------
-    # APD gate
+    # APD gate — ALL channels use same starting delay (resonance.py style)
     # ------------------------------------------------------------------
     apd_train = [
-        (int(front_buffer), LOW),
-
-        # Reference experiment
-        (int(polarization_ns), LOW),
-        (int(init_to_mw_buffer), LOW),
-        (int(tau_ns), LOW),
-        (int(init_to_mw_buffer), LOW),
-        (int(readout_ns), HIGH),
-        (int(meas_buffer), LOW),
-
-        # Signal experiment
-        (int(polarization_ns), LOW),
-        (int(init_to_mw_buffer), LOW),
-        (int(tau_ns), LOW),
-        (int(init_to_mw_buffer), LOW),
-        (int(readout_ns), HIGH),
-        (int(meas_buffer), LOW),
-    ]
-    seq.setDigital(do_apd_gate, apd_train)
-
-    # ------------------------------------------------------------------
-    # Microwave gate
-    # OFF during reference, ON during signal tau only
-    # ------------------------------------------------------------------
-    mw_train = [
         (int(front_buffer - uwave_delay), LOW),
 
         # Reference experiment
         (int(polarization_ns), LOW),
-        (int(init_to_mw_buffer), LOW),
+        (int(transient), LOW),
         (int(tau_ns), LOW),
-        (int(init_to_mw_buffer), LOW),
-        (int(readout_ns), LOW),
+        (int(transient), LOW),
+        (int(readout_ns), HIGH),
         (int(meas_buffer), LOW),
 
         # Signal experiment
         (int(polarization_ns), LOW),
-        (int(init_to_mw_buffer), LOW),
+        (int(transient), LOW),
+        (int(tau_ns), LOW),
+        (int(transient), LOW),
+        (int(readout_ns), HIGH),
+        (int(meas_buffer + uwave_delay), LOW),
+    ]
+    seq.setDigital(do_apd_gate, apd_train)
+
+    # ------------------------------------------------------------------
+    # Microwave gate — OFF in reference, ON during signal tau
+    # ------------------------------------------------------------------
+    mw_train = [
+        (int(front_buffer - uwave_delay), LOW),
+
+        # Reference experiment — MW OFF
+        (int(polarization_ns), LOW),
+        (int(transient), LOW),
+        (int(tau_ns), LOW),
+        (int(transient), LOW),
+        (int(readout_ns), LOW),
+        (int(meas_buffer), LOW),
+
+        # Signal experiment — MW ON during tau only
+        (int(polarization_ns), LOW),
+        (int(transient), LOW),
         (int(tau_ns), HIGH),
-        (int(init_to_mw_buffer), LOW),
+        (int(transient), LOW),
         (int(readout_ns), LOW),
         (int(meas_buffer + uwave_delay), LOW),
     ]
     seq.setDigital(do_sig_gen_gate, mw_train)
 
     # ------------------------------------------------------------------
-    # Laser laser train
+    # Laser train — same alignment as APD and MW
     # ------------------------------------------------------------------
     laser_train = [
-        (int(front_buffer - pol_delay), LOW),
+        (int(front_buffer - uwave_delay), LOW),
 
         # Reference experiment
         (int(polarization_ns), HIGH),
-        (int(init_to_mw_buffer), LOW),
+        (int(transient), LOW),
         (int(tau_ns), LOW),
-        (int(init_to_mw_buffer), LOW),
+        (int(transient), LOW),
         (int(readout_ns), HIGH),
         (int(meas_buffer), LOW),
 
         # Signal experiment
         (int(polarization_ns), HIGH),
-        (int(init_to_mw_buffer), LOW),
+        (int(transient), LOW),
         (int(tau_ns), LOW),
-        (int(init_to_mw_buffer), LOW),
+        (int(transient), LOW),
         (int(readout_ns), HIGH),
-        (int(meas_buffer + pol_delay), LOW),
+        (int(meas_buffer + uwave_delay), LOW),
     ]
 
-    tb.process_laser_seq(seq, pol_vkey, laser_train)
+    tb.process_laser_seq(seq, readout_vkey, laser_train)
 
     final = OutputState([], 0.0, 0.0)
     return seq, final, [int(period)]

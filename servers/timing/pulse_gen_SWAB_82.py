@@ -79,6 +79,7 @@ class PulseGenSwab82(PulseGen, LabradServer):
         file_name, file_ext = os.path.splitext(seq_file)
         if file_ext == ".py":  # py: import as a module
             seq_module = importlib.import_module(file_name)
+            importlib.reload(seq_module)
             args = tb.decode_seq_args(seq_args_string)
             seq, final, ret_vals = seq_module.get_seq(self, self.config, args)
         return seq, final, ret_vals

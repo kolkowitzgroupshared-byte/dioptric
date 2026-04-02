@@ -134,10 +134,10 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 10, #dbm
-                "frequency": 2.90,
-                "rabi_period": 200,
-                "pi_pulse": 100,
-                "pi_on_2_pulse": 36,
+                "frequency": 2.8262,
+                "rabi_period": 204,
+                "pi_pulse": 102,
+                "pi_on_2_pulse": 51, #Half of pi pulse, for use in Ramsey and SE
             },
             # sig gen 1 is iq molulated
             1: {
@@ -194,7 +194,7 @@ config |= {
             },
             VirtualLaserKey.SINGLET_DRIVE: {
                 "physical_name": tisapph_laser,
-                "duration": 300,  # this is a placeholder
+                "duration": 100e3,  # this is a placeholder
             },
 
             VirtualLaserKey.SPIN_READOUT: {

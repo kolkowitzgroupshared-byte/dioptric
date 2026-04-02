@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Ti:sapph singlet scan sequence.
+Short ODMR sequence with Ti:Sapph singlet shelving.
 
-Four APD-gated experiments per repetition:
-    gate 0 = ms0, Ti:sapph OFF
-    gate 1 = ms0, Ti:sapph ON
-    gate 2 = ms1, Ti:sapph OFF
-    gate 3 = ms1, Ti:sapph ON
+Two blocks per repetition:
+    gate 0 = reference: Green Pol → MW pi → (no Ti:Sapph) → Green Readout
+    gate 1 = signal:    Green Pol → MW pi → Ti:Sapph     → Green Readout
+
+The MW frequency is swept by the main routine between stream_start calls.
+The sequence itself is loaded once and reused for all frequencies.
 
 Args:
     [pol_ns, probe_ns, readout_ns, uwave_ind, spin_pol_vkey, readout_vkey]
@@ -22,14 +23,14 @@ LOW = Digital.LOW
 HIGH = Digital.HIGH
 
 
-def _as_int64(name, v):
+def _as_int64(name, value):
     try:
-        iv = int(v)
+        value = int(value)
     except Exception:
-        raise TypeError(f"{name} must be int-like, got {type(v).__name__}: {v!r}")
-    if iv < 0:
-        raise ValueError(f"{name} must be >= 0, got {iv}")
-    return np.int64(iv)
+        raise TypeError(f"{name} must be int-like, got {value!r}")
+    if value < 0:
+        raise ValueError(f"{name} must be >= 0, got {value}")
+    return np.int64(value)
 
 
 def _vkey_from_arg(x):
@@ -92,23 +93,23 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
 
     meas_buffer = _as_int64("meas_buffer", config["CommonDurations"]["cw_meas_buffer"])
     transient = np.int64(1000)
+    # Buffer after Ti:Sapph probe to let AOM fully close before readout
+    probe_buffer = np.int64(5000)  # 5 μs — adjust if Ti:Sapph AOM is slower
 
     front_buffer = np.int64(
         max(uwave_delay, spin_pol_delay, readout_delay, tisapph_aom_delay)
     )
 
-    # one block = pol -> optional MW -> optional Ti:sapph probe -> readout
+    # One block: pol → transient → MW pi → transient → probe → probe_buffer → readout → meas_buffer
     block_ns = np.int64(
-        pol_ns + transient +
-        uwave_ns + transient +
-        probe_ns + readout_ns + meas_buffer
+        pol_ns + transient + uwave_ns + transient + probe_ns + probe_buffer + readout_ns + meas_buffer
     )
 
     period = np.int64(front_buffer + 2 * block_ns)
 
     seq = Sequence()
 
-    # sample clock
+    # ---- Sample clock ----
     clk_train = (
         [(int(period - 200), LOW), (100, HIGH), (100, LOW)]
         if period >= 300
@@ -116,12 +117,11 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
     )
     seq.setDigital(do_sample_clock, clk_train)
 
-    # block logic
-    block_use_mw = [True, True]
+    # ---- Block logic ----
+    # Block 0 = reference (no Ti:Sapph), Block 1 = signal (Ti:Sapph ON)
     block_use_tisapph = [False, True]
-    # block_use_mw = [False, False, True, True]
-    # block_use_tisapph = [False, True, False, True]
-    # ---------------- APD gate ----------------
+
+    # ---- APD gate ----
     apd_train = [(int(front_buffer), LOW)]
     for _ in range(2):
         apd_train.extend([
@@ -130,27 +130,29 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
             (int(uwave_ns), LOW),
             (int(transient), LOW),
             (int(probe_ns), LOW),
+            (int(probe_buffer), LOW),
             (int(readout_ns), HIGH),
             (int(meas_buffer), LOW),
         ])
     seq.setDigital(do_apd_gate, apd_train)
 
-    # ---------------- MW gate ----------------
+    # ---- MW gate (ON in both blocks — pi pulse) ----
     mw_train = [(int(front_buffer - uwave_delay), LOW)]
-    for use_mw in block_use_mw:
+    for _ in range(2):
         mw_train.extend([
             (int(pol_ns), LOW),
             (int(transient), LOW),
-            (int(uwave_ns), HIGH if use_mw else LOW),
+            (int(uwave_ns), HIGH),
             (int(transient), LOW),
             (int(probe_ns), LOW),
+            (int(probe_buffer), LOW),
             (int(readout_ns), LOW),
             (int(meas_buffer), LOW),
         ])
     mw_train.append((int(uwave_delay), LOW))
     seq.setDigital(do_sig_gen_gate, mw_train)
 
-    # ---------------- Ti:sapph AOM gate ----------------
+    # ---- Ti:Sapph AOM gate (OFF in ref, ON in signal) ----
     tisapph_train = [(int(front_buffer - tisapph_aom_delay), LOW)]
     for use_tisapph in block_use_tisapph:
         tisapph_train.extend([
@@ -159,33 +161,30 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
             (int(uwave_ns), LOW),
             (int(transient), LOW),
             (int(probe_ns), HIGH if use_tisapph else LOW),
+            (int(probe_buffer), LOW),
             (int(readout_ns), LOW),
             (int(meas_buffer), LOW),
         ])
     tisapph_train.append((int(tisapph_aom_delay), LOW))
     seq.setDigital(do_tisapph_aom, tisapph_train)
 
-    # ---------------- Spin/readout laser(s) ----------------
-    # If spin polarization and readout use the same physical laser channel,
-    # combine them into one train so the second call does not overwrite the first.
+    # ---- Green laser (pol + readout in both blocks) ----
     if spin_pol_laser_name == readout_laser_name:
         shared_delay = max(spin_pol_delay, readout_delay)
-
-        combined_laser_train = [(int(front_buffer - shared_delay), LOW)]
+        laser_train = [(int(front_buffer - shared_delay), LOW)]
         for _ in range(2):
-            combined_laser_train.extend([
-                (int(pol_ns), HIGH),   # polarization pulse
+            laser_train.extend([
+                (int(pol_ns), HIGH),
                 (int(transient), LOW),
                 (int(uwave_ns), LOW),
                 (int(transient), LOW),
                 (int(probe_ns), LOW),
-                (int(readout_ns), HIGH),  # readout pulse
+                (int(probe_buffer), LOW),
+                (int(readout_ns), HIGH),
                 (int(meas_buffer), LOW),
             ])
-        combined_laser_train.append((int(shared_delay), LOW))
-
-        tb.process_laser_seq(seq, readout_vkey, combined_laser_train)
-
+        laser_train.append((int(shared_delay), LOW))
+        tb.process_laser_seq(seq, readout_vkey, laser_train)
     else:
         spin_pol_train = [(int(front_buffer - spin_pol_delay), LOW)]
         for _ in range(2):
@@ -195,6 +194,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
                 (int(uwave_ns), LOW),
                 (int(transient), LOW),
                 (int(probe_ns), LOW),
+                (int(probe_buffer), LOW),
                 (int(readout_ns), LOW),
                 (int(meas_buffer), LOW),
             ])
@@ -209,6 +209,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
                 (int(uwave_ns), LOW),
                 (int(transient), LOW),
                 (int(probe_ns), LOW),
+                (int(probe_buffer), LOW),
                 (int(readout_ns), HIGH),
                 (int(meas_buffer), LOW),
             ])
@@ -218,11 +219,12 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
     final = OutputState([], 0.0, 0.0)
     return seq, final, [int(period)]
 
+
 if __name__ == "__main__":
     from utils import common
 
     cfg = common.get_config_dict()
-    args = [2e3, 100e3, 440, 0, "SPIN_POL", "SPIN_READOUT"]
+    args = [2000, 100000, 440, 0, "SPIN_POL", "SPIN_READOUT"]
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])
     seq.plot()

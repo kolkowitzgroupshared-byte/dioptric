@@ -15,7 +15,6 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 
-from controlpanels.control_panel_cryo import do_optimize_galvo, do_optimize_z
 import majorroutines.targeting as targeting
 from utils import positioning as pos
 from utils import tool_belt as tb
@@ -35,9 +34,9 @@ def main(
     uwave_ind,
     uwave_power_dbm=None,
     laser_power=None,
-    do_targeting=False, #broken
-    do_plot=True, 
-    shuffle=False, #broken
+    optimize_between_runs=False,
+    do_plot=True,
+    shuffle=False,
     norm_mode=NormMode.SINGLE_VALUED,
 ):
     tb.reset_cfm()
@@ -89,7 +88,6 @@ def main(
     ref_counts = np.full((num_runs, num_steps), np.nan, dtype=float)
 
     timestamp = dm.get_time_stamp()
-    opti_coords_list = []
 
     if do_plot:
         fig, ax = plt.subplots()
@@ -113,6 +111,12 @@ def main(
         sweep_order = np.arange(num_steps)
         if shuffle:
             np.random.shuffle(sweep_order)
+
+        # Reload sequence each run (optimization resets servers between runs)
+        pulsegen_server.stream_load(seq_file, seq_args_string)
+        sig_gen.set_amp(float(uwave_power_dbm)) if uwave_power_dbm is not None else None
+        sig_gen.set_freq(float(freq_center_ghz))
+        sig_gen.uwave_on()
 
         counter_server.start_tag_stream()
         try:
@@ -159,35 +163,21 @@ def main(
             ax.autoscale_view()
             plt.pause(0.01)
 
-        if do_targeting:
-            # piezo = pos.get_positioner_server(CoordsKey.Z)
-            # galvo= pos.get_positioner_server(CoordsKey.PIXEL)
-
-            # print(f"Starting position: Z={piezo.read_z()}, XY={galvo.read_xy()}")
-            # do_optimize_z(nv_sig)  # Optimize Z using piezo
-            # piezo.read_z()
-            # piezo.write_z(piezo.read_z()) 
-            # opti_z=piezo.read_z()
-            # print(f"Z position: {opti_z}") # Write current Z back to trigger any necessary updates
-
-            # do_optimize_galvo(nv_sig)
-            # galvo.read_xy()
-            # galvo.write_xy(galvo.read_xy())
-            # print(f"Galvo position: {galvo.read_xy()}")
-            # opti_x=galvo.read_x()
-            # opti_y=galvo.read_y()
-
-            # print(f"Optimized position: Z={opti_z}, XY={opti_x},{opti_y}")
-            
-            # opti_coords = [opti_x,opti_y,opti_z]
-            # opti_coords_list.append(opti_coords)
-            
+        if optimize_between_runs:
             try:
-                opti_coords = pos.set_xyz_on_nv(nv_sig)
-                opti_coords_list.append(opti_coords)
+                z_coords, z_counts = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
+                print(f"  Optimized Z: {z_coords}, counts={z_counts}")
             except Exception as e:
-                print(f"Targeting failed on run {run_ind}: {e}")
-                opti_coords_list.append(None)
+                print(f"  Z optimization failed on run {run_ind}: {e}")
+            try:
+                galvo_key = pos.get_laser_positioner(VirtualLaserKey.IMAGING)
+                xy_coords, xy_counts = targeting.optimize(nv_sig, coords_key=galvo_key)
+                print(f"  Optimized XY: {xy_coords}, counts={xy_counts}")
+            except Exception as e:
+                print(f"  XY optimization failed on run {run_ind}: {e}")
+            for f_num in plt.get_fignums():
+                if plt.figure(f_num) is not fig:
+                    plt.close(f_num)
     
     print(f"run {run_ind}: norm_mean min={norm_mean.min():.6f} max={norm_mean.max():.6f}, runs averaged={run_ind+1}")
 

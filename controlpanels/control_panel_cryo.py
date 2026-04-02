@@ -40,6 +40,7 @@ import majorroutines.confocal.confocal_rabi as rabi
 # import majorroutines.confocal.ramsey as ramsey
 import majorroutines.confocal.confocal_resonance as resonance
 import majorroutines.confocal.confocal_resonance_singlet_scan as resonance_tisapph_singlet_scan
+import majorroutines.confocal.confocal_odmr_tisapph_short as odmr_tisapph_short
 import majorroutines.confocal.confocal_apd_gate_overlap_scan as find_apd_gate_overlap
 
 # import majorroutines.confocal.spin_echo as spin_echo
@@ -276,7 +277,7 @@ def do_optimize_xy_loop(
         )
 
 
-def do_green_optimize_loop(nv_sig, num_iterations=3):
+def do_green_optimize_loop(nv_sig, num_iterations=3): # Not actually moving to new position
     for i in range(num_iterations):
         if tool_belt.safe_stop():
             break
@@ -288,16 +289,21 @@ def do_green_optimize_loop(nv_sig, num_iterations=3):
         do_optimize_z(nv_sig)  # Optimize Z using piezo
         piezo.read_z()
         piezo.write_z(piezo.read_z())
-        print(
-            f"Z position: {piezo.read_z()}"
-        )  # Write current Z back to trigger any necessary updates
+        # pos.get_positioner_server(CoordsKey.Z).read_z()
+        # positioner = CoordsKey.Z
+        # pos._set_xyz(nv_sig)  # Update nv_sig coords with current position
 
+        print(
+            f"Z position: {piezo.read_z(), nv_sig.coords[CoordsKey.Z]}"
+        )  # Write current Z back to trigger any necessary updates
+        
         do_optimize_galvo(nv_sig)
         galvo.read_xy()
         galvo.write_xy(galvo.read_xy())
         print(
             f"Galvo position: {galvo.read_xy()}"
         )  # Write current XY back to trigger any necessary updates
+        
 
         print(f"Optimized position: Z={piezo.read_z()}, XY={galvo.read_xy()}")
 
@@ -783,13 +789,13 @@ def do_rabi(nv_sig):
     rabi.main(
         nv_sig=nv_sig,
         num_reps=int(20e4),
-        num_runs=10,
+        num_runs=5, #testing
         min_tau=20,  # ns
         max_tau=500,  # ns (480+min_tau)
-        num_steps=31,  # 1 step every ~5-10ns
+        num_steps=15,  # 1 step every ~5-10ns
         uwave_ind=0,
-        uwave_freq_ghz=2.8548,  # 2.8573,  # Change to target ms=+1 or ms=-1 transition
-        optimize_between_runs=False,  # Set to false to turn off optimize between runs
+        uwave_freq_ghz=2.8262,  # Change to target ms=+1 or ms=-1 transition
+        optimize_between_runs=True,  # Set to false to turn off optimize between runs
     )
 
 
@@ -800,8 +806,9 @@ def do_resonance(nv_sig):
         freq_span_mhz=200.0,
         num_steps=30,
         num_reps=20e4,
-        num_runs=3,
+        num_runs=10,
         uwave_ind=0,
+        optimize_between_runs=True,
     )
 
 
@@ -810,17 +817,34 @@ def do_tisapph_singlet_scan(nv_sig):
         nv_sig,
         wavelength_start_nm=805.0,
         wavelength_stop_nm=825.0,
-        num_steps=81,
+        num_steps=31,
         num_reps=20e4,
-        num_runs=3,
+        num_runs=10,
         uwave_ind=0,
-        uwave_freq_ghz=2.8786,
-        uwave_power_dbm=5.0,
-        probe_ns=500,
+        uwave_freq_ghz=2.8262,  # ms=-1
+        uwave_power_dbm=10.0,
+        probe_ns=100e3,
         do_plot=True,
-        shuffle=True,
+        shuffle=False,
         settle_s=0.3,
+        optimize_between_runs=True,
     )
+
+
+def do_odmr_tisapph_short(nv_sig):
+    odmr_tisapph_short.main(
+        nv_sig,
+        freq_center_ghz=2.87,
+        freq_span_mhz=200.0,
+        num_steps=30,
+        num_reps=int(20e4),
+        num_runs=10,
+        uwave_ind=0,
+        probe_ns=100e3,
+        optimize_between_runs=True,
+    )
+
+
 # def do_t1_dq(nv_sig):
 #     # T1 experiment parameters, formatted:
 #     # [[init state, read state], relaxation_time_range, num_steps, num_reps]
@@ -1025,9 +1049,9 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z = 4.2596  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z = 4.2883  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # pixel_xy = [0,0]  # galvo ref
-    pixel_xy = [0.04, 0.083]  # alignment test
+    pixel_xy = [0.014, 0.062]  # alignment test
     # pixel_xy = [0.093, 0.067] # NV Lovelace
     # pixel_xy = [0.006, -0.001]  # NV Lovelace
     # return
@@ -1045,12 +1069,12 @@ if __name__ == "__main__":
             VirtualLaserKey.IMAGING: int(10e6),  # readout is in ns (5e6 = 5ms)
             VirtualLaserKey.SPIN_READOUT: int(440),  # readout is in ns (5e6 = 5ms)
             VirtualLaserKey.SPIN_POL: 2000,
-            VirtualLaserKey.SINGLET_DRIVE: 300,  # placeholder
+            VirtualLaserKey.SINGLET_DRIVE: 100e3,  # placeholder
         },
     )
 
-    # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 200
+    nv_sig.expected_counts = None
+    # nv_sig.expected_counts = 200
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifoc
@@ -1122,13 +1146,13 @@ if __name__ == "__main__":
         # end region Image sample
         #
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=4.2, voltage_end=4.3, step_size=0.002)
+        # do_optimize_z_PI(nv_sig, voltage_start=4.20, voltage_end=4.4, step_size=0.005)
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
 
         # do_compensate_for_drift(nv_sig)
-        # do_optimize_galvo(nv_sig) # optimize xy for drift
+        do_optimize_galvo(nv_sig) # optimize xy for drift
         # do_optimize_z(nv_sig) # optimize z for drift
         # do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
         #
