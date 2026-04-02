@@ -37,22 +37,19 @@ red_laser_aod = "laser_COBO_638_aod"
 # calibration_coords_red = [[41.956, 88.653],[69.523, 40.383],[90.96, 93.205]]
 
 calibration_coords_pixel = [
-    # [209.573, 201.991],
-    [355.977,  55.633],
-    [220.414, 359.866],
-    [ 25.961,  55.878],
-        ]
+    [355.855, 55.308], 
+    [220.425, 359.764], 
+    [25.893, 55.843],
+    ]
 calibration_coords_green =[
-    #  [101.058, 100.75],
-    [72.2, 124.948],
-    [101.955, 72.349],
-    [131.548, 130.073],
+    [72.248, 124.933],
+    [102.003, 72.355],
+    [131.597, 130.11],
     ]
 calibration_coords_red = [
-    # [66.063, 65.329],
-    [41.465, 82.8],
-    [68.524, 42.346],
-    [89.124, 91.245],
+    [41.498, 82.808],
+    [68.574, 42.356],
+    [89.185, 91.264],
     ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -81,7 +78,6 @@ pixel_to_sample_affine_transformation_matrix = [
     [0.06108861, -0.00533755, -12.74624750],    
     [0.00748424, 0.06162394, -16.62683414],  
 ]
-
 # endregion
 # region Base config
 # Add on to the default config
