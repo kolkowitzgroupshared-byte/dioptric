@@ -192,6 +192,9 @@ def main(
             if tb.safe_stop():
                 break
 
+            if optimize_between_runs:
+                    targeting.compensate_for_drift(nv_sig)
+                    
             sweep_order = np.arange(num_steps)
             if shuffle:
                 np.random.shuffle(sweep_order)
@@ -200,6 +203,7 @@ def main(
             pulsegen_server.stream_load(seq_file, seq_args_string)
             sig_gen.set_freq(float(uwave_freq_ghz)) if uwave_freq_ghz is not None else None
             sig_gen.uwave_on()
+            
 
             counter_server.start_tag_stream()
             try:
@@ -272,21 +276,23 @@ def main(
 
                 plt.pause(0.01)
 
-            if optimize_between_runs:
-                try:
-                    z_coords, z_counts = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
-                    print(f"  Optimized Z: {z_coords}, counts={z_counts}")
-                except Exception as e:
-                    print(f"  Z optimization failed on run {run_ind}: {e}")
-                try:
-                    galvo_key = pos.get_laser_positioner(VirtualLaserKey.IMAGING)
-                    xy_coords, xy_counts = targeting.optimize(nv_sig, coords_key=galvo_key)
-                    print(f"  Optimized XY: {xy_coords}, counts={xy_counts}")
-                except Exception as e:
-                    print(f"  XY optimization failed on run {run_ind}: {e}")
-                for f_num in plt.get_fignums():
-                    if not do_plot or plt.figure(f_num) is not fig:
-                        plt.close(f_num)
+                
+                # if optimize_between_runs:
+                #         targeting.compensate_for_drift(nv_sig)
+                # try:
+                #     z_coords, z_counts = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
+                #     print(f"  Optimized Z: {z_coords}, counts={z_counts}")
+                # except Exception as e:
+                #     print(f"  Z optimization failed on run {run_ind}: {e}")
+                # try:
+                #     galvo_key = pos.get_laser_positioner(VirtualLaserKey.IMAGING)
+                #     xy_coords, xy_counts = targeting.optimize(nv_sig, coords_key=galvo_key)
+                #     print(f"  Optimized XY: {xy_coords}, counts={xy_counts}")
+                # except Exception as e:
+                #     print(f"  XY optimization failed on run {run_ind}: {e}")
+                # for f_num in plt.get_fignums():
+                #     if not do_plot or plt.figure(f_num) is not fig:
+                #         plt.close(f_num)
 
     except Exception:
         print(traceback.format_exc())

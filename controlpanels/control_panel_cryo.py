@@ -1051,7 +1051,7 @@ if __name__ == "__main__":
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
     coord_z = 4.2883  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # pixel_xy = [0,0]  # galvo ref
-    pixel_xy = [0.014, 0.062]  # alignment test
+    pixel_xy = [0.022, 0.061]  # alignment test
     # pixel_xy = [0.093, 0.067] # NV Lovelace
     # pixel_xy = [0.006, -0.001]  # NV Lovelace
     # return
@@ -1072,9 +1072,8 @@ if __name__ == "__main__":
             VirtualLaserKey.SINGLET_DRIVE: 100e3,  # placeholder
         },
     )
-
-    nv_sig.expected_counts = None
-    # nv_sig.expected_counts = 200
+    # nv_sig.expected_counts = None
+    nv_sig.expected_counts = 304.6
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifoc
@@ -1152,7 +1151,7 @@ if __name__ == "__main__":
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
 
         # do_compensate_for_drift(nv_sig)
-        do_optimize_galvo(nv_sig) # optimize xy for drift
+        # do_optimize_galvo(nv_sig) # optimize xy for drift
         # do_optimize_z(nv_sig) # optimize z for drift
         # do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
         #
@@ -1178,7 +1177,7 @@ if __name__ == "__main__":
         # do_pulsed_resonance(nv_sig, 2.87, 0.200)
         # do_pulsed_re2.sonance_state(nv_sig, States.LOW)
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
-        # do_rabi(nv_sig)
+        do_rabi(nv_sig)
         # do_resonance(nv_sig)
         # do_tisapph_singlet_scan(nv_sig)
         # do_find_apd_gate_overlap(nv_sig)
