@@ -202,7 +202,7 @@ def main(
         "ref_counts": ref_counts.tolist(),
         "norm_mean": norm_mean.tolist(),
         "norm_ste": norm_ste.tolist(),
-        "opti_coords_list": opti_coords_list,
+        # "opti_coords_list": opti_coords_list,
     }
 
     ts = dm.get_time_stamp()
