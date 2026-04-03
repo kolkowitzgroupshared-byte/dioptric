@@ -961,6 +961,9 @@ if __name__ == "__main__":
     file_ids = [
         "2026_03_28-07_17_36-qnami-nv0_2026_02_20"
     ]
+    file_ids = [
+        "2026_03_28-21_55_48-qnami-nv0_2026_02_20"
+    ]
     # Load the first dataset as a base
     combined_data = dm.get_raw_data(
         file_stem=file_ids[0], load_npz=True, use_cache=True

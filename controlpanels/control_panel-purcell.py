@@ -310,7 +310,7 @@ def do_optimize_pixel(nv_sig):
 def do_optimize_loop(nv_list, coords_key):
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     opti_coords_list = []
-    for nv in nv_list[1:2]:
+    for nv in nv_list:
         if coords_key == green_laser:
             opti_coords = do_optimize_green(nv)
         elif coords_key == red_laser:
@@ -563,7 +563,7 @@ def do_resonance(nv_list):
     freq_range = 0.260
     num_steps = 45
     num_reps = 4
-    num_runs = 200
+    num_runs = 300
     freqs = calculate_freqs(freq_center, freq_range, num_steps)
     ##
     # Remove duplicates and sort
@@ -1693,22 +1693,22 @@ if __name__ == "__main__":
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
     # pixel_coords_list =[
-    #     [209.573, 201.991],
-    #     [355.977,  55.633],
-    #     [220.414, 359.866],
-    #     [25.961,  55.878],
+    #     [209.693, 202.035], 
+    #     [355.855, 55.308], 
+    #     [220.425, 359.764], 
+    #     [25.893, 55.843],
     #     ]
     # green_coords_list = [
-    #     [101.114, 100.916], 
-    #     [72.2, 124.948],
-    #     [101.955, 72.349],
-    #     [131.548, 130.073],
-    #     ]
+    #     [101.165, 100.701],
+    #     [72.248, 124.933],
+    #     [102.003, 72.355],
+    #     [131.597, 130.11],
+    # ]
     # red_coords_list = [
-    #     [66.063, 65.329],
-    #     [41.465, 82.8],
-    #     [68.524, 42.346],
-    #     [89.124, 91.245],
+    #     [66.259, 65.255],
+    #     [41.505, 82.791],
+    #     [68.562, 42.354],
+    #     [89.161, 91.279],
     #     ]
 
     num_nvs = len(pixel_coords_list)
@@ -1806,7 +1806,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts = 1100.0
-    nv_sig.expected_counts = 1700
+    # nv_sig.expected_counts = 1700
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:150]
     print(f"length of NVs list:{len(nv_list)}")
@@ -1823,7 +1823,7 @@ if __name__ == "__main__":
         # pass
         kpl.init_kplotlib()
         # tb.init_safe_stop()
-        # widefield.reset_all_drift()
+        # widefield.reset_all_drift()1
         # do_optimize_z(nv_sig)
         # do_optimize_xyz(nv_sig)
         # pos.set_xyz_on_nv(nv_sig)
