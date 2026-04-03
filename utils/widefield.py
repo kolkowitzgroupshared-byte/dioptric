@@ -114,44 +114,6 @@ def _calc_dist_matrix(radius=None):
     x_crop_mesh, y_crop_mesh = np.meshgrid(x_crop, y_crop)
     return np.sqrt((x_crop_mesh) ** 2 + (y_crop_mesh) ** 2)
 
-
-# def integrate_counts(img_array, pixel_coords, radius=None):
-#     """Add up the counts around a target set of pixel coordinates in the passed image array.
-#     Use for getting the total number of photons coming from a target NV.
-
-#     Parameters
-#     ----------
-#     img_array : ndarray
-#         Image array in units of photons (convert from ADUs with adus_to_photons)
-#     pixel_coords : 2-tuple
-#         Pixel coordinates to integrate around
-#     radius : _type_, optional
-#         Radius of disk to integrate over, by default retrieved from config
-
-#     Returns
-#     -------
-#     float
-#         Integrated counts (just an estimate, as adus_to_photons is also just an estimate)
-#     """
-#     pixel_x = pixel_coords[0]
-#     pixel_y = pixel_coords[1]
-
-#     if radius is None:
-#         radius = _get_camera_spot_radius()
-
-#     # Don't work through all the pixels, just the ones that might be relevant
-#     left = round(pixel_x - radius)
-#     right = round(pixel_x + radius)
-#     top = round(pixel_y - radius)
-#     bottom = round(pixel_y + radius)
-#     img_array_crop = img_array[top : bottom + 1, left : right + 1]
-#     dist = _calc_dist_matrix()
-
-
-#     counts = np.sum(img_array_crop, where=dist < radius)
-#     return counts
-
-
 # SBC: update on 9/9/2024
 def integrate_counts(img_array, pixel_coords, radius=None):
     """
