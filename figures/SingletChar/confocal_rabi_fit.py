@@ -90,7 +90,7 @@ def main():
         freq_guess = 1.0 / (taus_ns[-1] - taus_ns[0])
 
     decay_guess = taus_ns[-1] / 2.0
-    phase_guess = np.pi
+    phase_guess = 0.0
 
     p0 = [amp_guess, freq_guess, phase_guess, decay_guess, offset_guess]
     bounds = (

@@ -155,7 +155,7 @@
 """
 Created on Tue Feb  11 21:24:36 2026
 
-Laser-free variant: drives DAQ clock and APD gate only.
+Simple readout: drives DAQ clock, APD gate, and imaging laser (continuous ON).
 """
 
 import numpy as np
