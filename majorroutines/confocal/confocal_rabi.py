@@ -198,40 +198,23 @@ def main(
         if tb.safe_stop():
             break
 
-
         if optimize_between_runs:
-            try:
-                # 1D Z optimization
-                z_coords, z_counts = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
-                # 1D XY galvo optimization
-                galvo_key = pos.get_laser_positioner(VirtualLaserKey.IMAGING)
-                xy_coords, xy_counts = targeting.optimize(nv_sig, coords_key=galvo_key)
-                print(f"  Optimized: Z={z_coords}, XY={xy_coords}, counts={xy_counts}")
-            except Exception as e:
-                print(f"  Optimization failed on run {run_ind}: {e}")
-            # Close optimize plots without closing the Rabi figure
-            for f_num in plt.get_fignums():
-                if plt.figure(f_num) is not fig:
-                    plt.close(f_num)
-
+            targeting.compensate_for_drift(nv_sig)
+            
         # if optimize_between_runs:
         #     try:
-        #         xy_kwargs = dict(optimize_xy_kwargs or {})
-        #         xy_kwargs.setdefault("num_steps", 8)
-        #         xy_kwargs.setdefault("scan_range", 0.008)
-        #         xy_kwargs.setdefault("move_to_optimal", True)
-        #         xy_kwargs.setdefault("save_data", False)
-        #         results = optimize_xy.main(nv_sig, **xy_kwargs)
-        #         opti_x = results.get("opti_x")
-        #         opti_y = results.get("opti_y")
-        #         if opti_x is not None and opti_y is not None:
-        #             print(f"  Optimized: X={opti_x:.4f}, Y={opti_y:.4f}")
+        #         # 1D Z optimization
+        #         z_coords, z_counts = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
+        #         # 1D XY galvo optimization
+        #         galvo_key = pos.get_laser_positioner(VirtualLaserKey.IMAGING)
+        #         xy_coords, xy_counts = targeting.optimize(nv_sig, coords_key=galvo_key)
+        #         print(f"  Optimized: Z={z_coords}, XY={xy_coords}, counts={xy_counts}")
         #     except Exception as e:
-        #         print(f"  XY optimization failed: {e}")
-        #     # Close optimize_xy plots without closing the Rabi figure
-        #     for f in plt.get_fignums():
-        #         if plt.figure(f) is not fig:
-        #             plt.close(f)
+        #         print(f"  Optimization failed on run {run_ind}: {e}")
+        #     # Close optimize plots without closing the Rabi figure
+        #     for f_num in plt.get_fignums():
+        #         if plt.figure(f_num) is not fig:
+        #             plt.close(f_num)
 
         # Re-enable sig gen after optimization (reset_cfm turns it off)
         if uwave_power_dbm is not None:

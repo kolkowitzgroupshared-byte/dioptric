@@ -281,7 +281,7 @@ def nuvu2thorcam_calibration(coords):
     )
 
     cal_coords_nuvu = np.array(
-        [[337.858, 361.309], [311.45, 10.839], [17.841, 209.591]], dtype="float32"
+        [[338.04, 361.354], [311.711, 11.032], [18.043, 209.58]], dtype="float32"
     )
     # Compute the affine transformation matrix
     M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
@@ -314,13 +314,13 @@ def compute_and_write_nvs_phase():
         shape=(4096, 2048),
         spot_vectors=thorcam_coords_xy,
         basis="ij",
-        spot_amp=spot_weights,
+        # spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally
     hologram.optimize(
         "WGS-Kim",
-        maxiter=30,
+        maxiter=40,
         feedback="computational_spot",
         stat_groups=["computational_spot"],
     )

@@ -37,22 +37,19 @@ red_laser_aod = "laser_COBO_638_aod"
 # calibration_coords_red = [[41.956, 88.653],[69.523, 40.383],[90.96, 93.205]]
 
 calibration_coords_pixel = [
-    # [209.573, 201.991],
-    [355.977,  55.633],
-    [220.414, 359.866],
-    [ 25.961,  55.878],
-        ]
+    [355.855, 55.308], 
+    [220.425, 359.764], 
+    [25.893, 55.843],
+    ]
 calibration_coords_green =[
-    #  [101.058, 100.75],
-    [72.2, 124.948],
-    [101.955, 72.349],
-    [131.548, 130.073],
+    [72.218, 124.96],
+    [101.986, 72.343],
+    [131.603, 130.079],
     ]
 calibration_coords_red = [
-    # [66.063, 65.329],
-    [41.465, 82.8],
-    [68.524, 42.346],
-    [89.124, 91.245],
+    [41.498, 82.808],
+    [68.574, 42.356],
+    [89.185, 91.264],
     ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -81,7 +78,6 @@ pixel_to_sample_affine_transformation_matrix = [
     [0.06108861, -0.00533755, -12.74624750],    
     [0.00748424, 0.06162394, -16.62683414],  
 ]
-
 # endregion
 # region Base config
 # Add on to the default config
@@ -270,8 +266,8 @@ config |= {
             VirtualLaserKey.WIDEFIELD_CHARGE_READOUT: {
                 "physical_name": yellow_laser,
                 # "duration": 60e6,
-                # "duration": 50e6,
-                "duration": 24e6,  # for red calibration
+                "duration": 50e6,
+                # "duration": 24e6,  # for red calibration
             },
             # LaserKey.WIDEFIELD_CHARGE_READOUT: {"physical_name": yellow_laser, "duration": 100e6},
         },
@@ -966,6 +962,7 @@ opx_config = {
         "yellow_imaging": {"type": "constant", "sample": 0.40},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.344}, #1460NVs 
         "yellow_charge_readout": {"type": "constant", "sample": 0.3614}, 
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.4014}, 
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other
