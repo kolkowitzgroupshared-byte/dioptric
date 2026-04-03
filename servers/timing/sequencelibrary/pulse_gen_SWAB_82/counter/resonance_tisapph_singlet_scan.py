@@ -104,7 +104,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
         probe_ns + readout_ns + meas_buffer
     )
 
-    period = np.int64(front_buffer + 2 * block_ns)
+    period = np.int64(front_buffer + 4 * block_ns)
 
     seq = Sequence()
 
@@ -117,13 +117,12 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
     seq.setDigital(do_sample_clock, clk_train)
 
     # block logic
-    block_use_mw = [True, True]
-    block_use_tisapph = [False, True]
-    # block_use_mw = [False, False, True, True]
-    # block_use_tisapph = [False, True, False, True]
+    block_use_mw = [False, False, True, True]
+    block_use_tisapph = [False, True, False, True]
+
     # ---------------- APD gate ----------------
     apd_train = [(int(front_buffer), LOW)]
-    for _ in range(2):
+    for _ in range(4):
         apd_train.extend([
             (int(pol_ns), LOW),
             (int(transient), LOW),
@@ -172,7 +171,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
         shared_delay = max(spin_pol_delay, readout_delay)
 
         combined_laser_train = [(int(front_buffer - shared_delay), LOW)]
-        for _ in range(2):
+        for _ in range(4):
             combined_laser_train.extend([
                 (int(pol_ns), HIGH),   # polarization pulse
                 (int(transient), LOW),
@@ -188,7 +187,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
 
     else:
         spin_pol_train = [(int(front_buffer - spin_pol_delay), LOW)]
-        for _ in range(2):
+        for _ in range(4):
             spin_pol_train.extend([
                 (int(pol_ns), HIGH),
                 (int(transient), LOW),
@@ -202,7 +201,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
         tb.process_laser_seq(seq, spin_pol_vkey, spin_pol_train)
 
         readout_train = [(int(front_buffer - readout_delay), LOW)]
-        for _ in range(2):
+        for _ in range(4):
             readout_train.extend([
                 (int(pol_ns), LOW),
                 (int(transient), LOW),
@@ -222,7 +221,7 @@ if __name__ == "__main__":
     from utils import common
 
     cfg = common.get_config_dict()
-    args = [2e3, 100e3, 440, 0, "SPIN_POL", "SPIN_READOUT"]
+    args = [2000, 500, 440, 0, "SPIN_POL", "SPIN_READOUT"]
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])
     seq.plot()
