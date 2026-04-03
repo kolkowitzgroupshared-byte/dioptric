@@ -42,9 +42,9 @@ calibration_coords_pixel = [
     [25.893, 55.843],
     ]
 calibration_coords_green =[
-    [72.248, 124.933],
-    [102.003, 72.355],
-    [131.597, 130.11],
+    [72.218, 124.96],
+    [101.986, 72.343],
+    [131.603, 130.079],
     ]
 calibration_coords_red = [
     [41.498, 82.808],
@@ -266,8 +266,8 @@ config |= {
             VirtualLaserKey.WIDEFIELD_CHARGE_READOUT: {
                 "physical_name": yellow_laser,
                 # "duration": 60e6,
-                # "duration": 50e6,
-                "duration": 24e6,  # for red calibration
+                "duration": 50e6,
+                # "duration": 24e6,  # for red calibration
             },
             # LaserKey.WIDEFIELD_CHARGE_READOUT: {"physical_name": yellow_laser, "duration": 100e6},
         },
@@ -962,6 +962,7 @@ opx_config = {
         "yellow_imaging": {"type": "constant", "sample": 0.40},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.344}, #1460NVs 
         "yellow_charge_readout": {"type": "constant", "sample": 0.3614}, 
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.4014}, 
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other

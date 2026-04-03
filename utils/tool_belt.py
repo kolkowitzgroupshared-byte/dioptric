@@ -64,7 +64,7 @@ def configure_logging(inst, level=logging.INFO):
 
 def get_mod_mode(laser_name):
     config = common.get_config_dict()
-    mod_mode = config["Optics"][laser_name]["mod_mode"]
+    mod_mode = config["Optics"]["PhysicalLasers"][laser_name]["mod_mode"]
     return mod_mode.name
 
 
@@ -78,7 +78,7 @@ def laser_on(laser_name, laser_power=None):
 
 def laser_switch_sub(turn_on, laser_name, laser_power=None):
     config = common.get_config_dict()
-    mod_mode = config["Optics"][laser_name]["mod_mode"]
+    mod_mode = config["Optics"]["PhysicalLasers"][laser_name]["mod_mode"]
     pulse_gen = get_server_pulse_gen()
 
     if mod_mode is ModMode.DIGITAL:

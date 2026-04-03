@@ -180,7 +180,7 @@ def do_optimize_readout_amp(nv_list):
     # num_reps = 150
     # num_runs = 5
     num_reps = 12
-    num_runs = 200
+    num_runs = 400
     min_amp = 0.8
     max_amp = 1.2
     return optimize_charge_state_histograms.optimize_readout_amp(
@@ -1699,10 +1699,10 @@ if __name__ == "__main__":
     #     [25.893, 55.843],
     #     ]
     # green_coords_list = [
-    #     [101.165, 100.701],
-    #     [72.248, 124.933],
-    #     [102.003, 72.355],
-    #     [131.597, 130.11],
+    #     [101.132, 100.716],
+    #     [72.218, 124.96],
+    #     [101.986, 72.343],
+    #     [131.603, 130.079],
     # ]
     # red_coords_list = [
     #     [66.259, 65.255],
@@ -1838,7 +1838,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.RED_IMAGIN,
         # )
         
-        do_compensate_for_drift(nv_sig)
+        # do_compensate_for_drift(nv_sig)
         
         # do_red_calibration_image(
         #     nv_sig,
@@ -1846,7 +1846,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)
+        do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list:
@@ -1901,7 +1901,7 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        do_charge_state_histograms(nv_list)
+        # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
