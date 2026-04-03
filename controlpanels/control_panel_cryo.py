@@ -804,7 +804,7 @@ def do_resonance(nv_sig):
         nv_sig,
         freq_center_ghz=2.8786,
         freq_span_mhz=200.0,
-        num_steps=30,
+        num_steps=31,
         num_reps=20e4,
         num_runs=10,
         uwave_ind=0,
@@ -812,18 +812,18 @@ def do_resonance(nv_sig):
     )
 
 
-def do_tisapph_singlet_scan(nv_sig):
+def do_tisapph_singlet_scan(nv_sig,probe_ns=2e3):
     resonance_tisapph_singlet_scan.main(
         nv_sig,
         wavelength_start_nm=805.0,
-        wavelength_stop_nm=825.0,
-        num_steps=31,
-        num_reps=20e4,
-        num_runs=10,
+        wavelength_stop_nm=815.0,
+        num_steps=51,
+        num_reps=1e4, # Keep this number low to avoid losing NV
+        num_runs=200, # Balance out low reps with more runs 
         uwave_ind=0,
         uwave_freq_ghz=2.8262,  # ms=-1
         uwave_power_dbm=10.0,
-        probe_ns=100e3,
+        probe_ns=probe_ns,
         do_plot=True,
         shuffle=False,
         settle_s=0.3,
@@ -1049,11 +1049,11 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z = 4.2883  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z = 4.2499  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # pixel_xy = [0,0]  # galvo ref
-    pixel_xy = [0.014, 0.062]  # alignment test
+    # pixel_xy = [0.018, 0.061]  # alignment test
     # pixel_xy = [0.093, 0.067] # NV Lovelace
-    # pixel_xy = [0.006, -0.001]  # NV Lovelace
+    pixel_xy = [0.028, 0.059]  # NV Lovelace
     # return
     nv_sig = NVSig(
         name=f"({get_sample_name()})",
@@ -1072,9 +1072,8 @@ if __name__ == "__main__":
             VirtualLaserKey.SINGLET_DRIVE: 100e3,  # placeholder
         },
     )
-
-    nv_sig.expected_counts = None
-    # nv_sig.expected_counts = 200
+    # nv_sig.expected_counts = None
+    nv_sig.expected_counts = 345.8
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifoc
@@ -1146,13 +1145,13 @@ if __name__ == "__main__":
         # end region Image sample
         #
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=4.20, voltage_end=4.4, step_size=0.005)
+        # do_optimize_z_PI(nv_sig, voltage_start=4.2, voltage_end=4.35, step_size=0.002)
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
 
         # do_compensate_for_drift(nv_sig)
-        do_optimize_galvo(nv_sig) # optimize xy for drift
+        # do_optimize_galvo(nv_sig) # optimize xy for drift
         # do_optimize_z(nv_sig) # optimize z for drift
         # do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
         #
@@ -1179,8 +1178,11 @@ if __name__ == "__main__":
         # do_pulsed_re2.sonance_state(nv_sig, States.LOW)
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
         # do_rabi(nv_sig)
-        # do_resonance(nv_sig)
+        do_resonance(nv_sig)
         # do_tisapph_singlet_scan(nv_sig)
+        # probe_ns = [2e3, 5e3, 10e3, 20e3, 50e3, 100e3]
+        # for probe in probe_ns:
+            # do_tisapph_singlet_scan(nv_sig, probe_ns=probe)
         # do_find_apd_gate_overlap(nv_sig)
         # do_rabi(nv_sig, uwave_time_range=[0, 400])
         # do_spin_echo(nv_sig)
