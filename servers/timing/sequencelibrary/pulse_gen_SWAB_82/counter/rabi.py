@@ -73,7 +73,7 @@ def get_seq(pulse_streamer, config, args):
     # Buffers — match resonance.py exactly
     common_durations = config["CommonDurations"]
     meas_buffer = _as_int64("meas_buffer", common_durations["cw_meas_buffer"])
-    transient = np.int64(1e3)  # Hardcoded 1000 ns, same as resonance.py
+    transient = np.int64(200)  # Hardcoded 200 ns, same as resonance.py
 
     # Same front_buffer and alignment as resonance.py
     front_buffer = np.int64(max(uwave_delay, laser_delay))

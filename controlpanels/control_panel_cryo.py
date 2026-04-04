@@ -789,7 +789,7 @@ def do_rabi(nv_sig):
     rabi.main(
         nv_sig=nv_sig,
         num_reps=int(20e4),
-        num_runs=5, #testing
+        num_runs=4, #testing
         min_tau=20,  # ns
         max_tau=500,  # ns (480+min_tau)
         num_steps=15,  # 1 step every ~5-10ns
@@ -812,20 +812,19 @@ def do_resonance(nv_sig):
     )
 
 
-def do_tisapph_singlet_scan(nv_sig,probe_ns=2e3):
+def do_tisapph_singlet_scan(nv_sig, probe_ns=2e3):
     resonance_tisapph_singlet_scan.main(
         nv_sig,
         wavelength_start_nm=805.0,
         wavelength_stop_nm=815.0,
         num_steps=51,
         num_reps=1e4, # Keep this number low to avoid losing NV
-        num_runs=200, # Balance out low reps with more runs 
+        num_runs=20, # Balance out low reps with more runs 
         uwave_ind=0,
-        uwave_freq_ghz=2.8262,  # ms=-1
         uwave_power_dbm=10.0,
         probe_ns=probe_ns,
         do_plot=True,
-        shuffle=False,
+        shuffle=True,
         settle_s=0.3,
         optimize_between_runs=True,
     )
@@ -908,7 +907,6 @@ def do_odmr_tisapph_short(nv_sig):
 #         state,
 #     )
 #     return angle
-
 
 def do_pulse_gen_constant(digital_channels=(3,), analog0=None, analog1=None):
     pulse_gen = tool_belt.get_server_pulse_streamer()
@@ -1090,13 +1088,14 @@ if __name__ == "__main__":
         # expected_counts=13,
         pulse_durations={
             VirtualLaserKey.IMAGING: int(10e6),  # readout is in ns (5e6 = 5ms)
-            VirtualLaserKey.SPIN_READOUT: int(440),  # readout is in ns (5e6 = 5ms)
+            # VirtualLaserKey.SPIN_READOUT: int(440),  # readout is in ns (5e6 = 5ms)
+            VirtualLaserKey.SPIN_READOUT: int(2e3),  # readout is in ns (5e6 = 5ms)
             VirtualLaserKey.SPIN_POL: 2000,
             VirtualLaserKey.SINGLET_DRIVE: 100e3,  # placeholder
         },
     )
-    # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 454
+    nv_sig.expected_counts = None
+    # nv_sig.expected_counts = 454
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifoc
@@ -1120,8 +1119,8 @@ if __name__ == "__main__":
         # do_pulse_gen_constant()
         # do_pulse_gen_constant(digital_channels=(2,))
         # do_pulse_gen_constant(digital_channels=(3,))
-
         # do_tisapph_constant_wavelength(wavelength_nm=780.0)
+        # do_pulse_gen_square_wave(10000, digital_channels=(3,))
 
         # # # Manually set Z reference to current position
         # piezo = pos.get_positioner_server(CoordsKey.Z)
@@ -1200,9 +1199,9 @@ if __name__ == "__main__":
         # do_pulsed_resonance(nv_sig, 2.87, 0.200)
         # do_pulsed_re2.sonance_state(nv_sig, States.LOW)
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
-        do_rabi(nv_sig)
+        # do_rabi(nv_sig)
         # do_resonance(nv_sig)
-        # do_tisapph_singlet_scan(nv_sig)
+        do_tisapph_singlet_scan(nv_sig)
         # probe_ns = [2e3, 5e3, 10e3, 20e3, 50e3, 100e3]
         # for probe in probe_ns:
             # do_tisapph_singlet_scan(nv_sig, probe_ns=probe)
@@ -1217,7 +1216,6 @@ if __name__ == "__main__":
         # endregion Resonance and SCC
 
     ### Error handling and wrap-up
-
     except Exception as exc:
         recipient = "cmreiter@berkeley.edu"
         # tool_belt.send_exception_email(email_to=recipient)

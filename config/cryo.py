@@ -83,7 +83,7 @@ config |= {
     "CommonDurations": {
         "cw_meas_buffer": 1000,
         "pol_to_uwave_wait_dur": 1000,
-        "scc_ion_readout_buffer": 10000,
+        "scc_ion_readout_buffer": 1000,
         "uwave_buffer": 100,
         "uwave_to_readout_wait_dur": 1000,
     },
@@ -135,9 +135,9 @@ config |= {
                 "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 10, #dbm
                 "frequency": 2.8251, #GHz
-                "rabi_period": 204,
-                "pi_pulse": 102,
-                "pi_on_2_pulse": 51, #Half of pi pulse, for use in Ramsey and SE
+                "rabi_period": 278,
+                "pi_pulse": 156,
+                "pi_on_2_pulse": 64, #Half of pi pulse, for use in Ramsey and SE
             },
             # sig gen 1 is iq molulated
             1: {
@@ -180,7 +180,7 @@ config |= {
                 "positioner": CoordsKey.PIXEL,
             },
             tisapph_laser: {
-                "delay": 0,
+                "delay": 1e3, #Characterized by Saroj and Caitlin on 04/17/2025
                 "mod_mode": ModMode.DIGITAL,
                 "positioner": CoordsKey.PIXEL,
             },

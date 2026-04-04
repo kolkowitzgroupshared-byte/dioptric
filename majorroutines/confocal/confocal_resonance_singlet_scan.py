@@ -87,7 +87,7 @@ def main(
     laser_power=None,
     optimize_between_runs=True,
     do_plot=True,
-    shuffle=False,
+    shuffle=True,
     settle_s=0.25,
 ):
     tb.reset_cfm()
@@ -129,14 +129,6 @@ def main(
     sig_gen.uwave_on()
 
     seq_file = "resonance_tisapph_singlet_scan.py"
-    seq_args = [
-        int(pol_ns),
-        int(probe_ns),
-        int(readout_ns),
-        int(uwave_ind),
-        spin_pol_vkey,
-        readout_vkey,
-    ]
 
     wavelengths_nm = np.linspace(wavelength_start_nm, wavelength_stop_nm, num_steps)
 
@@ -203,12 +195,19 @@ def main(
                     wl_nm = float(wavelengths_nm[step_ind])
                     tisapph.set_wavelength_nm(wl_nm)
                     time.sleep(settle_s)
+                    seq_args = [
+                        int(pol_ns),
+                        int(probe_ns),
+                        int(readout_ns),
+                        int(uwave_ind),
+                        spin_pol_vkey,
+                        readout_vkey,
+                    ]
                     seq_args_string = tb.encode_seq_args(seq_args)
                     pulsegen_server.stream_load(seq_file, seq_args_string)
 
                     counter_server.clear_buffer()
                     pulsegen_server.stream_start(int(num_reps))
-
                     # Each row should be [ms0_off, ms0_on, ms1_off, ms1_on]
                     new_counts = counter_server.read_counter_modulo_gates(4, int(num_reps))
                     count_arr = np.array(new_counts, dtype=np.int64)
@@ -441,7 +440,8 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
 
     # Example:
-    data = dm.get_raw_data(file_stem="2026_04_03-05_20_17-(lovelace)", load_npz=True)
+    # data = dm.get_raw_data(file_stem="2026_04_03-05_20_17-(lovelace)", load_npz=True)
+    data = dm.get_raw_data(file_stem="2026_04_03-19_10_05-(lovelace)", load_npz=True)
     # plot_ms_contrast_from_loaded(data, use_tisapph_on=True)
     plot_ms0_ms1_raw_from_loaded(data)
     kpl.show(block=True)
