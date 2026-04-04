@@ -404,13 +404,46 @@ def plot_ms_contrast_from_loaded(raw_data, use_tisapph_on=False):
     plt.tight_layout()
     return fig
 
+def plot_ms0_ms1_raw_from_loaded(raw_data):
+    wavelengths_nm = np.asarray(raw_data["wavelengths_nm"], dtype=float)
+
+    ms0_off = np.asarray(raw_data["ms0_off_counts"], dtype=float)
+    ms1_off = np.asarray(raw_data["ms1_off_counts"], dtype=float)
+    ms0_on = np.asarray(raw_data["ms0_on_counts"], dtype=float)
+    ms1_on = np.asarray(raw_data["ms1_on_counts"], dtype=float)
+
+    ms0_off_mean = np.nanmean(ms0_off, axis=0)
+    ms1_off_mean = np.nanmean(ms1_off, axis=0)
+    ms0_on_mean = np.nanmean(ms0_on, axis=0)
+    ms1_on_mean = np.nanmean(ms1_on, axis=0)
+
+    fig, axes = plt.subplots(2, 1, figsize=(7, 8), sharex=True)
+
+    ax = axes[0]
+    ax.plot(wavelengths_nm, ms0_off_mean, "o-", label="ms=0, Ti:Sapph off")
+    ax.plot(wavelengths_nm, ms1_off_mean, "o-", label="ms=±1, Ti:Sapph off")
+    ax.set_ylabel("Raw Counts")
+    ax.set_title("Ti:Sapph OFF")
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.legend()
+
+    ax = axes[1]
+    ax.plot(wavelengths_nm, ms0_on_mean, "o-", label="ms=0, Ti:Sapph on")
+    ax.plot(wavelengths_nm, ms1_on_mean, "o-", label="ms=±1, Ti:Sapph on")
+    ax.set_xlabel("Ti:sapph wavelength (nm)")
+    ax.set_ylabel("Raw Counts")
+    ax.set_title("Ti:Sapph ON")
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.legend()
+
+    return fig
 if __name__ == "__main__":
     kpl.init_kplotlib()
 
     # Example:
     data = dm.get_raw_data(file_stem="2026_04_03-05_20_17-(lovelace)", load_npz=True)
-    fig = fig = plot_ms_contrast_from_loaded(data, use_tisapph_on=False)
-
+    # plot_ms_contrast_from_loaded(data, use_tisapph_on=True)
+    plot_ms0_ms1_raw_from_loaded(data)
     kpl.show(block=True)
     # Replace this with your actual nv_sig object
     # raise RuntimeError("Load or define nv_sig, then call main(...) manually.")

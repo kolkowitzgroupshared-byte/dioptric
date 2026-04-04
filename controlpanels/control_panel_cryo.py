@@ -933,7 +933,30 @@ def do_pulse_gen_constant(digital_channels=(3,), analog0=None, analog1=None):
         # Safest cleanup: forces final + sets everything off
         pulse_gen.reset()
 
+def do_pulse_gen_square_wave(period, digital_channels=(3,), analog0=None, analog1=None):
+    pulse_gen = tool_belt.get_server_pulse_streamer()
 
+    # Digital channels
+    digital_channels = [int(ch) for ch in digital_channels]
+
+    # Analog channels
+    analog_channels = []
+    analog_voltages = []
+    if analog0 is not None:
+        analog_channels.append(0)
+        analog_voltages.append(float(analog0))
+    if analog1 is not None:
+        analog_channels.append(1)
+        analog_voltages.append(float(analog1))
+
+    # Start square wave
+    pulse_gen.square_wave(digital_channels, analog_channels, analog_voltages, period)
+
+    try:
+        input("Square wave running. Press Enter to stop...")
+    finally:
+        pulse_gen.reset()
+        
 def piezo_pest():
     cxn = labrad.connect()
     s = cxn.pos_z_PI_pifoc
