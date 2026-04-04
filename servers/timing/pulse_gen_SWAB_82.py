@@ -129,6 +129,26 @@ class PulseGenSwab82(PulseGen, LabradServer):
         # Run the operation
         state = OutputState(digital_channels, analog_0_voltage, analog_1_voltage)
         self.pulse_streamer.constant(state)
+        
+    @setting(7, digital_channels="*i", analog_channels="*i", analog_voltages="*v[]", period="v[]")
+    def square_wave(self, c, digital_channels=[], analog_channels=[], analog_voltages=[], period=1000):
+        """
+        OPX-like square-wave helper for the Swabian Pulse Streamer.
+        """
+
+        digital_channels = [int(el) for el in digital_channels]
+        analog_channels = [int(el) for el in analog_channels]
+        analog_voltages = [float(el) for el in analog_voltages]
+        period = int(round(float(period)))
+
+        if len(analog_channels) != len(analog_voltages):
+            raise ValueError("analog_channels and analog_voltages must have the same length")
+
+        args = [digital_channels, analog_channels, analog_voltages, period]
+        seq_args_string = tb.encode_seq_args(args)
+
+        self.stream_load(c, "square_wave_seq.py", seq_args_string)
+        self.stream_start(c, -1)
 
     @setting(5)
     def force_final(self, c):
