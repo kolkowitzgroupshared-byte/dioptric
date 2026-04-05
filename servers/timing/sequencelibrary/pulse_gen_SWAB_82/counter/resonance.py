@@ -158,7 +158,7 @@ if __name__ == "__main__":
 
     cfg = common.get_config_dict()
     # args = [5000,300, 0, "IMAGING", None]
-    args = [2e3, 440, 0, None,"SPIN_READOUT", None]
+    args = [2e3, 440, 0, None,VirtualLaserKey.SPIN_READOUT, None]
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])
     seq.plot()

@@ -34,6 +34,7 @@ import majorroutines.confocal.confocal_image_sample as image_sample
 # import majorroutines.confocal.optimize_magnet_angle as optimize_magnet_angle
 # import majorroutines.confocal.pulsed_resonance as pulsed_resonance
 import majorroutines.confocal.confocal_rabi as rabi
+import majorroutines.confocal.confocal_test_simple_spin_contrast as test_simple_spin_contrast
 
 # import majorroutines.confocal.confocal_resonance as resonance
 
@@ -812,14 +813,14 @@ def do_resonance(nv_sig):
     )
 
 
-def do_tisapph_singlet_scan(nv_sig, probe_ns=2e3):
+def do_tisapph_singlet_scan(nv_sig, probe_ns=1.5e3):
     resonance_tisapph_singlet_scan.main(
         nv_sig,
         wavelength_start_nm=805.0,
         wavelength_stop_nm=815.0,
         num_steps=51,
         num_reps=1e4, # Keep this number low to avoid losing NV
-        num_runs=20, # Balance out low reps with more runs 
+        num_runs=40, # Balance out low reps with more runs 
         uwave_ind=0,
         uwave_power_dbm=10.0,
         probe_ns=probe_ns,
@@ -843,7 +844,16 @@ def do_odmr_tisapph_short(nv_sig):
         optimize_between_runs=True,
     )
 
-
+def do_test_simple_spin_contrast(nv_sig):
+    test_simple_spin_contrast.main(
+    nv_sig,
+    uwave_freq_ghz=2.8252,
+    num_reps=200000,
+    num_runs=10,
+    uwave_ind=0,
+    optimize_between_runs=True,
+    do_plot=True,
+)
 # def do_t1_dq(nv_sig):
 #     # T1 experiment parameters, formatted:
 #     # [[init state, read state], relaxation_time_range, num_steps, num_reps]
@@ -1088,17 +1098,16 @@ if __name__ == "__main__":
         # expected_counts=13,
         pulse_durations={
             VirtualLaserKey.IMAGING: int(10e6),  # readout is in ns (5e6 = 5ms)
-            # VirtualLaserKey.SPIN_READOUT: int(440),  # readout is in ns (5e6 = 5ms)
-            VirtualLaserKey.SPIN_READOUT: int(2e3),  # readout is in ns (5e6 = 5ms)
+            VirtualLaserKey.SPIN_READOUT: int(440),  # readout is in ns (5e6 = 5ms)
             VirtualLaserKey.SPIN_POL: 2000,
             VirtualLaserKey.SINGLET_DRIVE: 100e3,  # placeholder
         },
     )
-    nv_sig.expected_counts = None
-    # nv_sig.expected_counts = 454
+    # nv_sig.expected_counts = None
+    nv_sig.expected_counts = 420
 
     # cxn = labrad.connect()
-    # s = cxn.pos_z_PI_pifoc
+    # s = cxn.pos_z_PI_pifocss
     # print(sorted(s.settings.keys()))
     # sys.exit()
     # endregion
@@ -1202,6 +1211,7 @@ if __name__ == "__main__":
         # do_rabi(nv_sig)
         # do_resonance(nv_sig)
         do_tisapph_singlet_scan(nv_sig)
+        # do_test_simple_spin_contrast(nv_sig)
         # probe_ns = [2e3, 5e3, 10e3, 20e3, 50e3, 100e3]
         # for probe in probe_ns:
             # do_tisapph_singlet_scan(nv_sig, probe_ns=probe)
