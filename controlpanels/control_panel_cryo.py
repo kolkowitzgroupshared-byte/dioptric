@@ -46,6 +46,7 @@ import majorroutines.confocal.confocal_apd_gate_overlap_scan as find_apd_gate_ov
 
 # import majorroutines.confocal.spin_echo as spin_echo
 import majorroutines.confocal.confocal_stationary_count as stationary_count
+import majorroutines.confocal.confocal_stationary_count_Tisapph as stationary_count_Tisapph
 import majorroutines.confocal.z_scan_1d as z_scan_1d
 import majorroutines.confocal.z_scan_2d as z_scan_2d
 
@@ -464,6 +465,12 @@ def do_stationary_count(nv_sig, disable_opt=None):
         # nv_zero_initialization=nv_zero_initialization,
     )
 
+def do_stationary_count_Tisapph(
+    nv_sig,
+    disable_opt=None,
+):
+    run_time = 3 * 60 * 10**9  # ns
+    stationary_count_Tisapph.main(nv_sig, run_time, disable_opt=disable_opt)
 
 def do_calibrate_z_axis(nv_sig):
     """
@@ -790,12 +797,12 @@ def do_rabi(nv_sig):
     rabi.main(
         nv_sig=nv_sig,
         num_reps=int(20e4),
-        num_runs=4, #testing
+        num_runs=10, #testing
         min_tau=20,  # ns
         max_tau=500,  # ns (480+min_tau)
         num_steps=15,  # 1 step every ~5-10ns
         uwave_ind=0,
-        uwave_freq_ghz=2.8262,  # Change to target ms=+1 or ms=-1 transition
+        uwave_freq_ghz=2.8214,  # Change to target ms=+1 or ms=-1 transition
         optimize_between_runs=True,  # Set to false to turn off optimize between runs
     )
 
@@ -807,25 +814,25 @@ def do_resonance(nv_sig):
         freq_span_mhz=200.0,
         num_steps=31,
         num_reps=20e4,
-        num_runs=10,
+        num_runs=5,
         uwave_ind=0,
         optimize_between_runs=True,
     )
+    
 
-
-def do_tisapph_singlet_scan(nv_sig, probe_ns=1.5e3):
+def do_tisapph_singlet_scan(nv_sig):
     resonance_tisapph_singlet_scan.main(
         nv_sig,
-        wavelength_start_nm=805.0,
-        wavelength_stop_nm=815.0,
-        num_steps=51,
-        num_reps=1e4, # Keep this number low to avoid losing NV
-        num_runs=40, # Balance out low reps with more runs 
+        wavelength_start_nm=795.5,
+        wavelength_stop_nm=806.0,
+        num_steps=51, #51=0.2nm steps, 105=0.1nm steps 
+        num_reps=1e4,
+        num_runs=60, 
         uwave_ind=0,
         uwave_power_dbm=10.0,
-        probe_ns=probe_ns,
+        probe_ns=100e3,
         do_plot=True,
-        shuffle=True,
+        shuffle=False,
         settle_s=0.3,
         optimize_between_runs=True,
     )
@@ -1080,11 +1087,10 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z = 4.3972  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
-    # pixel_xy = [0,0]  # galvo ref
-    # pixel_xy = [0.018, 0.061]  # alignment test
-    # pixel_xy = [0.093, 0.067] # NV Lovelace
-    pixel_xy = [0.013, 0.079]  # NV Lovelace
+    # coord_z = 4.3972  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z = 3.7814
+    # pixel_xy = [0.013, 0.079]  # NV Lovelace
+    pixel_xy = [0.012, 0.099]  # NV Lovelace
     # return
     nv_sig = NVSig(
         name=f"({get_sample_name()})",
@@ -1104,7 +1110,7 @@ if __name__ == "__main__":
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 420
+    nv_sig.expected_counts = 430.5
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
@@ -1176,7 +1182,7 @@ if __name__ == "__main__":
         # end region Image sample
         #
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=4.3, voltage_end=4.5, step_size=0.002)
+        # do_optimize_z_PI(nv_sig, voltage_start=3.7, voltage_end=3.85, step_size=0.002)
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
@@ -1190,6 +1196,7 @@ if __name__ == "__main__":
 
         # region Stationary count
         # do_stationary_count(nv_sig, disable_opt=True) #Note there is a slow response time w/ the APD
+        # do_stationary_count_Tisapph(nv_sig, disable_opt=True)
         # do_stationary_count(nv_sig, disable_opt=True, nv_minus_initialization=True)
         # do_stationary_count(nv_sig, disable_opt=True, nv_zero_initialization=True)
         # endregion Stationary count

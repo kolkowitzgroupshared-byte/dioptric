@@ -385,15 +385,15 @@ def main(
                         ms1_on_val,
                     )
 
-                    # print(
-                    #     f"  wl={wl_nm:.3f} nm | "
-                    #     f"ms0_off={int(ms0_off_val)}, ms0_on={int(ms0_on_val)}, "
-                    #     f"ms1_off={int(ms1_off_val)}, ms1_on={int(ms1_on_val)}, "
-                    #     f"spin_off={metrics_val['spin_contrast_off']:.5e}, "
-                    #     f"spin_on={metrics_val['spin_contrast_on']:.5e}, "
-                    #     f"resp0={metrics_val['ms0_response']:.5e}, "
-                    #     f"resp1={metrics_val['ms1_response']:.5e}"
-                    # )
+                    print(
+                        f"  wl={wl_nm:.3f} nm | "
+                        f"ms0_off={int(ms0_off_val)}, ms0_on={int(ms0_on_val)}, "
+                        f"ms1_off={int(ms1_off_val)}, ms1_on={int(ms1_on_val)}, "
+                        f"spin_off={metrics_val['spin_contrast_off']:.5e}, "
+                        f"spin_on={metrics_val['spin_contrast_on']:.5e}, "
+                        f"resp0={metrics_val['ms0_response']:.5e}, "
+                        f"resp1={metrics_val['ms1_response']:.5e}"
+                    )
 
             finally:
                 try:
@@ -837,16 +837,16 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
 
     # Example:
-    # data = dm.get_raw_data(file_stem="2026_04_03-05_20_17-(lovelace)", load_npz=True)
-    # data = dm.get_raw_data(file_stem="2026_04_04-09_42_57-(lovelace)", load_npz=True)
-    # plot_ms_contrast_from_loaded(data, use_tisapph_on=True)
+    data = dm.get_raw_data(file_stem="2026_04_03-05_20_17-(lovelace)", load_npz=True)
+    data = dm.get_raw_data(file_stem="2026_04_04-09_42_57-(lovelace)", load_npz=True)
+    plot_ms_contrast_from_loaded(data, use_tisapph_on=True)
 
-    data1 = dm.get_raw_data(file_stem="2026_04_04-17_48_29-(lovelace)", load_npz=True)
-    data2 = dm.get_raw_data(file_stem="2026_04_04-16_53_01-(lovelace)", load_npz=True)
+    # data1 = dm.get_raw_data(file_stem="2026_04_04-17_48_29-(lovelace)", load_npz=True)
+    # data2 = dm.get_raw_data(file_stem="2026_04_04-16_53_01-(lovelace)", load_npz=True)
 
-    combined_data = combine_tisapph_raw_data(data1, data2)
+    # combined_data = combine_tisapph_raw_data(data1, data2)
 
-    plot_ms0_ms1_raw_from_loaded(combined_data)
+    # plot_ms0_ms1_raw_from_loaded(combined_data)
     kpl.show(block=True)
     # Replace this with your actual nv_sig object
     # raise RuntimeError("Load or define nv_sig, then call main(...) manually.")

@@ -62,7 +62,7 @@ def load_data(data_dir, base_name):
 
 def main():
     data_dir = r"G:\nvdata\pc_cryo\branch_master\confocal_rabi\2026_04"
-    base_name = "2026_04_03-16_20_04-(lovelace)"
+    base_name = "2026_04_08-19_35_17-(lovelace)"
 
     taus_ns, counts = load_data(data_dir, base_name)
 
