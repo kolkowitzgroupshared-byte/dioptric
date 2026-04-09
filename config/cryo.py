@@ -32,35 +32,6 @@ tisapph_laser = "laser_TISAPPH"  # fill this in later (labrad server for Tisapph
 thor_galvos = "pos_xy_THOR_gvs212"
 cryo_piezo = "pos_xyz_ATTO_piezos"
 
-
-# # NOT updated for cryo yet set-up for galvo
-# calibration_coords_pixel = [
-#     [13.905, 11.931],
-#     [124.563, 242.424],
-#     [240.501, 17.871],
-# ]
-# calibration_coords_galvo = [
-#     [82.15, 83.705],
-#     [75.199, 61.034],
-#     [61.32, 79.784],
-# ]
-
-# Create the dictionaries using the provided lists
-# calibration_coords_nv1 = {
-#     CoordsKey.PIXEL: calibration_coords_pixel[0],
-#     thor_galvos: calibration_coords_galvo[0],
-# }
-
-# calibration_coords_nv2 = {
-#     CoordsKey.PIXEL: calibration_coords_pixel[1],
-#     thor_galvos: calibration_coords_galvo[1],
-# }
-
-# calibration_coords_nv3 = {
-#     CoordsKey.PIXEL: calibration_coords_pixel[2],
-#     thor_galvos: calibration_coords_galvo[2],
-# }
-
 pixel_to_sample_affine_transformation_matrix = [
     [0.01476835, -0.00148369, -1.42104908],
     [0.00140560, 0.01479702, -1.73286644],
@@ -134,7 +105,7 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 10, #dbm
-                "frequency": 2.8251, #GHz
+                "frequency": 2.8214, #GHz
                 "rabi_period": 278,
                 "pi_pulse": 156,
                 "pi_on_2_pulse": 64, #Half of pi pulse, for use in Ramsey and SE
@@ -151,27 +122,6 @@ config |= {
         },
     },
     ###
-    "Camera": {
-        "server_name": "camera_NUVU_hnu512gamma",
-        "resolution": (512, 512),
-        "spot_radius": 2.5,
-        # Radius for integrating NV counts in a camera image
-        "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
-        "em_gain": 5000,
-        # "em_gain": 1000,
-        # "em_gain": 10,
-        "temp": -60,
-        "timeout": 60e3,  # ms
-        # "timeout": -1,  # No timeout
-        # Readout mode specifies EM vs conventional, as well as vertical and horizontal readout frequencies.
-        # See camera server file for details
-        "readout_mode": 1,  # 16 for double horizontal readout rate (em mode)
-        # "readout_mode": 6,  # Fast conventional
-        "roi": (122, 126, 250, 250),  # offsetX, offsetY, width, height
-        # "roi": None,  # offsetX, offsetY, width, height
-        "scale": 5 / 0.6,  # pixels / micron
-    },
-    ###
     "Optics": {
         "PhysicalLasers": {
             green_laser: {
@@ -180,7 +130,8 @@ config |= {
                 "positioner": CoordsKey.PIXEL,
             },
             tisapph_laser: {
-                "delay": 1e3, #Characterized by Saroj and Caitlin on 04/17/2025
+                # "delay": 0,
+                "delay": 960, #960ns, Characterized by Saroj and Caitlin on 04/17/2025
                 "mod_mode": ModMode.DIGITAL,
                 "positioner": CoordsKey.PIXEL,
             },
@@ -233,7 +184,6 @@ config |= {
                 "control_mode": PosControlMode.STEP,
                 "delay": int(1e6),  # 5 ms for PIFOC xyz
                 "nm_per_unit": 1000,
-                # "optimize_range": 0.09,
                 "optimize_range": 0.1,
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
@@ -244,7 +194,6 @@ config |= {
                 # "delay": int(1e6),  # 1 ms for ATTO
                 "delay": int(5e6),  # 5 ms for PIFOC xyz
                 "nm_per_unit": 1000,
-                # "optimize_range": 0.09,
                 "optimize_range": 0.1,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
@@ -255,7 +204,6 @@ config |= {
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
                 "optimize_range": 0.01,
-                # "optimize_range": 0.08,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
@@ -292,14 +240,6 @@ config |= {
             "scaling_gain": 0.5,
         },
         "PulseGen": {
-            # "do_laser_INTE_520_dm": 3,
-            # "do_laser_OPTO_589_dm": 3,
-            # "do_laser_COBO_638_dm": 7,
-            # "do_sig_gen_BERK_bnc835_gate": 1,
-            # "do_sig_gen_STAN_sg394_gate": 10,
-            # "do_apd_gate": 5,
-            # "do_sample_clock": 0,
-            # "do_camera_trigger": 5,
             # clocks / gates
             "do_sample_clock": 0,  # 125 MHz-compatible sample clock out to Tagger
             "do_apd_gate": 1,  # gate line to Tagger
@@ -308,7 +248,6 @@ config |= {
             "do_laser_COBO_520_dm": 2,
             # "do_laser_COBO_638_dm": 3,  # red TTL
             # microwaves (TTL gate to SGs)
-            # "do_sig_gen_BERK_bnc835_gate": 4,
             "do_sig_gen_STAN_sg394_3_dm": 4,
             # "do_sig_gen_STAN_sg394_dm": 5,
             # analog (for the yellow AOM amplitude)
