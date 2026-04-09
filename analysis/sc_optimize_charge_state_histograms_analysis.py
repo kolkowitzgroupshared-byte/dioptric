@@ -16,6 +16,7 @@ from analysis.bimodal_histogram import (
     determine_threshold,
     fit_bimodal_histogram,
 )
+from analysis import bimodal_histogram
 from utils import data_manager as dm
 from utils import kplotlib as kpl
 
@@ -429,10 +430,6 @@ def process_and_plot(raw_data, do_plot=False):
     print(f"Processed data saved to '{file_path}'.")
     return results
 
-
-from analysis import bimodal_histogram
-
-
 def recompute_optimal_from_processed(analyzed_data, nv_ind, weights=(1, 1, 1)):
     step_vals = np.asarray(analyzed_data["step_vals"], dtype=float)
     prep = np.asarray(analyzed_data["prep_fidelity_arr"][nv_ind], dtype=float)
@@ -816,82 +813,83 @@ def process_and_plot_charge(raw_data, do_plot=False):
 
 if __name__ == "__main__":
     kpl.init_kplotlib()
-    ### readout amp
-    # file_id = "2026_03_22-21_49_52-qnami-nv0_2026_02_20"
-
-    ### pol amp var
+    ## readout amp
+    file_id = "2026_03_22-21_49_52-qnami-nv0_2026_02_20"
+    file_id = "2026_04_03-08_23_00-qnami-nv0_2026_02_20" ## 1277
+    
+    ## pol amp var
     # file_id = "2026_03_24-21_11_43-qnami-nv0_2026_02_20" ## 1460
     # file_id = "2026_03_25-23_32_41-qnami-nv0_2026_02_20" ## 1306
     
-    ### pol dur var
+    ## pol dur var
     # file_id = "2026_03_17-06_00_50-qnami-nv0_2026_02_20"
 
-    # raw_data = dm.get_raw_data(file_stem=file_id, load_npz=True)
-    # process_and_plot(raw_data, do_plot=False)
+    raw_data = dm.get_raw_data(file_stem=file_id, load_npz=True)
+    process_and_plot(raw_data, do_plot=False)
     # process_and_plot_charge(raw_data, do_plot=True)
     
     
 
-    analyzed_file_id = "2026_03_26-15_04_19-optimization_processed_full_raw_data"
-    analyzed = dm.get_raw_data(file_stem=analyzed_file_id, load_npz=True)
+    # analyzed_file_id = "2026_03_26-15_04_19-optimization_processed_full_raw_data"
+    # analyzed = dm.get_raw_data(file_stem=analyzed_file_id, load_npz=True)
 
-    new_weights = (1, 2, 1)
+    # new_weights = (1, 2, 1)
 
-    # 1) recompute one NV with new weights
-    nv_ind = 10
-    opt_step, opt_prep, opt_readout, opt_score = recompute_optimal_from_processed(
-        analyzed,
-        nv_ind=nv_ind,
-        weights=new_weights,
-    )
-    print(
-        f"NV {nv_ind}: opt_step={opt_step}, prep={opt_prep}, "
-        f"readout={opt_readout}, score={opt_score}"
-    )
+    # # 1) recompute one NV with new weights
+    # nv_ind = 10
+    # opt_step, opt_prep, opt_readout, opt_score = recompute_optimal_from_processed(
+    #     analyzed,
+    #     nv_ind=nv_ind,
+    #     weights=new_weights,
+    # )
+    # print(
+    #     f"NV {nv_ind}: opt_step={opt_step}, prep={opt_prep}, "
+    #     f"readout={opt_readout}, score={opt_score}"
+    # )
 
-    # 2) recompute all NVs with new weights
-    summary = recompute_all_optimal_values_from_processed(
-        analyzed,
-        weights=new_weights,
-    )
-    print("num valid NVs:", len(summary["valid_step_vals"]))
-    print("mean optimal step:", np.nanmean(summary["optimal_step_vals"]))
+    # # 2) recompute all NVs with new weights
+    # summary = recompute_all_optimal_values_from_processed(
+    #     analyzed,
+    #     weights=new_weights,
+    # )
+    # print("num valid NVs:", len(summary["valid_step_vals"]))
+    # print("mean optimal step:", np.nanmean(summary["optimal_step_vals"]))
 
-    if "optimal_weights" in summary:
-        print("optimal_weights:", list(summary["optimal_weights"]))
-        print("total_power:", summary["total_power"])
-        print("aom_voltage:", summary["aom_voltage"])
+    # if "optimal_weights" in summary:
+    #     print("optimal_weights:", list(summary["optimal_weights"]))
+    #     print("total_power:", summary["total_power"])
+    #     print("aom_voltage:", summary["aom_voltage"])
 
-    # add metadata to saved summary
-    summary["source_analyzed_file"] = analyzed_file_id
-    summary["nv_checked"] = nv_ind
-    summary["single_nv_result"] = {
-        "nv_ind": int(nv_ind),
-        "opt_step": float(opt_step),
-        "opt_prep": float(opt_prep),
-        "opt_readout": float(opt_readout),
-        "opt_score": float(opt_score),
-    }
+    # # add metadata to saved summary
+    # summary["source_analyzed_file"] = analyzed_file_id
+    # summary["nv_checked"] = nv_ind
+    # summary["single_nv_result"] = {
+    #     "nv_ind": int(nv_ind),
+    #     "opt_step": float(opt_step),
+    #     "opt_prep": float(opt_prep),
+    #     "opt_readout": float(opt_readout),
+    #     "opt_score": float(opt_score),
+    # }
 
-    summary_to_save = make_json_safe(summary)
+    # summary_to_save = make_json_safe(summary)
 
-    timestamp = dm.get_time_stamp()
-    weights_str = "_".join(str(w) for w in new_weights)
-    file_name = f"recomputed_summary_w_{weights_str}_{analyzed_file_id}"
-    file_path = dm.get_file_path(__file__, timestamp, file_name)
-    dm.save_raw_data(summary_to_save, file_path)
+    # timestamp = dm.get_time_stamp()
+    # weights_str = "_".join(str(w) for w in new_weights)
+    # file_name = f"recomputed_summary_w_{weights_str}_{analyzed_file_id}"
+    # file_path = dm.get_file_path(__file__, timestamp, file_name)
+    # dm.save_raw_data(summary_to_save, file_path)
 
-    print(f"Saved recomputed summary to: {file_path}")
+    # print(f"Saved recomputed summary to: {file_path}")
 
-    # 3) plot metric curves for one NV
-    fig1 = plot_processed_nv_metrics(analyzed, nv_ind=nv_ind, weights=new_weights)
+    # # 3) plot metric curves for one NV
+    # fig1 = plot_processed_nv_metrics(analyzed, nv_ind=nv_ind, weights=new_weights)
 
-    # 4) plot one saved reference histogram at a chosen step
-    fig2 = plot_ref_histogram_from_processed(
-        analyzed,
-        nv_ind=nv_ind,
-        step_ind=8,
-        density=True,
-    )
+    # # 4) plot one saved reference histogram at a chosen step
+    # fig2 = plot_ref_histogram_from_processed(
+    #     analyzed,
+    #     nv_ind=nv_ind,
+    #     step_ind=8,
+    #     density=True,
+    # )
 
-    kpl.show(block=True)
+    # kpl.show(block=True)

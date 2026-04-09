@@ -1310,18 +1310,18 @@ def do_opx_constant_ac():
     # print((stop - start) / num_reps)
 
     # Microwave test
-    if True:
-        sig_gen = cxn.sig_gen_STAN_sg394_3
-        amp = 2
-        chan = 3
-    else:
-        sig_gen = cxn.sig_gen_STAN_sg394_2
-        amp = 10
-        chan = 10
-    sig_gen.set_amp(amp)  # 12
-    sig_gen.set_freq(1.0)
-    sig_gen.uwave_on()
-    opx.constant_ac([chan])
+    # if True:
+    #     sig_gen = cxn.sig_gen_STAN_sg394_3
+    #     amp = 2
+    #     chan = 3
+    # else:
+    #     sig_gen = cxn.sig_gen_STAN_sg394_2
+    #     amp = 10
+    #     chan = 10
+    # sig_gen.set_amp(amp)  # 12
+    # sig_gen.set_freq(1.0)
+    # sig_gen.uwave_on()
+    # opx.constant_ac([chan])
 
     # Camera frame rate test
     # seq_args = [500]
@@ -1330,12 +1330,12 @@ def do_opx_constant_ac():
     # opx.stream_start()
 
     # Yellow
-    opx.constant_ac(
-        [],  # Digital channels
-        [7],  # Analog channels
-        [0.15],  # Analog voltages
-        [0],  # Analog frequencies
-    )
+    # opx.constant_ac(
+    #     [],  # Digital channels
+    #     [7],  # Analog channels
+    #     [0.15],  # Analog voltages
+    #     [0],  # Analog frequencies
+    # )
     # opx.constant_ac([4])  # Just laser
     # Red
     # freqs = [65, 75, 85]
@@ -1405,15 +1405,59 @@ def do_opx_constant_ac():
     #     [99, 99, 0],  # Analog frequencies
     # )
     # Red + green + Yellow
-    # opx.constant_ac(
-    #     [4, 1],  # Digital channels1
-    #     [3, 4, 2, 6, 7],  # Analog channels
-    #     [0.08, 0.08, 0.08, 0.08, 0.35],  # Analog voltages
-    #     [102, 102, 67, 67, 0],  # Analog frequencies
-    # )
+    opx.constant_ac(
+        [4, 1],  # Digital channels1
+        [3, 4, 2, 6, 7],  # Analog channels
+        [0.08, 0.08, 0.08, 0.08, 0.35],  # Analog voltages
+        [102, 102, 67, 67, 0],  # Analog frequencies
+    )
     input("Press enter to stop...")
     # sig_gen.uwave_off()
 
+def do_green_red_triplet_time_mux():
+    cxn = common.labrad_connect()
+    opx = cxn.QM_opx
+
+    green_center = np.array([104.0, 104.0], dtype=float)
+    red_center   = np.array([69.0,  69.0], dtype=float)
+
+    green_d = 25.0   # MHz
+    red_d   = 20.0   # MHz
+
+    green_square = [
+        [green_center[0] - green_d, green_center[1] - green_d],  # bottom-left
+        [green_center[0] - green_d, green_center[1] + green_d],  # top-left
+        [green_center[0] + green_d, green_center[1] - green_d],  # bottom-right
+        [green_center[0] + green_d, green_center[1] + green_d],  # top-right
+    ]
+
+    red_square = [
+        [red_center[0] - red_d, red_center[1] - red_d],  # bottom-left
+        [red_center[0] - red_d, red_center[1] + red_d],  # top-left
+        [red_center[0] + red_d, red_center[1] - red_d],  # bottom-right
+        [red_center[0] + red_d, red_center[1] + red_d],  # top-right
+    ]
+    # Start low; raise carefully if needed
+    green_amp = 0.03
+    red_amp = 0.04
+    yellow_amp = None
+    dwell_us = 200
+
+    seq_args = [
+        green_square,
+        red_square,
+        green_amp,
+        red_amp,
+        yellow_amp,
+        dwell_us,
+    ]
+    seq_args_string = tb.encode_seq_args(seq_args)
+
+    opx.stream_load("constant_aod_time_mux.py", seq_args_string)
+    opx.stream_start()
+
+    input("Press enter to stop...")
+#     opx.halt()
 
 def compile_speed_test(nv_list):
     cxn = common.labrad_connect()
@@ -1647,8 +1691,8 @@ if __name__ == "__main__":
     # magnet_angle = 90
     date_str = "2026_02_20"
     sample_coords = [-0.75, 1.8]
-    z_coord = -2.4
-    # z_coord = -4.8
+    # z_coord = -2.4
+    z_coord = -3.0
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",
@@ -1692,24 +1736,24 @@ if __name__ == "__main__":
     print(f"Reference NV:{pixel_coords_list[0]}")
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
-    # pixel_coords_list =[
-    #     [209.693, 202.035], 
-    #     [355.855, 55.308], 
-    #     [220.425, 359.764], 
-    #     [25.893, 55.843],
-    #     ]
-    # green_coords_list = [
-    #     [101.132, 100.716],
-    #     [72.218, 124.96],
-    #     [101.986, 72.343],
-    #     [131.603, 130.079],
-    # ]
-    # red_coords_list = [
-    #     [66.259, 65.255],
-    #     [41.505, 82.791],
-    #     [68.562, 42.354],
-    #     [89.161, 91.279],
-    #     ]
+    pixel_coords_list =[
+        # [209.693, 202.035], 
+        [355.855, 55.308], 
+        [220.425, 359.764], 
+        [25.893, 55.843],
+        ]
+    green_coords_list = [
+        # [101.132, 100.716],
+        [72.218, 124.96],
+        [101.986, 72.343],
+        [131.603, 130.079],
+    ]
+    red_coords_list = [
+        # [66.259, 65.255],
+        [41.505, 82.791],
+        [68.562, 42.354],
+        [89.161, 91.279],
+        ]
 
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
@@ -1846,7 +1890,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_widefield_image_sample(nv_sig, 50)
+        # do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list:
@@ -1885,9 +1929,10 @@ if __name__ == "__main__":
         #         print(f"Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         #         do_scanning_image_sample(nv_sig)
 
-        # do_opx_constant_ac()
+        do_opx_constant_ac()
         # do_opx_square_wave()
-
+        # do_green_red_triplet_time_mux()
+        
         # do_optimize_pixel(nv_sig)
         # do_optimize_green(nv_sig)
         # repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
