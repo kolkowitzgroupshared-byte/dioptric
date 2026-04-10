@@ -210,61 +210,79 @@ def _print_local_window(freqs, norm, idx, halfwidth=2):
 # ----------------------------------------------------------------------
 # Fitting
 # ----------------------------------------------------------------------
-def fit_two_lines(freqs, norm):
-    """Independent two-Lorentzian fit (7 parameters)."""
+def fit_two_lines(freqs, norm, fwhm_fixed_ghz):
+    """
+    Fixed-width two-Lorentzian fit (5 free parameters).
+
+    Both lines share the same FWHM, fixed at `fwhm_fixed_ghz`. We only
+    fit the baseline offset, the two centers, and the two contrasts. This
+    avoids the degenerate width/contrast ridge that appears when trying
+    to fit a 3-parameter Lorentzian to a one-point-wide dip.
+
+    Returned `popt` is padded back out to the 7-parameter form
+    [offset, f_-1, fwhm, c_-1, f_+1, fwhm, c_+1] so the rest of the
+    script doesn't need to know which parameters were free, and `pcov`
+    is the 5x5 covariance over the actually-fitted parameters.
+    """
     fmin, fmax = freqs[0], freqs[-1]
-    span = fmax - fmin
     step = freqs[1] - freqs[0]
 
-    p0 = seed_two_lines(freqs, norm)
-    _, f_minus_seed, _, _, f_plus_seed, _, _ = p0
+    p0_full = seed_two_lines(freqs, norm)
+    offset_seed, f_minus_seed, _, c_minus_seed, f_plus_seed, _, c_plus_seed = p0_full
 
-    # Cage each center within +/- 3 sweep steps of its seed. The seed
-    # routine reliably finds the right peaks; the danger is curve_fit
-    # drifting away from a shallow dip into a flat valley of the cost
-    # surface and producing a degenerate fit. Width capped at 4 * step:
-    # both Zeeman lines here are at most a couple of points wide, so
-    # there's no reason to let the fitter make a 100-MHz Lorentzian.
+    # Free-parameter ordering: [offset, f_minus, c_minus, f_plus, c_plus]
+    p0 = [offset_seed, f_minus_seed, c_minus_seed, f_plus_seed, c_plus_seed]
+
+    # Cage each center within +/- 3 sweep steps of its seed. With FWHM
+    # fixed there's no degenerate ridge, but the cage still keeps the two
+    # lines from swapping or merging.
     center_window = 3 * step
-    fwhm_max = 4 * step
     bounds = (
         [
             0.0,
             max(f_minus_seed - center_window, fmin),
-            step / 2,
             0.0,
             max(f_plus_seed - center_window, fmin),
-            step / 2,
             0.0,
         ],
         [
             np.inf,
             min(f_minus_seed + center_window, fmax),
-            fwhm_max,
             1.0,
             min(f_plus_seed + center_window, fmax),
-            fwhm_max,
             1.0,
         ],
     )
 
-    # Note: deliberately not passing `sigma` even when it's available.
-    # With absolute_sigma + small ste, individual low-noise points get
-    # over-weighted and the fit becomes unstable on shallow features.
-    # Uniform weights give a more robust answer for low-SNR ODMR dips.
-    popt, pcov = curve_fit(
-        two_lorentzian_dip, freqs, norm, p0=p0, bounds=bounds,
-        maxfev=50000,
+    def model(f, offset, f_minus, c_minus, f_plus, c_plus):
+        return (
+            offset
+            - lorentzian_dip(f, f_minus, fwhm_fixed_ghz, c_minus)
+            - lorentzian_dip(f, f_plus, fwhm_fixed_ghz, c_plus)
+        )
+
+    # Note: deliberately not passing `sigma`. With absolute_sigma + small
+    # ste, individual low-noise points get over-weighted and the fit
+    # becomes unstable on shallow features. Uniform weights are more
+    # robust here.
+    popt5, pcov5 = curve_fit(
+        model, freqs, norm, p0=p0, bounds=bounds, maxfev=50000,
     )
 
-    # Enforce f_minus < f_plus on the fitted parameters.
-    offset, f1, w1, c1, f2, w2, c2 = popt
-    if f1 > f2:
-        popt = np.array([offset, f2, w2, c2, f1, w1, c1])
-        # Permute the covariance matrix to match the new ordering.
-        perm = [0, 4, 5, 6, 1, 2, 3]
-        pcov = pcov[np.ix_(perm, perm)]
-    return popt, pcov
+    offset, f_minus, c_minus, f_plus, c_plus = popt5
+
+    # Enforce f_minus < f_plus.
+    if f_minus > f_plus:
+        f_minus, f_plus = f_plus, f_minus
+        c_minus, c_plus = c_plus, c_minus
+        # Permute the covariance: swap (f_minus, c_minus) with (f_plus, c_plus).
+        perm5 = [0, 3, 4, 1, 2]
+        pcov5 = pcov5[np.ix_(perm5, perm5)]
+
+    popt_full = np.array(
+        [offset, f_minus, fwhm_fixed_ghz, c_minus, f_plus, fwhm_fixed_ghz, c_plus]
+    )
+    return popt_full, pcov5, model
 
 
 # ----------------------------------------------------------------------
@@ -274,6 +292,12 @@ def main():
     # ---- USER SETTINGS ----------------------------------------------------
     data_dir = r"G:\nvdata\pc_cryo\branch_master\confocal_resonance\2026_04"
     base_name = "2026_04_09-14_53_04-(lovelace)"
+    # FWHM held fixed for both Lorentzian dips. The default is set after
+    # the data is loaded, to half the sweep step ("one data point's worth
+    # of width") -- the right value when both lines are essentially one
+    # point wide. Override here in MHz if a measurement actually resolves
+    # the line shape; e.g. fwhm_fixed_mhz = 6.0.
+    fwhm_fixed_mhz = None
     # -----------------------------------------------------------------------
 
     freqs_ghz, norm, ste = load_data(data_dir, base_name)
@@ -297,25 +321,38 @@ def main():
 
     print(f"Fitting {len(norm)} data points")
 
+    step_ghz = freqs_ghz[1] - freqs_ghz[0]
+    if fwhm_fixed_mhz is None:
+        fwhm_fixed_ghz = step_ghz / 2.0
+    else:
+        fwhm_fixed_ghz = fwhm_fixed_mhz * 1e-3
+    print(f"  Fixed FWHM (both lines): {fwhm_fixed_ghz * 1e3:.3f} MHz")
+
     fit_success = True
     try:
-        popt, pcov = fit_two_lines(freqs_ghz, norm)
+        popt, pcov5, _ = fit_two_lines(freqs_ghz, norm, fwhm_fixed_ghz)
         fit_y = two_lorentzian_dip(freqs_ghz, *popt)
         ss_res = np.sum((norm - fit_y) ** 2)
         ss_tot = np.sum((norm - np.mean(norm)) ** 2)
         r_squared = 1.0 - (ss_res / ss_tot)
-        dof = max(len(norm) - len(popt), 1)
+        dof = max(len(norm) - 5, 1)  # 5 free parameters
         red_chi_sq = ss_res / dof
         residuals = norm - fit_y
-        perr = np.sqrt(np.diag(pcov))
+        # 5x5 covariance order: [offset, f_minus, c_minus, f_plus, c_plus]
+        perr5 = np.sqrt(np.diag(pcov5))
+        of_e = perr5[0]
+        fm_e = perr5[1]
+        cm_e = perr5[2]
+        fp_e = perr5[3]
+        cp_e = perr5[4]
     except Exception as e:
         print(f"Fit failed: {e}")
         fit_success = False
         popt = None
-        perr = None
         residuals = np.zeros_like(norm)
         r_squared = None
         red_chi_sq = None
+        of_e = fm_e = cm_e = fp_e = cp_e = None
 
     # ----- Terminal output -----
     print("\n" + "=" * 64)
@@ -323,7 +360,6 @@ def main():
     print("=" * 64)
     if fit_success:
         offset, f_minus, fwhm_minus, c_minus, f_plus, fwhm_plus, c_plus = popt
-        of_e, fm_e, wm_e, cm_e, fp_e, wp_e, cp_e = perr
         center = 0.5 * (f_minus + f_plus)
         splitting_ghz = f_plus - f_minus
         splitting_mhz = splitting_ghz * 1e3
@@ -333,12 +369,12 @@ def main():
         print()
         print(f"  m_s = -1 line:")
         print(f"    center           : {f_minus:.6f} GHz +/- {fm_e * 1e3:.3f} MHz")
-        print(f"    FWHM             : {fwhm_minus * 1e3:.3f} MHz +/- {wm_e * 1e3:.3f} MHz")
+        print(f"    FWHM (fixed)     : {fwhm_minus * 1e3:.3f} MHz")
         print(f"    contrast         : {c_minus:.4f} +/- {cm_e:.4f}")
         print()
         print(f"  m_s = +1 line:")
         print(f"    center           : {f_plus:.6f} GHz +/- {fp_e * 1e3:.3f} MHz")
-        print(f"    FWHM             : {fwhm_plus * 1e3:.3f} MHz +/- {wp_e * 1e3:.3f} MHz")
+        print(f"    FWHM (fixed)     : {fwhm_plus * 1e3:.3f} MHz")
         print(f"    contrast         : {c_plus:.4f} +/- {cp_e:.4f}")
         print("-" * 64)
         print(f"  Center D = (f_-1 + f_+1)/2: {center:.6f} GHz")
@@ -376,7 +412,7 @@ def main():
         f_smooth = np.linspace(freqs_ghz[0], freqs_ghz[-1], 2000)
         ax_main.plot(
             f_smooth, two_lorentzian_dip(f_smooth, *popt), "-",
-            label="Two-Lorentzian fit (independent widths)",
+            label="Two-Lorentzian fit (FWHM fixed)",
             linewidth=2, color="darkorange",
         )
         # Mark the two dip centers. Use a blended transform (x in data
