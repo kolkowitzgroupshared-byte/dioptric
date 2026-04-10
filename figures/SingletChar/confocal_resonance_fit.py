@@ -131,8 +131,8 @@ def seed_two_lines(freqs, norm):
       3. Broad-line seed = minimum of a lightly smoothed trace, with a
          window of +/- 10% of the sweep around the sharp-line seed masked
          out so the same dip isn't picked twice.
-      4. FWHM seeds: sharp = step_size / 2 (so the fitter can go either
-         way), broad = data-driven half-depth width.
+      4. FWHM seeds: sharp = one sweep step (the narrowest meaningful
+         width given the sampling); broad = data-driven half-depth width.
       5. Returned in (f_minus, f_plus) order with f_minus < f_plus.
     """
     n = len(norm)
@@ -143,7 +143,9 @@ def seed_two_lines(freqs, norm):
     i_sharp = int(np.nanargmax(depth))
     f_sharp = freqs[i_sharp]
     c_sharp = max(float(depth[i_sharp]), 1e-4)
-    fwhm_sharp = step / 2.0
+    # A single-point-wide line is undersampled; the smallest meaningful FWHM
+    # given the sweep is one step. Don't seed below that.
+    fwhm_sharp = step
 
     # Mask +/- 10% of the sweep around the sharp line so we don't pick the
     # same point as the broad line.
@@ -198,12 +200,18 @@ def fit_two_lines(freqs, norm, sigma=None):
     """Independent two-Lorentzian fit (7 parameters)."""
     fmin, fmax = freqs[0], freqs[-1]
     span = fmax - fmin
+    step = freqs[1] - freqs[0]
 
     p0 = seed_two_lines(freqs, norm)
 
+    # FWHM lower bound = one sweep step. Anything narrower is undersampled
+    # and lets the fitter make a delta-spike Lorentzian centered between
+    # data points with arbitrary contrast. Contrast capped at 0.5: NV ODMR
+    # contrasts are typically <0.3, and capping it prevents the fitter from
+    # compensating for an unresolved width with a giant amplitude.
     bounds = (
-        [0.0, fmin, 1e-4, 0.0, fmin, 1e-4, 0.0],
-        [np.inf, fmax, span, 1.0, fmax, span, 1.0],
+        [0.0, fmin, step, 0.0, fmin, step, 0.0],
+        [np.inf, fmax, span, 0.5, fmax, span, 0.5],
     )
 
     popt, pcov = curve_fit(
@@ -329,11 +337,15 @@ def main():
             label="Two-Lorentzian fit (independent widths)",
             linewidth=2, color="darkorange",
         )
-        # Mark the two dip centers.
+        # Mark the two dip centers. Use a blended transform (x in data
+        # coordinates, y in axes fraction) so the labels stay pinned to the
+        # top of the panel and don't confuse tight_layout.
+        label_transform = ax_main.get_xaxis_transform()
         for fc, lbl in [(popt[1], "m_s=-1"), (popt[4], "m_s=+1")]:
             ax_main.axvline(fc, color="gray", linestyle=":", linewidth=1)
             ax_main.text(
-                fc, ax_main.get_ylim()[1], f" {lbl}",
+                fc, 0.97, f" {lbl}",
+                transform=label_transform,
                 fontsize=8, color="gray", verticalalignment="top",
             )
 
