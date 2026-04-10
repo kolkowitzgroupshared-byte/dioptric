@@ -187,39 +187,74 @@ def seed_two_lines(freqs, norm):
         f"data value = {norm[i_sharp]:.6f}, depth = {c_sharp:.4f}, "
         f"FWHM = {fwhm_sharp * 1e3:.3f} MHz  [{sharp_label}]"
     )
+    _print_local_window(freqs, norm, i_sharp)
     print(
         f"    broad seed     : f = {f_broad:.6f} GHz, "
         f"data value = {norm[i_broad]:.6f}, depth = {c_broad:.4f}, "
         f"FWHM = {fwhm_broad * 1e3:.3f} MHz  [{broad_label}]"
     )
+    _print_local_window(freqs, norm, i_broad)
     return p0
+
+
+def _print_local_window(freqs, norm, idx, halfwidth=2):
+    """Print a small window of data points centered on `idx` for debugging."""
+    lo = max(idx - halfwidth, 0)
+    hi = min(idx + halfwidth + 1, len(norm))
+    print("      local data:")
+    for i in range(lo, hi):
+        marker = " <-- seed" if i == idx else ""
+        print(f"        f = {freqs[i]:.6f} GHz   norm = {norm[i]:.6f}{marker}")
 
 
 # ----------------------------------------------------------------------
 # Fitting
 # ----------------------------------------------------------------------
-def fit_two_lines(freqs, norm, sigma=None):
+def fit_two_lines(freqs, norm):
     """Independent two-Lorentzian fit (7 parameters)."""
     fmin, fmax = freqs[0], freqs[-1]
     span = fmax - fmin
     step = freqs[1] - freqs[0]
 
     p0 = seed_two_lines(freqs, norm)
+    _, f_minus_seed, _, _, f_plus_seed, _, _ = p0
 
-    # FWHM lower bound = step / 2. Smaller than this is undersampled and
-    # lets the fitter put a delta-spike between data points; larger forces
-    # the model to bleed contrast onto neighboring points and prevents
-    # single-point peaks from being captured. Contrast bounded [0, 1] --
-    # do NOT cap below 1, the singlet-shelving probe seen by this script
-    # routinely has contrasts ~0.5-0.9.
+    # Cage each center within +/- 3 sweep steps of its seed. The seed
+    # routine reliably finds the right peaks; the danger is curve_fit
+    # drifting away from a shallow dip into a flat valley of the cost
+    # surface and producing a degenerate fit. Width capped at 4 * step:
+    # both Zeeman lines here are at most a couple of points wide, so
+    # there's no reason to let the fitter make a 100-MHz Lorentzian.
+    center_window = 3 * step
+    fwhm_max = 4 * step
     bounds = (
-        [0.0, fmin, step / 2, 0.0, fmin, step / 2, 0.0],
-        [np.inf, fmax, span, 1.0, fmax, span, 1.0],
+        [
+            0.0,
+            max(f_minus_seed - center_window, fmin),
+            step / 2,
+            0.0,
+            max(f_plus_seed - center_window, fmin),
+            step / 2,
+            0.0,
+        ],
+        [
+            np.inf,
+            min(f_minus_seed + center_window, fmax),
+            fwhm_max,
+            1.0,
+            min(f_plus_seed + center_window, fmax),
+            fwhm_max,
+            1.0,
+        ],
     )
 
+    # Note: deliberately not passing `sigma` even when it's available.
+    # With absolute_sigma + small ste, individual low-noise points get
+    # over-weighted and the fit becomes unstable on shallow features.
+    # Uniform weights give a more robust answer for low-SNR ODMR dips.
     popt, pcov = curve_fit(
         two_lorentzian_dip, freqs, norm, p0=p0, bounds=bounds,
-        sigma=sigma, absolute_sigma=sigma is not None, maxfev=50000,
+        maxfev=50000,
     )
 
     # Enforce f_minus < f_plus on the fitted parameters.
@@ -264,7 +299,7 @@ def main():
 
     fit_success = True
     try:
-        popt, pcov = fit_two_lines(freqs_ghz, norm, sigma=ste)
+        popt, pcov = fit_two_lines(freqs_ghz, norm)
         fit_y = two_lorentzian_dip(freqs_ghz, *popt)
         ss_res = np.sum((norm - fit_y) ** 2)
         ss_tot = np.sum((norm - np.mean(norm)) ** 2)
