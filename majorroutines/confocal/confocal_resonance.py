@@ -219,7 +219,7 @@ def main(
 if __name__ == "__main__":
     # example:
     kpl.init_kplotlib()
-    data = dm.get_raw_data(file_stem="2026_03_09-13_37_07-(lovelace)", load_npz=True)
+    data = dm.get_raw_data(file_stem="2026_04_09-02_39_31-(lovelace)", load_npz=True)
     nv_sig = data["nv_sig"]
     sig_counts = np.asarray(data["sig_counts"]) 
     ref_counts = np.asarray(data["ref_counts"])   

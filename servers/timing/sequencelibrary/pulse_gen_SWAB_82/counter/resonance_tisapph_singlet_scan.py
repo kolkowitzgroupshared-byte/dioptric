@@ -301,6 +301,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
     # MW source from virtual sig gen
     vsg = tb.get_virtual_sig_gen_dict(uwave_ind)
     uwave_ns = _as_int64("uwave_ns", vsg["pi_pulse"])
+    print(f"[singlet_scan seq] uwave_ns (pi_pulse) = {uwave_ns} ns")
     sig_gen_name = vsg["physical_name"]
     uwave_delay = _as_int64(
         "uwave_delay",
