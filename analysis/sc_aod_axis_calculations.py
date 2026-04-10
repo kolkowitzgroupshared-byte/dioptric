@@ -3,491 +3,8 @@ import matplotlib.pyplot as plt
 from itertools import combinations
 from collections import defaultdict
 from utils import kplotlib as kpl
+import matplotlib.lines as mlines
 kpl.init_kplotlib()
-
-# ============================================================
-# 1. INPUTS
-# ============================================================
-
-# Your 3-point calibration
-calibration_coords_pixel = np.array([
-    [355.855,  55.308],
-    [220.425, 359.764],
-    [ 25.893,  55.843],
-], dtype=float)
-
-calibration_coords_green = np.array([
-    [ 72.248, 124.933],
-    [102.003,  72.355],
-    [131.597, 130.110],
-], dtype=float)
-
-calibration_coords_red = np.array([
-    [41.498, 82.808],
-    [68.574, 42.356],
-    [89.185, 91.264],
-], dtype=float)
-
-# Path to your uploaded NV coordinates
-npz_path = "slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz"
-
-
-# ============================================================
-# 2. BASIC CALIBRATION FUNCTIONS
-# ============================================================
-
-def fit_affine(src, dst):
-    """
-    Fit affine map:
-        dst = A @ src + t
-
-    src: (N,2)
-    dst: (N,2)
-
-    Returns:
-        A: (2,2)
-        t: (2,)
-    """
-    src = np.asarray(src, dtype=float)
-    dst = np.asarray(dst, dtype=float)
-
-    X = np.column_stack([src, np.ones(len(src))])   # (N,3)
-    M, *_ = np.linalg.lstsq(X, dst, rcond=None)     # (3,2)
-    M = M.T                                         # (2,3)
-
-    A = M[:, :2]
-    t = M[:, 2]
-    return A, t
-
-
-def apply_affine(coords, A, t):
-    """
-    coords: (N,2)
-    returns transformed coords: (N,2)
-    """
-    coords = np.asarray(coords, dtype=float)
-    return (A @ coords.T).T + t
-
-
-def invert_affine(coords, A, t):
-    """
-    Invert:
-        pixel = A @ aod + t
-    so:
-        aod = A^{-1} @ (pixel - t)
-    """
-    coords = np.asarray(coords, dtype=float)
-    Ainv = np.linalg.inv(A)
-    return (Ainv @ (coords - t).T).T
-
-
-def axis_info(A):
-    """
-    Returns basis vectors, angles, scales, and inter-axis angle.
-    """
-    a1 = A[:, 0]
-    a2 = A[:, 1]
-
-    len1 = np.linalg.norm(a1)
-    len2 = np.linalg.norm(a2)
-
-    ang1 = np.degrees(np.arctan2(a1[1], a1[0]))
-    ang2 = np.degrees(np.arctan2(a2[1], a2[0]))
-
-    cosang = np.dot(a1, a2) / (len1 * len2)
-    cosang = np.clip(cosang, -1.0, 1.0)
-    inter_axis = np.degrees(np.arccos(cosang))
-
-    return {
-        "axis1_vector": a1,
-        "axis2_vector": a2,
-        "axis1_scale": len1,
-        "axis2_scale": len2,
-        "axis1_angle_deg": ang1,
-        "axis2_angle_deg": ang2,
-        "inter_axis_angle_deg": inter_axis,
-    }
-
-
-# ============================================================
-# 3. LOAD NV DATA
-# ============================================================
-
-data = np.load(npz_path, allow_pickle=True)
-
-nv_pixel = np.asarray(data["nv_coordinates"], dtype=float)
-
-if "updated_spot_weights" in data.files:
-    nv_weights = np.asarray(data["updated_spot_weights"], dtype=float)
-else:
-    nv_weights = None
-
-print(f"Loaded {len(nv_pixel)} NV coordinates")
-
-
-# ============================================================
-# 4. FIT GREEN / RED CALIBRATIONS
-# ============================================================
-
-A_green, t_green = fit_affine(calibration_coords_green, calibration_coords_pixel)
-A_red, t_red = fit_affine(calibration_coords_red, calibration_coords_pixel)
-
-print("\n=== GREEN calibration: pixel = A_green @ green + t_green ===")
-print("A_green =\n", A_green)
-print("t_green =", t_green)
-print(axis_info(A_green))
-
-print("\n=== RED calibration: pixel = A_red @ red + t_red ===")
-print("A_red =\n", A_red)
-print("t_red =", t_red)
-print(axis_info(A_red))
-
-
-# ============================================================
-# 5. TRANSFORM NVs INTO AOD SPACE
-# ============================================================
-
-# Choose which AOD space you want to analyze.
-# Usually green is the initialization / main addressing path.
-# You can switch between "green" and "red".
-ANALYSIS_SPACE = "green"
-
-if ANALYSIS_SPACE == "green":
-    A_use = A_green
-    t_use = t_green
-elif ANALYSIS_SPACE == "red":
-    A_use = A_red
-    t_use = t_red
-else:
-    raise ValueError("ANALYSIS_SPACE must be 'green' or 'red'")
-
-nv_aod = invert_affine(nv_pixel, A_use, t_use)
-
-
-# ============================================================
-# 6. PLOTTING UTILITIES
-# ============================================================
-
-def plot_camera_axes(pixel_pts, A_green, A_red, title="AOD axes in camera pixel space"):
-    plt.figure(figsize=(8, 7))
-    plt.scatter(pixel_pts[:, 0], pixel_pts[:, 1], s=60, label="Calibration points")
-
-    origin = np.mean(pixel_pts, axis=0)
-
-    # Use normalized arrows for visibility
-    g1 = A_green[:, 0]
-    g2 = A_green[:, 1]
-    r1 = A_red[:, 0]
-    r2 = A_red[:, 1]
-
-    scale = 25.0
-
-    def draw_vec(vec, label):
-        v = vec / np.linalg.norm(vec) * scale
-        plt.arrow(
-            origin[0], origin[1], v[0], v[1],
-            length_includes_head=True, head_width=5, head_length=8
-        )
-        plt.text(origin[0] + v[0], origin[1] + v[1], label)
-
-    draw_vec(g1, "green axis 1")
-    draw_vec(g2, "green axis 2")
-    draw_vec(r1, "red axis 1")
-    draw_vec(r2, "red axis 2")
-
-    plt.scatter([origin[0]], [origin[1]], s=80, marker="x", label="origin")
-    plt.gca().invert_yaxis()  # camera-style if desired; comment out if not wanted
-    plt.xlabel("Pixel X")
-    plt.ylabel("Pixel Y")
-    plt.title(title)
-    plt.legend()
-    plt.axis("equal")
-
-def plot_nv_camera_and_aod(nv_pixel, nv_aod, weights=None):
-    fig = plt.figure(figsize=(13, 6))
-
-    ax1 = fig.add_subplot(1, 2, 1)
-    if weights is None:
-        ax1.scatter(nv_pixel[:, 0], nv_pixel[:, 1], s=8)
-    else:
-        ax1.scatter(nv_pixel[:, 0], nv_pixel[:, 1], s=10, c=weights)
-        plt.colorbar(ax1.collections[0], ax=ax1, label="weight")
-    ax1.set_title("NVs in camera pixel space")
-    ax1.set_xlabel("Pixel X")
-    ax1.set_ylabel("Pixel Y")
-    ax1.axis("equal")
-    ax1.invert_yaxis()
-
-    ax2 = fig.add_subplot(1, 2, 2)
-    if weights is None:
-        ax2.scatter(nv_aod[:, 0], nv_aod[:, 1], s=8)
-    else:
-        ax2.scatter(nv_aod[:, 0], nv_aod[:, 1], s=10, c=weights)
-        plt.colorbar(ax2.collections[0], ax=ax2, label="weight")
-    ax2.set_title(f"NVs in {ANALYSIS_SPACE} AOD coordinates")
-    ax2.set_xlabel("u (AOD axis 1)")
-    ax2.set_ylabel("v (AOD axis 2)")
-    ax2.axis("equal")
-
-
-def plot_example_groups(nv_pixel, groups, title, max_groups=10):
-    """
-    groups: list of lists of NV indices
-    """
-    plt.figure(figsize=(8, 7))
-    plt.scatter(nv_pixel[:, 0], nv_pixel[:, 1], s=8, alpha=0.3)
-
-    for i, g in enumerate(groups[:max_groups]):
-        pts = nv_pixel[np.array(g)]
-        plt.scatter(pts[:, 0], pts[:, 1], s=40)
-        for j, idx in enumerate(g):
-            plt.text(pts[j, 0], pts[j, 1], str(idx), fontsize=8)
-
-        # Close loop for 4-point groups
-        if len(g) == 4:
-            ordered = pts[np.argsort(pts[:, 0] + 0.2 * pts[:, 1])]
-            cx, cy = pts.mean(axis=0)
-            angles = np.arctan2(pts[:, 1] - cy, pts[:, 0] - cx)
-            cyc = pts[np.argsort(angles)]
-            cyc = np.vstack([cyc, cyc[0]])
-            plt.plot(cyc[:, 0], cyc[:, 1], linewidth=1)
-
-        elif len(g) == 2:
-            plt.plot(pts[:, 0], pts[:, 1], linewidth=1)
-
-    plt.gca().invert_yaxis()
-    plt.xlabel("Pixel X")
-    plt.ylabel("Pixel Y")
-    plt.title(title)
-    plt.axis("equal")
-
-# ============================================================
-# 7. BINNING / GROUPING IN AOD SPACE
-# ============================================================
-
-def quantize(values, tol):
-    """
-    Convert continuous values to integer bins.
-    """
-    return np.round(values / tol).astype(int)
-
-
-def find_1x2_pairs(nv_aod, u_tol=0.5, v_min_sep=0.8, v_max_sep=20.0):
-    """
-    Find NV pairs that share nearly same u (same AOD axis 1 coordinate),
-    but differ in v -> valid for 1x2 addressing.
-    """
-    u = nv_aod[:, 0]
-    v = nv_aod[:, 1]
-
-    u_bin = quantize(u, u_tol)
-    groups = defaultdict(list)
-    for i, b in enumerate(u_bin):
-        groups[b].append(i)
-
-    pairs = []
-    for b, idxs in groups.items():
-        if len(idxs) < 2:
-            continue
-        for i, j in combinations(idxs, 2):
-            dv = abs(v[i] - v[j])
-            if v_min_sep <= dv <= v_max_sep:
-                pairs.append([i, j])
-
-    return pairs
-
-
-def find_2x1_pairs(nv_aod, v_tol=0.5, u_min_sep=0.8, u_max_sep=20.0):
-    """
-    Find NV pairs that share nearly same v,
-    but differ in u -> valid for 2x1 addressing.
-    """
-    u = nv_aod[:, 0]
-    v = nv_aod[:, 1]
-
-    v_bin = quantize(v, v_tol)
-    groups = defaultdict(list)
-    for i, b in enumerate(v_bin):
-        groups[b].append(i)
-
-    pairs = []
-    for b, idxs in groups.items():
-        if len(idxs) < 2:
-            continue
-        for i, j in combinations(idxs, 2):
-            du = abs(u[i] - u[j])
-            if u_min_sep <= du <= u_max_sep:
-                pairs.append([i, j])
-
-    return pairs
-
-
-def find_2x2_rectangles(nv_aod, u_tol=0.5, v_tol=0.5):
-    """
-    Find 2x2-compatible groups:
-        (u1, v1), (u1, v2), (u2, v1), (u2, v2)
-
-    Method:
-    - bin NVs in AOD space
-    - look for filled corners
-    """
-    u = nv_aod[:, 0]
-    v = nv_aod[:, 1]
-
-    u_bin = quantize(u, u_tol)
-    v_bin = quantize(v, v_tol)
-
-    # Map bin -> NV indices
-    bin_to_indices = defaultdict(list)
-    for i, (ub, vb) in enumerate(zip(u_bin, v_bin)):
-        bin_to_indices[(ub, vb)].append(i)
-
-    # Get occupied bins
-    occupied = sorted(bin_to_indices.keys())
-
-    # Group bins by u
-    u_to_vs = defaultdict(set)
-    for ub, vb in occupied:
-        u_to_vs[ub].add(vb)
-
-    rectangles = []
-    used_bin_rects = set()
-
-    u_keys = sorted(u_to_vs.keys())
-
-    for u1, u2 in combinations(u_keys, 2):
-        common_vs = sorted(u_to_vs[u1].intersection(u_to_vs[u2]))
-        if len(common_vs) < 2:
-            continue
-
-        for v1, v2 in combinations(common_vs, 2):
-            rect_bins = tuple(sorted([(u1, v1), (u1, v2), (u2, v1), (u2, v2)]))
-            if rect_bins in used_bin_rects:
-                continue
-
-            # choose first NV from each occupied bin
-            idxs = [
-                bin_to_indices[(u1, v1)][0],
-                bin_to_indices[(u1, v2)][0],
-                bin_to_indices[(u2, v1)][0],
-                bin_to_indices[(u2, v2)][0],
-            ]
-            rectangles.append(idxs)
-            used_bin_rects.add(rect_bins)
-
-    return rectangles
-
-
-def remove_overlapping_groups(groups):
-    """
-    Greedy selection of non-overlapping groups.
-    """
-    selected = []
-    used = set()
-
-    # Prefer larger groups first if needed
-    groups = sorted(groups, key=lambda g: (-len(g), tuple(g)))
-
-    for g in groups:
-        s = set(g)
-        if used.intersection(s):
-            continue
-        selected.append(g)
-        used.update(s)
-
-    return selected
-
-
-# ============================================================
-# 8. RUN GROUP SEARCH
-# ============================================================
-
-# Tolerances: you may tune these.
-# In AOD units, start modestly.
-u_tol = 0.75
-v_tol = 0.75
-
-pairs_1x2 = find_1x2_pairs(nv_aod, u_tol=u_tol, v_min_sep=0.8, v_max_sep=25.0)
-pairs_2x1 = find_2x1_pairs(nv_aod, v_tol=v_tol, u_min_sep=0.8, u_max_sep=25.0)
-rectangles_2x2 = find_2x2_rectangles(nv_aod, u_tol=u_tol, v_tol=v_tol)
-
-pairs_1x2_nonoverlap = remove_overlapping_groups(pairs_1x2)
-pairs_2x1_nonoverlap = remove_overlapping_groups(pairs_2x1)
-rectangles_2x2_nonoverlap = remove_overlapping_groups(rectangles_2x2)
-
-print("\n=== GROUPING SUMMARY ===")
-print(f"1x2 candidate pairs found: {len(pairs_1x2)}")
-print(f"1x2 non-overlapping pairs: {len(pairs_1x2_nonoverlap)} "
-      f"({2 * len(pairs_1x2_nonoverlap)} NVs)")
-
-print(f"2x1 candidate pairs found: {len(pairs_2x1)}")
-print(f"2x1 non-overlapping pairs: {len(pairs_2x1_nonoverlap)} "
-      f"({2 * len(pairs_2x1_nonoverlap)} NVs)")
-
-print(f"2x2 candidate rectangles found: {len(rectangles_2x2)}")
-print(f"2x2 non-overlapping rectangles: {len(rectangles_2x2_nonoverlap)} "
-      f"({4 * len(rectangles_2x2_nonoverlap)} NVs)")
-
-
-# ============================================================
-# 9. VISUALIZATIONS
-# ============================================================
-
-plot_camera_axes(
-    calibration_coords_pixel,
-    A_green,
-    A_red,
-    title="Green / red AOD axes expressed in camera pixel space"
-)
-
-plot_nv_camera_and_aod(nv_pixel, nv_aod, weights=nv_weights)
-
-plot_example_groups(
-    nv_pixel,
-    pairs_1x2_nonoverlap,
-    title=f"Example 1x2-compatible NV pairs ({ANALYSIS_SPACE} AOD space)",
-    max_groups=12,
-)
-
-plot_example_groups(
-    nv_pixel,
-    pairs_2x1_nonoverlap,
-    title=f"Example 2x1-compatible NV pairs ({ANALYSIS_SPACE} AOD space)",
-    max_groups=12,
-)
-
-plot_example_groups(
-    nv_pixel,
-    rectangles_2x2_nonoverlap,
-    title=f"Example 2x2-compatible NV groups ({ANALYSIS_SPACE} AOD space)",
-    max_groups=12,
-)
-
-
-
-
-# ============================================================
-# 10. OPTIONAL: PRINT SOME EXAMPLE GROUP DETAILS
-# ============================================================
-
-def group_details(nv_pixel, nv_aod, groups, nshow=5, name="groups"):
-    print(f"\n=== Example {name} ===")
-    for k, g in enumerate(groups[:nshow]):
-        print(f"\n{name} #{k+1}: indices = {g}")
-        for idx in g:
-            print(
-                f"  NV {idx:4d} | pixel = {nv_pixel[idx]} | aod = {nv_aod[idx]}"
-            )
-
-group_details(nv_pixel, nv_aod, pairs_1x2_nonoverlap, nshow=5, name="1x2 pairs")
-group_details(nv_pixel, nv_aod, pairs_2x1_nonoverlap, nshow=5, name="2x1 pairs")
-group_details(nv_pixel, nv_aod, rectangles_2x2_nonoverlap, nshow=5, name="2x2 rectangles")
-
-
-
-import numpy as np
-import matplotlib.pyplot as plt
-
 
 # ============================================================
 # INPUTS
@@ -511,8 +28,7 @@ calibration_coords_red = np.array([
     [89.185, 91.264],
 ], dtype=float)
 
-# npz_path = "/mnt/data/48e7d17e-3cc2-4d77-98f9-3d0fc3f410ee.npz"
-
+npz_path = "slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz"
 
 # ============================================================
 # HELPERS
@@ -737,13 +253,6 @@ axis_report("PILLAR basis on camera (square-lattice estimate)", pillar_basis)
 
 common_origin = nv_pixel.mean(axis=0)
 
-
-# ============================================================
-# PLOT 1: ALL AXES FROM SAME POINT, VERY LARGE
-# ============================================================
-
-import matplotlib.lines as mlines
-
 # ============================================================
 # COLORS
 # ============================================================
@@ -900,6 +409,8 @@ plt.tight_layout()
 plt.show()
 
 
+
+
 # ============================================================
 # ANGLE SUMMARY
 # ============================================================
@@ -916,4 +427,216 @@ print("pillar axis 1 angle:", pillar_ang1)
 print("green - pillar (deg):", wrapped_angle_diff_deg(green_ang1, pillar_ang1))
 print("red   - pillar (deg):", wrapped_angle_diff_deg(red_ang1, pillar_ang1))
 print("green - red    (deg):", wrapped_angle_diff_deg(green_ang1, red_ang1))
+
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+# ============================================================
+# FIX THIS BUG
+# ============================================================
+
+def rotate_basis_90(basis):
+    """
+    Rotate the whole 2D basis by +90 degrees.
+    """
+    R = np.array([[0, -1],
+                  [1,  0]], dtype=float)
+    return R @ basis
+
+
+# ============================================================
+# EXTRA HELPERS FOR ALIGNMENT
+# ============================================================
+
+def normalize_cols(B):
+    B = np.asarray(B, dtype=float)
+    return B / np.linalg.norm(B, axis=0, keepdims=True)
+
+
+def best_rigid_rotation_deg(from_basis, to_basis):
+    """
+    Best rigid rotation angle that maps from_basis -> to_basis
+    after column normalization.
+    """
+    F = normalize_cols(from_basis)
+    T = normalize_cols(to_basis)
+
+    U, _, Vt = np.linalg.svd(T @ F.T)
+    R = U @ Vt
+
+    # enforce proper rotation
+    if np.linalg.det(R) < 0:
+        U[:, -1] *= -1
+        R = U @ Vt
+
+    theta_deg = np.degrees(np.arctan2(R[1, 0], R[0, 0]))
+    return theta_deg, R
+
+
+def estimate_lattice_pitch(points):
+    """
+    Estimate square-lattice pitch from nearest-neighbor distances.
+    """
+    pts = np.asarray(points, dtype=float)
+    diff = pts[:, None, :] - pts[None, :, :]
+    dist = np.sqrt(np.sum(diff**2, axis=2))
+    np.fill_diagonal(dist, np.inf)
+
+    nn1 = np.min(dist, axis=1)
+    pitch = np.median(nn1)
+    return pitch
+
+
+def choose_center_anchor(points):
+    """
+    Pick the measured NV/pillar center closest to the cloud center.
+    """
+    pts = np.asarray(points, dtype=float)
+    ctr = pts.mean(axis=0)
+    idx = np.argmin(np.sum((pts - ctr) ** 2, axis=1))
+    return pts[idx], idx
+
+
+def make_triplet_targets(anchor_pix, pillar_basis, pitch_px, step=8):
+    """
+    3-point calibration target set aligned to the pillar lattice.
+    """
+    u = normalize(pillar_basis[:, 0]) * pitch_px * step
+    v = normalize(pillar_basis[:, 1]) * pitch_px * step
+
+    target_pixels = np.vstack([
+        anchor_pix,
+        anchor_pix + u,
+        anchor_pix + v,
+    ])
+    return target_pixels, u, v
+
+
+def make_grid_targets(anchor_pix, pillar_basis, pitch_px, half_span=2):
+    """
+    2D grid of pillar-aligned target positions in camera pixels.
+    Good for a more robust multi-point calibration.
+    """
+    u = normalize(pillar_basis[:, 0]) * pitch_px
+    v = normalize(pillar_basis[:, 1]) * pitch_px
+
+    pts = []
+    ij = []
+    for i in range(-half_span, half_span + 1):
+        for j in range(-half_span, half_span + 1):
+            pts.append(anchor_pix + i * u + j * v)
+            ij.append((i, j))
+    return np.asarray(pts, dtype=float), ij
+
+
+def src_to_camera(src_pts, A, t):
+    src_pts = np.asarray(src_pts, dtype=float)
+    return src_pts @ A.T + t
+
+
+def camera_to_src(pixel_pts, A, t):
+    """
+    Convert desired camera pixel positions back into source coordinates
+    (green or red command coordinates) using the current affine map.
+    """
+    pixel_pts = np.asarray(pixel_pts, dtype=float)
+    Ainv = np.linalg.inv(A)
+    return (pixel_pts - t) @ Ainv.T
+
+
+def angle_err_to_pillar_deg(basis, pillar_basis):
+    theta, _ = best_rigid_rotation_deg(basis, pillar_basis)
+    return theta
+
+
+def print_alignment_guidance():
+    green_rot_deg, _ = best_rigid_rotation_deg(green_basis, pillar_basis)
+    red_rot_deg, _ = best_rigid_rotation_deg(red_basis, pillar_basis)
+
+    print("\n=== Best rigid rotations into pillar basis ===")
+    print(f"green -> pillar: {green_rot_deg:+.3f} deg")
+    print(f"red   -> pillar: {red_rot_deg:+.3f} deg")
+
+    print("\nInterpretation:")
+    print("Negative means the printed AOD angle should DECREASE in your current angle convention.")
+    print("For your current data, green should move by about -5.4 deg.")
+    print("Red is already close, so a common rotation of both AODs is not ideal.")
+
+    if abs(red_rot_deg) < 1.0 and abs(green_rot_deg) > 3.0:
+        print("WARNING: red is already nearly aligned to the pillar axis.")
+        print("If green and red rotate together mechanically, you cannot make both perfect at once.")
+
+
+# ============================================================
+# AFTER YOU COMPUTE green_basis, red_basis, pillar_basis
+# ============================================================
+
+pitch_px = estimate_lattice_pitch(nv_pixel)
+anchor_pix, anchor_idx = choose_center_anchor(nv_pixel)
+
+print(f"\nEstimated pillar pitch (pixels): {pitch_px:.3f}")
+print(f"Chosen anchor index: {anchor_idx}")
+print(f"Chosen anchor pixel: {anchor_pix}")
+
+print_alignment_guidance()
+
+# 3-point pillar-aligned targets on camera
+target_pixels_3, u_step, v_step = make_triplet_targets(
+    anchor_pix=anchor_pix,
+    pillar_basis=pillar_basis,
+    pitch_px=pitch_px,
+    step=8,   # try 6, 8, or 10 depending on your FOV
+)
+
+print("\n=== Suggested 3-point target pixels for GREEN ===")
+print(target_pixels_3)
+
+# If you want the CURRENT green mapping to hit those camera pixels,
+# these are the green coordinates you would command:
+green_target_coords = camera_to_src(target_pixels_3, A_green, t_green)
+
+print("\n=== GREEN source coords that correspond to those target pixels ===")
+print(green_target_coords)
+
+# You can do the same for red if needed:
+red_target_coords = camera_to_src(target_pixels_3, A_red, t_red)
+
+print("\n=== RED source coords that correspond to those target pixels ===")
+print(red_target_coords)
+
+
+# ============================================================
+# OPTIONAL: plot the target pixels on top of your NV image
+# ============================================================
+
+fig, ax = plt.subplots(figsize=(8, 6))
+ax.scatter(nv_pixel[:, 0], nv_pixel[:, 1], s=8, alpha=0.35, color="gray")
+ax.scatter(calibration_coords_pixel[:, 0], calibration_coords_pixel[:, 1],
+           s=90, marker="s", color="black", label="Current calib pixels")
+
+# Existing basis overlays
+draw_basis(ax, common_origin, green_basis,  "green",  axis_len=180, color="limegreen")
+draw_basis(ax, common_origin, red_basis,    "red",    axis_len=180, color="crimson")
+draw_basis(ax, common_origin, pillar_basis, "pillar", axis_len=180, color="royalblue")
+
+# New target pixels
+ax.scatter(target_pixels_3[:, 0], target_pixels_3[:, 1],
+           s=140, marker="+", linewidths=2.5, color="gold", label="3 target pixels")
+
+for k, p in enumerate(target_pixels_3):
+    ax.text(p[0] + 6, p[1] + 6, f"T{k}", color="gold", fontsize=11)
+
+ax.scatter([anchor_pix[0]], [anchor_pix[1]], s=120, marker="x", color="cyan", label="Anchor pillar")
+
+ax.set_title("Pillar-aligned target pixels for green calibration")
+ax.set_xlabel("Pixel X")
+ax.set_ylabel("Pixel Y")
+ax.axis("equal")
+ax.invert_yaxis()
+ax.legend(loc="upper right", frameon=True)
+plt.tight_layout()
+
 plt.show(block=True)

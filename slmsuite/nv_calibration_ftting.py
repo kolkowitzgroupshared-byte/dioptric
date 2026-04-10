@@ -104,12 +104,12 @@ if __name__ == "__main__":
     img_plot = kpl.imshow(ax, img_array, cbar_label="Photons")
     plt.show(block=True)
     # List of initial peak yellow coordinates
-    initial_peaks = np.array([[338.04, 361.354], [311.711, 11.032], [18.043, 209.58]])
+    # initial_peaks = np.array([[338.04, 361.354], [311.711, 11.032], [18.043, 209.58]])
     # red calibration
     # initial_peaks = np.array([[123.486, 9.115], [16.951, 242.751], [237.556, 240.186]])
     # gree calibration
-    # initial_peaks = np.array(      
-    #     [[209.538, 201.829], [355.903, 55.327], [220.407, 359.723], [25.892, 55.822]])
+    initial_peaks = np.array(      
+        [[209.538, 201.829], [355.903, 55.327], [220.407, 359.723], [25.892, 55.822]])
     # Fit Gaussian to each peak
     optimized_coords = []
     for peak in initial_peaks:
