@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-Fitting program for Single-NV / single-pixel ESR (resonance) sweep produced by
-do_resonance in control_panel_cryo.py (which calls confocal_resonance.main).
+Fitting program for the Zeeman-split m_s = +/-1 lines of the NV ground-state
+spin triplet, as measured by do_resonance in control_panel_cryo.py
+(which calls confocal_resonance.main).
 
-Fits the NV triplet ms = +1 / -1 doublet with a symmetric pair of Lorentzians
-(shared linewidth and contrast, mirrored around the central D frequency).
-An optional independent-dip mode is also provided as a fallback.
+The two dips correspond to the m_s = -1 and m_s = +1 spin sublevels of the
+NV triplet ground state, whose degeneracy is lifted by an applied magnetic
+field. The two lines are fit independently (each with its own center, FWHM,
+and contrast) so that an asymmetric pair -- e.g. one sharp line and one
+broad line -- is captured correctly.
 
 Creator: chemistatcode
 Created on: April 9th, 2026
@@ -19,41 +22,33 @@ from scipy.ndimage import uniform_filter1d
 from pathlib import Path
 
 
+# Electron gyromagnetic ratio for the NV center, used to convert the Zeeman
+# splitting to the magnetic field projection along the NV axis.
+GAMMA_E_GHZ_PER_T = 28.024  # GHz/T
+
+
 # ----------------------------------------------------------------------
-# Models
+# Model
 # ----------------------------------------------------------------------
 def lorentzian_dip(f, f0, fwhm, contrast):
     """Single Lorentzian dip (positive `contrast` = depth below baseline)."""
     return contrast * (fwhm / 2) ** 2 / ((f - f0) ** 2 + (fwhm / 2) ** 2)
 
 
-def nv_doublet(f, offset, center, splitting, fwhm, contrast):
+def two_lorentzian_dip(
+    f, offset, f_minus, fwhm_minus, c_minus, f_plus, fwhm_plus, c_plus
+):
     """
-    Symmetric NV ms=+/-1 doublet.
+    Sum of two independent Lorentzian dips on a flat baseline.
 
-    Parameters
-    ----------
-    offset    : baseline (normalized signal away from resonance)
-    center    : zero-field-splitting-like center frequency D (GHz)
-    splitting : full peak-to-peak splitting between ms=-1 and ms=+1 (GHz)
-    fwhm      : shared FWHM of each Lorentzian dip (GHz)
-    contrast  : shared depth of each dip below the baseline
+    Models the Zeeman-split m_s = +/-1 NV lines. Each line is fully
+    independent in frequency, FWHM, and contrast so that asymmetric pairs
+    (one sharp line + one broad line) are captured correctly.
     """
-    f_minus = center - splitting / 2.0
-    f_plus = center + splitting / 2.0
     return (
         offset
-        - lorentzian_dip(f, f_minus, fwhm, contrast)
-        - lorentzian_dip(f, f_plus, fwhm, contrast)
-    )
-
-
-def nv_doublet_independent(f, offset, f1, fwhm1, c1, f2, fwhm2, c2):
-    """Two Lorentzians with independent widths and contrasts (fallback model)."""
-    return (
-        offset
-        - lorentzian_dip(f, f1, fwhm1, c1)
-        - lorentzian_dip(f, f2, fwhm2, c2)
+        - lorentzian_dip(f, f_minus, fwhm_minus, c_minus)
+        - lorentzian_dip(f, f_plus, fwhm_plus, c_plus)
     )
 
 
@@ -101,20 +96,6 @@ def estimate_baseline(norm):
     return float(np.nanpercentile(norm, 85))
 
 
-def split_minima(freqs, norm):
-    """
-    Split the sweep at its midpoint and find the minimum in each half.
-    Smooth lightly first so that single-point noise doesn't dominate.
-    """
-    n = len(norm)
-    win = max(3, n // 25)
-    smoothed = uniform_filter1d(norm, size=win, mode="nearest")
-    half = n // 2
-    i_left = int(np.nanargmin(smoothed[:half]))
-    i_right = int(np.nanargmin(smoothed[half:])) + half
-    return freqs[i_left], freqs[i_right]
-
-
 def estimate_fwhm(freqs, norm, baseline, dip_freq):
     """
     Estimate the FWHM of the dip nearest `dip_freq` from the data itself:
@@ -127,7 +108,6 @@ def estimate_fwhm(freqs, norm, baseline, dip_freq):
     below = norm < half_level
     if not np.any(below):
         return max((freqs[-1] - freqs[0]) / 20.0, 1e-3)
-    # Pick the contiguous run of points below half-level closest to dip_freq.
     idxs = np.where(below)[0]
     near = idxs[np.argmin(np.abs(freqs[idxs] - dip_freq))]
     lo = near
@@ -140,64 +120,104 @@ def estimate_fwhm(freqs, norm, baseline, dip_freq):
     return max(width, freqs[1] - freqs[0])
 
 
+def seed_two_lines(freqs, norm):
+    """
+    Build initial-guess parameters for the two-line dip fit.
+
+    Strategy:
+      1. Baseline = 85th percentile.
+      2. Sharp-line seed = global maximum of (baseline - norm), no smoothing.
+         This guarantees that a single anomalously-low point is picked.
+      3. Broad-line seed = minimum of a lightly smoothed trace, with a
+         window of +/- 10% of the sweep around the sharp-line seed masked
+         out so the same dip isn't picked twice.
+      4. FWHM seeds: sharp = step_size / 2 (so the fitter can go either
+         way), broad = data-driven half-depth width.
+      5. Returned in (f_minus, f_plus) order with f_minus < f_plus.
+    """
+    n = len(norm)
+    step = freqs[1] - freqs[0]
+    baseline = estimate_baseline(norm)
+
+    depth = baseline - norm
+    i_sharp = int(np.nanargmax(depth))
+    f_sharp = freqs[i_sharp]
+    c_sharp = max(float(depth[i_sharp]), 1e-4)
+    fwhm_sharp = step / 2.0
+
+    # Mask +/- 10% of the sweep around the sharp line so we don't pick the
+    # same point as the broad line.
+    mask_half = max(int(round(0.10 * n)), 2)
+    mask_lo = max(i_sharp - mask_half, 0)
+    mask_hi = min(i_sharp + mask_half + 1, n)
+
+    smooth_win = max(3, n // 25)
+    smoothed = uniform_filter1d(norm, size=smooth_win, mode="nearest")
+    masked = smoothed.copy()
+    masked[mask_lo:mask_hi] = np.inf
+    if np.all(~np.isfinite(masked)):
+        # Degenerate case: only one obvious dip. Place the second seed at
+        # the opposite end of the sweep.
+        i_broad = 0 if i_sharp > n // 2 else n - 1
+    else:
+        i_broad = int(np.nanargmin(masked))
+    f_broad = freqs[i_broad]
+    c_broad = max(baseline - float(smoothed[i_broad]), 1e-4)
+    fwhm_broad = estimate_fwhm(freqs, norm, baseline, f_broad)
+
+    # Order so f_minus < f_plus.
+    if f_sharp < f_broad:
+        f_minus, fwhm_minus, c_minus = f_sharp, fwhm_sharp, c_sharp
+        f_plus, fwhm_plus, c_plus = f_broad, fwhm_broad, c_broad
+        sharp_label = "m_s=-1 (sharp)"
+        broad_label = "m_s=+1 (broad)"
+    else:
+        f_minus, fwhm_minus, c_minus = f_broad, fwhm_broad, c_broad
+        f_plus, fwhm_plus, c_plus = f_sharp, fwhm_sharp, c_sharp
+        sharp_label = "m_s=+1 (sharp)"
+        broad_label = "m_s=-1 (broad)"
+
+    p0 = [baseline, f_minus, fwhm_minus, c_minus, f_plus, fwhm_plus, c_plus]
+    print("  Initial seeds:")
+    print(f"    baseline       : {baseline:.6f}")
+    print(
+        f"    sharp seed     : f = {f_sharp:.6f} GHz, "
+        f"FWHM = {fwhm_sharp * 1e3:.3f} MHz, depth = {c_sharp:.4f}  [{sharp_label}]"
+    )
+    print(
+        f"    broad seed     : f = {f_broad:.6f} GHz, "
+        f"FWHM = {fwhm_broad * 1e3:.3f} MHz, depth = {c_broad:.4f}  [{broad_label}]"
+    )
+    return p0
+
+
 # ----------------------------------------------------------------------
 # Fitting
 # ----------------------------------------------------------------------
-def fit_doublet(freqs, norm, sigma=None):
-    """Symmetric ms=+/-1 doublet fit (5 parameters)."""
+def fit_two_lines(freqs, norm, sigma=None):
+    """Independent two-Lorentzian fit (7 parameters)."""
     fmin, fmax = freqs[0], freqs[-1]
     span = fmax - fmin
 
-    baseline = estimate_baseline(norm)
-    f_left, f_right = split_minima(freqs, norm)
-    center0 = 0.5 * (f_left + f_right)
-    splitting0 = max(f_right - f_left, 2 * (freqs[1] - freqs[0]))
-    contrast0 = max(baseline - np.nanmin(norm), 1e-4)
-    fwhm0 = 0.5 * (
-        estimate_fwhm(freqs, norm, baseline, f_left)
-        + estimate_fwhm(freqs, norm, baseline, f_right)
-    )
+    p0 = seed_two_lines(freqs, norm)
 
-    p0 = [baseline, center0, splitting0, fwhm0, contrast0]
     bounds = (
-        [0.0, fmin, 0.0, freqs[1] - freqs[0], 0.0],
-        [np.inf, fmax, span, span, 1.0],
-    )
-
-    print(
-        f"  Initial guess: baseline={baseline:.4f}, center={center0:.4f} GHz, "
-        f"splitting={splitting0 * 1e3:.1f} MHz, FWHM={fwhm0 * 1e3:.1f} MHz, "
-        f"contrast={contrast0:.4f}"
-    )
-
-    popt, pcov = curve_fit(
-        nv_doublet, freqs, norm, p0=p0, bounds=bounds,
-        sigma=sigma, absolute_sigma=sigma is not None, maxfev=50000,
-    )
-    return popt, pcov
-
-
-def fit_doublet_independent(freqs, norm, sigma=None):
-    """Two-Lorentzian fit with independent widths and contrasts (7 params)."""
-    fmin, fmax = freqs[0], freqs[-1]
-    span = fmax - fmin
-
-    baseline = estimate_baseline(norm)
-    f_left, f_right = split_minima(freqs, norm)
-    contrast0 = max(baseline - np.nanmin(norm), 1e-4)
-    fwhm_l = estimate_fwhm(freqs, norm, baseline, f_left)
-    fwhm_r = estimate_fwhm(freqs, norm, baseline, f_right)
-
-    p0 = [baseline, f_left, fwhm_l, contrast0, f_right, fwhm_r, contrast0]
-    bounds = (
-        [0.0, fmin, freqs[1] - freqs[0], 0.0, fmin, freqs[1] - freqs[0], 0.0],
+        [0.0, fmin, 1e-4, 0.0, fmin, 1e-4, 0.0],
         [np.inf, fmax, span, 1.0, fmax, span, 1.0],
     )
 
     popt, pcov = curve_fit(
-        nv_doublet_independent, freqs, norm, p0=p0, bounds=bounds,
+        two_lorentzian_dip, freqs, norm, p0=p0, bounds=bounds,
         sigma=sigma, absolute_sigma=sigma is not None, maxfev=50000,
     )
+
+    # Enforce f_minus < f_plus on the fitted parameters.
+    offset, f1, w1, c1, f2, w2, c2 = popt
+    if f1 > f2:
+        popt = np.array([offset, f2, w2, c2, f1, w1, c1])
+        # Permute the covariance matrix to match the new ordering.
+        perm = [0, 4, 5, 6, 1, 2, 3]
+        pcov = pcov[np.ix_(perm, perm)]
     return popt, pcov
 
 
@@ -208,7 +228,6 @@ def main():
     # ---- USER SETTINGS ----------------------------------------------------
     data_dir = r"G:\nvdata\pc_cryo\branch_master\confocal_resonance\2026_04"
     base_name = "2026_04_09-02_39_31-(lovelace)"
-    independent_dips = False  # set True to drop the symmetric constraint
     # -----------------------------------------------------------------------
 
     freqs_ghz, norm, ste = load_data(data_dir, base_name)
@@ -234,15 +253,8 @@ def main():
 
     fit_success = True
     try:
-        if independent_dips:
-            popt, pcov = fit_doublet_independent(freqs_ghz, norm, sigma=ste)
-            fit_func = nv_doublet_independent
-            model_label = "Independent double Lorentzian"
-        else:
-            popt, pcov = fit_doublet(freqs_ghz, norm, sigma=ste)
-            fit_func = nv_doublet
-            model_label = "NV ms=+/-1 doublet"
-        fit_y = fit_func(freqs_ghz, *popt)
+        popt, pcov = fit_two_lines(freqs_ghz, norm, sigma=ste)
+        fit_y = two_lorentzian_dip(freqs_ghz, *popt)
         ss_res = np.sum((norm - fit_y) ** 2)
         ss_tot = np.sum((norm - np.mean(norm)) ** 2)
         r_squared = 1.0 - (ss_res / ss_tot)
@@ -258,55 +270,40 @@ def main():
         residuals = np.zeros_like(norm)
         r_squared = None
         red_chi_sq = None
-        fit_func = nv_doublet_independent if independent_dips else nv_doublet
-        model_label = "Independent double Lorentzian" if independent_dips else "NV ms=+/-1 doublet"
 
     # ----- Terminal output -----
-    print("\n" + "=" * 60)
-    print(f"CONFOCAL ESR FIT RESULTS  ({model_label})")
-    print("=" * 60)
+    print("\n" + "=" * 64)
+    print("CONFOCAL ESR FIT RESULTS -- Zeeman-split m_s = +/-1 lines")
+    print("=" * 64)
     if fit_success:
-        if independent_dips:
-            offset, f1, g1, c1, f2, g2, c2 = popt
-            of_e, f1_e, g1_e, c1_e, f2_e, g2_e, c2_e = perr
-            if f1 > f2:
-                f1, f2 = f2, f1
-                g1, g2 = g2, g1
-                c1, c2 = c2, c1
-                f1_e, f2_e = f2_e, f1_e
-                g1_e, g2_e = g2_e, g1_e
-                c1_e, c2_e = c2_e, c1_e
-            center = 0.5 * (f1 + f2)
-            splitting = f2 - f1
-            print(f"  Baseline offset:   {offset:.6f} +/- {of_e:.6f}")
-            print(f"  ms=-1 center:      {f1:.6f} GHz +/- {f1_e * 1e3:.3f} MHz")
-            print(f"  ms=-1 FWHM:        {g1 * 1e3:.3f} MHz +/- {g1_e * 1e3:.3f} MHz")
-            print(f"  ms=-1 contrast:    {c1:.4f} +/- {c1_e:.4f}")
-            print(f"  ms=+1 center:      {f2:.6f} GHz +/- {f2_e * 1e3:.3f} MHz")
-            print(f"  ms=+1 FWHM:        {g2 * 1e3:.3f} MHz +/- {g2_e * 1e3:.3f} MHz")
-            print(f"  ms=+1 contrast:    {c2:.4f} +/- {c2_e:.4f}")
-            print("-" * 60)
-            print(f"  D (center):        {center:.6f} GHz")
-            print(f"  Splitting:         {splitting * 1e3:.3f} MHz")
-        else:
-            offset, center, splitting, fwhm, contrast = popt
-            of_e, ce_e, sp_e, fw_e, co_e = perr
-            f_minus = center - splitting / 2.0
-            f_plus = center + splitting / 2.0
-            print(f"  Baseline offset:   {offset:.6f} +/- {of_e:.6f}")
-            print(f"  D (center):        {center:.6f} GHz +/- {ce_e * 1e3:.3f} MHz")
-            print(f"  Splitting:         {splitting * 1e3:.3f} MHz +/- {sp_e * 1e3:.3f} MHz")
-            print(f"  FWHM (shared):     {fwhm * 1e3:.3f} MHz +/- {fw_e * 1e3:.3f} MHz")
-            print(f"  Contrast (shared): {contrast:.4f} +/- {co_e:.4f}")
-            print("-" * 60)
-            print(f"  ms = -1:           {f_minus:.6f} GHz")
-            print(f"  ms = +1:           {f_plus:.6f} GHz")
-        print("-" * 60)
+        offset, f_minus, fwhm_minus, c_minus, f_plus, fwhm_plus, c_plus = popt
+        of_e, fm_e, wm_e, cm_e, fp_e, wp_e, cp_e = perr
+        center = 0.5 * (f_minus + f_plus)
+        splitting_ghz = f_plus - f_minus
+        splitting_mhz = splitting_ghz * 1e3
+        b_par_mt = splitting_ghz / (2 * GAMMA_E_GHZ_PER_T) * 1e3  # in mT
+
+        print(f"  Baseline offset:   {offset:.6f} +/- {of_e:.6f}")
+        print()
+        print(f"  m_s = -1 line:")
+        print(f"    center           : {f_minus:.6f} GHz +/- {fm_e * 1e3:.3f} MHz")
+        print(f"    FWHM             : {fwhm_minus * 1e3:.3f} MHz +/- {wm_e * 1e3:.3f} MHz")
+        print(f"    contrast         : {c_minus:.4f} +/- {cm_e:.4f}")
+        print()
+        print(f"  m_s = +1 line:")
+        print(f"    center           : {f_plus:.6f} GHz +/- {fp_e * 1e3:.3f} MHz")
+        print(f"    FWHM             : {fwhm_plus * 1e3:.3f} MHz +/- {wp_e * 1e3:.3f} MHz")
+        print(f"    contrast         : {c_plus:.4f} +/- {cp_e:.4f}")
+        print("-" * 64)
+        print(f"  Center D = (f_-1 + f_+1)/2: {center:.6f} GHz")
+        print(f"  Zeeman splitting Df       : {splitting_mhz:.3f} MHz")
+        print(f"  B|| (along NV axis)       : {b_par_mt:.3f} mT")
+        print("-" * 64)
         print(f"  R-squared:           {r_squared:.6f}")
         print(f"  Reduced chi-squared: {red_chi_sq:.2e}")
     else:
         print("  Fit did not converge -- showing data only.")
-    print("=" * 60 + "\n")
+    print("=" * 64 + "\n")
 
     # ----- Plotting: two-panel figure -----
     fig, (ax_main, ax_res) = plt.subplots(
@@ -326,18 +323,14 @@ def main():
         )
 
     if fit_success:
-        f_smooth = np.linspace(freqs_ghz[0], freqs_ghz[-1], 1000)
+        f_smooth = np.linspace(freqs_ghz[0], freqs_ghz[-1], 2000)
         ax_main.plot(
-            f_smooth, fit_func(f_smooth, *popt), "-",
-            label=model_label, linewidth=2, color="darkorange",
+            f_smooth, two_lorentzian_dip(f_smooth, *popt), "-",
+            label="Two-Lorentzian fit (independent widths)",
+            linewidth=2, color="darkorange",
         )
         # Mark the two dip centers.
-        if independent_dips:
-            f_minus, f_plus = sorted([popt[1], popt[4]])
-        else:
-            f_minus = popt[1] - popt[2] / 2.0
-            f_plus = popt[1] + popt[2] / 2.0
-        for fc, lbl in [(f_minus, "ms=-1"), (f_plus, "ms=+1")]:
+        for fc, lbl in [(popt[1], "m_s=-1"), (popt[4], "m_s=+1")]:
             ax_main.axvline(fc, color="gray", linestyle=":", linewidth=1)
             ax_main.text(
                 fc, ax_main.get_ylim()[1], f" {lbl}",
@@ -345,34 +338,23 @@ def main():
             )
 
     ax_main.set_ylabel("Normalized Signal")
-    ax_main.set_title("Confocal ESR  --  NV ms = +/-1 doublet fit")
+    ax_main.set_title("Confocal ESR -- NV triplet, Zeeman-split m_s = +/-1 lines")
     ax_main.legend(loc="lower right")
     ax_main.grid(True, linestyle="--", alpha=0.5)
 
     if fit_success:
-        if independent_dips:
-            offset, f1, g1, c1, f2, g2, c2 = popt
-            if f1 > f2:
-                f1, f2 = f2, f1
-                g1, g2 = g2, g1
-                c1, c2 = c2, c1
-            annotation = (
-                f"$f_{{-1}}$ = {f1:.4f} GHz\n"
-                f"$f_{{+1}}$ = {f2:.4f} GHz\n"
-                f"$\\Delta f$ = {(f2 - f1) * 1e3:.2f} MHz\n"
-                f"FWHM$_{{-1}}$ = {g1 * 1e3:.2f} MHz\n"
-                f"FWHM$_{{+1}}$ = {g2 * 1e3:.2f} MHz\n"
-                f"$R^2$ = {r_squared:.4f}"
-            )
-        else:
-            offset, center, splitting, fwhm, contrast = popt
-            annotation = (
-                f"$D$ = {center:.4f} GHz\n"
-                f"$\\Delta f$ = {splitting * 1e3:.2f} MHz\n"
-                f"FWHM = {fwhm * 1e3:.2f} MHz\n"
-                f"contrast = {contrast:.3f}\n"
-                f"$R^2$ = {r_squared:.4f}"
-            )
+        offset, f_minus, fwhm_minus, c_minus, f_plus, fwhm_plus, c_plus = popt
+        splitting_mhz = (f_plus - f_minus) * 1e3
+        b_par_mt = (f_plus - f_minus) / (2 * GAMMA_E_GHZ_PER_T) * 1e3
+        annotation = (
+            f"$f_{{-1}}$ = {f_minus:.4f} GHz\n"
+            f"$f_{{+1}}$ = {f_plus:.4f} GHz\n"
+            f"$\\Delta f$ = {splitting_mhz:.2f} MHz\n"
+            f"$B_{{\\parallel}}$ = {b_par_mt:.2f} mT\n"
+            f"FWHM$_{{-1}}$ = {fwhm_minus * 1e3:.2f} MHz\n"
+            f"FWHM$_{{+1}}$ = {fwhm_plus * 1e3:.2f} MHz\n"
+            f"$R^2$ = {r_squared:.4f}"
+        )
         ax_main.text(
             0.02, 0.02, annotation, transform=ax_main.transAxes,
             fontsize=9, verticalalignment="bottom",
