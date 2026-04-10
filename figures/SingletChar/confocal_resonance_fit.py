@@ -184,11 +184,13 @@ def seed_two_lines(freqs, norm):
     print(f"    baseline       : {baseline:.6f}")
     print(
         f"    sharp seed     : f = {f_sharp:.6f} GHz, "
-        f"FWHM = {fwhm_sharp * 1e3:.3f} MHz, depth = {c_sharp:.4f}  [{sharp_label}]"
+        f"data value = {norm[i_sharp]:.6f}, depth = {c_sharp:.4f}, "
+        f"FWHM = {fwhm_sharp * 1e3:.3f} MHz  [{sharp_label}]"
     )
     print(
         f"    broad seed     : f = {f_broad:.6f} GHz, "
-        f"FWHM = {fwhm_broad * 1e3:.3f} MHz, depth = {c_broad:.4f}  [{broad_label}]"
+        f"data value = {norm[i_broad]:.6f}, depth = {c_broad:.4f}, "
+        f"FWHM = {fwhm_broad * 1e3:.3f} MHz  [{broad_label}]"
     )
     return p0
 
@@ -204,14 +206,15 @@ def fit_two_lines(freqs, norm, sigma=None):
 
     p0 = seed_two_lines(freqs, norm)
 
-    # FWHM lower bound = one sweep step. Anything narrower is undersampled
-    # and lets the fitter make a delta-spike Lorentzian centered between
-    # data points with arbitrary contrast. Contrast capped at 0.5: NV ODMR
-    # contrasts are typically <0.3, and capping it prevents the fitter from
-    # compensating for an unresolved width with a giant amplitude.
+    # FWHM lower bound = step / 2. Smaller than this is undersampled and
+    # lets the fitter put a delta-spike between data points; larger forces
+    # the model to bleed contrast onto neighboring points and prevents
+    # single-point peaks from being captured. Contrast bounded [0, 1] --
+    # do NOT cap below 1, the singlet-shelving probe seen by this script
+    # routinely has contrasts ~0.5-0.9.
     bounds = (
-        [0.0, fmin, step, 0.0, fmin, step, 0.0],
-        [np.inf, fmax, span, 0.5, fmax, span, 0.5],
+        [0.0, fmin, step / 2, 0.0, fmin, step / 2, 0.0],
+        [np.inf, fmax, span, 1.0, fmax, span, 1.0],
     )
 
     popt, pcov = curve_fit(
@@ -314,9 +317,13 @@ def main():
     print("=" * 64 + "\n")
 
     # ----- Plotting: two-panel figure -----
+    # Use constrained_layout instead of tight_layout: the dip-center labels
+    # are placed with a blended (data, axes-fraction) transform, which
+    # tight_layout cannot compute a bounding box for.
     fig, (ax_main, ax_res) = plt.subplots(
         2, 1, figsize=(9, 7), sharex=True,
         gridspec_kw={"height_ratios": [3, 1], "hspace": 0.05},
+        constrained_layout=True,
     )
 
     # Top panel: data + fit
@@ -382,7 +389,6 @@ def main():
     ax_res.set_ylabel("Residuals")
     ax_res.grid(True, linestyle="--", alpha=0.5)
 
-    plt.tight_layout()
     plt.show()
 
 
