@@ -163,23 +163,23 @@ def main(
             ax.autoscale_view()
             plt.pause(0.01)
 
-        # if optimize_between_runs:
-        #     targeting.compensate_for_drift(nv_sig)
         if optimize_between_runs:
-            try:
-                z_coords, z_counts = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
-                print(f"  Optimized Z: {z_coords}, counts={z_counts}")
-            except Exception as e:
-                print(f"  Z optimization failed on run {run_ind}: {e}")
-            try:
-                galvo_key = pos.get_laser_positioner(VirtualLaserKey.IMAGING)
-                xy_coords, xy_counts = targeting.optimize(nv_sig, coords_key=galvo_key)
-                print(f"  Optimized XY: {xy_coords}, counts={xy_counts}")
-            except Exception as e:
-                print(f"  XY optimization failed on run {run_ind}: {e}")
-            for f_num in plt.get_fignums():
-                if plt.figure(f_num) is not fig:
-                    plt.close(f_num)
+            targeting.compensate_for_drift(nv_sig)
+        # if optimize_between_runs:
+        #     try:
+        #         z_coords, z_counts = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
+        #         print(f"  Optimized Z: {z_coords}, counts={z_counts}")
+        #     except Exception as e:
+        #         print(f"  Z optimization failed on run {run_ind}: {e}")
+        #     try:
+        #         galvo_key = pos.get_laser_positioner(VirtualLaserKey.IMAGING)
+        #         xy_coords, xy_counts = targeting.optimize(nv_sig, coords_key=galvo_key)
+        #         print(f"  Optimized XY: {xy_coords}, counts={xy_counts}")
+        #     except Exception as e:
+        #         print(f"  XY optimization failed on run {run_ind}: {e}")
+        #     for f_num in plt.get_fignums():
+        #         if plt.figure(f_num) is not fig:
+        #             plt.close(f_num)
     
     print(f"run {run_ind}: norm_mean min={norm_mean.min():.6f} max={norm_mean.max():.6f}, runs averaged={run_ind+1}")
 
