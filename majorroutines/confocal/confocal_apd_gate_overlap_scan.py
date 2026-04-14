@@ -1,9 +1,24 @@
 # -*- coding: utf-8 -*-
 # Updated: chemistatcode 4/14/2026
 """
-Sweep the delay between the END of the readout laser pulse and the START
-of the APD gate. Positive delay = APD gate opens after the pulse ends;
+Sweep the *physical* delay between the end of the readout laser pulse
+and the opening of the APD gate. Positive delay = APD gate physically
+opens after the laser physically turns off (guaranteed no overlap);
 negative delay = APD gate opens while the laser is still on.
+
+Two hardware-delay parameters convert between the command timeline
+(what the pulser actually streams) and the physical timeline (what the
+sample sees):
+
+    laser_fall_delay_ns -- time between the laser command falling edge
+        and the optical power actually dropping. Defaults to the laser's
+        "delay" entry in the config, which typically characterizes the
+        rising edge; override if the falling edge has been measured.
+    apd_gate_delay_ns   -- propagation delay from APD-gate command HIGH
+        to the APD actually enabling counting. Defaults to 0.
+
+Both are forwarded to the sequence so `gate_delay_ns` is interpreted in
+physical time.
 """
 
 import matplotlib.pyplot as plt
@@ -23,6 +38,8 @@ def main(
     laser_on_ns=None,
     gate_width_ns=300,
     laser_vkey=VirtualLaserKey.SPIN_READOUT,
+    laser_fall_delay_ns=None,
+    apd_gate_delay_ns=0,
 ):
     tb.reset_cfm()
     kpl.init_kplotlib()
@@ -35,15 +52,32 @@ def main(
         laser_on_ns = int(nv_sig.pulse_durations.get(laser_vkey, int(vld["duration"])))
     laser_on_ns = int(laser_on_ns)
 
+    # Default the laser falling-edge delay to the laser's config "delay"
+    # (which is usually the rising-edge delay). This is a best-effort
+    # placeholder until the falling edge is characterized separately.
+    if laser_fall_delay_ns is None:
+        laser_name = tb.get_physical_laser_name(laser_vkey)
+        laser_fall_delay_ns = int(
+            tb.get_physical_laser_dict(laser_name)["delay"]
+        )
+    laser_fall_delay_ns = int(laser_fall_delay_ns)
+    apd_gate_delay_ns = int(apd_gate_delay_ns)
+
+    print(
+        f"laser_on_ns={laser_on_ns}, gate_width_ns={gate_width_ns}, "
+        f"laser_fall_delay_ns={laser_fall_delay_ns}, "
+        f"apd_gate_delay_ns={apd_gate_delay_ns}"
+    )
+
     delays_ns = np.linspace(delay_min_ns, delay_max_ns, num_steps)
     delays_ns = np.rint(delays_ns).astype(int)
 
     counts = np.full((num_runs, len(delays_ns)), np.nan, dtype=float)
 
     fig, ax = plt.subplots()
-    ax.set_xlabel("APD gate delay after end of readout pulse (ns)")
+    ax.set_xlabel("Physical delay from end of readout pulse to APD gate (ns)")
     ax.set_ylabel("Total counts")
-    ax.set_title("APD gate delay scan (gate start vs readout-pulse end)")
+    ax.set_title("APD gate delay scan (physical time, no overlap for delay >= 0)")
     (line_avg,) = ax.plot([], [], marker="o")
 
     seq_file = "apd_gate_overlap_scan.py"
@@ -65,6 +99,8 @@ def main(
                 int(gate_width_ns),
                 int(delay_ns),
                 laser_vkey.name,
+                int(laser_fall_delay_ns),
+                int(apd_gate_delay_ns),
             ]
             seq_args_string = tb.encode_seq_args(seq_args)
 
@@ -97,7 +133,7 @@ def main(
     best_delay_ns = int(delays_ns[best_ind])
 
     print("\nDone")
-    print(f"Best gate delay after readout-pulse end = {best_delay_ns} ns")
+    print(f"Best physical delay (laser-off -> APD-on) = {best_delay_ns} ns")
     print(f"Max average counts = {avg_counts[best_ind]:.1f}")
 
     tb.reset_cfm()
@@ -107,6 +143,8 @@ def main(
         "counts": counts,
         "avg_counts": avg_counts,
         "best_delay_ns": best_delay_ns,
+        "laser_fall_delay_ns": laser_fall_delay_ns,
+        "apd_gate_delay_ns": apd_gate_delay_ns,
     }
 
 

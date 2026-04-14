@@ -181,14 +181,17 @@ def main(
                 if plt.figure(f_num) is not fig:
                     plt.close(f_num)
     
-    print(f"run {run_ind}: norm_mean min={norm_mean.min():.6f} max={norm_mean.max():.6f}, runs averaged={run_ind+1}")
-
     with np.errstate(divide="ignore", invalid="ignore"):
         norm_runs = sig_counts / ref_counts
 
     norm_mean = np.nanmean(norm_runs, axis=0)
     norm_ste = np.nanstd(norm_runs, axis=0, ddof=1) / np.sqrt(
         np.sum(np.isfinite(norm_runs), axis=0)
+    )
+
+    print(
+        f"Final: norm_mean min={np.nanmin(norm_mean):.6f} "
+        f"max={np.nanmax(norm_mean):.6f}, runs averaged={run_ind+1}"
     )
 
     raw_data = {
