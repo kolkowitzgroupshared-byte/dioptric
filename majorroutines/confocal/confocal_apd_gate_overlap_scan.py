@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Updated: chemistatcode 4/14/2026
 
 import matplotlib.pyplot as plt
 import numpy as np

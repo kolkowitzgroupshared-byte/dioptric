@@ -40,6 +40,7 @@ import majorroutines.confocal.confocal_test_simple_spin_contrast as test_simple_
 
 # import majorroutines.confocal.ramsey as ramsey
 import majorroutines.confocal.confocal_resonance as resonance
+import majorroutines.confocal.optimize_green_readout as optimize_green_readout
 import majorroutines.confocal.confocal_resonance_singlet_scan as resonance_tisapph_singlet_scan
 import majorroutines.confocal.confocal_odmr_tisapph_short as odmr_tisapph_short
 import majorroutines.confocal.confocal_apd_gate_overlap_scan as find_apd_gate_overlap
@@ -818,7 +819,26 @@ def do_resonance(nv_sig):
         uwave_ind=0,
         optimize_between_runs=True,
     )
-    
+
+
+def do_optimize_green_readout(nv_sig):
+    """Sweep green readout duration and pick the one that gives the best
+    ODMR contrast. Set `freq_center_ghz` / `freq_span_mhz` below so the
+    scan window contains exactly one Zeeman line (e.g. the m_s=-1 peak).
+    """
+    optimize_green_readout.main(
+        nv_sig,
+        readout_times_ns=[200, 400, 600, 800, 1200, 1600, 2000, 2500],
+        freq_center_ghz=2.8262,   # park on the m_s=-1 peak
+        freq_span_mhz=30.0,       # narrow zoom -- single-peak fit
+        num_steps=21,
+        num_reps=int(20e4),
+        num_runs=3,
+        uwave_ind=0,
+        optimize_between_runs=True,
+    )
+
+
 
 def do_tisapph_singlet_scan(nv_sig):
     resonance_tisapph_singlet_scan.main(
