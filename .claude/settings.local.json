@@ -7,7 +7,8 @@
       "Bash(grep -rn \"short\\\\|ODMR\\\\|shelving\\\\|SHELVING\" /c/Users/cmrei/Documents/dioptric/servers/timing/sequencelibrary/pulse_gen_SWAB_82/counter/*.py)",
       "Bash(grep:*)",
       "Bash(ls /mnt/)",
-      "Read(//cygdrive/**)"
+      "Read(//cygdrive/**)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('figures/SingletChar/confocal_resonance_fit.py'\\).read\\(\\)\\); print\\('OK'\\)\")"
     ]
   }
 }
