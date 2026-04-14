@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
 # Updated: chemistatcode 4/14/2026
+"""
+Sweep the delay between the END of the readout laser pulse and the START
+of the APD gate. Positive delay = APD gate opens after the pulse ends;
+negative delay = APD gate opens while the laser is still on.
+"""
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,8 +17,8 @@ def main(
     nv_sig,
     num_reps=int(2e5),
     num_runs=3,
-    offset_min_ns=-1000,
-    offset_max_ns=1000,
+    delay_min_ns=-1000,
+    delay_max_ns=1000,
     num_steps=81,
     laser_on_ns=None,
     gate_width_ns=300,
@@ -30,15 +35,15 @@ def main(
         laser_on_ns = int(nv_sig.pulse_durations.get(laser_vkey, int(vld["duration"])))
     laser_on_ns = int(laser_on_ns)
 
-    offsets_ns = np.linspace(offset_min_ns, offset_max_ns, num_steps)
-    offsets_ns = np.rint(offsets_ns).astype(int)
+    delays_ns = np.linspace(delay_min_ns, delay_max_ns, num_steps)
+    delays_ns = np.rint(delays_ns).astype(int)
 
-    counts = np.full((num_runs, len(offsets_ns)), np.nan, dtype=float)
+    counts = np.full((num_runs, len(delays_ns)), np.nan, dtype=float)
 
     fig, ax = plt.subplots()
-    ax.set_xlabel("APD gate offset relative to laser onset (ns)")
+    ax.set_xlabel("APD gate delay after end of readout pulse (ns)")
     ax.set_ylabel("Total counts")
-    ax.set_title("APD gate / laser overlap scan")
+    ax.set_title("APD gate delay scan (gate start vs readout-pulse end)")
     (line_avg,) = ax.plot([], [], marker="o")
 
     seq_file = "apd_gate_overlap_scan.py"
@@ -51,14 +56,14 @@ def main(
         if tb.safe_stop():
             break
 
-        for ind, offset_ns in enumerate(offsets_ns):
+        for ind, delay_ns in enumerate(delays_ns):
             if tb.safe_stop():
                 break
 
             seq_args = [
                 int(laser_on_ns),
                 int(gate_width_ns),
-                int(offset_ns),
+                int(delay_ns),
                 laser_vkey.name,
             ]
             seq_args_string = tb.encode_seq_args(seq_args)
@@ -79,29 +84,29 @@ def main(
             total_counts = int(new_counts[0]) if len(new_counts) > 0 else 0
             counts[run_ind, ind] = total_counts
 
-            print(f"  offset={int(offset_ns):>5d} ns | counts={total_counts}")
+            print(f"  delay={int(delay_ns):>5d} ns | counts={total_counts}")
 
         avg_counts = np.nanmean(counts[: run_ind + 1], axis=0)
-        line_avg.set_data(offsets_ns, avg_counts)
+        line_avg.set_data(delays_ns, avg_counts)
         ax.relim()
         ax.autoscale_view()
         plt.pause(0.01)
 
     avg_counts = np.nanmean(counts, axis=0)
     best_ind = int(np.nanargmax(avg_counts))
-    best_offset_ns = int(offsets_ns[best_ind])
+    best_delay_ns = int(delays_ns[best_ind])
 
     print("\nDone")
-    print(f"Best offset = {best_offset_ns} ns")
+    print(f"Best gate delay after readout-pulse end = {best_delay_ns} ns")
     print(f"Max average counts = {avg_counts[best_ind]:.1f}")
 
     tb.reset_cfm()
 
     return {
-        "offsets_ns": offsets_ns,
+        "delays_ns": delays_ns,
         "counts": counts,
         "avg_counts": avg_counts,
-        "best_offset_ns": best_offset_ns,
+        "best_delay_ns": best_delay_ns,
     }
 
 
