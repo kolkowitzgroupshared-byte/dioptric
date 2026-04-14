@@ -811,7 +811,7 @@ def do_rabi(nv_sig):
 def do_resonance(nv_sig):
     resonance.main(
         nv_sig,
-        freq_center_ghz=2.8725,
+        freq_center_ghz=2.869332,
         freq_span_mhz=200.0,
         num_steps=51,
         num_reps=20e4,
@@ -829,9 +829,9 @@ def do_optimize_green_readout_time(nv_sig):
     optimize_green_readout_time.main(
         nv_sig,
         readout_times_ns=[200, 250, 300, 350, 400, 450, 500, 550],
-        freq_center_ghz=2.8262,   # park on the m_s=-1 peak
-        freq_span_mhz=30.0,       # narrow zoom -- single-peak fit
-        num_steps=21,
+        freq_center_ghz=2.869332,   # park on the m_s=-1 peak
+        freq_span_mhz=50.0,       # narrow zoom -- single-peak fit
+        num_steps=3,
         num_reps=int(20e4),
         num_runs=3,
         uwave_ind=0,
@@ -1206,7 +1206,7 @@ if __name__ == "__main__":
         # region Image / 3D scan
     
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
-        do_image_sample_zoom(nv_sig)
+        # do_image_sample_zoom(nv_sig)
         # do_image_sample(nv_sig)
         # do_image_sample(nv_sig, nv_minus_initialization=True)
         # do_image_sample_zoom(nv_sig, nv_minus_initialization=True)
@@ -1224,8 +1224,7 @@ if __name__ == "__main__":
         # do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
 
         #Optimize seq. parameters 
-        #do_optimize_green_readout_time
-
+        do_optimize_green_readout_time(nv_sig)
         # endregion Optimize
 
         # region Stationary count
@@ -1237,7 +1236,7 @@ if __name__ == "__main__":
 
         # region Resonance, Pulse Seq., Singlet
 
-        do_resonance(nv_sig)
+        # do_resonance(nv_sig)
         # do_rabi(nv_sig)
 
         # for i in range(3):
