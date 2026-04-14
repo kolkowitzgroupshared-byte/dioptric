@@ -1066,9 +1066,18 @@ def do_tisapph_constant_wavelength(wavelength_nm=780.0):
         pass
 
 def do_find_apd_gate_overlap(nv_sig):
-    """Sweep the delay between the end of the readout pulse and the start
-    of the APD gate. Positive delay = gate opens after the laser turns
-    off; negative delay = gate opens while the laser is still on.
+    """Sweep the PHYSICAL delay between the end of the readout pulse and
+    the opening of the APD gate. Positive delay = APD physically opens
+    after the laser physically turns off (guaranteed no overlap);
+    negative delay = APD opens while the laser is still on.
+
+    The two hardware-delay kwargs convert command-time to physical time:
+        laser_fall_delay_ns: delay from laser command falling edge to
+            optical power dropping. Default (None) = laser "delay" entry
+            in config (usually the rising edge). Measure the falling
+            edge and pass it explicitly if they differ.
+        apd_gate_delay_ns: propagation delay from APD-gate command HIGH
+            to APD actually enabling counting. Default 0.
     """
     find_apd_gate_overlap.main(
         nv_sig,
@@ -1080,6 +1089,8 @@ def do_find_apd_gate_overlap(nv_sig):
         laser_on_ns=500,  # or None to use nv_sig / virtual-laser default
         gate_width_ns=300,
         laser_vkey=VirtualLaserKey.SPIN_READOUT,
+        laser_fall_delay_ns=None,  # None -> use config laser "delay"
+        apd_gate_delay_ns=0,
     )
 
 
