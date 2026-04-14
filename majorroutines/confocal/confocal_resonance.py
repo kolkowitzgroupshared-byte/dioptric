@@ -34,7 +34,7 @@ def main(
     uwave_ind,
     uwave_power_dbm=None,
     laser_power=None,
-    optimize_between_runs=False,
+    optimize_between_runs=True,
     do_plot=True,
     shuffle=False,
     norm_mode=NormMode.SINGLE_VALUED,
@@ -164,20 +164,22 @@ def main(
             plt.pause(0.01)
 
         if optimize_between_runs:
-            try:
-                z_coords, z_counts = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
-                print(f"  Optimized Z: {z_coords}, counts={z_counts}")
-            except Exception as e:
-                print(f"  Z optimization failed on run {run_ind}: {e}")
-            try:
-                galvo_key = pos.get_laser_positioner(VirtualLaserKey.IMAGING)
-                xy_coords, xy_counts = targeting.optimize(nv_sig, coords_key=galvo_key)
-                print(f"  Optimized XY: {xy_coords}, counts={xy_counts}")
-            except Exception as e:
-                print(f"  XY optimization failed on run {run_ind}: {e}")
-            for f_num in plt.get_fignums():
-                if plt.figure(f_num) is not fig:
-                    plt.close(f_num)
+            targeting.compensate_for_drift(nv_sig)
+        # if optimize_between_runs:
+        #     try:
+        #         z_coords, z_counts = targeting.optimize(nv_sig, coords_key=CoordsKey.Z)
+        #         print(f"  Optimized Z: {z_coords}, counts={z_counts}")
+        #     except Exception as e:
+        #         print(f"  Z optimization failed on run {run_ind}: {e}")
+        #     try:
+        #         galvo_key = pos.get_laser_positioner(VirtualLaserKey.IMAGING)
+        #         xy_coords, xy_counts = targeting.optimize(nv_sig, coords_key=galvo_key)
+        #         print(f"  Optimized XY: {xy_coords}, counts={xy_counts}")
+        #     except Exception as e:
+        #         print(f"  XY optimization failed on run {run_ind}: {e}")
+        #     for f_num in plt.get_fignums():
+        #         if plt.figure(f_num) is not fig:
+        #             plt.close(f_num)
     
     print(f"run {run_ind}: norm_mean min={norm_mean.min():.6f} max={norm_mean.max():.6f}, runs averaged={run_ind+1}")
 
@@ -219,7 +221,7 @@ def main(
 if __name__ == "__main__":
     # example:
     kpl.init_kplotlib()
-    data = dm.get_raw_data(file_stem="2026_04_09-02_39_31-(lovelace)", load_npz=True)
+    data = dm.get_raw_data(file_stem="2026_04_14-10_27_04-(Wu)", load_npz=True)
     nv_sig = data["nv_sig"]
     sig_counts = np.asarray(data["sig_counts"]) 
     ref_counts = np.asarray(data["ref_counts"])   

@@ -273,7 +273,7 @@ def fit_two_lines(freqs, norm):
 def main():
     # ---- USER SETTINGS ----------------------------------------------------
     data_dir = r"G:\nvdata\pc_cryo\branch_master\confocal_resonance\2026_04"
-    base_name = "2026_04_09-14_53_04-(lovelace)"
+    base_name = "2026_04_10-16_00_01-(lovelace)"
     # -----------------------------------------------------------------------
 
     freqs_ghz, norm, ste = load_data(data_dir, base_name)
