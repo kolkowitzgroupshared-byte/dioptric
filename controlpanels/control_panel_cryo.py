@@ -1116,10 +1116,10 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z = 5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z = 5.61715 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # coord_z = 3.4318
     # pixel_xy = [-0.03, -0.011]  # Wu
-    pixel_xy = [-0.039, 0.014]  # Wu
+    pixel_xy = [-0.021, 0.036]  # Wu
 
     # return
     nv_sig = NVSig(
@@ -1151,7 +1151,7 @@ if __name__ == "__main__":
 
     try:
         tool_belt.init_safe_stop()
-        pos.set_drift([0.0, 0.0, 0.0])  # Reset drift to clean state
+        # pos.set_drift([0.0, 0.0, 0.0])  # Reset drift to clean state
         # drift = tool_belt.get_drift()
         # tool_belt.set_drift([0.0, 0.0, drift[2]])  # Keep z
         # tool_belt.set_drifts([drift[0], drift[1], 0.0])  # Keep xy
@@ -1202,7 +1202,7 @@ if __name__ == "__main__":
         # end region Image sample
         #
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=5.4, voltage_end=5.7, step_size=0.003) #must be between 1-9V
+        do_optimize_z_PI(nv_sig, voltage_start=6.0, voltage_end=6.5, step_size=0.003) #must be between 1-9V
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
@@ -1213,7 +1213,7 @@ if __name__ == "__main__":
         # do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
 
         #Optimize seq. parameters 
-        do_optimize_green_readout_time(nv_sig)
+        # do_optimize_green_readout_time(nv_sig)
         # endregion Optimize
 
         # region Stationary count
