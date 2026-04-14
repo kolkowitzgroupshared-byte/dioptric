@@ -1115,8 +1115,8 @@ if __name__ == "__main__":
             VirtualLaserKey.SINGLET_DRIVE: 100e3,  # placeholder
         },
     )
-    # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 55
+    nv_sig.expected_counts = None
+    # nv_sig.expected_counts = 55
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
@@ -1127,7 +1127,7 @@ if __name__ == "__main__":
 
     try:
         tool_belt.init_safe_stop()
-        # pos.set_drift([0.0, 0.0, 0.0])  # Reset drift to clean state
+        pos.set_drift([0.0, 0.0, 0.0])  # Reset drift to clean state
         # drift = tool_belt.get_drift()
         # tool_belt.set_drift([0.0, 0.0, drift[2]])  # Keep z
         # tool_belt.set_drifts([drift[0], drift[1], 0.0])  # Keep xy
@@ -1171,7 +1171,7 @@ if __name__ == "__main__":
         # region Image / 3D scan
     
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
-        # do_image_sample_zoom(nv_sig)
+        do_image_sample_zoom(nv_sig)
         # do_image_sample(nv_sig)
         # do_image_sample(nv_sig, nv_minus_initialization=True)
         # do_image_sample_zoom(nv_sig, nv_minus_initialization=True)
