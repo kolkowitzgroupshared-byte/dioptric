@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Simple APD-gate / laser overlap scan using VirtualLaserKey.
+APD-gate timing sweep referenced to the *end* of the readout laser pulse.
 
 Args:
-    [laser_on_ns, gate_width_ns, gate_offset_ns, laser_vkey]
+    [laser_on_ns, gate_width_ns, gate_delay_ns, laser_vkey]
 
 Convention:
-    gate_offset_ns > 0  -> APD gate starts AFTER laser onset
-    gate_offset_ns < 0  -> APD gate starts BEFORE laser onset
+    gate_delay_ns > 0  -> APD gate starts AFTER the readout pulse ends
+    gate_delay_ns == 0 -> APD gate opens right when the laser turns off
+    gate_delay_ns < 0  -> APD gate starts BEFORE the readout pulse ends
+                          (i.e., gate overlaps the tail of the laser pulse)
 """
 
 from pulsestreamer import Sequence, OutputState
@@ -40,11 +42,11 @@ def _vkey_from_arg(x):
 
 
 def get_seq(pulse_streamer, config, args):
-    laser_on_ns, gate_width_ns, gate_offset_ns, laser_vkey_arg = args
+    laser_on_ns, gate_width_ns, gate_delay_ns, laser_vkey_arg = args
 
     laser_on_ns = _as_int64("laser_on_ns", laser_on_ns)
     gate_width_ns = _as_int64("gate_width_ns", gate_width_ns)
-    gate_offset_ns = int(gate_offset_ns)
+    gate_delay_ns = int(gate_delay_ns)
     laser_vkey = _vkey_from_arg(laser_vkey_arg)
 
     pulser_wiring = config["Wiring"]["PulseGen"]
@@ -56,12 +58,16 @@ def get_seq(pulse_streamer, config, args):
 
     base_buffer = max(200, laser_delay)
 
-    if gate_offset_ns >= 0:
-        laser_onset = base_buffer
-        gate_onset = base_buffer + gate_offset_ns
-    else:
-        gate_onset = base_buffer
-        laser_onset = base_buffer - gate_offset_ns
+    # gate_delay_ns is measured from the *end* of the readout pulse.
+    # gate_onset = (laser_onset + laser_on_ns) + gate_delay_ns.
+    # If gate_delay_ns is very negative the gate could land before the
+    # sequence starts; shift the whole thing forward so gate_onset >= 0.
+    laser_onset = base_buffer
+    gate_onset = laser_onset + int(laser_on_ns) + gate_delay_ns
+    if gate_onset < 0:
+        shift = -gate_onset
+        laser_onset += shift
+        gate_onset = 0
 
     laser_cmd_onset = laser_onset - laser_delay
 

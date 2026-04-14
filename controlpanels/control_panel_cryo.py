@@ -1066,12 +1066,16 @@ def do_tisapph_constant_wavelength(wavelength_nm=780.0):
         pass
 
 def do_find_apd_gate_overlap(nv_sig):
+    """Sweep the delay between the end of the readout pulse and the start
+    of the APD gate. Positive delay = gate opens after the laser turns
+    off; negative delay = gate opens while the laser is still on.
+    """
     find_apd_gate_overlap.main(
         nv_sig,
         num_reps=int(2e5),
         num_runs=3,
-        offset_min_ns=-1000,
-        offset_max_ns=1000,
+        delay_min_ns=-1000,
+        delay_max_ns=1000,
         num_steps=81,
         laser_on_ns=500,  # or None to use nv_sig / virtual-laser default
         gate_width_ns=300,
