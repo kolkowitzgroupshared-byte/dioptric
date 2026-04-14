@@ -811,7 +811,7 @@ def do_rabi(nv_sig):
 def do_resonance(nv_sig):
     resonance.main(
         nv_sig,
-        freq_center_ghz=2.8725,
+        freq_center_ghz=2.869332,
         freq_span_mhz=200.0,
         num_steps=51,
         num_reps=20e4,
