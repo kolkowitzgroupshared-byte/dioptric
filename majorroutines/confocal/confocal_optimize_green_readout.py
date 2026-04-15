@@ -90,10 +90,31 @@ def main(
         )
         per_point_runs.append(run_data)
 
-        freqs = np.asarray(run_data["freqs_ghz"], dtype=float)
-        norm = np.asarray(run_data["norm_mean"], dtype=float)
-        valid = np.isfinite(freqs) & np.isfinite(norm)
-        freqs, norm = freqs[valid], norm[valid]
+        freqs_full = np.asarray(run_data["freqs_ghz"], dtype=float)
+        norm_full = np.asarray(run_data["norm_mean"], dtype=float)
+        sig_arr = np.asarray(run_data.get("sig_counts", []), dtype=float)
+        ref_arr = np.asarray(run_data.get("ref_counts", []), dtype=float)
+        n_total = norm_full.size
+        n_finite = int(np.sum(np.isfinite(norm_full)))
+        print(
+            f"  norm_mean: {n_finite}/{n_total} finite points; "
+            f"sig_counts shape={sig_arr.shape}, ref_counts shape={ref_arr.shape}"
+        )
+        if n_finite == 0 and sig_arr.size and ref_arr.size:
+            zero_ref_steps = int(np.sum(np.nansum(ref_arr, axis=0) == 0))
+            n_steps_local = ref_arr.shape[1] if ref_arr.ndim == 2 else "?"
+            print(
+                f"  (steps with zero ref across all runs: "
+                f"{zero_ref_steps}/{n_steps_local})"
+            )
+        if n_finite > 0:
+            print(
+                f"  norm_mean min={np.nanmin(norm_full):.4f}, "
+                f"max={np.nanmax(norm_full):.4f}"
+            )
+
+        valid = np.isfinite(freqs_full) & np.isfinite(norm_full)
+        freqs, norm = freqs_full[valid], norm_full[valid]
 
         if freqs.size < 4:
             print("  Not enough finite points to fit a Lorentzian.")
