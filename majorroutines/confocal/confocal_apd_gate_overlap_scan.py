@@ -82,7 +82,7 @@ def main(
     ax.set_title("APD gate delay scan (physical time, no overlap for delay >= 0)")
     (line_avg,) = ax.plot([], [], marker="o")
 
-    seq_file = "apd_gate_overlap_scan.py"
+    seq_file = "confocal_apd_gate_overlap_scan.py"
 
     tb.init_safe_stop()
 

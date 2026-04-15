@@ -1085,7 +1085,7 @@ def do_find_apd_gate_overlap(nv_sig):
         num_runs=3,
         delay_min_ns=-1000,
         delay_max_ns=1000,
-        num_steps=30, #for testing
+        num_steps=10, #for testing
         laser_on_ns=500,  # or None to use nv_sig / virtual-laser default
         gate_width_ns=300,
         laser_vkey=VirtualLaserKey.SPIN_READOUT,
