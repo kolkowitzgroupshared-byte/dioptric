@@ -71,8 +71,41 @@ def main(
         f"apd_gate_delay_ns={apd_gate_delay_ns}"
     )
 
+    # Safety: a negative gate_delay_ns physically opens the APD gate while
+    # the readout laser is still on, which risks damaging the detector via
+    # stray/scattered green light. Clamp to zero and warn.
+    if delay_min_ns < 0:
+        print(
+            f"WARNING: delay_min_ns={delay_min_ns} would overlap the APD "
+            f"gate with the readout laser. Clamping to 0 ns to protect the "
+            f"detector. Pass a negative value deliberately only with a "
+            f"physical shutter / ND filter protecting the APD."
+        )
+        delay_min_ns = 0
+    if delay_max_ns < delay_min_ns:
+        raise ValueError(
+            f"delay_max_ns ({delay_max_ns}) must be >= delay_min_ns "
+            f"({delay_min_ns})."
+        )
+
     delays_ns = np.linspace(delay_min_ns, delay_max_ns, num_steps)
     delays_ns = np.rint(delays_ns).astype(int)
+
+    # Physical-timing summary: show the user exactly what each swept delay
+    # means relative to the readout pulse. gate_delay_ns is already the
+    # *physical* delay (laser-off -> gate-on), so status is just a reminder
+    # of the margin each point has.
+    print("\nPhysical timing table (gate opens relative to end of laser pulse):")
+    print(f"{'delay (ns)':>12}  {'margin vs laser-off':>22}  status")
+    for d in delays_ns:
+        status = "SAFE" if d > 0 else ("AT EDGE" if d == 0 else "OVERLAP")
+        print(f"{int(d):>12d}  {int(d):>19d} ns  {status}")
+    print(
+        "Note: 'SAFE' assumes laser_fall_delay_ns correctly characterizes "
+        "the optical fall time. If the true fall tail is longer than the "
+        "configured value, even SAFE points can briefly overlap."
+    )
+    print()
 
     counts = np.full((num_runs, len(delays_ns)), np.nan, dtype=float)
 

@@ -1068,8 +1068,8 @@ def do_tisapph_constant_wavelength(wavelength_nm=780.0):
 def do_find_apd_gate_overlap(nv_sig):
     """Sweep the PHYSICAL delay between the end of the readout pulse and
     the opening of the APD gate. Positive delay = APD physically opens
-    after the laser physically turns off (guaranteed no overlap);
-    negative delay = APD opens while the laser is still on.
+    after the laser physically turns off (no overlap). The routine
+    clamps delay_min_ns to 0 to protect the APD from direct laser light.
 
     The two hardware-delay kwargs convert command-time to physical time:
         laser_fall_delay_ns: delay from laser command falling edge to
@@ -1083,9 +1083,9 @@ def do_find_apd_gate_overlap(nv_sig):
         nv_sig,
         num_reps=int(2e5),
         num_runs=3,
-        delay_min_ns=-1000,
+        delay_min_ns=0,      # never overlap the APD with the laser
         delay_max_ns=1000,
-        num_steps=10, #for testing
+        num_steps=41,        # 25 ns resolution
         laser_on_ns=500,  # or None to use nv_sig / virtual-laser default
         gate_width_ns=300,
         laser_vkey=VirtualLaserKey.SPIN_READOUT,
