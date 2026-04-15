@@ -155,13 +155,15 @@
 """
 Created on Tue Feb  11 21:24:36 2026
 
-Laser-free variant: drives DAQ clock and APD gate only.
+Simple readout: drives DAQ clock, APD gate, and imaging laser (continuous ON).
 """
 
 import numpy as np
 from pulsestreamer import OutputState, Sequence
 
 from utils import common
+from utils import tool_belt as tb 
+from utils.constants import VirtualLaserKey, NormMode
 
 LOW = 0
 HIGH = 1
@@ -172,6 +174,7 @@ def get_seq(pulse_streamer, config, args):
     delay, readout_time, *_ = (
         args  # accepts [delay, readout_time, laser_name, laser_power]
     )
+    readout_vkey = VirtualLaserKey.IMAGING
 
     # Wiring
     pulse_gen_wiring = config["Wiring"]["PulseGen"]
@@ -196,7 +199,9 @@ def get_seq(pulse_streamer, config, args):
     gate_train = [(delay, LOW), (readout_time, HIGH), (tail_pad, LOW)]
     seq.setDigital(do_daq_gate, gate_train)
 
-    # No laser control
+    # Laser train: on continuously during both measurements
+    laser_train = [(int(period), HIGH)]
+    tb.process_laser_seq(seq, readout_vkey, laser_train)
 
     final = OutputState([], 0.0, 0.0)
     return seq, final, [period]

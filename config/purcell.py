@@ -32,10 +32,25 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
-calibration_coords_pixel = [[367.181, 25.354], [229.35, 379.51], [34.93, 44.916]]
-calibration_coords_green = [[70.546, 130.492], [101.628, 69.147], [130.573, 132.308]]
-calibration_coords_red = [[41.956, 88.653], [69.523, 40.383], [90.96, 93.205]]
+# calibration_coords_pixel = [[367.181, 25.354], [229.35, 379.51], [34.93, 44.916]]
+# calibration_coords_green = [[70.546, 130.492],[101.628, 69.147],[130.573, 132.308]]
+# calibration_coords_red = [[41.956, 88.653],[69.523, 40.383],[90.96, 93.205]]
 
+calibration_coords_pixel = [
+    [355.855, 55.308],
+    [220.425, 359.764],
+    [25.893, 55.843],
+]
+calibration_coords_green = [
+    [72.218, 124.96],
+    [101.986, 72.343],
+    [131.603, 130.079],
+]
+calibration_coords_red = [
+    [41.498, 82.808],
+    [68.574, 42.356],
+    [89.185, 91.264],
+]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
     CoordsKey.PIXEL: calibration_coords_pixel[0],
@@ -63,7 +78,6 @@ pixel_to_sample_affine_transformation_matrix = [
     [0.06108861, -0.00533755, -12.74624750],
     [0.00748424, 0.06162394, -16.62683414],
 ]
-
 # endregion
 # region Base config
 # Add on to the default config
@@ -161,8 +175,8 @@ config |= {
         "resolution": (512, 512),
         "spot_radius": 3.0,  # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
-        "em_gain": 5000,
-        # "em_gain": 10,
+        # "em_gain": 5000,
+        "em_gain": 10,
         "temp": -60,
         "timeout": 60e3,  # ms
         # "timeout": -1,  # No timeout
@@ -171,7 +185,7 @@ config |= {
         "readout_mode": 1,  # 16 for double horizontal readout rate (em mode)
         # "readout_mode": 6,  # Fast conventional
         # "roi": (122, 126, 250, 250),  # offsetX, offsetY, width, height
-        "roi": (55, 85, 400, 400),  # offsetX, offsetY, width, height
+        "roi": (60, 87, 375, 375),  # offsetX, offsetY, width, height
         # "roi": None,  # offsetX, offsetY, width, height
         "scale": 5 / 0.6,  # pixels / micron
     },
@@ -251,8 +265,8 @@ config |= {
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 1e6},
             VirtualLaserKey.WIDEFIELD_CHARGE_READOUT: {
                 "physical_name": yellow_laser,
-                "duration": 60e6,
-                # "duration": 50e6,
+                # "duration": 60e6,
+                "duration": 50e6,
                 # "duration": 24e6,  # for red calibration
             },
             # LaserKey.WIDEFIELD_CHARGE_READOUT: {"physical_name": yellow_laser, "duration": 100e6},
@@ -939,8 +953,9 @@ opx_config = {
     ### Analog
     "waveforms": {
         # Green AOD
-        "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
-        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
+        # "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
+        "green_aod_cw-opti": {"type": "constant", "sample": 0.11},
+        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.13},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.15},
@@ -949,8 +964,10 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.45},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.33},
+        "yellow_imaging": {"type": "constant", "sample": 0.40},
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.344}, #1460NVs
+        "yellow_charge_readout": {"type": "constant", "sample": 0.3614},
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.4014},
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other

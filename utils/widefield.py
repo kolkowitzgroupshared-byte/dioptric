@@ -114,44 +114,6 @@ def _calc_dist_matrix(radius=None):
     x_crop_mesh, y_crop_mesh = np.meshgrid(x_crop, y_crop)
     return np.sqrt((x_crop_mesh) ** 2 + (y_crop_mesh) ** 2)
 
-
-# def integrate_counts(img_array, pixel_coords, radius=None):
-#     """Add up the counts around a target set of pixel coordinates in the passed image array.
-#     Use for getting the total number of photons coming from a target NV.
-
-#     Parameters
-#     ----------
-#     img_array : ndarray
-#         Image array in units of photons (convert from ADUs with adus_to_photons)
-#     pixel_coords : 2-tuple
-#         Pixel coordinates to integrate around
-#     radius : _type_, optional
-#         Radius of disk to integrate over, by default retrieved from config
-
-#     Returns
-#     -------
-#     float
-#         Integrated counts (just an estimate, as adus_to_photons is also just an estimate)
-#     """
-#     pixel_x = pixel_coords[0]
-#     pixel_y = pixel_coords[1]
-
-#     if radius is None:
-#         radius = _get_camera_spot_radius()
-
-#     # Don't work through all the pixels, just the ones that might be relevant
-#     left = round(pixel_x - radius)
-#     right = round(pixel_x + radius)
-#     top = round(pixel_y - radius)
-#     bottom = round(pixel_y + radius)
-#     img_array_crop = img_array[top : bottom + 1, left : right + 1]
-#     dist = _calc_dist_matrix()
-
-
-#     counts = np.sum(img_array_crop, where=dist < radius)
-#     return counts
-
-
 # SBC: update on 9/9/2024
 def integrate_counts(img_array, pixel_coords, radius=None):
     """
@@ -196,6 +158,51 @@ def integrate_counts(img_array, pixel_coords, radius=None):
 
     return counts
 
+def integrate_counts_bg_subtracted(
+    img_array,
+    pixel_coords,
+    radius=None,
+    bg_inner_radius=None,
+    bg_outer_radius=None,
+):
+    """
+    Integrate counts in a disk around the NV and subtract local background
+    estimated from an annulus around the same NV.
+    """
+    pixel_x = pixel_coords[0]
+    pixel_y = pixel_coords[1]
+
+    if radius is None:
+        radius = _get_camera_spot_radius()
+
+    if bg_inner_radius is None:
+        bg_inner_radius = radius + 2.0
+    if bg_outer_radius is None:
+        bg_outer_radius = radius + 3.0
+
+    half_width = int(np.ceil(bg_outer_radius))
+    left = max(0, round(pixel_x - half_width))
+    right = min(img_array.shape[1] - 1, round(pixel_x + half_width))
+    top = max(0, round(pixel_y - half_width))
+    bottom = min(img_array.shape[0] - 1, round(pixel_y + half_width))
+
+    img_crop = img_array[top : bottom + 1, left : right + 1]
+
+    y_coords, x_coords = np.ogrid[top : bottom + 1, left : right + 1]
+    dist = np.sqrt((x_coords - pixel_x) ** 2 + (y_coords - pixel_y) ** 2)
+
+    sig_mask = dist < radius
+    bg_mask = (dist >= bg_inner_radius) & (dist < bg_outer_radius)
+
+    sig_sum = np.sum(img_crop[sig_mask])
+
+    if np.count_nonzero(bg_mask) == 0:
+        return sig_sum
+
+    bg_mean = np.mean(img_crop[bg_mask])
+    bg_subtracted_counts = sig_sum - bg_mean * np.count_nonzero(sig_mask)
+
+    return bg_subtracted_counts
 
 def fit_max_counts(img_array, pixel_coords, radius=None):
     """

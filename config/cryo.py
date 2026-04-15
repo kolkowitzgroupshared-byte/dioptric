@@ -28,38 +28,9 @@ home = Path.home()
 # region Widefield calibration coords
 
 green_laser = "laser_COBO_520"  # make labrad server for COBOLT green laser
-tisapph_laser = ""  # fill this in later (labrad server for Tisapph)
+tisapph_laser = "laser_TISAPPH"  # fill this in later (labrad server for Tisapph)
 thor_galvos = "pos_xy_THOR_gvs212"
 cryo_piezo = "pos_xyz_ATTO_piezos"
-
-
-# # NOT updated for cryo yet set-up for galvo
-# calibration_coords_pixel = [
-#     [13.905, 11.931],
-#     [124.563, 242.424],
-#     [240.501, 17.871],
-# ]
-# calibration_coords_galvo = [
-#     [82.15, 83.705],
-#     [75.199, 61.034],
-#     [61.32, 79.784],
-# ]
-
-# Create the dictionaries using the provided lists
-# calibration_coords_nv1 = {
-#     CoordsKey.PIXEL: calibration_coords_pixel[0],
-#     thor_galvos: calibration_coords_galvo[0],
-# }
-
-# calibration_coords_nv2 = {
-#     CoordsKey.PIXEL: calibration_coords_pixel[1],
-#     thor_galvos: calibration_coords_galvo[1],
-# }
-
-# calibration_coords_nv3 = {
-#     CoordsKey.PIXEL: calibration_coords_pixel[2],
-#     thor_galvos: calibration_coords_galvo[2],
-# }
 
 pixel_to_sample_affine_transformation_matrix = [
     [0.01476835, -0.00148369, -1.42104908],
@@ -76,16 +47,16 @@ config |= {
     # "charge_state_estimation_mode": ChargeStateEstimationMode.MLE,
     "charge_state_estimation_mode": ChargeStateEstimationMode.THRESHOLDING,
     "windows_repo_path": home / "GitHub/dioptric",
-    "disable_z_drift_compensation":True,
+    "disable_z_drift_compensation": False,
     ###
     # Common durations are in ns
     ###
     "CommonDurations": {
-        "cw_meas_buffer": 5000,
-        "pol_to_uwave_wait_dur": 5000,
-        "scc_ion_readout_buffer": 10000,
+        "cw_meas_buffer": 1000,
+        "pol_to_uwave_wait_dur": 1000,
+        "scc_ion_readout_buffer": 1000,
         "uwave_buffer": 100,
-        "uwave_to_readout_wait_dur": 5000,
+        "uwave_to_readout_wait_dur": 1000,
     },
     ###
     "DeviceIDs": {
@@ -113,6 +84,7 @@ config |= {
             "port": 9510,
             "cluster_name": "kolkowitz_nv_lab",
         },
+        "tisapph_M2_solstis_ip": "192.168.0.195",
         "power_supply_RNS_ngc103_visa": "TCPIP::192.168.0.130::INSTR",
         "pos_xyz_ATTO_piezos_ip": "192.168.0.199",
         "filter_slider_THOR_ell9k_com": "COM5",
@@ -132,11 +104,11 @@ config |= {
         "VirtualSigGens": {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
-                "uwave_power": 6.0,
-                "frequency": 2.8785,
-                "rabi_period": 144,
-                "pi_pulse": 72,
-                "pi_on_2_pulse": 36,
+                "uwave_power": 10, #dbm
+                "frequency": 2.8250, #GHz
+                "rabi_period": 293.1,
+                "pi_pulse": 146.6,
+                "pi_on_2_pulse": 64, #Half of pi pulse, for use in Ramsey and SE
             },
             # sig gen 1 is iq molulated
             1: {
@@ -150,36 +122,16 @@ config |= {
         },
     },
     ###
-    "Camera": {
-        "server_name": "camera_NUVU_hnu512gamma",
-        "resolution": (512, 512),
-        "spot_radius": 2.5,
-        # Radius for integrating NV counts in a camera image
-        "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
-        "em_gain": 5000,
-        # "em_gain": 1000,
-        # "em_gain": 10,
-        "temp": -60,
-        "timeout": 60e3,  # ms
-        # "timeout": -1,  # No timeout
-        # Readout mode specifies EM vs conventional, as well as vertical and horizontal readout frequencies.
-        # See camera server file for details
-        "readout_mode": 1,  # 16 for double horizontal readout rate (em mode)
-        # "readout_mode": 6,  # Fast conventional
-        "roi": (122, 126, 250, 250),  # offsetX, offsetY, width, height
-        # "roi": None,  # offsetX, offsetY, width, height
-        "scale": 5 / 0.6,  # pixels / micron
-    },
-    ###
     "Optics": {
         "PhysicalLasers": {
             green_laser: {
-                "delay": 0,
+                "delay": 0, 
                 "mod_mode": ModMode.DIGITAL,
                 "positioner": CoordsKey.PIXEL,
             },
             tisapph_laser: {
-                "delay": 0,
+                # "delay": 0,
+                "delay": 960, #960ns, Characterized by Saroj and Caitlin on 04/17/2025
                 "mod_mode": ModMode.DIGITAL,
                 "positioner": CoordsKey.PIXEL,
             },
@@ -189,16 +141,16 @@ config |= {
             VirtualLaserKey.IMAGING: {
                 # "physical_name": green_laser,
                 "physical_name": green_laser,  # this is the laser that appears on the imaging APD scan
-                "duration": 12e6,  # this duration appears on the imaging APD scan
+                "duration": 10e6,  # this duration appears on the imaging APD scan
             },
             VirtualLaserKey.SINGLET_DRIVE: {
                 "physical_name": tisapph_laser,
-                "duration": 300,  # this is a placeholder
+                "duration": 100e3,  # this is a placeholder
             },
 
             VirtualLaserKey.SPIN_READOUT: {
                 "physical_name": green_laser,
-                "duration": 300,
+                "duration": 440,
             },
             # LaserKey.CHARGE_POL: {"physical_name": green_laser, "duration": 10e3},
             VirtualLaserKey.CHARGE_POL: {
@@ -208,7 +160,7 @@ config |= {
             # LaserKey.CHARGE_POL: {"physical_name": green_laser, "duration": 60},
             VirtualLaserKey.SPIN_POL: {
                 "physical_name": green_laser,
-                "duration": 10e3,
+                "duration": 2e3,
             },
             VirtualLaserKey.SHELVING: {
                 "physical_name": green_laser,
@@ -228,32 +180,30 @@ config |= {
             # update with correct piezos for cryo
             CoordsKey.SAMPLE: {
                 "physical_name": "pos_xyz_ATTO_piezos", #xy atto
-                "control_mode": PosControlMode.STREAM,
+                # "control_mode": PosControlMode.STREAM,
+                "control_mode": PosControlMode.STEP,
                 "delay": int(1e6),  # 5 ms for PIFOC xyz
                 "nm_per_unit": 1000,
-                "optimize_range": 0.09,
-                "units": "Voltage (V)",
+                "optimize_range": 0.1,
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
             CoordsKey.Z: {
                 # "physical_name": "pos_xyz_ATTO_piezos", #z atto
                 "physical_name": "pos_z_PI_pifoc", #z atto
-                "control_mode": PosControlMode.STREAM,
+                "control_mode": PosControlMode.STEP,
                 # "delay": int(1e6),  # 1 ms for ATTO
                 "delay": int(5e6),  # 5 ms for PIFOC xyz
                 "nm_per_unit": 1000,
-                # "optimize_range": 0.09,
                 "optimize_range": 0.1,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
             CoordsKey.PIXEL: {
                 "physical_name": "pos_xy_THOR_gvs212",
-                "control_mode": PosControlMode.STREAM,
+                "control_mode": PosControlMode.STEP,
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
-                # "optimize_range": 0.02,
-                "optimize_range": 0.008,
+                "optimize_range": 0.01,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
@@ -290,27 +240,19 @@ config |= {
             "scaling_gain": 0.5,
         },
         "PulseGen": {
-            # "do_laser_INTE_520_dm": 3,
-            # "do_laser_OPTO_589_dm": 3,
-            # "do_laser_COBO_638_dm": 7,
-            # "do_sig_gen_BERK_bnc835_gate": 1,
-            # "do_sig_gen_STAN_sg394_gate": 10,
-            # "do_apd_gate": 5,
-            # "do_sample_clock": 0,
-            # "do_camera_trigger": 5,
             # clocks / gates
             "do_sample_clock": 0,  # 125 MHz-compatible sample clock out to Tagger
             "do_apd_gate": 1,  # gate line to Tagger
             # "do_camera_trigger": 6,  # optional
             # "do_laser_INTE_520_dm": 2,  # green  TTL
             "do_laser_COBO_520_dm": 2,
-            "do_laser_COBO_638_dm": 3,  # red TTL
+            # "do_laser_COBO_638_dm": 3,  # red TTL
             # microwaves (TTL gate to SGs)
-            # "do_sig_gen_BERK_bnc835_gate": 4,
             "do_sig_gen_STAN_sg394_3_dm": 4,
             # "do_sig_gen_STAN_sg394_dm": 5,
             # analog (for the yellow AOM amplitude)
             "ao_laser_OPTO_589_am": 0,  # yellow analog modulation
+            "do_laser_TISAPPH_dm":3,  # Tisapph TTL modulation
         },
         "Tagger": {
             "di_clock": 1,
@@ -322,7 +264,6 @@ config |= {
 }
 
 # endregion
-
 
 if __name__ == "__main__":
     key = "pixel_to_sample_affine_transformation_matrix"

@@ -201,17 +201,40 @@ def get_nv_coords(
     return coords
 
 
-def should_drift_adjust(coords_key):
-    """Check whether or not we should adjust the coordinates associated with the
-    passed coords_key for drift. Assume that we compensate for drift by adjusting
-    the sample positioner if we can. Otherwise, we adjust the coordinates
-    associated with the optical paths
-    """
-    if coords_key in [CoordsKey.SAMPLE, CoordsKey.Z]:
-        return True
-    else:
-        return not has_sample_positioner()
+# def should_drift_adjust(coords_key):
+#     """Check whether or not we should adjust the coordinates associated with the
+#     passed coords_key for drift. Assume that we compensate for drift by adjusting
+#     the sample positioner if we can. Otherwise, we adjust the coordinates
+#     associated with the optical paths
+#     """
+#     if coords_key in [CoordsKey.SAMPLE, CoordsKey.Z]:
+#         return True
+#     else:
+#         return not has_sample_positioner()
 
+def should_drift_adjust(coords_key):
+    """Decide whether coords for this positioner should be drift-adjusted.
+
+    Small tweak:
+    - camera mode: adjust SAMPLE and Z
+    - counter/confocal mode: adjust PIXEL
+    """
+    config = common.get_config_dict()
+    collection_mode = config["collection_mode"]
+
+    if collection_mode == CollectionMode.CAMERA:
+        if coords_key == CoordsKey.SAMPLE:
+            return True
+        if coords_key == CoordsKey.Z:
+            return True
+        return False
+
+    # confocal / counter mode
+    if coords_key == CoordsKey.PIXEL:
+        return True
+    if coords_key == CoordsKey.Z:
+        return True
+    return False
 
 def set_nv_coords(nv_sig, coords, coords_key=CoordsKey.SAMPLE):
     coords_val = nv_sig.coords
@@ -637,6 +660,7 @@ def get_scan_grid_2d(
         x_high + x_half_pixel,     # right
         y_high + y_half_pixel,     # bottom (origin='upper': img[h-1] here = y_max galvo)
         y_low - y_half_pixel,      # top (origin='upper': img[0] here = y_min galvo)
+
     ]
 
     return coords_1, coords_2, coords_1_1d, coords_2_1d, img_extent

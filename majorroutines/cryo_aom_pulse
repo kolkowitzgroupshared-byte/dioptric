@@ -1,0 +1,83 @@
+import copy
+import sys
+import time
+
+import labrad
+import numpy as np
+
+import majorroutines.calibration.calibrate_z_axis as calibrate_z_axis
+import majorroutines.calibration.optimize_xy as optimize_xy
+import majorroutines.calibration.optimize_z_PI as optimize_z_PI
+
+# import majorroutines.confocal.determine_standard_readout_params as determine_standard_readout_params
+# import majorroutines.confocal.g2_measurement as g2_measurement
+import majorroutines.confocal.confocal_image_sample as image_sample
+
+# import majorroutines.confocal.image_sample as image_sample
+# import majorroutines.confocal.optimize_magnet_angle as optimize_magnet_angle
+# import majorroutines.confocal.pulsed_resonance as pulsed_resonance
+import majorroutines.confocal.confocal_rabi as rabi
+
+# import majorroutines.confocal.confocal_resonance as resonance
+
+# import majorroutines.confocal.ramsey as ramsey
+import majorroutines.confocal.confocal_resonance as resonance
+import majorroutines.confocal.confocal_resonance_singlet_scan as resonance_tisapph_singlet_scan
+import majorroutines.confocal.confocal_odmr_tisapph_short as odmr_tisapph_short
+import majorroutines.confocal.confocal_apd_gate_overlap_scan as find_apd_gate_overlap
+
+# import majorroutines.confocal.spin_echo as spin_echo
+import majorroutines.confocal.confocal_stationary_count as stationary_count
+import majorroutines.confocal.z_scan_1d as z_scan_1d
+import majorroutines.confocal.z_scan_2d as z_scan_2d
+
+# import majorroutines.confocal.t1_dq_main as t1_dq_main
+import majorroutines.targeting as targeting
+import utils.tool_belt as tool_belt
+from majorroutines.calibration import approach_surface, diagnose_z_direction
+from majorroutines.confocal.confocal_2D_scan import confocal_scan_2D_xz
+from majorroutines.confocal.z_scan_1d import main as scan_1D
+from utils import common, kplotlib as kpl
+from utils import positioning as pos
+from utils.constants import Axes, CoordsKey, NVSig, VirtualLaserKey
+
+def do_pulse_gen_constant(digital_channels=(3,), analog0=None, analog1=None):
+    pulse_gen = tool_belt.get_server_pulse_streamer()
+    # Build args for the LabRAD setting
+    digital_channels = [int(ch) for ch in digital_channels]
+
+    analog_channels = []
+    analog_voltages = []
+    if analog0 is not None:
+        analog_channels.append(0)
+        analog_voltages.append(float(analog0))
+    if analog1 is not None:
+        analog_channels.append(1)
+        analog_voltages.append(float(analog1))
+
+    # Turn on constant outputs
+    pulse_gen.constant(digital_channels, analog_channels, analog_voltages)
+
+    try:
+        input("Constant state applied. Press Enter to stop...")
+    finally:
+        # Safest cleanup: forces final + sets everything off
+        pulse_gen.reset()
+
+
+if __name__ == "__main__":
+    ### Shared parameters
+
+    try:
+        tool_belt.init_safe_stop()
+        # do_pulse_gen_constant()
+        do_pulse_gen_constant(digital_channels=(3,))
+    except Exception as exc:
+        recipient = "cmreiter@berkeley.edu"
+        # tool_belt.send_exception_email(email_to=recipient)
+        tool_belt.traceback.print_exc()
+        raise exc
+    finally:
+        tool_belt.reset_cfm()
+        tool_belt.reset_safe_stop()
+        kpl.show(block=True)

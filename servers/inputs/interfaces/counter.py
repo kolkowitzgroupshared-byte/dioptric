@@ -5,6 +5,10 @@ Interface for TTL pulse counters
 Created on August 29th, 2022
 
 @author: mccambria
+
+Updated on March 18th, 2026
+
+@author: sbchand
 """
 
 import logging
@@ -73,36 +77,27 @@ class Counter(LabradServer, ABC):
 
         return return_counts
 
-    @setting(210, modulus="i", num_to_read="i", returns="*2w")
+    @setting(210, modulus="i", num_to_read="i", returns="**w")
     def read_counter_modulo_gates(self, c, modulus, num_to_read=None):
         complete_counts = self.read_counter_setting_internal(num_to_read)
 
-        # To combine APDs we assume all the APDs have the same gate
-        try:
-            gate_channels = list(self.tagger_di_gate.values())
-            first_gate_channel = gate_channels[0]
-            if not all(val == first_gate_channel for val in gate_channels):
-                logging.critical("Combined counts from APDs with different gates.")
-        except:
-            pass
-        # Add the APD counts as vectors for each sample in complete_counts
-        # sum_lambda = lambda arg: np.sum(arg, 0, dtype=int).tolist()
-        # with Pool() as p:
-        #     separate_gate_counts = p.map(sum_lambda, complete_counts)
-        separate_gate_counts = [
-            np.sum(el, 0, dtype=int).tolist() for el in complete_counts
-        ]
+        separate_gate_counts = []
+        for el in complete_counts:
+            summed = np.sum(el, axis=0, dtype=np.int64)
+            separate_gate_counts.append(np.asarray(summed, dtype=np.int64).reshape(-1))
 
-        # Run the modulus
         return_counts = []
         for sample in separate_gate_counts:
             sample_list = []
             for ind in range(modulus):
-                sample_list.append(np.sum(sample[ind::modulus]))
+                vals = sample[ind::modulus]
+                total = int(np.sum(vals, dtype=np.int64)) if vals.size > 0 else 0
+                if total < 0:
+                    total = 0
+                sample_list.append(total)
             return_counts.append(sample_list)
 
-        # logging.info(return_counts)
-
+        return_counts = [[int(v) for v in sample] for sample in return_counts]
         return return_counts
 
     @setting(211, num_to_read="i", returns="*2w")
