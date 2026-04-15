@@ -65,6 +65,7 @@ def main(
     laser_fall_delay_ns=None,
     apd_gate_delay_ns=0,
     tolerance=0.10,
+    expected_readout_vkey=VirtualLaserKey.IMAGING,
 ):
     tb.reset_cfm()
     kpl.init_kplotlib()
@@ -130,13 +131,22 @@ def main(
     )
     print()
 
-    # nv_sig.expected_counts is in the same scale as the total counts this
-    # scan integrates per delay (summed over num_reps). The displayed
-    # "counts" value at the optimal delay should match expected_counts
-    # directly -- e.g. expected_counts=55 means the optimum is the first
-    # delay where counts settle to 55 within the tolerance window.
+    # nv_sig.expected_counts is measured with the IMAGING virtual laser
+    # at its configured readout duration (e.g. 10 ms). This scan runs at
+    # a different integration -- num_reps * gate_width_ns of total gate
+    # time (e.g. 2e5 * 300 ns = 60 ms) with a different laser
+    # (SPIN_READOUT). To make a fair comparison we scale the observed
+    # raw totals into "equivalent counts per IMAGING readout" so the
+    # displayed number matches expected_counts directly.
     expected = getattr(nv_sig, "expected_counts", None)
     tolerance = float(tolerance)
+
+    imaging_readout_ns = int(
+        tb.get_virtual_laser_dict(expected_readout_vkey)["duration"]
+    )
+    scan_total_gate_ns = float(num_reps) * float(gate_width_ns)
+    scale_to_imaging = float(imaging_readout_ns) / scan_total_gate_ns
+
     if expected is None:
         print(
             "NOTE: nv_sig.expected_counts is None. The optimum will fall "
@@ -147,18 +157,28 @@ def main(
         expected = float(expected)
         pct = tolerance * 100.0
         print(
-            f"Target: counts should drop to expected_counts = {expected:g} "
-            f"(+/-{pct:.0f}%) at the optimum. Criterion: first delay with "
-            f"counts <= {expected * (1 + tolerance):.2f}."
+            f"expected_counts = {expected:g} is referenced to "
+            f"{expected_readout_vkey.name} readout = "
+            f"{imaging_readout_ns * 1e-6:.3f} ms. "
+            f"Scan integration = {num_reps} reps * {gate_width_ns} ns "
+            f"= {scan_total_gate_ns * 1e-6:.3f} ms. "
+            f"Scale factor (scan->imaging) = {scale_to_imaging:.6f}."
+        )
+        print(
+            f"Target: scaled counts should drop to {expected:g} "
+            f"(+/-{pct:.0f}%) at the optimum."
         )
 
-    # counts[run, ind] stores total photons at that delay (summed over
-    # num_reps reps), directly comparable to expected_counts.
+    # counts[run, ind] stores the *scaled* counts (equivalent counts per
+    # IMAGING readout), directly comparable to expected_counts.
     counts = np.full((num_runs, len(delays_ns)), np.nan, dtype=float)
 
     fig, ax = plt.subplots()
     ax.set_xlabel("Delay from laser-off command to APD gate (ns)")
-    ax.set_ylabel("Counts")
+    ax.set_ylabel(
+        f"Counts (scaled to {expected_readout_vkey.name} readout = "
+        f"{imaging_readout_ns * 1e-6:.3f} ms)"
+    )
     ax.set_title(
         "APD gate delay scan -- find first delay where counts = expected"
     )
@@ -222,9 +242,13 @@ def main(
                     pass
 
             total_counts = int(np.sum(new_counts)) if len(new_counts) > 0 else 0
-            counts[run_ind, ind] = total_counts
+            scaled_counts = total_counts * scale_to_imaging
+            counts[run_ind, ind] = scaled_counts
 
-            print(f"  delay={int(delay_ns):>5d} ns | counts={total_counts}")
+            print(
+                f"  delay={int(delay_ns):>5d} ns | "
+                f"counts={scaled_counts:.2f}  (raw total={total_counts})"
+            )
 
         avg_counts_so_far = np.nanmean(counts[: run_ind + 1], axis=0)
         line_avg.set_data(delays_ns, avg_counts_so_far)
@@ -387,6 +411,9 @@ def main(
         "laser_fall_delay_ns": int(laser_fall_delay_ns),
         "apd_gate_delay_ns": int(apd_gate_delay_ns),
         "expected_counts": (None if expected is None else float(expected)),
+        "expected_readout_vkey": expected_readout_vkey.name,
+        "imaging_readout_ns": int(imaging_readout_ns),
+        "scale_to_imaging": float(scale_to_imaging),
         "tolerance": float(tolerance),
         "best_delay_ns": float(best_delay_ns),
         "best_counts": float(best_counts),
