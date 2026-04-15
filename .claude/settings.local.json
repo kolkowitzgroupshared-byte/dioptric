@@ -12,7 +12,8 @@
       "Bash(python -c \"import ast; ast.parse\\(open\\('majorroutines/confocal/optimize_green_readout.py'\\).read\\(\\)\\); ast.parse\\(open\\('controlpanels/control_panel_cryo.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
       "Bash(python -c \"import ast; [ast.parse\\(open\\(p\\).read\\(\\)\\) for p in ['servers/timing/sequencelibrary/pulse_gen_SWAB_82/counter/confocal_apd_gate_overlap_scan.py', 'majorroutines/confocal/confocal_apd_gate_overlap_scan.py', 'controlpanels/control_panel_cryo.py']]; print\\('OK'\\)\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\('majorroutines/confocal/confocal_resonance.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
-      "Bash(python -c \"import ast; [ast.parse\\(open\\(p\\).read\\(\\)\\) for p in ['figures/SingletChar/confocal_resonance_fit.py', 'majorroutines/confocal/confocal_optimize_green_readout.py']]; print\\('OK'\\)\")"
+      "Bash(python -c \"import ast; [ast.parse\\(open\\(p\\).read\\(\\)\\) for p in ['figures/SingletChar/confocal_resonance_fit.py', 'majorroutines/confocal/confocal_optimize_green_readout.py']]; print\\('OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('majorroutines/confocal/confocal_optimize_green_readout.py'\\).read\\(\\)\\); print\\('OK'\\)\")"
     ]
   }
 }
