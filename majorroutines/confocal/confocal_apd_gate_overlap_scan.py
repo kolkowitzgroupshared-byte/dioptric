@@ -110,10 +110,9 @@ def main(
     counts = np.full((num_runs, len(delays_ns)), np.nan, dtype=float)
 
     fig, ax = plt.subplots()
-    ax.set_xlabel("Delay from laser-off command to APD gate (ns)")
+    ax.set_xlabel("Delay (ns)")
     ax.set_ylabel(
-        f"Counts (scaled to {expected_readout_vkey.name} = "
-        f"{imaging_readout_ns * 1e-6:.3f} ms)"
+        f"Counts"
     )
     ax.set_title("APD gate delay scan")
     (line_avg,) = ax.plot([], [], marker="o", linestyle="None", label="Counts")

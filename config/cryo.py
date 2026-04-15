@@ -141,7 +141,7 @@ config |= {
             VirtualLaserKey.IMAGING: {
                 # "physical_name": green_laser,
                 "physical_name": green_laser,  # this is the laser that appears on the imaging APD scan
-                "duration": 12e6,  # this duration appears on the imaging APD scan
+                "duration": 10e6,  # this duration appears on the imaging APD scan
             },
             VirtualLaserKey.SINGLET_DRIVE: {
                 "physical_name": tisapph_laser,
