@@ -110,7 +110,7 @@ def main(
             try:
                 counter_server.clear_buffer()
                 pulsegen_server.stream_immediate(
-                    seq_file, int(num_reps), seq_args_string
+                    seq_file, seq_args_string, int(num_reps)
                 )
                 new_counts = counter_server.read_counter_simple(1)
             finally:
