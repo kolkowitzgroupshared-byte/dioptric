@@ -105,9 +105,9 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 10, #dbm
-                "frequency": 2.8252, #GHz
-                "rabi_period": 278,
-                "pi_pulse": 156,
+                "frequency": 2.8250, #GHz
+                "rabi_period": 293.1,
+                "pi_pulse": 146.6,
                 "pi_on_2_pulse": 64, #Half of pi pulse, for use in Ramsey and SE
             },
             # sig gen 1 is iq molulated
@@ -141,7 +141,7 @@ config |= {
             VirtualLaserKey.IMAGING: {
                 # "physical_name": green_laser,
                 "physical_name": green_laser,  # this is the laser that appears on the imaging APD scan
-                "duration": 12e6,  # this duration appears on the imaging APD scan
+                "duration": 10e6,  # this duration appears on the imaging APD scan
             },
             VirtualLaserKey.SINGLET_DRIVE: {
                 "physical_name": tisapph_laser,

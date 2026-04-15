@@ -52,6 +52,11 @@ def two_lorentzian_dip(
     )
 
 
+def one_lorentzian_dip(f, offset, f0, fwhm, contrast):
+    """Single Lorentzian dip on a flat baseline (4 parameters)."""
+    return offset - lorentzian_dip(f, f0, fwhm, contrast)
+
+
 # ----------------------------------------------------------------------
 # Data loading
 # ----------------------------------------------------------------------
@@ -197,6 +202,43 @@ def seed_two_lines(freqs, norm):
     return p0
 
 
+def seed_one_line(freqs, norm):
+    """
+    Build initial-guess parameters for the single-line dip fit (4 params).
+
+    Strategy mirrors the sharp-line branch of `seed_two_lines`: baseline
+    from the 85th percentile, dip center at the global maximum depth, and
+    FWHM from the half-depth width of the data.
+    """
+    baseline = estimate_baseline(norm)
+    depth = baseline - norm
+    i_dip = int(np.nanargmax(depth))
+    f0 = freqs[i_dip]
+    c = max(float(depth[i_dip]), 1e-4)
+    fwhm = estimate_fwhm(freqs, norm, baseline, f0)
+
+    p0 = [baseline, f0, fwhm, c]
+    print("  Initial seeds:")
+    print(f"    baseline       : {baseline:.6f}")
+    print(
+        f"    dip seed       : f = {f0:.6f} GHz, "
+        f"data value = {norm[i_dip]:.6f}, depth = {c:.4f}, "
+        f"FWHM = {fwhm * 1e3:.3f} MHz"
+    )
+    _print_local_window(freqs, norm, i_dip)
+    return p0
+
+
+def ms_label_from_center(f0_ghz, d_ghz=2.87):
+    """Infer the m_s label from a single fitted center frequency.
+
+    The NV zero-field splitting is D ~ 2.87 GHz; under a magnetic field
+    along the NV axis the m_s=-1 line shifts below D and the m_s=+1 line
+    shifts above D.
+    """
+    return "m_s=-1" if f0_ghz < d_ghz else "m_s=+1"
+
+
 def _print_local_window(freqs, norm, idx, halfwidth=2):
     """Print a small window of data points centered on `idx` for debugging."""
     lo = max(idx - halfwidth, 0)
@@ -267,13 +309,53 @@ def fit_two_lines(freqs, norm):
     return popt, pcov
 
 
+def fit_one_line(freqs, norm):
+    """Single-Lorentzian fit on a flat baseline (4 parameters).
+
+    Bounds are generous (center anywhere in the scan, FWHM up to the full
+    span) because the single-line case is typically a zoomed scan whose
+    feature dominates the window -- unlike the two-line case, there's no
+    neighboring dip for a wide Lorentzian to spuriously swallow.
+    """
+    fmin, fmax = freqs[0], freqs[-1]
+    step = freqs[1] - freqs[0]
+    span = fmax - fmin
+
+    p0 = seed_one_line(freqs, norm)
+    _, f0_seed, fwhm_seed, c_seed = p0
+
+    bounds = (
+        [0.0, fmin, step / 2, 0.0],
+        [np.inf, fmax, span, 1.0],
+    )
+
+    # Clamp the seed into the bounds so curve_fit doesn't raise
+    # "x0 is infeasible" when estimate_fwhm returns something at the
+    # edge of its own range.
+    p0_clamped = [
+        max(p0[0], bounds[0][0]),
+        min(max(p0[1], bounds[0][1]), bounds[1][1]),
+        min(max(p0[2], bounds[0][2]), bounds[1][2]),
+        min(max(p0[3], bounds[0][3]), bounds[1][3]),
+    ]
+
+    popt, pcov = curve_fit(
+        one_lorentzian_dip, freqs, norm, p0=p0_clamped, bounds=bounds,
+        maxfev=50000,
+    )
+    return popt, pcov
+
+
 # ----------------------------------------------------------------------
 # Main
 # ----------------------------------------------------------------------
 def main():
     # ---- USER SETTINGS ----------------------------------------------------
     data_dir = r"G:\nvdata\pc_cryo\branch_master\confocal_resonance\2026_04"
-    base_name = "2026_04_09-14_53_04-(lovelace)"
+    base_name = "2026_04_14-15_57_42-(Wu)"
+    # Set to 1 for a zoomed scan over a single transition (e.g. just the
+    # m_s=-1 dip); set to 2 for a standard sweep over both Zeeman lines.
+    num_peaks = 1
     # -----------------------------------------------------------------------
 
     freqs_ghz, norm, ste = load_data(data_dir, base_name)
@@ -297,10 +379,15 @@ def main():
 
     print(f"Fitting {len(norm)} data points")
 
+    if num_peaks not in (1, 2):
+        raise ValueError(f"num_peaks must be 1 or 2, got {num_peaks}")
+    fit_func = one_lorentzian_dip if num_peaks == 1 else two_lorentzian_dip
+    fit_routine = fit_one_line if num_peaks == 1 else fit_two_lines
+
     fit_success = True
     try:
-        popt, pcov = fit_two_lines(freqs_ghz, norm)
-        fit_y = two_lorentzian_dip(freqs_ghz, *popt)
+        popt, pcov = fit_routine(freqs_ghz, norm)
+        fit_y = fit_func(freqs_ghz, *popt)
         ss_res = np.sum((norm - fit_y) ** 2)
         ss_tot = np.sum((norm - np.mean(norm)) ** 2)
         r_squared = 1.0 - (ss_res / ss_tot)
@@ -319,9 +406,12 @@ def main():
 
     # ----- Terminal output -----
     print("\n" + "=" * 64)
-    print("CONFOCAL ESR FIT RESULTS -- Zeeman-split m_s = +/-1 lines")
+    if num_peaks == 2:
+        print("CONFOCAL ESR FIT RESULTS -- Zeeman-split m_s = +/-1 lines")
+    else:
+        print("CONFOCAL ESR FIT RESULTS -- single Zeeman line")
     print("=" * 64)
-    if fit_success:
+    if fit_success and num_peaks == 2:
         offset, f_minus, fwhm_minus, c_minus, f_plus, fwhm_plus, c_plus = popt
         of_e, fm_e, wm_e, cm_e, fp_e, wp_e, cp_e = perr
         center = 0.5 * (f_minus + f_plus)
@@ -344,6 +434,20 @@ def main():
         print(f"  Center D = (f_-1 + f_+1)/2: {center:.6f} GHz")
         print(f"  Zeeman splitting Df       : {splitting_mhz:.3f} MHz")
         print(f"  B|| (along NV axis)       : {b_par_mt:.3f} mT")
+        print("-" * 64)
+        print(f"  R-squared:           {r_squared:.6f}")
+        print(f"  Reduced chi-squared: {red_chi_sq:.2e}")
+    elif fit_success and num_peaks == 1:
+        offset, f0, fwhm, contrast = popt
+        of_e, f0_e, w_e, c_e = perr
+        label = ms_label_from_center(f0)
+
+        print(f"  Baseline offset:   {offset:.6f} +/- {of_e:.6f}")
+        print()
+        print(f"  {label} line:")
+        print(f"    center           : {f0:.6f} GHz +/- {f0_e * 1e3:.3f} MHz")
+        print(f"    FWHM             : {fwhm * 1e3:.3f} MHz +/- {w_e * 1e3:.3f} MHz")
+        print(f"    contrast         : {contrast:.4f} +/- {c_e:.4f}")
         print("-" * 64)
         print(f"  R-squared:           {r_squared:.6f}")
         print(f"  Reduced chi-squared: {red_chi_sq:.2e}")
@@ -374,16 +478,23 @@ def main():
 
     if fit_success:
         f_smooth = np.linspace(freqs_ghz[0], freqs_ghz[-1], 2000)
+        if num_peaks == 2:
+            fit_label = "Two-Lorentzian fit (independent widths)"
+        else:
+            fit_label = "Single-Lorentzian fit"
         ax_main.plot(
-            f_smooth, two_lorentzian_dip(f_smooth, *popt), "-",
-            label="Two-Lorentzian fit (independent widths)",
-            linewidth=2, color="darkorange",
+            f_smooth, fit_func(f_smooth, *popt), "-",
+            label=fit_label, linewidth=2, color="darkorange",
         )
-        # Mark the two dip centers. Use a blended transform (x in data
+        # Mark the dip center(s). Use a blended transform (x in data
         # coordinates, y in axes fraction) so the labels stay pinned to the
         # top of the panel and don't confuse tight_layout.
         label_transform = ax_main.get_xaxis_transform()
-        for fc, lbl in [(popt[1], "m_s=-1"), (popt[4], "m_s=+1")]:
+        if num_peaks == 2:
+            center_labels = [(popt[1], "m_s=-1"), (popt[4], "m_s=+1")]
+        else:
+            center_labels = [(popt[1], ms_label_from_center(popt[1]))]
+        for fc, lbl in center_labels:
             ax_main.axvline(fc, color="gray", linestyle=":", linewidth=1)
             ax_main.text(
                 fc, 0.97, f" {lbl}",
@@ -392,11 +503,16 @@ def main():
             )
 
     ax_main.set_ylabel("Normalized Signal")
-    ax_main.set_title("Confocal ESR -- NV triplet, Zeeman-split m_s = +/-1 lines")
+    if num_peaks == 2:
+        ax_main.set_title(
+            "Confocal ESR -- NV triplet, Zeeman-split m_s = +/-1 lines"
+        )
+    else:
+        ax_main.set_title("Confocal ESR -- single Zeeman line")
     ax_main.legend(loc="lower right")
     ax_main.grid(True, linestyle="--", alpha=0.5)
 
-    if fit_success:
+    if fit_success and num_peaks == 2:
         offset, f_minus, fwhm_minus, c_minus, f_plus, fwhm_plus, c_plus = popt
         splitting_mhz = (f_plus - f_minus) * 1e3
         b_par_mt = (f_plus - f_minus) / (2 * GAMMA_E_GHZ_PER_T) * 1e3
@@ -407,6 +523,21 @@ def main():
             f"$B_{{\\parallel}}$ = {b_par_mt:.2f} mT\n"
             f"FWHM$_{{-1}}$ = {fwhm_minus * 1e3:.2f} MHz\n"
             f"FWHM$_{{+1}}$ = {fwhm_plus * 1e3:.2f} MHz\n"
+            f"$R^2$ = {r_squared:.4f}"
+        )
+        ax_main.text(
+            0.02, 0.02, annotation, transform=ax_main.transAxes,
+            fontsize=9, verticalalignment="bottom",
+            bbox=dict(boxstyle="round,pad=0.4", facecolor="wheat", alpha=0.8),
+        )
+    elif fit_success and num_peaks == 1:
+        offset, f0, fwhm, contrast = popt
+        label = ms_label_from_center(f0)
+        sub = "-1" if label == "m_s=-1" else "+1"
+        annotation = (
+            f"$f_{{{sub}}}$ = {f0:.4f} GHz\n"
+            f"FWHM$_{{{sub}}}$ = {fwhm * 1e3:.2f} MHz\n"
+            f"contrast = {contrast:.3f}\n"
             f"$R^2$ = {r_squared:.4f}"
         )
         ax_main.text(

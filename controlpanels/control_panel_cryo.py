@@ -40,6 +40,7 @@ import majorroutines.confocal.confocal_test_simple_spin_contrast as test_simple_
 
 # import majorroutines.confocal.ramsey as ramsey
 import majorroutines.confocal.confocal_resonance as resonance
+import majorroutines.confocal.confocal_optimize_green_readout as optimize_green_readout_time
 import majorroutines.confocal.confocal_resonance_singlet_scan as resonance_tisapph_singlet_scan
 import majorroutines.confocal.confocal_odmr_tisapph_short as odmr_tisapph_short
 import majorroutines.confocal.confocal_apd_gate_overlap_scan as find_apd_gate_overlap
@@ -73,7 +74,7 @@ def do_image_sample(nv_sig):
     """
 
     scan_range = 0.2  # voltage
-    num_steps = 60
+    num_steps = 90
 
     # For now we only support square scans so pass scan_range twice
     image_sample.confocal_scan(
@@ -85,8 +86,8 @@ def do_image_sample(nv_sig):
 
 
 def do_image_sample_zoom(nv_sig):
-    scan_range = 0.05  # cryo iimage conversion: 37um/V; step size: x,y,z=30,30,40V
-    num_steps = 30
+    scan_range = 0.05  #0.05 cryo iimage conversion: 37um/V; step size: x,y,z=30,30,40V
+    num_steps = 35
 
     image_sample.confocal_scan(
         nv_sig,
@@ -797,12 +798,12 @@ def do_rabi(nv_sig):
     rabi.main(
         nv_sig=nv_sig,
         num_reps=int(20e4),
-        num_runs=4, #testing
+        num_runs=10, #testing
         min_tau=20,  # ns
         max_tau=500,  # ns (480+min_tau)
         num_steps=30,  # 1 step every ~5-10ns
         uwave_ind=0,
-        uwave_freq_ghz=2.8261, # Change to target ms=+1 or ms=-1 transition
+        uwave_freq_ghz=2.8258, # Change to target ms=+1 or ms=-1 transition
         optimize_between_runs=True,  # Set to false to turn off optimize between runs
     )
 
@@ -810,27 +811,46 @@ def do_rabi(nv_sig):
 def do_resonance(nv_sig):
     resonance.main(
         nv_sig,
-        freq_center_ghz=2.8786,
+        freq_center_ghz=2.869332,
         freq_span_mhz=200.0,
-        num_steps=81,
+        num_steps=31,
         num_reps=20e4,
-        num_runs=20,
+        num_runs=5,
         uwave_ind=0,
         optimize_between_runs=True,
     )
-    
+
+
+def do_optimize_green_readout_time(nv_sig):
+    """Sweep green readout duration and pick the one that gives the best
+    ODMR contrast. Set `freq_center_ghz` / `freq_span_mhz` below so the
+    scan window contains exactly one Zeeman line (e.g. the m_s=-1 peak).
+    """
+    optimize_green_readout_time.main(
+        nv_sig,
+        readout_times_ns=[400, 425, 450, 478, 500, 525, 550, 575],
+        freq_center_ghz=2.8081,   # park on the m_s=-1 peak
+        freq_span_mhz=50.0,       # narrow zoom -- single-peak fit
+        num_steps=31,  #min 4
+        num_reps=int(20e4),
+        num_runs=5, #per readout time
+        uwave_ind=0,
+        optimize_between_runs=True,
+    )
+
+
 
 def do_tisapph_singlet_scan(nv_sig):
     resonance_tisapph_singlet_scan.main(
         nv_sig,
         wavelength_start_nm=795.5,
-        wavelength_stop_nm=806.0,
+        wavelength_stop_nm=825,
         num_steps=51, #51=0.2nm steps, 105=0.1nm steps 
         num_reps=1e4,
-        num_runs=60, 
+        num_runs=10, 
         uwave_ind=0,
         uwave_power_dbm=10.0,
-        probe_ns=2e3,
+        probe_ns=100e3,
         do_plot=True,
         shuffle=False,
         settle_s=0.3,
@@ -861,6 +881,11 @@ def do_test_simple_spin_contrast(nv_sig):
     optimize_between_runs=True,
     do_plot=True,
 )
+    
+#  def do_determine_standard_readout_params(nv_sig)
+    
+
+
 # def do_t1_dq(nv_sig):
 #     # T1 experiment parameters, formatted:
 #     # [[init state, read state], relaxation_time_range, num_steps, num_reps]
@@ -982,7 +1007,7 @@ def piezo_pest():
 
 
 def get_sample_name() -> str:
-    sample = "lovelace"  # lovelace
+    sample = "Wu"  # lovelace
     return sample
 
 
@@ -1041,16 +1066,25 @@ def do_tisapph_constant_wavelength(wavelength_nm=780.0):
         pass
 
 def do_find_apd_gate_overlap(nv_sig):
+    """Sweep APD gate delay; find where counts match nv_sig.expected_counts."""
+    TOLERANCE = 0.10       # +/- band around expected_counts
+    ALLOW_OVERLAP = True  # True to probe negative delays (APD inside laser pulse)
+
+    delay_min_ns = -600 if ALLOW_OVERLAP else 0
+    num_steps = 45 if ALLOW_OVERLAP else 21
+
     find_apd_gate_overlap.main(
         nv_sig,
         num_reps=int(2e5),
         num_runs=3,
-        offset_min_ns=-1000,
-        offset_max_ns=1000,
-        num_steps=81,
-        laser_on_ns=500,  # or None to use nv_sig / virtual-laser default
+        delay_min_ns=delay_min_ns,
+        delay_max_ns=500,
+        num_steps=num_steps,
+        laser_on_ns=500,
         gate_width_ns=300,
         laser_vkey=VirtualLaserKey.SPIN_READOUT,
+        tolerance=TOLERANCE,
+        allow_overlap=ALLOW_OVERLAP,
     )
 
 
@@ -1087,10 +1121,11 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    # coord_z = 4.3972  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
-    coord_z = 3.7726
-    # pixel_xy = [0.027, 0.14]  # New NV Test
-    pixel_xy = [0.002, 0.082]  # Old Bright NV Lovelace
+    coord_z = 5.8074 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    # coord_z = 3.4318
+    # pixel_xy = [-0.03, -0.011]  # Wu
+    pixel_xy = [-0.026, 0.036]  # Wu
+
     # return
     nv_sig = NVSig(
         name=f"({get_sample_name()})",
@@ -1110,7 +1145,7 @@ if __name__ == "__main__":
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 615
+    nv_sig.expected_counts = 64.8
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
@@ -1131,11 +1166,14 @@ if __name__ == "__main__":
         # pos.set_xyz_on_nv(nv_sig)  # Leave this line out when calibrating z
         pos.set_xyz_on_nv(nv_sig)  # Leave this line out when calibrating z
 
+        # region Pulse Gen
         # do_pulse_gen_constant()
         # do_pulse_gen_constant(digital_channels=(2,))
         # do_pulse_gen_constant(digital_channels=(3,))
         # do_tisapph_constant_wavelength(wavelength_nm=780.0)
         # do_pulse_gen_square_wave(10000, digital_channels=(3,))
+        # do_constant_ac()
+        # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None)
 
         # # # Manually set Z reference to current position
         # piezo = pos.get_positioner_server(CoordsKey.Z)
@@ -1146,7 +1184,7 @@ if __name__ == "__main__":
         # do_calibrate_z_axis(nv_sig)
         # do_z_scan_1d(nv_sig)
         # endregion 1D scan + Calibrate
-
+        # do_image_sample_zoom(nv_sig)
         # region 2D scan (x galvo, z piezo)
         # # do_2D_xz_scan(nv_sig)
         # z_range = np.linspace(0, 3, 31)
@@ -1160,29 +1198,16 @@ if __name__ == "__main__":
         # endregion 2D scan
 
         # region Image / 3D scan
-        # do_constant_ac()
-        # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None)
-        # do_pulse_gen_constant(digital_channels=(4,), analog0=None, analog1=None):
+    
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
-        # do_image_sample(nv_sig)
-        # do_image_sample_zoom(nv_sig)
- 
-        # # Quick NV area scans
-        # for i in range(10):
         # do_image_sample_zoom(nv_sig)
         # do_image_sample(nv_sig)
-        # coord_z = 0.00 + i * 0.005  # Start at 0.05V and increment by 0.02V for each scan
-        # nv_sig.coords[CoordsKey.Z] = coord_z
-        # pos.set_xyz_on_nv(nv_sig)
-        # do_image_sample_zoom(nv_sig)
-        # do_image_sample(nv_sig)
-
         # do_image_sample(nv_sig, nv_minus_initialization=True)
         # do_image_sample_zoom(nv_sig, nv_minus_initialization=True)
         # end region Image sample
         #
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=3.7, voltage_end=3.85, step_size=0.002)
+        # do_optimize_z_PI(nv_sig, voltage_start=5.3, voltage_end=5.9, step_size=0.003) #must be between 1-9V
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
@@ -1191,7 +1216,10 @@ if __name__ == "__main__":
         # do_optimize_galvo(nv_sig) # optimize xy for drift
         # do_optimize_z(nv_sig) # optimize z for drift
         # do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
-        #
+
+        #Optimize seq. parameters 
+        # do_optimize_green_readout_time(nv_sig)
+        # do_find_apd_gate_overlap(nv_sig)
         # endregion Optimize
 
         # region Stationary count
@@ -1201,8 +1229,10 @@ if __name__ == "__main__":
         # do_stationary_count(nv_sig, disable_opt=True, nv_zero_initialization=True)
         # endregion Stationary count
 
-        # region Resonance and SCC
-        # do_resonance(nv_sig)
+        # region Resonance, Pulse Seq., Singlet
+
+        do_resonance(nv_sig)
+        # do_rabi(nv_sig)
 
         # for i in range(3):
         #     do_resonance(nv_sig)
@@ -1215,22 +1245,23 @@ if __name__ == "__main__":
         # do_pulsed_resonance(nv_sig, 2.87, 0.200)
         # do_pulsed_re2.sonance_state(nv_sig, States.LOW)
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
-        # do_rabi(nv_sig)
-        do_resonance(nv_sig)
+        
         # do_tisapph_singlet_scan(nv_sig)
         # do_test_simple_spin_contrast(nv_sig)
+
         # probe_ns = [2e3, 5e3, 10e3, 20e3, 50e3, 100e3]
         # for probe in probe_ns:
             # do_tisapph_singlet_scan(nv_sig, probe_ns=probe)
-        # do_find_apd_gate_overlap(nv_sig)
+          
         # do_rabi(nv_sig, uwave_time_range=[0, 400])
         # do_spin_echo(nv_sig)
         # do_g2_measurement(nv_sig, 0, 1)
         # do_determine_standard_readout_params(nv_sig)
-        # SCC characterization
+        
+        # region SCC
         # do_determine_charge_readout_params(nv_sig,nbins=200,nreps=100)
         # do_scc_pulsed_resonance(nv_sig)
-        # endregion Resonance and SCC
+
 
     ### Error handling and wrap-up
     except Exception as exc:
