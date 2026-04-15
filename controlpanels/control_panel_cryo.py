@@ -831,9 +831,9 @@ def do_optimize_green_readout_time(nv_sig):
         readout_times_ns=[200, 250, 300, 350, 400, 450, 500, 550],
         freq_center_ghz=2.869332,   # park on the m_s=-1 peak
         freq_span_mhz=50.0,       # narrow zoom -- single-peak fit
-        num_steps=3,
+        num_steps=5,  #min 4
         num_reps=int(20e4),
-        num_runs=3,
+        num_runs=3, #per readout time
         uwave_ind=0,
         optimize_between_runs=False,
     )
