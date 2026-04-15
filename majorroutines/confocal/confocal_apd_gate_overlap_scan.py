@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Updated: chemistatcode 4/14/2026
 """
 Sweep the *physical* delay between the end of the readout laser pulse
 and the opening of the APD gate. Positive delay = APD gate physically
@@ -19,6 +18,9 @@ sample sees):
 
 Both are forwarded to the sequence so `gate_delay_ns` is interpreted in
 physical time.
+
+@author: sarojchand
+@author: chemistatcode
 """
 
 import matplotlib.pyplot as plt

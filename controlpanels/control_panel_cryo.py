@@ -1085,7 +1085,7 @@ def do_find_apd_gate_overlap(nv_sig):
         num_runs=3,
         delay_min_ns=-1000,
         delay_max_ns=1000,
-        num_steps=81,
+        num_steps=30, #for testing
         laser_on_ns=500,  # or None to use nv_sig / virtual-laser default
         gate_width_ns=300,
         laser_vkey=VirtualLaserKey.SPIN_READOUT,
@@ -1224,7 +1224,8 @@ if __name__ == "__main__":
         # do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
 
         #Optimize seq. parameters 
-        do_optimize_green_readout_time(nv_sig)
+        # do_optimize_green_readout_time(nv_sig)
+        do_find_apd_gate_overlap(nv_sig)
         # endregion Optimize
 
         # region Stationary count
@@ -1257,7 +1258,7 @@ if __name__ == "__main__":
         # probe_ns = [2e3, 5e3, 10e3, 20e3, 50e3, 100e3]
         # for probe in probe_ns:
             # do_tisapph_singlet_scan(nv_sig, probe_ns=probe)
-        # do_find_apd_gate_overlap(nv_sig)  
+          
         # do_rabi(nv_sig, uwave_time_range=[0, 400])
         # do_spin_echo(nv_sig)
         # do_g2_measurement(nv_sig, 0, 1)
