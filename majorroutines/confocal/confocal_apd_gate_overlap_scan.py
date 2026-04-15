@@ -112,14 +112,18 @@ def main(
                 pulsegen_server.stream_immediate(
                     seq_file, seq_args_string, int(num_reps)
                 )
-                new_counts = counter_server.read_counter_simple(1)
+                # The sequence emits one sample-clock edge (= one APD gate
+                # window) per repetition, so read all num_reps samples
+                # and sum. Reading only 1 sample throws away all but the
+                # first rep's photons and almost always returns 0.
+                new_counts = counter_server.read_counter_simple(int(num_reps))
             finally:
                 try:
                     counter_server.stop_tag_stream()
                 except Exception:
                     pass
 
-            total_counts = int(new_counts[0]) if len(new_counts) > 0 else 0
+            total_counts = int(np.sum(new_counts)) if len(new_counts) > 0 else 0
             counts[run_ind, ind] = total_counts
 
             print(f"  delay={int(delay_ns):>5d} ns | counts={total_counts}")
