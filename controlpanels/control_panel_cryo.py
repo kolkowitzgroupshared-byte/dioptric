@@ -813,7 +813,7 @@ def do_resonance(nv_sig):
         nv_sig,
         freq_center_ghz=2.869332,
         freq_span_mhz=200.0,
-        num_steps=51,
+        num_steps=31,
         num_reps=20e4,
         num_runs=5,
         uwave_ind=0,
@@ -828,14 +828,14 @@ def do_optimize_green_readout_time(nv_sig):
     """
     optimize_green_readout_time.main(
         nv_sig,
-        readout_times_ns=[200, 250, 300, 350, 400, 450, 500, 550],
-        freq_center_ghz=2.869332,   # park on the m_s=-1 peak
+        readout_times_ns=[400, 425, 450, 478, 500, 525, 550, 575],
+        freq_center_ghz=2.8081,   # park on the m_s=-1 peak
         freq_span_mhz=50.0,       # narrow zoom -- single-peak fit
-        num_steps=5,  #min 4
+        num_steps=31,  #min 4
         num_reps=int(20e4),
-        num_runs=3, #per readout time
+        num_runs=5, #per readout time
         uwave_ind=0,
-        optimize_between_runs=False,
+        optimize_between_runs=True,
     )
 
 
@@ -1068,7 +1068,7 @@ def do_tisapph_constant_wavelength(wavelength_nm=780.0):
 def do_find_apd_gate_overlap(nv_sig):
     """Sweep APD gate delay; find where counts match nv_sig.expected_counts."""
     TOLERANCE = 0.10       # +/- band around expected_counts
-    ALLOW_OVERLAP = False  # True to probe negative delays (APD inside laser pulse)
+    ALLOW_OVERLAP = True  # True to probe negative delays (APD inside laser pulse)
 
     delay_min_ns = -600 if ALLOW_OVERLAP else 0
     num_steps = 45 if ALLOW_OVERLAP else 21
@@ -1124,7 +1124,7 @@ if __name__ == "__main__":
     coord_z = 5.8074 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # coord_z = 3.4318
     # pixel_xy = [-0.03, -0.011]  # Wu
-    pixel_xy = [-0.025, 0.036]  # Wu
+    pixel_xy = [-0.026, 0.036]  # Wu
 
     # return
     nv_sig = NVSig(
@@ -1145,7 +1145,7 @@ if __name__ == "__main__":
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 59 #test
+    nv_sig.expected_counts = 64.8
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
@@ -1219,7 +1219,7 @@ if __name__ == "__main__":
 
         #Optimize seq. parameters 
         # do_optimize_green_readout_time(nv_sig)
-        do_find_apd_gate_overlap(nv_sig)
+        # do_find_apd_gate_overlap(nv_sig)
         # endregion Optimize
 
         # region Stationary count
@@ -1231,7 +1231,7 @@ if __name__ == "__main__":
 
         # region Resonance, Pulse Seq., Singlet
 
-        # do_resonance(nv_sig)
+        do_resonance(nv_sig)
         # do_rabi(nv_sig)
 
         # for i in range(3):
