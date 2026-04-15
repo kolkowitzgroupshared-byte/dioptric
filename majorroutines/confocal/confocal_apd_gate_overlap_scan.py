@@ -213,53 +213,77 @@ def main(
 
     avg_counts = np.nanmean(counts, axis=0)
 
-    # Optimal delay selection -- in same units as expected_counts
+    # Optimal delay selection -- linear interpolation to the crossing
+    # where the counts curve intersects expected_counts. That lets the
+    # optimum fall BETWEEN sampled delays, e.g. expected=70, data
+    # (100 -> 75, 200 -> 65) gives optimum = 150.
+    def _crossing_delay(d_arr, c_arr, target):
+        """Return (delay, counts) at the first downward crossing of
+        target, or None if no crossing exists."""
+        finite = np.isfinite(c_arr)
+        d = np.asarray(d_arr, dtype=float)[finite]
+        c = np.asarray(c_arr, dtype=float)[finite]
+        if d.size < 1:
+            return None
+        if c[0] <= target:
+            return float(d[0]), float(c[0])
+        for i in range(1, d.size):
+            if c[i] <= target:  # downward crossing between i-1 and i
+                y0, y1 = c[i - 1], c[i]
+                x0, x1 = d[i - 1], d[i]
+                if y0 == y1:
+                    return float(x0), float(target)
+                frac = (y0 - target) / (y0 - y1)
+                return float(x0 + frac * (x1 - x0)), float(target)
+        return None
+
     if expected is not None:
-        upper = expected * (1 + tolerance)
-        lower = expected * (1 - tolerance)
-        below = np.where(np.isfinite(avg_counts) & (avg_counts <= upper))[0]
-        if below.size > 0:
-            best_ind = int(below[0])  # earliest delay that reaches plateau
-            best_delay_ns = int(delays_ns[best_ind])
-            selection_mode = "expected_counts"
+        crossing = _crossing_delay(delays_ns, avg_counts, expected)
+        if crossing is not None:
+            best_delay_ns, best_counts = crossing
+            if np.isclose(best_counts, expected):
+                selection_mode = "expected_counts_interpolated"
+            else:
+                selection_mode = "expected_counts_first_point"
         else:
+            lower = expected * (1 - tolerance)
             print(
-                "WARNING: counts never dropped to "
-                f"{upper:.2f} (= expected * (1 + {tolerance:.2f})). The "
-                "scan range may not extend far enough past the laser fall. "
-                "Reporting the lowest-counts delay instead."
+                f"WARNING: counts never dropped to expected = {expected:g}. "
+                "The scan range may not extend far enough past the laser "
+                "fall. Reporting the lowest-counts delay instead."
             )
             best_ind = int(np.nanargmin(avg_counts))
-            best_delay_ns = int(delays_ns[best_ind])
+            best_delay_ns = float(delays_ns[best_ind])
+            best_counts = float(avg_counts[best_ind])
             selection_mode = "min_counts_fallback"
     else:
         best_ind = int(np.nanargmax(avg_counts))
-        best_delay_ns = int(delays_ns[best_ind])
+        best_delay_ns = float(delays_ns[best_ind])
+        best_counts = float(avg_counts[best_ind])
         selection_mode = "max_counts_fallback"
 
     print("\nDone")
-    print(f"Optimal delay (laser-off cmd -> APD gate) = {best_delay_ns} ns")
-    print(f"Counts at optimum = {avg_counts[best_ind]:.4g}")
+    print(
+        f"Optimal delay (laser-off cmd -> APD gate) = {best_delay_ns:.1f} ns"
+    )
+    print(f"Counts at optimum = {best_counts:.4g}")
     if expected is not None:
         print(f"Expected counts = {expected:g}")
-        if avg_counts[best_ind] < lower:
+        plateau_min = float(np.nanmin(avg_counts))
+        if plateau_min < expected * (1 - tolerance):
             print(
-                f"NOTE: counts at the optimum ({avg_counts[best_ind]:.4g}) "
-                f"are below expected * (1 - {tolerance:.2f}) = {lower:.4g}. "
-                "nv_sig.expected_counts may be stale or the NV drifted -- "
-                "re-measure expected_counts."
+                f"NOTE: counts dropped as low as {plateau_min:.4g} during "
+                f"the scan, below expected * (1 - {tolerance:.2f}) = "
+                f"{expected * (1 - tolerance):.4g}. nv_sig.expected_counts "
+                "may be stale or the NV drifted -- re-measure."
             )
     print(f"Selection mode: {selection_mode}")
 
-    # Mark the optimal point directly on the counts curve (big red dot)
-    # and drop a thin vertical guide down to the x-axis, so the plot
-    # matches the phrasing "find where counts = expected, mark this spot
-    # as the optimal delay".
+    # Mark the (possibly interpolated) optimum on the curve.
     ax.plot(
-        [best_delay_ns], [avg_counts[best_ind]],
+        [best_delay_ns], [best_counts],
         marker="o", markersize=10, color="red", zorder=5,
-        label=f"optimum: delay={best_delay_ns} ns, "
-        f"counts={avg_counts[best_ind]:.4g}",
+        label=f"optimum: delay={best_delay_ns:.1f} ns, counts={best_counts:.4g}",
     )
     ax.axvline(best_delay_ns, color="red", linestyle=":", linewidth=1)
     ax.legend(loc="best")
@@ -279,7 +303,8 @@ def main(
         "apd_gate_delay_ns": int(apd_gate_delay_ns),
         "expected_counts": (None if expected is None else float(expected)),
         "tolerance": float(tolerance),
-        "best_delay_ns": int(best_delay_ns),
+        "best_delay_ns": float(best_delay_ns),
+        "best_counts": float(best_counts),
         "selection_mode": selection_mode,
     }
     ts = dm.get_time_stamp()
