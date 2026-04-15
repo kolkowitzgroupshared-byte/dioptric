@@ -310,26 +310,37 @@ def fit_two_lines(freqs, norm):
 
 
 def fit_one_line(freqs, norm):
-    """Single-Lorentzian fit on a flat baseline (4 parameters)."""
+    """Single-Lorentzian fit on a flat baseline (4 parameters).
+
+    Bounds are generous (center anywhere in the scan, FWHM up to the full
+    span) because the single-line case is typically a zoomed scan whose
+    feature dominates the window -- unlike the two-line case, there's no
+    neighboring dip for a wide Lorentzian to spuriously swallow.
+    """
     fmin, fmax = freqs[0], freqs[-1]
     step = freqs[1] - freqs[0]
+    span = fmax - fmin
 
     p0 = seed_one_line(freqs, norm)
-    _, f0_seed, _, _ = p0
+    _, f0_seed, fwhm_seed, c_seed = p0
 
-    # Cage the center within +/- 3 sweep steps of the seed and cap the
-    # FWHM at 4 * step, matching the bounding strategy used in
-    # fit_two_lines. The single-line case is typically a zoomed scan over
-    # one transition, so these tight bounds stay appropriate.
-    center_window = 3 * step
-    fwhm_max = 4 * step
     bounds = (
-        [0.0, max(f0_seed - center_window, fmin), step / 2, 0.0],
-        [np.inf, min(f0_seed + center_window, fmax), fwhm_max, 1.0],
+        [0.0, fmin, step / 2, 0.0],
+        [np.inf, fmax, span, 1.0],
     )
 
+    # Clamp the seed into the bounds so curve_fit doesn't raise
+    # "x0 is infeasible" when estimate_fwhm returns something at the
+    # edge of its own range.
+    p0_clamped = [
+        max(p0[0], bounds[0][0]),
+        min(max(p0[1], bounds[0][1]), bounds[1][1]),
+        min(max(p0[2], bounds[0][2]), bounds[1][2]),
+        min(max(p0[3], bounds[0][3]), bounds[1][3]),
+    ]
+
     popt, pcov = curve_fit(
-        one_lorentzian_dip, freqs, norm, p0=p0, bounds=bounds,
+        one_lorentzian_dip, freqs, norm, p0=p0_clamped, bounds=bounds,
         maxfev=50000,
     )
     return popt, pcov

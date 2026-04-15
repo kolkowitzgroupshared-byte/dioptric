@@ -112,7 +112,16 @@ def main(
                 f"contrast={contrast:.4f} +/- {perr[3]:.4f}"
             )
         except Exception as e:
+            import traceback
             print(f"  Fit failed at readout_ns={readout_ns}: {e}")
+            traceback.print_exc()
+            # Fallback so this readout point still appears on the plot:
+            # use the simple (1 - min(norm)) depth with no error bar.
+            depth = 1.0 - float(np.nanmin(norm))
+            if np.isfinite(depth) and depth > 0:
+                contrasts[i] = depth
+                contrast_stes[i] = 0.0
+                print(f"  Fallback contrast (1 - min(norm)) = {depth:.4f}")
 
     # Save summary + per-point raw runs
     summary = {
