@@ -1119,7 +1119,7 @@ if __name__ == "__main__":
     coord_z = 5.8074 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # coord_z = 3.4318
     # pixel_xy = [-0.03, -0.011]  # Wu
-    pixel_xy = [-0.021, 0.036]  # Wu
+    pixel_xy = [-0.025, 0.036]  # Wu
 
     # return
     nv_sig = NVSig(
@@ -1140,7 +1140,7 @@ if __name__ == "__main__":
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 55
+    nv_sig.expected_counts = 59 #test
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
