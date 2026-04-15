@@ -108,9 +108,14 @@ def main(
     )
     print()
 
-    expected_counts = getattr(nv_sig, "expected_counts", None)
+    # nv_sig.expected_counts is stored in photons-per-single-readout units
+    # (same as what targeting / stationary_count compare against). We scale
+    # it by num_reps here so every number reported by this routine is in
+    # the same unit as the total counts actually read from the counter.
+    expected_counts_per_rep = getattr(nv_sig, "expected_counts", None)
     tolerance = float(tolerance)
-    if expected_counts is None:
+    if expected_counts_per_rep is None:
+        expected_total = None
         print(
             "NOTE: nv_sig.expected_counts is None. The optimum will fall "
             "back to the maximum-counts delay. For characterization, set "
@@ -118,35 +123,37 @@ def main(
             "photons-per-readout value."
         )
     else:
+        expected_total = float(expected_counts_per_rep) * float(num_reps)
         pct = tolerance * 100.0
         print(
-            f"Target: counts per readout should drop to expected_counts "
-            f"= {expected_counts} (+/-{pct:.0f}%) at the optimum. "
-            f"Criterion: first delay with counts <= {expected_counts} * "
-            f"(1 + {tolerance:.2f}) = {expected_counts * (1 + tolerance):.2f}."
+            f"Target: total counts should drop to expected_counts * num_reps "
+            f"= {expected_counts_per_rep} * {int(num_reps)} = "
+            f"{expected_total:.0f} (+/-{pct:.0f}%) at the optimum. "
+            f"Criterion: first delay with counts <= "
+            f"{expected_total * (1 + tolerance):.0f}."
         )
 
     counts = np.full((num_runs, len(delays_ns)), np.nan, dtype=float)
 
     fig, ax = plt.subplots()
     ax.set_xlabel("Delay from laser-off command to APD gate (ns)")
-    ax.set_ylabel("Counts per readout pulse")
+    ax.set_ylabel(f"Total counts (summed over {int(num_reps)} reps)")
     ax.set_title(
         "APD gate delay scan -- find first delay where counts = expected"
     )
-    (line_avg,) = ax.plot([], [], marker="o", label="Counts per readout")
-    if expected_counts is not None:
-        exp = float(expected_counts)
+    (line_avg,) = ax.plot([], [], marker="o", label="Counts")
+    if expected_total is not None:
         ax.axhline(
-            exp, color="gray", linestyle="--", linewidth=1,
-            label=f"expected = {expected_counts}",
+            expected_total, color="gray", linestyle="--", linewidth=1,
+            label=f"expected = {expected_total:.0f}",
         )
-        # +/- tolerance window guides. The upper line is the selection
-        # threshold (first delay at or below it is the optimum). The
-        # lower line is a sanity-check guide: if the plateau lives
-        # below it, expected_counts may be stale or the NV drifted.
+        # +/- tolerance band. Upper edge is the selection threshold (first
+        # delay at or below it is the optimum). Lower edge is a sanity
+        # guide -- if the plateau lives below it, expected_counts may be
+        # stale or the NV drifted.
         ax.axhspan(
-            exp * (1 - tolerance), exp * (1 + tolerance),
+            expected_total * (1 - tolerance),
+            expected_total * (1 + tolerance),
             color="gray", alpha=0.15,
             label=f"+/-{tolerance * 100:.0f}% band",
         )
@@ -195,70 +202,62 @@ def main(
 
             total_counts = int(np.sum(new_counts)) if len(new_counts) > 0 else 0
             counts[run_ind, ind] = total_counts
-            per_rep = total_counts / float(num_reps)
 
-            if expected_counts is None:
-                print(
-                    f"  delay={int(delay_ns):>5d} ns | "
-                    f"counts={total_counts} | per-rep={per_rep:.3f}"
-                )
+            if expected_total is None:
+                print(f"  delay={int(delay_ns):>5d} ns | counts={total_counts}")
             else:
-                ratio = per_rep / float(expected_counts) if expected_counts else float("nan")
+                ratio = total_counts / expected_total
                 print(
                     f"  delay={int(delay_ns):>5d} ns | "
-                    f"counts={total_counts} | per-rep={per_rep:.3f} "
-                    f"(ratio to expected = {ratio:.2f})"
+                    f"counts={total_counts} (ratio to expected = {ratio:.2f})"
                 )
 
-        # Live plot in per-rep units so expected_counts reference lines
-        # are directly comparable.
-        avg_per_rep = np.nanmean(counts[: run_ind + 1], axis=0) / float(num_reps)
-        line_avg.set_data(delays_ns, avg_per_rep)
+        avg_counts_so_far = np.nanmean(counts[: run_ind + 1], axis=0)
+        line_avg.set_data(delays_ns, avg_counts_so_far)
         ax.relim()
         ax.autoscale_view()
         plt.pause(0.01)
 
     avg_counts = np.nanmean(counts, axis=0)
-    avg_per_rep = avg_counts / float(num_reps)
 
-    # Optimal delay selection
-    if expected_counts is not None:
-        exp = float(expected_counts)
-        upper = exp * (1 + tolerance)
-        lower = exp * (1 - tolerance)
-        below = np.where(np.isfinite(avg_per_rep) & (avg_per_rep <= upper))[0]
+    # Optimal delay selection -- all comparisons in total-counts units
+    if expected_total is not None:
+        upper = expected_total * (1 + tolerance)
+        lower = expected_total * (1 - tolerance)
+        below = np.where(np.isfinite(avg_counts) & (avg_counts <= upper))[0]
         if below.size > 0:
             best_ind = int(below[0])  # earliest delay that reaches plateau
             best_delay_ns = int(delays_ns[best_ind])
             selection_mode = "expected_counts"
         else:
             print(
-                "WARNING: counts-per-readout never dropped to "
-                f"{upper:.2f} (= expected * (1 + {tolerance:.2f})). The "
+                "WARNING: counts never dropped to "
+                f"{upper:.0f} (= expected * (1 + {tolerance:.2f})). The "
                 "scan range may not extend far enough past the laser fall. "
                 "Reporting the lowest-counts delay instead."
             )
-            best_ind = int(np.nanargmin(avg_per_rep))
+            best_ind = int(np.nanargmin(avg_counts))
             best_delay_ns = int(delays_ns[best_ind])
             selection_mode = "min_counts_fallback"
     else:
-        best_ind = int(np.nanargmax(avg_per_rep))
+        best_ind = int(np.nanargmax(avg_counts))
         best_delay_ns = int(delays_ns[best_ind])
         selection_mode = "max_counts_fallback"
 
     print("\nDone")
     print(f"Optimal delay (laser-off cmd -> APD gate) = {best_delay_ns} ns")
-    print(f"Counts per readout at optimum = {avg_per_rep[best_ind]:.3f}")
-    if expected_counts is not None:
-        ratio = avg_per_rep[best_ind] / float(expected_counts)
+    print(f"Counts at optimum = {avg_counts[best_ind]:.0f}")
+    if expected_total is not None:
+        ratio = avg_counts[best_ind] / expected_total
         print(
-            f"Expected counts per readout = {expected_counts} "
+            f"Expected counts = {expected_total:.0f} "
+            f"({expected_counts_per_rep} per rep * {int(num_reps)} reps) "
             f"(ratio = {ratio:.2f})"
         )
-        if avg_per_rep[best_ind] < lower:
+        if avg_counts[best_ind] < lower:
             print(
-                f"NOTE: counts at the optimum ({avg_per_rep[best_ind]:.3f}) "
-                f"are below expected * (1 - {tolerance:.2f}) = {lower:.2f}. "
+                f"NOTE: counts at the optimum ({avg_counts[best_ind]:.0f}) "
+                f"are below expected * (1 - {tolerance:.2f}) = {lower:.0f}. "
                 "Either nv_sig.expected_counts is stale / too high, or the "
                 "NV has drifted -- re-measure expected_counts."
             )
@@ -278,8 +277,8 @@ def main(
         "delays_ns": delays_ns,
         "counts": counts,
         "avg_counts": avg_counts,
-        "avg_per_rep": avg_per_rep,
-        "expected_counts": expected_counts,
+        "expected_counts_per_rep": expected_counts_per_rep,
+        "expected_total": expected_total,
         "tolerance": tolerance,
         "best_delay_ns": best_delay_ns,
         "selection_mode": selection_mode,
