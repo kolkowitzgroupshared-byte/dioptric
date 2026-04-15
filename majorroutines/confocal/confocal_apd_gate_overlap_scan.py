@@ -65,6 +65,7 @@ def main(
     apd_gate_delay_ns=0,
     tolerance=0.10,
     expected_readout_vkey=VirtualLaserKey.IMAGING,
+    allow_overlap=False,
 ):
     tb.reset_cfm()
     kpl.init_kplotlib()
@@ -83,10 +84,17 @@ def main(
     laser_fall_delay_ns = int(laser_fall_delay_ns)
     apd_gate_delay_ns = int(apd_gate_delay_ns)
 
-    # Safety: negative delays risk overlapping the APD gate with the laser.
+    # Safety: negative delays overlap the APD gate with the laser.
     if delay_min_ns < 0:
-        print(f"WARNING: clamping delay_min_ns={delay_min_ns} to 0 to protect APD.")
-        delay_min_ns = 0
+        if allow_overlap:
+            print(
+                f"WARNING: allow_overlap=True -- APD gate will overlap the "
+                f"laser pulse (delay_min_ns={delay_min_ns}). Confirm optical "
+                f"filtering protects the detector."
+            )
+        else:
+            print(f"WARNING: clamping delay_min_ns={delay_min_ns} to 0 to protect APD.")
+            delay_min_ns = 0
     if delay_max_ns < delay_min_ns:
         raise ValueError(
             f"delay_max_ns ({delay_max_ns}) < delay_min_ns ({delay_min_ns})"

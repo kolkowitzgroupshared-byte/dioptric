@@ -1067,19 +1067,24 @@ def do_tisapph_constant_wavelength(wavelength_nm=780.0):
 
 def do_find_apd_gate_overlap(nv_sig):
     """Sweep APD gate delay; find where counts match nv_sig.expected_counts."""
-    TOLERANCE = 0.10          # +/- band around expected_counts
+    TOLERANCE = 0.10       # +/- band around expected_counts
+    ALLOW_OVERLAP = False  # True to probe negative delays (APD inside laser pulse)
+
+    delay_min_ns = -600 if ALLOW_OVERLAP else 0
+    num_steps = 45 if ALLOW_OVERLAP else 21
 
     find_apd_gate_overlap.main(
         nv_sig,
         num_reps=int(2e5),
         num_runs=3,
-        delay_min_ns=0,
+        delay_min_ns=delay_min_ns,
         delay_max_ns=500,
-        num_steps=21,
+        num_steps=num_steps,
         laser_on_ns=500,
         gate_width_ns=300,
         laser_vkey=VirtualLaserKey.SPIN_READOUT,
         tolerance=TOLERANCE,
+        allow_overlap=ALLOW_OVERLAP,
     )
 
 
