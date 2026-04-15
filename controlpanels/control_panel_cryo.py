@@ -1066,19 +1066,30 @@ def do_tisapph_constant_wavelength(wavelength_nm=780.0):
         pass
 
 def do_find_apd_gate_overlap(nv_sig):
-    """Sweep the PHYSICAL delay between the end of the readout pulse and
-    the opening of the APD gate. Positive delay = APD physically opens
-    after the laser physically turns off (no overlap). The routine
-    clamps delay_min_ns to 0 to protect the APD from direct laser light.
+    """Characterize the APD gate delay that eliminates laser-leakage
+    overlap. Sweeps delay_ns from 0 (APD command opens when laser
+    command falls) out to delay_max_ns and reports the earliest delay at
+    which counts per readout drops down to nv_sig.expected_counts
+    (within 10%) -- i.e., where only real NV fluorescence is reaching
+    the detector.
 
-    The two hardware-delay kwargs convert command-time to physical time:
-        laser_fall_delay_ns: delay from laser command falling edge to
-            optical power dropping. Default (None) = laser "delay" entry
-            in config (usually the rising edge). Measure the falling
-            edge and pass it explicitly if they differ.
-        apd_gate_delay_ns: propagation delay from APD-gate command HIGH
-            to APD actually enabling counting. Default 0.
+    Before running, set `nv_sig.expected_counts` (below in __main__) to
+    the NV's photons-per-readout level. Without it the routine falls
+    back to reporting the max-counts delay and warns.
+
+    Edit the constants below when the hardware delays are characterized.
+    Keeping both at 0 means the swept axis is pure command-time delay;
+    the knee of the counts curve then directly measures the physical
+    (laser_fall + apd_gate) delay of your setup.
     """
+    # ---- Hardware-delay knobs -- 0 for characterization; set once known ---
+    LASER_FALL_DELAY_NS = 0   # optical fall tail of the readout laser
+    APD_GATE_DELAY_NS = 0     # APD gate propagation delay
+    # Fractional tolerance window around nv_sig.expected_counts used to
+    # decide "counts have settled to the NV-only plateau". 0.10 = +/-10%.
+    TOLERANCE = 0.10
+    # -----------------------------------------------------------------------
+
     find_apd_gate_overlap.main(
         nv_sig,
         num_reps=int(2e5),
@@ -1089,8 +1100,9 @@ def do_find_apd_gate_overlap(nv_sig):
         laser_on_ns=500,  # or None to use nv_sig / virtual-laser default
         gate_width_ns=300,
         laser_vkey=VirtualLaserKey.SPIN_READOUT,
-        laser_fall_delay_ns=None,  # None -> use config laser "delay"
-        apd_gate_delay_ns=0,
+        laser_fall_delay_ns=LASER_FALL_DELAY_NS,
+        apd_gate_delay_ns=APD_GATE_DELAY_NS,
+        tolerance=TOLERANCE,
     )
 
 
@@ -1150,8 +1162,8 @@ if __name__ == "__main__":
             VirtualLaserKey.SINGLET_DRIVE: 100e3,  # placeholder
         },
     )
-    nv_sig.expected_counts = None
-    # nv_sig.expected_counts = 55
+    # nv_sig.expected_counts = None
+    nv_sig.expected_counts = 55
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
