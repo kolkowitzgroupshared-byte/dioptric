@@ -1066,38 +1066,19 @@ def do_tisapph_constant_wavelength(wavelength_nm=780.0):
         pass
 
 def do_find_apd_gate_overlap(nv_sig):
-    """Characterize the APD gate delay that eliminates laser-leakage
-    overlap. Sweeps delay_ns from 0 (APD command opens when laser
-    command falls) out to delay_max_ns and reports the earliest delay at
-    which counts per readout drops down to nv_sig.expected_counts
-    (within 10%) -- i.e., where only real NV fluorescence is reaching
-    the detector.
-
-    Before running, set `nv_sig.expected_counts` (below in __main__) to
-    the NV's photons-per-readout level. Without it the routine falls
-    back to reporting the max-counts delay and warns.
-
-    Edit the constants below when the hardware delays are characterized.
-    Keeping both at 0 means the swept axis is pure command-time delay;
-    the knee of the counts curve then directly measures the physical
-    (laser_fall + apd_gate) delay of your setup.
-    """
-    # ---- Hardware-delay knobs -- 0 for characterization; set once known ---
-    LASER_FALL_DELAY_NS = 0   # optical fall tail of the readout laser
-    APD_GATE_DELAY_NS = 0     # APD gate propagation delay
-    # Fractional tolerance window around nv_sig.expected_counts used to
-    # decide "counts have settled to the NV-only plateau". 0.10 = +/-10%.
-    TOLERANCE = 0.10
-    # -----------------------------------------------------------------------
+    """Sweep APD gate delay; find where counts match nv_sig.expected_counts."""
+    LASER_FALL_DELAY_NS = 0   # optical fall of readout laser (ns)
+    APD_GATE_DELAY_NS = 0     # APD gate propagation delay (ns)
+    TOLERANCE = 0.10          # +/- band around expected_counts
 
     find_apd_gate_overlap.main(
         nv_sig,
         num_reps=int(2e5),
         num_runs=3,
-        delay_min_ns=0,      # never overlap the APD with the laser
+        delay_min_ns=0,
         delay_max_ns=1000,
-        num_steps=41,        # 25 ns resolution
-        laser_on_ns=500,  # or None to use nv_sig / virtual-laser default
+        num_steps=41,
+        laser_on_ns=500,
         gate_width_ns=300,
         laser_vkey=VirtualLaserKey.SPIN_READOUT,
         laser_fall_delay_ns=LASER_FALL_DELAY_NS,
