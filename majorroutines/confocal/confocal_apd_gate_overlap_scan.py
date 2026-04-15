@@ -109,20 +109,18 @@ def main(
     )
     print()
 
-    # nv_sig.expected_counts is stored in photons-per-single-readout units
-    # (same as what targeting / stationary_count compare against). We keep
-    # every number reported by this routine in that same unit so the
-    # displayed "counts" value at the optimal delay directly matches
-    # expected_counts (e.g. expected_counts=55 -> optimum is the first
-    # delay where counts settle to 55 within the tolerance window).
+    # nv_sig.expected_counts is in the same scale as the total counts this
+    # scan integrates per delay (summed over num_reps). The displayed
+    # "counts" value at the optimal delay should match expected_counts
+    # directly -- e.g. expected_counts=55 means the optimum is the first
+    # delay where counts settle to 55 within the tolerance window.
     expected = getattr(nv_sig, "expected_counts", None)
     tolerance = float(tolerance)
     if expected is None:
         print(
             "NOTE: nv_sig.expected_counts is None. The optimum will fall "
             "back to the maximum-counts delay. For characterization, set "
-            "nv_sig.expected_counts in control_panel_cryo.py to the NV's "
-            "photons-per-readout value."
+            "nv_sig.expected_counts in control_panel_cryo.py."
         )
     else:
         expected = float(expected)
@@ -133,14 +131,13 @@ def main(
             f"counts <= {expected * (1 + tolerance):.2f}."
         )
 
-    # counts[run, ind] stores counts per repetition at that delay (total
-    # photons summed across num_reps, divided by num_reps), so it's
-    # directly comparable to expected_counts.
+    # counts[run, ind] stores total photons at that delay (summed over
+    # num_reps reps), directly comparable to expected_counts.
     counts = np.full((num_runs, len(delays_ns)), np.nan, dtype=float)
 
     fig, ax = plt.subplots()
     ax.set_xlabel("Delay from laser-off command to APD gate (ns)")
-    ax.set_ylabel("Counts (per readout pulse)")
+    ax.set_ylabel("Counts")
     ax.set_title(
         "APD gate delay scan -- find first delay where counts = expected"
     )
@@ -204,16 +201,9 @@ def main(
                     pass
 
             total_counts = int(np.sum(new_counts)) if len(new_counts) > 0 else 0
-            per_rep = total_counts / float(num_reps)
-            counts[run_ind, ind] = per_rep
+            counts[run_ind, ind] = total_counts
 
-            # Use %g so very-small (<1) and larger (>=1) values both print
-            # readably -- avoids "0.00" when per_rep is e.g. 0.0015.
-            print(
-                f"  delay={int(delay_ns):>5d} ns | "
-                f"counts={per_rep:.4g}  (total={total_counts} over "
-                f"{int(num_reps)} reps)"
-            )
+            print(f"  delay={int(delay_ns):>5d} ns | counts={total_counts}")
 
         avg_counts_so_far = np.nanmean(counts[: run_ind + 1], axis=0)
         line_avg.set_data(delays_ns, avg_counts_so_far)
@@ -256,12 +246,8 @@ def main(
             print(
                 f"NOTE: counts at the optimum ({avg_counts[best_ind]:.4g}) "
                 f"are below expected * (1 - {tolerance:.2f}) = {lower:.4g}. "
-                "Possible causes: (a) nv_sig.expected_counts is stale or the "
-                "NV drifted; (b) unit mismatch -- expected_counts may have "
-                "been measured with a different gate width / integration "
-                "time than this scan's gate_width_ns. Re-measure "
-                "expected_counts with the same gate width to get a "
-                "directly-comparable target."
+                "nv_sig.expected_counts may be stale or the NV drifted -- "
+                "re-measure expected_counts."
             )
     print(f"Selection mode: {selection_mode}")
 
