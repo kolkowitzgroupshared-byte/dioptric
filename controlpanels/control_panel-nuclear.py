@@ -21,7 +21,7 @@ import websocket
 from majorroutines.caf_spectroscopy import (
     laser_char,
     lifetime_caf,
-    resonance,
+    sideillum_resonance,
     singlet_search,
     # singlet_search_1043,
     singlet_search_with_etalon,
@@ -38,6 +38,37 @@ from utils import tool_belt as tb
 from utils.constants import Axes, CoordsKey, NVSig, VirtualLaserKey
 
 
+def do_caf_resonance(th_sig):
+    # resonance.main(
+    #     nv_sig,
+    #     1.7,  # GHz,
+    #     0.3,
+    #     num_steps= ,
+    #     num_runs= ,
+
+    # )
+
+    # sideillum_resonance.main(
+    #     th_sig,
+    #     freq_center_ghz=2,
+    #     freq_span_mhz=2000,
+    #     num_steps=801,
+    #     num_reps=1,
+    #     num_runs=100,
+    #     uwave_ind=0,
+    # )
+
+    sideillum_resonance.main(
+        th_sig,
+        freq_center_ghz=1.7,
+        freq_span_mhz=400,
+        num_steps=65,
+        num_reps=1,
+        num_runs=1000,
+        uwave_ind=0,
+    )
+
+
 def do_resonance(nv_sig):
     # resonance.main(
     #     nv_sig,
@@ -48,19 +79,14 @@ def do_resonance(nv_sig):
 
     # )
 
-    resonance.main(
+    sideillum_resonance.main(
         nv_sig,
-        center_freq_ghz=1.72,
-        span_mhz=300,
-        num_steps=101,
-        num_reps=20000,
-        num_runs=6,
+        freq_center_ghz=2.8786,
+        freq_span_mhz=200.0,
+        num_steps=51,
+        num_reps=1,
+        num_runs=25,
         uwave_ind=0,
-        mw_dur_ns=2000,
-        shuffle_freqs=True,
-        shuffle_seed=0,
-        do_save=True,
-        do_plot=True,
     )
 
 
@@ -94,7 +120,7 @@ def do_lifetime_measurement(nv_sig):
 
 def do_th_lifetime_measurement(caf_sig):
 
-    readout_time, pulse_time = 0.8e3, 1e3
+    readout_time, pulse_time = 0.2e3, 0.1e3
     time_args = [readout_time, pulse_time]
     # print("CaF2 Lifetime!")
     print("Laser Lifetime!")
@@ -102,11 +128,11 @@ def do_th_lifetime_measurement(caf_sig):
         caf_sig,
         apd_indices=[0],
         readout_times=time_args,
-        filter_pos=[2, 2],  # [2, 1],  # Slider 1 and 3  0, 2
+        filter_pos=[1, 3],  # [2, 1],  # Slider 1 and 3  0, 2
         num_reps=100000,
-        num_runs=1,
-        num_bins=200,
-        laser_power=5e-3,
+        num_runs=150,
+        num_bins=2000,
+        laser_power=4.7e-3,
     )
 
     # Simple lifetime (715 SP, 715 LP)
@@ -455,6 +481,23 @@ def test_multimeter_avg():
 #     server_name = "tisapph_pump_COHE_verdi"
 #     pump = common.get_server_by_name(server_name)
 #     pump.
+def do_stationary_count(nv_sig, disable_opt=None):
+    """
+    A 1D scan which holds the galvo and piezo at a fixed position while collecting photon counts.
+
+    Movement can be done during this scan using cryo_position_control.py file and running in
+    a dedicated terminal.
+
+    """
+    run_time = 3 * 60 * 10**9  # ns
+
+    stationary_count.main(
+        nv_sig,
+        run_time,
+        disable_opt=disable_opt,
+        # nv_minus_initialization=nv_minus_initialization,
+        # nv_zero_initialization=nv_zero_initialization,
+    )
 
 
 def do_pulse_streamer_constant(digital_channels=(2,), analog0=None, analog1=None):
@@ -489,7 +532,7 @@ if __name__ == "__main__":
 
     # return
     th_sig = NVSig(
-        name="Th_Sample_1",
+        name="NV_HTHP",
         disable_opt=False,
         disable_z_opt=True,
         expected_counts=13,
@@ -505,8 +548,11 @@ if __name__ == "__main__":
         # ^leave the comma at the end or it will complain
         # do_stationary_count(th_sig, disable_opt=True)
         # do_lifetime_measurement(th_sig)
-        # do_th_lifetime_measurement(th_sig)
-        do_awg_test()
+        do_th_lifetime_measurement(th_sig)
+        # do_awg_test()
+        # do_resonance(th_sig)
+        # do_stationary_count(th_sig)
+        # do_caf_resonance(th_sig)
         # print("hi")
         # test_shutter()
         # test_multimeter()

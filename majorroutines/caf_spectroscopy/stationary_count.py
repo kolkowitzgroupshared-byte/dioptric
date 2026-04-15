@@ -108,7 +108,7 @@ def main(
             new = counter_server.read_counter_simple()  # N
 
         if i < 5:
-            print(new)
+            # print(new)
             i += 1
         new = _ensure_1d_counts(new)
 
