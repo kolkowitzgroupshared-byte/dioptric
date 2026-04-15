@@ -162,7 +162,7 @@ def main(
     ax.set_title(
         "APD gate delay scan -- find first delay where counts = expected"
     )
-    (line_avg,) = ax.plot([], [], marker="o", label="Counts")
+    (line_avg,) = ax.plot([], [], marker="o", linestyle="None", label="Counts")
     if expected is not None:
         ax.axhline(
             expected, color="gray", linestyle="--", linewidth=1,
