@@ -25,10 +25,31 @@ physical time.
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.optimize import curve_fit
+
 from utils import tool_belt as tb
 from utils import kplotlib as kpl
 from utils import data_manager as dm
 from utils.constants import VirtualLaserKey
+
+
+def _gaussian_plus_offset(x, amp, mu, sigma, offset):
+    """Gaussian on a flat baseline. Models the counts-vs-delay curve as
+    the descending tail of a peak centered near (or before) delay=0."""
+    return amp * np.exp(-((x - mu) ** 2) / (2.0 * sigma ** 2)) + offset
+
+
+def _gaussian_crossing(popt, target):
+    """Given fitted params (amp, mu, sigma, offset), return the delay
+    where the Gaussian descends to `target`, or None if no valid
+    crossing exists."""
+    amp, mu, sigma, offset = popt
+    if amp <= 0 or sigma <= 0:
+        return None
+    frac = (target - offset) / amp
+    if not (0.0 < frac <= 1.0):
+        return None  # target outside [offset, offset + amp]
+    return float(mu + sigma * np.sqrt(-2.0 * np.log(frac)))
 
 
 def main(
@@ -213,10 +234,8 @@ def main(
 
     avg_counts = np.nanmean(counts, axis=0)
 
-    # Optimal delay selection -- linear interpolation to the crossing
-    # where the counts curve intersects expected_counts. That lets the
-    # optimum fall BETWEEN sampled delays, e.g. expected=70, data
-    # (100 -> 75, 200 -> 65) gives optimum = 150.
+    # Linear-interpolation crossing helper. Kept as a fallback when the
+    # Gaussian fit fails or doesn't intersect expected.
     def _crossing_delay(d_arr, c_arr, target):
         """Return (delay, counts) at the first downward crossing of
         target, or None if no crossing exists."""
@@ -228,7 +247,7 @@ def main(
         if c[0] <= target:
             return float(d[0]), float(c[0])
         for i in range(1, d.size):
-            if c[i] <= target:  # downward crossing between i-1 and i
+            if c[i] <= target:
                 y0, y1 = c[i - 1], c[i]
                 x0, x1 = d[i - 1], d[i]
                 if y0 == y1:
@@ -237,25 +256,75 @@ def main(
                 return float(x0 + frac * (x1 - x0)), float(target)
         return None
 
-    if expected is not None:
-        crossing = _crossing_delay(delays_ns, avg_counts, expected)
-        if crossing is not None:
-            best_delay_ns, best_counts = crossing
-            if np.isclose(best_counts, expected):
-                selection_mode = "expected_counts_interpolated"
-            else:
-                selection_mode = "expected_counts_first_point"
-        else:
-            lower = expected * (1 - tolerance)
-            print(
-                f"WARNING: counts never dropped to expected = {expected:g}. "
-                "The scan range may not extend far enough past the laser "
-                "fall. Reporting the lowest-counts delay instead."
+    # Fit a Gaussian-on-baseline to the (delay, counts) curve. The sweep
+    # usually shows only the descending half of the peak (the user's
+    # "partial Gaussian" observation) so bounds allow mu to sit before
+    # the first sampled delay.
+    gaussian_popt = None
+    gaussian_perr = None
+    finite_mask = np.isfinite(avg_counts)
+    if finite_mask.sum() >= 4:
+        d_fit = delays_ns[finite_mask].astype(float)
+        c_fit = avg_counts[finite_mask].astype(float)
+        span = float(d_fit[-1] - d_fit[0]) if d_fit.size > 1 else 1000.0
+        offset_seed = float(np.nanmin(c_fit))
+        amp_seed = max(float(np.nanmax(c_fit) - offset_seed), 1.0)
+        mu_seed = float(d_fit[int(np.nanargmax(c_fit))])
+        sigma_seed = max(span / 4.0, 1.0)
+        p0 = [amp_seed, mu_seed, sigma_seed, offset_seed]
+        bounds = (
+            [0.0, d_fit[0] - span, 1.0, 0.0],
+            [10.0 * amp_seed, d_fit[-1] + span, 10.0 * sigma_seed,
+             max(float(np.nanmax(c_fit)), 1.0)],
+        )
+        try:
+            gaussian_popt, pcov = curve_fit(
+                _gaussian_plus_offset, d_fit, c_fit, p0=p0, bounds=bounds,
+                maxfev=50000,
             )
-            best_ind = int(np.nanargmin(avg_counts))
-            best_delay_ns = float(delays_ns[best_ind])
-            best_counts = float(avg_counts[best_ind])
-            selection_mode = "min_counts_fallback"
+            gaussian_perr = np.sqrt(np.diag(pcov)).tolist()
+            gaussian_popt = gaussian_popt.tolist()
+            amp_f, mu_f, sigma_f, offset_f = gaussian_popt
+            print(
+                f"Gaussian fit: amp={amp_f:.4g}, mu={mu_f:.1f} ns, "
+                f"sigma={sigma_f:.1f} ns, offset={offset_f:.4g}"
+            )
+        except Exception as e:
+            print(f"Gaussian fit failed: {e}")
+            gaussian_popt = None
+
+    if expected is not None:
+        crossing_from_fit = (
+            _gaussian_crossing(gaussian_popt, expected)
+            if gaussian_popt is not None
+            else None
+        )
+        # Sanity-check: a Gaussian crossing that lands far outside the
+        # swept range is probably a fit artifact; fall back to linear.
+        span = float(delays_ns[-1] - delays_ns[0])
+        in_range = (
+            crossing_from_fit is not None
+            and delays_ns[0] - span <= crossing_from_fit <= delays_ns[-1] + span
+        )
+        if in_range:
+            best_delay_ns = float(crossing_from_fit)
+            best_counts = float(expected)
+            selection_mode = "expected_counts_gaussian"
+        else:
+            crossing = _crossing_delay(delays_ns, avg_counts, expected)
+            if crossing is not None:
+                best_delay_ns, best_counts = crossing
+                selection_mode = "expected_counts_linear_fallback"
+            else:
+                print(
+                    f"WARNING: counts never dropped to expected = "
+                    f"{expected:g} (neither Gaussian fit nor raw samples "
+                    "cross it). Reporting the lowest-counts delay instead."
+                )
+                best_ind = int(np.nanargmin(avg_counts))
+                best_delay_ns = float(delays_ns[best_ind])
+                best_counts = float(avg_counts[best_ind])
+                selection_mode = "min_counts_fallback"
     else:
         best_ind = int(np.nanargmax(avg_counts))
         best_delay_ns = float(delays_ns[best_ind])
@@ -269,15 +338,31 @@ def main(
     print(f"Counts at optimum = {best_counts:.4g}")
     if expected is not None:
         print(f"Expected counts = {expected:g}")
-        plateau_min = float(np.nanmin(avg_counts))
-        if plateau_min < expected * (1 - tolerance):
+        # Prefer the fitted baseline (offset) as the plateau indicator
+        # when the fit succeeded -- it's less noisy than the raw min.
+        if gaussian_popt is not None:
+            plateau = float(gaussian_popt[3])  # offset
+            plateau_label = "fitted offset"
+        else:
+            plateau = float(np.nanmin(avg_counts))
+            plateau_label = "raw min counts"
+        if plateau < expected * (1 - tolerance):
             print(
-                f"NOTE: counts dropped as low as {plateau_min:.4g} during "
-                f"the scan, below expected * (1 - {tolerance:.2f}) = "
+                f"NOTE: plateau counts ({plateau_label} = {plateau:.4g}) "
+                f"are below expected * (1 - {tolerance:.2f}) = "
                 f"{expected * (1 - tolerance):.4g}. nv_sig.expected_counts "
                 "may be stale or the NV drifted -- re-measure."
             )
     print(f"Selection mode: {selection_mode}")
+
+    # Overlay the Gaussian fit curve on the plot for visual inspection.
+    if gaussian_popt is not None:
+        t_smooth = np.linspace(delays_ns[0], delays_ns[-1], 400)
+        ax.plot(
+            t_smooth, _gaussian_plus_offset(t_smooth, *gaussian_popt),
+            linestyle="--", color="orange", linewidth=1.5,
+            label="Gaussian fit",
+        )
 
     # Mark the (possibly interpolated) optimum on the curve.
     ax.plot(
@@ -306,6 +391,8 @@ def main(
         "best_delay_ns": float(best_delay_ns),
         "best_counts": float(best_counts),
         "selection_mode": selection_mode,
+        "gaussian_popt": gaussian_popt,
+        "gaussian_perr": gaussian_perr,
     }
     ts = dm.get_time_stamp()
     file_path = dm.get_file_path(__file__, ts, getattr(nv_sig, "name", "nv"))
@@ -323,9 +410,12 @@ def main(
         "expected_counts": expected,
         "tolerance": tolerance,
         "best_delay_ns": best_delay_ns,
+        "best_counts": best_counts,
         "selection_mode": selection_mode,
         "laser_fall_delay_ns": laser_fall_delay_ns,
         "apd_gate_delay_ns": apd_gate_delay_ns,
+        "gaussian_popt": gaussian_popt,
+        "gaussian_perr": gaussian_perr,
     }
 
 
