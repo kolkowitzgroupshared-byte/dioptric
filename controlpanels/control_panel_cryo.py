@@ -815,7 +815,7 @@ def do_resonance(nv_sig):
         freq_span_mhz=200.0,
         num_steps=31,
         num_reps=20e4,
-        num_runs=5,
+        num_runs=10,
         uwave_ind=0,
         optimize_between_runs=True,
     )
@@ -824,16 +824,16 @@ def do_resonance(nv_sig):
 def do_optimize_green_readout_time(nv_sig):
     """Sweep green readout duration and pick the one that gives the best
     ODMR contrast. Set `freq_center_ghz` / `freq_span_mhz` below so the
-    scan window contains exactly one Zeeman line (e.g. the m_s=-1 peak).
+    scan window contains exactly one peak.
     """
     optimize_green_readout_time.main(
         nv_sig,
-        readout_times_ns=[400, 425, 450, 478, 500, 525, 550, 575],
-        freq_center_ghz=2.8081,   # park on the m_s=-1 peak
+        readout_times_ns=[400, 425, 450, 478, 500],
+        freq_center_ghz=2.8728,   # park on peak
         freq_span_mhz=50.0,       # narrow zoom -- single-peak fit
-        num_steps=31,  #min 4
+        num_steps=10,  #min 4
         num_reps=int(20e4),
-        num_runs=5, #per readout time
+        num_runs=10, #per readout time
         uwave_ind=0,
         optimize_between_runs=True,
     )
@@ -1121,10 +1121,10 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z = 5.8074 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z = 6.3930 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # coord_z = 3.4318
-    # pixel_xy = [-0.03, -0.011]  # Wu
-    pixel_xy = [-0.026, 0.036]  # Wu
+    # pixel_xy = [-0.026, 0.036]  # Old Wu NV 4/14
+    pixel_xy = [-0.053, -0.023]  # New NV Canidate Wu
 
     # return
     nv_sig = NVSig(
@@ -1145,7 +1145,7 @@ if __name__ == "__main__":
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 64.8
+    nv_sig.expected_counts = 80
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
@@ -1201,13 +1201,13 @@ if __name__ == "__main__":
     
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
         # do_image_sample_zoom(nv_sig)
-        # do_image_sample(nv_sig)
+        do_image_sample(nv_sig)
         # do_image_sample(nv_sig, nv_minus_initialization=True)
         # do_image_sample_zoom(nv_sig, nv_minus_initialization=True)
         # end region Image sample
         #
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=5.3, voltage_end=5.9, step_size=0.003) #must be between 1-9V
+        # do_optimize_z_PI(nv_sig, voltage_start=6.2, voltage_end=6.5, step_size=0.005) #must be between 1-9V
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
@@ -1231,7 +1231,11 @@ if __name__ == "__main__":
 
         # region Resonance, Pulse Seq., Singlet
 
-        do_resonance(nv_sig)
+        # probe_ns = [2e3, 5e3, 10e3, 20e3, 50e3, 100e3]
+        # for probe in probe_ns:
+            # do_tisapph_singlet_scan(nv_sig, probe_ns=probe)
+
+        # do_resonance(nv_sig)
         # do_rabi(nv_sig)
 
         # for i in range(3):
