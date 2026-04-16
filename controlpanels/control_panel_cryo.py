@@ -41,6 +41,9 @@ import majorroutines.confocal.confocal_test_simple_spin_contrast as test_simple_
 # import majorroutines.confocal.ramsey as ramsey
 import majorroutines.confocal.confocal_resonance as resonance
 import majorroutines.confocal.confocal_optimize_green_readout as optimize_green_readout_time
+import majorroutines.confocal.confocal_optimize_apd_gate_width as optimize_apd_gate_width
+import majorroutines.confocal.confocal_optimize_transient as optimize_transient
+import majorroutines.confocal.optimize_green_power as optimize_green_power
 import majorroutines.confocal.confocal_resonance_singlet_scan as resonance_tisapph_singlet_scan
 import majorroutines.confocal.confocal_odmr_tisapph_short as odmr_tisapph_short
 import majorroutines.confocal.confocal_apd_gate_overlap_scan as find_apd_gate_overlap
@@ -822,22 +825,60 @@ def do_resonance(nv_sig):
 
 
 def do_optimize_green_readout_time(nv_sig):
-    """Sweep green readout duration and pick the one that gives the best
-    ODMR contrast. Set `freq_center_ghz` / `freq_span_mhz` below so the
-    scan window contains exactly one Zeeman line (e.g. the m_s=-1 peak).
+    """Sweep green spin-readout pulse duration and pick the one that
+    maximizes SNR per rep (Poisson shot-noise-limited merit). Set
+    `freq_center_ghz` to the m_s=-1 (or +1) resonance you plan to drive.
     """
     optimize_green_readout_time.main(
         nv_sig,
         readout_times_ns=[200, 250, 300, 350, 400, 450, 500, 550],
-        freq_center_ghz=2.869332,   # park on the m_s=-1 peak
-        freq_span_mhz=50.0,       # narrow zoom -- single-peak fit
-        num_steps=5,  #min 4
+        freq_center_ghz=2.869332,   # m_s=-1 peak
         num_reps=int(20e4),
-        num_runs=3, #per readout time
+        num_runs=3,  # per readout time
         uwave_ind=0,
+        uwave_power_dbm=10.0,
+        pi_pulse_ns=146,
         optimize_between_runs=False,
     )
 
+
+def do_optimize_apd_gate_width(nv_sig):
+    """Sweep APD gate width (holding green readout pulse duration and gate
+    delay fixed) and pick the width that maximizes SNR per rep. Set
+    laser_on_ns >= max(gate_widths_ns) + gate_delay_ns.
+    """
+    optimize_apd_gate_width.main(
+        nv_sig,
+        gate_widths_ns=[50, 100, 150, 200, 300, 400, 500, 700, 1000],
+        freq_center_ghz=2.869332,
+        laser_on_ns=1000,
+        gate_delay_ns=0,
+        num_reps=int(20e4),
+        num_runs=3,
+        uwave_ind=0,
+        uwave_power_dbm=10.0,
+        pi_pulse_ns=146,
+        optimize_between_runs=False,
+    )
+
+
+def do_optimize_transient(nv_sig):
+    """Sweep the dark transient gap between the green polarization pulse
+    and green readout pulse, and pick the value that maximizes SNR per rep.
+    Too short → laser/MW leakage contaminates the measurement.
+    Too long  → T1 relaxation decays the spin state before readout.
+    """
+    optimize_transient.main(
+        nv_sig,
+        transient_times_ns=[100, 200, 500, 750, 1000, 1500, 2000, 3000, 5000],
+        freq_center_ghz=2.869332,
+        num_reps=int(20e4),
+        num_runs=3,
+        uwave_ind=0,
+        uwave_power_dbm=10.0,
+        pi_pulse_ns=146,
+        optimize_between_runs=False,
+    )
 
 
 def do_tisapph_singlet_scan(nv_sig):
@@ -881,7 +922,161 @@ def do_test_simple_spin_contrast(nv_sig):
     optimize_between_runs=True,
     do_plot=True,
 )
-    
+
+
+def do_optimize_green_power(nv_sig):
+    """Sweep green-laser power (and optionally readout duration) and measure
+    spin-readout SNR at each point. The optimal power is where SNR per rep
+    peaks; change the sweep range to find it, then fine-tune.
+
+    Microwave settings (freq, power, pi_pulse) override the VirtualSigGens
+    config for this run only; laser power is restored on exit.
+    """
+    optimize_green_power.main(
+        nv_sig,
+        powers_mW=np.linspace(0.1, 5.0, 10),
+        readout_times_ns=[300, 500, 1000],
+        num_reps=100000,
+        uwave_ind=0,
+        uwave_freq_ghz=2.8214,
+        uwave_power_dbm=10.0,
+        pi_pulse_ns=146,
+        laser_name="laser_COBO_520",
+        settle_time=0.2,
+        do_plot=True,
+    )
+
+
+def do_optimize_spin_readout(
+    nv_sig,
+    # --- Which routines to run ---
+    do_green_power=False,
+    do_readout_time=True,
+    do_apd_gate_width=False,
+    do_transient=False,
+    # --- Shared microwave params ---
+    freq_center_ghz=2.869332,
+    uwave_power_dbm=10.0,
+    pi_pulse_ns=146,
+    uwave_ind=0,
+    # --- Shared acquisition ---
+    num_reps=int(20e4),
+    num_runs=3,
+    optimize_between_runs=False,
+    # --- Green power routine ---
+    powers_mW=None,
+    power_readout_times_ns=None,
+    laser_name="laser_COBO_520",
+    settle_time=0.2,
+    # --- Readout time routine ---
+    readout_times_ns=None,
+    # --- APD gate width routine ---
+    gate_widths_ns=None,
+    laser_on_ns=1000,
+    gate_delay_ns=0,
+    # --- Transient routine ---
+    transient_times_ns=None,
+):
+    """Unified entry point for the four SNR-based spin-readout optimization
+    routines. Toggle each on/off with the do_* flags; shared microwave and
+    acquisition parameters are set once. Routine-specific sweep ranges use
+    sensible defaults when left as None.
+
+    Routines run in order: green power -> readout time -> APD gate -> transient.
+    """
+    if powers_mW is None:
+        powers_mW = np.linspace(0.1, 5.0, 10)
+    if power_readout_times_ns is None:
+        power_readout_times_ns = [300, 500, 1000]
+    if readout_times_ns is None:
+        readout_times_ns = [200, 250, 300, 350, 400, 450, 500, 550]
+    if gate_widths_ns is None:
+        gate_widths_ns = [50, 100, 150, 200, 300, 400, 500, 700, 1000]
+    if transient_times_ns is None:
+        transient_times_ns = [100, 200, 500, 750, 1000, 1500, 2000, 3000, 5000]
+
+    selected = any([do_green_power, do_readout_time, do_apd_gate_width, do_transient])
+    if not selected:
+        print("No optimization routines selected. Set at least one do_* flag to True.")
+        return
+
+    # 1. Green power
+    if do_green_power:
+        print("\n" + "#" * 72)
+        print("# OPTIMIZE GREEN POWER")
+        print("#" * 72)
+        optimize_green_power.main(
+            nv_sig,
+            powers_mW=powers_mW,
+            readout_times_ns=power_readout_times_ns,
+            num_reps=num_reps,
+            uwave_ind=uwave_ind,
+            uwave_freq_ghz=freq_center_ghz,
+            uwave_power_dbm=uwave_power_dbm,
+            pi_pulse_ns=pi_pulse_ns,
+            laser_name=laser_name,
+            settle_time=settle_time,
+            do_plot=True,
+        )
+
+    # 2. Readout time
+    if do_readout_time:
+        print("\n" + "#" * 72)
+        print("# OPTIMIZE GREEN READOUT TIME")
+        print("#" * 72)
+        optimize_green_readout_time.main(
+            nv_sig,
+            readout_times_ns=readout_times_ns,
+            freq_center_ghz=freq_center_ghz,
+            num_reps=num_reps,
+            num_runs=num_runs,
+            uwave_ind=uwave_ind,
+            uwave_power_dbm=uwave_power_dbm,
+            pi_pulse_ns=pi_pulse_ns,
+            optimize_between_runs=optimize_between_runs,
+        )
+
+    # 3. APD gate width
+    if do_apd_gate_width:
+        print("\n" + "#" * 72)
+        print("# OPTIMIZE APD GATE WIDTH")
+        print("#" * 72)
+        optimize_apd_gate_width.main(
+            nv_sig,
+            gate_widths_ns=gate_widths_ns,
+            freq_center_ghz=freq_center_ghz,
+            laser_on_ns=laser_on_ns,
+            gate_delay_ns=gate_delay_ns,
+            num_reps=num_reps,
+            num_runs=num_runs,
+            uwave_ind=uwave_ind,
+            uwave_power_dbm=uwave_power_dbm,
+            pi_pulse_ns=pi_pulse_ns,
+            optimize_between_runs=optimize_between_runs,
+        )
+
+    # 4. Transient dark gap
+    if do_transient:
+        print("\n" + "#" * 72)
+        print("# OPTIMIZE TRANSIENT DARK GAP")
+        print("#" * 72)
+        optimize_transient.main(
+            nv_sig,
+            transient_times_ns=transient_times_ns,
+            freq_center_ghz=freq_center_ghz,
+            num_reps=num_reps,
+            num_runs=num_runs,
+            uwave_ind=uwave_ind,
+            uwave_power_dbm=uwave_power_dbm,
+            pi_pulse_ns=pi_pulse_ns,
+            optimize_between_runs=optimize_between_runs,
+        )
+
+    print("\n" + "#" * 72)
+    print("# SPIN READOUT OPTIMIZATION COMPLETE")
+    print("#" * 72)
+
+
 #  def do_determine_standard_readout_params(nv_sig)
     
 
@@ -1069,8 +1264,11 @@ def do_find_apd_gate_overlap(nv_sig):
     """Sweep APD gate delay; find where counts match nv_sig.expected_counts."""
     TOLERANCE = 0.10       # +/- band around expected_counts
     ALLOW_OVERLAP = False  # True to probe negative delays (APD inside laser pulse)
+    LASER_ON_NS = 500
 
-    delay_min_ns = -600 if ALLOW_OVERLAP else 0
+    # Stay just inside the pre-laser dark region: gate_delay < -(laser_on + gate_width)
+    # is entirely before the laser turns on and contributes no signal.
+    delay_min_ns = -(LASER_ON_NS + 100) if ALLOW_OVERLAP else 0
     num_steps = 45 if ALLOW_OVERLAP else 21
 
     find_apd_gate_overlap.main(
@@ -1080,7 +1278,7 @@ def do_find_apd_gate_overlap(nv_sig):
         delay_min_ns=delay_min_ns,
         delay_max_ns=500,
         num_steps=num_steps,
-        laser_on_ns=500,
+        laser_on_ns=LASER_ON_NS,
         gate_width_ns=300,
         laser_vkey=VirtualLaserKey.SPIN_READOUT,
         tolerance=TOLERANCE,
