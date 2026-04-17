@@ -1,20 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-Sweep the green-laser spin-readout pulse duration and measure shot-noise-
-limited SNR per rep at each duration to find the readout time that
-maximizes NV spin-readout SNR.
+Sweep the APD gate width (holding green readout pulse duration and gate
+delay fixed) and measure spin-readout SNR per rep at each width.
 
-For each readout_ns in `readout_times_ns`:
-    - override nv_sig.pulse_durations[VirtualLaserKey.SPIN_READOUT]
-    - load `spin_contrast_simple.py` (MW-OFF ref gate, MW-ON sig gate)
-    - run num_runs * num_reps alternating reps, drift-compensating between
-      runs if requested
-    - compute SNR per rep as in determine_standard_readout_params.py:
-          snr_per_rep = (ref - sig) / sqrt(ref + sig) / sqrt(total_reps)
+Uses the `spin_contrast_variable_gate.py` sequence which decouples the
+APD gate from the laser readout pulse.  SNR per rep (Poisson):
 
-Save a summary, plot SNR vs readout duration, and report the best readout.
+    snr_per_rep = (ref - sig) / sqrt(ref + sig) / sqrt(total_reps)
+
+Expected result: SNR rises as gate width increases from zero (more NV
+photons), peaks around the NV polarization time (~300 ns under green),
+then decays as post-polarization noise (no contrast) is integrated.
 
 @author: chemistatcode
+Date: April 15th 2026
 """
 
 import copy
@@ -31,7 +30,7 @@ from utils import data_manager as dm
 from utils.constants import VirtualLaserKey
 
 
-SEQ_NAME = "spin_contrast_simple.py"
+SEQ_NAME = "spin_contrast_variable_gate.py"
 
 
 def _get_pulse_duration_ns(nv_sig, vkey, fallback_ns):
@@ -46,23 +45,26 @@ def _get_pulse_duration_ns(nv_sig, vkey, fallback_ns):
 
 def main(
     nv_sig,
-    readout_times_ns,
+    gate_widths_ns,
     freq_center_ghz,
-    num_reps,
-    num_runs,
-    uwave_ind,
+    laser_on_ns,
+    gate_delay_ns=0,
+    num_reps=int(2e5),
+    num_runs=3,
+    uwave_ind=0,
     uwave_power_dbm=None,
     pi_pulse_ns=None,
     optimize_between_runs=True,
     do_plot=True,
 ):
-    """Optimize the green spin-readout pulse duration via SNR per rep."""
     with common.labrad_connect() as cxn:
         return main_with_cxn(
             cxn,
             nv_sig,
-            readout_times_ns,
+            gate_widths_ns,
             freq_center_ghz,
+            laser_on_ns,
+            gate_delay_ns,
             num_reps,
             num_runs,
             uwave_ind,
@@ -76,8 +78,10 @@ def main(
 def main_with_cxn(
     cxn,
     nv_sig,
-    readout_times_ns,
+    gate_widths_ns,
     freq_center_ghz,
+    laser_on_ns,
+    gate_delay_ns,
     num_reps,
     num_runs,
     uwave_ind,
@@ -95,8 +99,6 @@ def main_with_cxn(
     sig_gen = tb.get_server_sig_gen(int(uwave_ind))
     vsg = tb.get_virtual_sig_gen_dict(int(uwave_ind))
 
-    # pi_pulse override: mutate live config dict; sequence picks it up via
-    # get_virtual_sig_gen_dict on each stream_load. Restored in finally.
     orig_pi_pulse = vsg["pi_pulse"]
     if pi_pulse_ns is not None:
         vsg["pi_pulse"] = int(pi_pulse_ns)
@@ -112,12 +114,22 @@ def main_with_cxn(
     vld_pol = tb.get_virtual_laser_dict(spin_pol_vkey)
     pol_ns = _get_pulse_duration_ns(nv_sig, spin_pol_vkey, vld_pol["duration"])
 
-    # -------------------- Normalize --------------------
-    readout_times_ns = np.asarray(readout_times_ns, dtype=int).ravel()
-    if readout_times_ns.size == 0:
-        raise ValueError("readout_times_ns must contain at least one value")
-    n = readout_times_ns.size
+    laser_on_ns = int(laser_on_ns)
+    gate_delay_ns = int(gate_delay_ns)
 
+    # -------------------- Normalize & validate --------------------
+    gate_widths_ns = np.asarray(gate_widths_ns, dtype=int).ravel()
+    if gate_widths_ns.size == 0:
+        raise ValueError("gate_widths_ns must contain at least one value")
+
+    bad = gate_widths_ns[gate_delay_ns + gate_widths_ns > laser_on_ns]
+    if bad.size > 0:
+        raise ValueError(
+            f"gate_delay_ns ({gate_delay_ns}) + gate_width exceeds "
+            f"laser_on_ns ({laser_on_ns}) for widths: {bad.tolist()}"
+        )
+
+    n = gate_widths_ns.size
     ref_totals = np.full(n, np.nan, dtype=float)
     sig_totals = np.full(n, np.nan, dtype=float)
     contrasts = np.full(n, np.nan, dtype=float)
@@ -127,21 +139,22 @@ def main_with_cxn(
     # -------------------- Sweep --------------------
     tb.init_safe_stop()
     try:
-        for i, readout_ns in enumerate(readout_times_ns):
+        for i, gate_w in enumerate(gate_widths_ns):
             if tb.safe_stop():
                 break
 
-            readout_ns = int(readout_ns)
+            gate_w = int(gate_w)
             print("\n" + "=" * 64)
-            print(f"[{i + 1}/{n}] readout_ns = {readout_ns}")
+            print(f"[{i + 1}/{n}] gate_width_ns = {gate_w}")
             print("=" * 64)
 
             nv_sig_run = copy.deepcopy(nv_sig)
-            nv_sig_run.pulse_durations[readout_vkey] = readout_ns
 
             seq_args = [
                 int(pol_ns),
-                int(readout_ns),
+                int(laser_on_ns),
+                int(gate_w),
+                int(gate_delay_ns),
                 int(uwave_ind),
                 spin_pol_vkey,
                 readout_vkey,
@@ -197,7 +210,7 @@ def main_with_cxn(
                 )
 
             if n_reps_accum == 0:
-                print("  No reps collected for this readout; skipping.")
+                print("  No reps collected; skipping.")
                 continue
 
             ref_totals[i] = float(ref_accum)
@@ -220,6 +233,9 @@ def main_with_cxn(
                 f"  contrast={100 * contrasts[i]:.2f}%, "
                 f"SNR/rep={snr_per_rep[i]:.4f}"
             )
+
+            if ref_accum + sig_accum < 100:
+                print("  WARNING: very few total counts — SNR estimate is noisy.")
     finally:
         try:
             sig_gen.uwave_off()
@@ -238,7 +254,9 @@ def main_with_cxn(
     raw_data = {
         "timestamp": ts,
         "nv_sig": nv_sig,
-        "readout_times_ns": readout_times_ns.tolist(),
+        "gate_widths_ns": gate_widths_ns.tolist(),
+        "laser_on_ns": laser_on_ns,
+        "gate_delay_ns": gate_delay_ns,
         "ref_totals": ref_totals.tolist(),
         "sig_totals": sig_totals.tolist(),
         "contrasts": contrasts.tolist(),
@@ -261,7 +279,7 @@ def main_with_cxn(
         fig, ax = plt.subplots(figsize=(8, 6))
         if ok.any():
             ax.plot(
-                readout_times_ns[ok],
+                gate_widths_ns[ok],
                 snr_per_rep[ok],
                 "o-",
                 color="darkorange",
@@ -271,18 +289,21 @@ def main_with_cxn(
             )
             if i_best is not None:
                 ax.axvline(
-                    readout_times_ns[i_best],
+                    gate_widths_ns[i_best],
                     color="gray",
                     linestyle=":",
                     linewidth=1,
                     label=(
-                        f"Best: {readout_times_ns[i_best]} ns  "
+                        f"Best: {gate_widths_ns[i_best]} ns  "
                         f"(SNR/rep={snr_per_rep[i_best]:.4f})"
                     ),
                 )
-        ax.set_xlabel("Green spin-readout pulse duration (ns)")
+        ax.set_xlabel("APD gate width (ns)")
         ax.set_ylabel("SNR per rep")
-        ax.set_title("Green readout optimization (SNR)")
+        ax.set_title(
+            f"APD gate width optimization "
+            f"(laser={laser_on_ns} ns, delay={gate_delay_ns} ns)"
+        )
         ax.grid(True, linestyle="--", alpha=0.5)
         ax.legend(loc="best")
         plt.tight_layout()
@@ -294,28 +315,31 @@ def main_with_cxn(
 
     # -------------------- Summary table --------------------
     print("\n" + "=" * 78)
-    print("GREEN READOUT SWEEP SUMMARY (SNR-based)")
+    print(
+        f"APD GATE WIDTH SWEEP SUMMARY  "
+        f"(laser={laser_on_ns} ns, delay={gate_delay_ns} ns)"
+    )
     print("=" * 78)
     print(
-        f"{'readout (ns)':>14} {'SNR/rep':>10} {'contrast':>10} "
+        f"{'gate (ns)':>12} {'SNR/rep':>10} {'contrast':>10} "
         f"{'ref total':>12} {'sig total':>12}"
     )
-    for t, s, c, rt, st in zip(
-        readout_times_ns, snr_per_rep, contrasts, ref_totals, sig_totals
+    for w, s, c, rt, st in zip(
+        gate_widths_ns, snr_per_rep, contrasts, ref_totals, sig_totals
     ):
         if np.isfinite(s):
             print(
-                f"{int(t):>14d} {s:>10.4f} {100 * c:>9.2f}% "
+                f"{int(w):>12d} {s:>10.4f} {100 * c:>9.2f}% "
                 f"{rt:>12.0f} {st:>12.0f}"
             )
         else:
             print(
-                f"{int(t):>14d} {'--':>10} {'--':>10} {'--':>12} {'--':>12}"
+                f"{int(w):>12d} {'--':>10} {'--':>10} {'--':>12} {'--':>12}"
             )
     if i_best is not None:
         print("-" * 78)
         print(
-            f"Best readout: {int(readout_times_ns[i_best])} ns, "
+            f"Best gate width: {int(gate_widths_ns[i_best])} ns, "
             f"SNR/rep = {snr_per_rep[i_best]:.4f}, "
             f"contrast = {100 * contrasts[i_best]:.2f}%"
         )

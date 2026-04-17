@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
 """
-Sweep the green-laser spin-readout pulse duration and measure shot-noise-
-limited SNR per rep at each duration to find the readout time that
-maximizes NV spin-readout SNR.
+Sweep the transient (dark gap) between the green polarization pulse and
+the green readout pulse, and measure spin-readout SNR per rep at each
+value.
 
-For each readout_ns in `readout_times_ns`:
-    - override nv_sig.pulse_durations[VirtualLaserKey.SPIN_READOUT]
-    - load `spin_contrast_simple.py` (MW-OFF ref gate, MW-ON sig gate)
-    - run num_runs * num_reps alternating reps, drift-compensating between
-      runs if requested
-    - compute SNR per rep as in determine_standard_readout_params.py:
-          snr_per_rep = (ref - sig) / sqrt(ref + sig) / sqrt(total_reps)
+Uses `spin_contrast_variable_transient.py` which accepts transient_ns as
+an argument (instead of hardcoding 1000 ns). The transient appears
+symmetrically on both sides of the microwave window:
 
-Save a summary, plot SNR vs readout duration, and report the best readout.
+    pol -> [transient] -> uwave pi -> [transient] -> readout
+
+Too short: laser/MW leakage contaminates the adjacent phase.
+Too long: T1 relaxation decays the spin state before readout.
+SNR peaks at the sweet spot.
 
 @author: chemistatcode
+Date: April 15th 2026
 """
 
 import copy
@@ -31,7 +32,7 @@ from utils import data_manager as dm
 from utils.constants import VirtualLaserKey
 
 
-SEQ_NAME = "spin_contrast_simple.py"
+SEQ_NAME = "spin_contrast_variable_transient.py"
 
 
 def _get_pulse_duration_ns(nv_sig, vkey, fallback_ns):
@@ -46,22 +47,21 @@ def _get_pulse_duration_ns(nv_sig, vkey, fallback_ns):
 
 def main(
     nv_sig,
-    readout_times_ns,
+    transient_times_ns,
     freq_center_ghz,
-    num_reps,
-    num_runs,
-    uwave_ind,
+    num_reps=int(2e5),
+    num_runs=3,
+    uwave_ind=0,
     uwave_power_dbm=None,
     pi_pulse_ns=None,
     optimize_between_runs=True,
     do_plot=True,
 ):
-    """Optimize the green spin-readout pulse duration via SNR per rep."""
     with common.labrad_connect() as cxn:
         return main_with_cxn(
             cxn,
             nv_sig,
-            readout_times_ns,
+            transient_times_ns,
             freq_center_ghz,
             num_reps,
             num_runs,
@@ -76,7 +76,7 @@ def main(
 def main_with_cxn(
     cxn,
     nv_sig,
-    readout_times_ns,
+    transient_times_ns,
     freq_center_ghz,
     num_reps,
     num_runs,
@@ -95,8 +95,6 @@ def main_with_cxn(
     sig_gen = tb.get_server_sig_gen(int(uwave_ind))
     vsg = tb.get_virtual_sig_gen_dict(int(uwave_ind))
 
-    # pi_pulse override: mutate live config dict; sequence picks it up via
-    # get_virtual_sig_gen_dict on each stream_load. Restored in finally.
     orig_pi_pulse = vsg["pi_pulse"]
     if pi_pulse_ns is not None:
         vsg["pi_pulse"] = int(pi_pulse_ns)
@@ -110,13 +108,15 @@ def main_with_cxn(
     spin_pol_vkey = VirtualLaserKey.SPIN_POL
     readout_vkey = VirtualLaserKey.SPIN_READOUT
     vld_pol = tb.get_virtual_laser_dict(spin_pol_vkey)
+    vld_readout = tb.get_virtual_laser_dict(readout_vkey)
     pol_ns = _get_pulse_duration_ns(nv_sig, spin_pol_vkey, vld_pol["duration"])
+    readout_ns = _get_pulse_duration_ns(nv_sig, readout_vkey, vld_readout["duration"])
 
     # -------------------- Normalize --------------------
-    readout_times_ns = np.asarray(readout_times_ns, dtype=int).ravel()
-    if readout_times_ns.size == 0:
-        raise ValueError("readout_times_ns must contain at least one value")
-    n = readout_times_ns.size
+    transient_times_ns = np.asarray(transient_times_ns, dtype=int).ravel()
+    if transient_times_ns.size == 0:
+        raise ValueError("transient_times_ns must contain at least one value")
+    n = transient_times_ns.size
 
     ref_totals = np.full(n, np.nan, dtype=float)
     sig_totals = np.full(n, np.nan, dtype=float)
@@ -127,21 +127,21 @@ def main_with_cxn(
     # -------------------- Sweep --------------------
     tb.init_safe_stop()
     try:
-        for i, readout_ns in enumerate(readout_times_ns):
+        for i, trans_ns in enumerate(transient_times_ns):
             if tb.safe_stop():
                 break
 
-            readout_ns = int(readout_ns)
+            trans_ns = int(trans_ns)
             print("\n" + "=" * 64)
-            print(f"[{i + 1}/{n}] readout_ns = {readout_ns}")
+            print(f"[{i + 1}/{n}] transient_ns = {trans_ns}")
             print("=" * 64)
 
             nv_sig_run = copy.deepcopy(nv_sig)
-            nv_sig_run.pulse_durations[readout_vkey] = readout_ns
 
             seq_args = [
                 int(pol_ns),
                 int(readout_ns),
+                int(trans_ns),
                 int(uwave_ind),
                 spin_pol_vkey,
                 readout_vkey,
@@ -197,7 +197,7 @@ def main_with_cxn(
                 )
 
             if n_reps_accum == 0:
-                print("  No reps collected for this readout; skipping.")
+                print("  No reps collected; skipping.")
                 continue
 
             ref_totals[i] = float(ref_accum)
@@ -238,7 +238,9 @@ def main_with_cxn(
     raw_data = {
         "timestamp": ts,
         "nv_sig": nv_sig,
-        "readout_times_ns": readout_times_ns.tolist(),
+        "transient_times_ns": transient_times_ns.tolist(),
+        "readout_ns": int(readout_ns),
+        "pol_ns": int(pol_ns),
         "ref_totals": ref_totals.tolist(),
         "sig_totals": sig_totals.tolist(),
         "contrasts": contrasts.tolist(),
@@ -250,7 +252,6 @@ def main_with_cxn(
         "uwave_freq_ghz": uwave_freq_ghz,
         "uwave_power_dbm": uwave_power_dbm,
         "pi_pulse_ns": int(vsg["pi_pulse"]) if pi_pulse_ns is None else int(pi_pulse_ns),
-        "pol_ns": int(pol_ns),
         "sequence": SEQ_NAME,
         "optimize_between_runs": bool(optimize_between_runs),
     }
@@ -261,7 +262,7 @@ def main_with_cxn(
         fig, ax = plt.subplots(figsize=(8, 6))
         if ok.any():
             ax.plot(
-                readout_times_ns[ok],
+                transient_times_ns[ok],
                 snr_per_rep[ok],
                 "o-",
                 color="darkorange",
@@ -271,18 +272,21 @@ def main_with_cxn(
             )
             if i_best is not None:
                 ax.axvline(
-                    readout_times_ns[i_best],
+                    transient_times_ns[i_best],
                     color="gray",
                     linestyle=":",
                     linewidth=1,
                     label=(
-                        f"Best: {readout_times_ns[i_best]} ns  "
+                        f"Best: {transient_times_ns[i_best]} ns  "
                         f"(SNR/rep={snr_per_rep[i_best]:.4f})"
                     ),
                 )
-        ax.set_xlabel("Green spin-readout pulse duration (ns)")
+        ax.set_xlabel("Transient dark gap (ns)")
         ax.set_ylabel("SNR per rep")
-        ax.set_title("Green readout optimization (SNR)")
+        ax.set_title(
+            f"Transient optimization "
+            f"(pol={pol_ns} ns, readout={readout_ns} ns)"
+        )
         ax.grid(True, linestyle="--", alpha=0.5)
         ax.legend(loc="best")
         plt.tight_layout()
@@ -294,28 +298,31 @@ def main_with_cxn(
 
     # -------------------- Summary table --------------------
     print("\n" + "=" * 78)
-    print("GREEN READOUT SWEEP SUMMARY (SNR-based)")
+    print(
+        f"TRANSIENT SWEEP SUMMARY  "
+        f"(pol={pol_ns} ns, readout={readout_ns} ns)"
+    )
     print("=" * 78)
     print(
-        f"{'readout (ns)':>14} {'SNR/rep':>10} {'contrast':>10} "
+        f"{'transient (ns)':>16} {'SNR/rep':>10} {'contrast':>10} "
         f"{'ref total':>12} {'sig total':>12}"
     )
     for t, s, c, rt, st in zip(
-        readout_times_ns, snr_per_rep, contrasts, ref_totals, sig_totals
+        transient_times_ns, snr_per_rep, contrasts, ref_totals, sig_totals
     ):
         if np.isfinite(s):
             print(
-                f"{int(t):>14d} {s:>10.4f} {100 * c:>9.2f}% "
+                f"{int(t):>16d} {s:>10.4f} {100 * c:>9.2f}% "
                 f"{rt:>12.0f} {st:>12.0f}"
             )
         else:
             print(
-                f"{int(t):>14d} {'--':>10} {'--':>10} {'--':>12} {'--':>12}"
+                f"{int(t):>16d} {'--':>10} {'--':>10} {'--':>12} {'--':>12}"
             )
     if i_best is not None:
         print("-" * 78)
         print(
-            f"Best readout: {int(readout_times_ns[i_best])} ns, "
+            f"Best transient: {int(transient_times_ns[i_best])} ns, "
             f"SNR/rep = {snr_per_rep[i_best]:.4f}, "
             f"contrast = {100 * contrasts[i_best]:.2f}%"
         )
