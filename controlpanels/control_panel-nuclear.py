@@ -120,7 +120,7 @@ def do_lifetime_measurement(nv_sig):
 
 def do_th_lifetime_measurement(caf_sig):
 
-    readout_time, pulse_time = 0.2e3, 0.1e3
+    readout_time, pulse_time = 0.5e3, 0.4e3
     time_args = [readout_time, pulse_time]
     # print("CaF2 Lifetime!")
     print("Laser Lifetime!")
@@ -128,11 +128,11 @@ def do_th_lifetime_measurement(caf_sig):
         caf_sig,
         apd_indices=[0],
         readout_times=time_args,
-        filter_pos=[1, 3],  # [2, 1],  # Slider 1 and 3  0, 2
+        filter_pos=[2, 2],  # [2, 1],  # Slider 1 and 3  0, 2
         num_reps=100000,
-        num_runs=150,
+        num_runs=15,
         num_bins=2000,
-        laser_power=4.7e-3,
+        laser_power=0.1e-3,
     )
 
     # Simple lifetime (715 SP, 715 LP)
