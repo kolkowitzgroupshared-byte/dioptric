@@ -77,7 +77,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
     transient = np.int64(1e3)
     # pol_ns = _as_int64("pol_ns", pol_ns)
     front_buffer = np.int64(max(uwave_delay, laser_delay))
-    period = np.int64(front_buffer+ 2 * (pol_ns + uwave_ns + transient + transient + readout_ns + meas_buffer))
+    period = np.int64(front_buffer+ 2 * (pol_ns + uwave_ns + transient + transient/2 + readout_ns + meas_buffer))
 
     print(f"Total period (ns): {period}")
     seq = Sequence()
@@ -96,14 +96,14 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
         (pol_ns, LOW),
         (transient, LOW),
         (uwave_ns, LOW),
-        (transient, LOW),
+        (transient/2, LOW),
         (readout_ns, HIGH),
         (meas_buffer, LOW),  
         # ref
         (pol_ns, LOW),
         (transient, LOW),
         (uwave_ns, LOW),
-        (transient, LOW),
+        (transient/2, LOW),
         (readout_ns, HIGH),
         (meas_buffer + uwave_delay, LOW),  # sig
     ]
@@ -115,14 +115,14 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
         (pol_ns, LOW),
         (transient, LOW), 
         (uwave_ns, LOW),
-        (transient, LOW),
+        (transient/2, LOW),
         (readout_ns, LOW),
         (meas_buffer, LOW),  
         # ref
         (pol_ns, LOW),
         (transient, LOW),
         (uwave_ns, HIGH),
-        (transient, LOW),
+        (transient/2, LOW),
         (readout_ns, LOW),
         (meas_buffer + uwave_delay, LOW),  # sig
     ]
@@ -134,14 +134,14 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
     (pol_ns, HIGH),
     (transient, LOW), 
     (uwave_ns, LOW),
-    (transient, LOW),
+    (transient/2, LOW),
     (readout_ns, HIGH),
     (meas_buffer, LOW),  
     # ref
     (pol_ns, HIGH),
     (transient, LOW),
     (uwave_ns, LOW),
-    (transient, LOW),
+    (transient/2, LOW),
     (readout_ns, HIGH),
     (meas_buffer + uwave_delay, LOW),  # sig
     ]

@@ -815,8 +815,8 @@ def do_resonance(nv_sig):
     resonance.main(
         nv_sig,
         freq_center_ghz=2.869332,
-        freq_span_mhz=200.0,
-        num_steps=31,
+        freq_span_mhz=150.0,
+        num_steps=51,
         num_reps=20e4,
         num_runs=10,
         uwave_ind=0,
@@ -1313,16 +1313,16 @@ if __name__ == "__main__":
     #     "resonance_HIGH": 2.882, "rabi_HIGH": 400, "uwave_power_HIGH": 16.5,
     #     }
     # fmt: on
-
+    #region Position
     # coords: SAMPLE (piezo) xyz
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z = 6.3930 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z = 6.4988 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # coord_z = 3.4318
     # pixel_xy = [-0.026, 0.036]  # Old Wu NV 4/14
-    pixel_xy = [-0.053, -0.023]  # New NV Canidate Wu
-
+    pixel_xy = [-0.072, 0.004]  # New NV Canidate Wu
+    # pixel_xy = [-0.07, 0.048]
     # return
     nv_sig = NVSig(
         name=f"({get_sample_name()})",
@@ -1342,7 +1342,7 @@ if __name__ == "__main__":
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 80
+    nv_sig.expected_counts = 57
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
@@ -1398,13 +1398,13 @@ if __name__ == "__main__":
     
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
         # do_image_sample_zoom(nv_sig)
-        do_image_sample(nv_sig)
+        # do_image_sample(nv_sig)
         # do_image_sample(nv_sig, nv_minus_initialization=True)
         # do_image_sample_zoom(nv_sig, nv_minus_initialization=True)
         # end region Image sample
         #
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=6.2, voltage_end=6.5, step_size=0.005) #must be between 1-9V
+        # do_optimize_z_PI(nv_sig, voltage_start=6.3, voltage_end=6.6, step_size=0.005) #must be between 1-9V
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
@@ -1432,11 +1432,11 @@ if __name__ == "__main__":
         # for probe in probe_ns:
             # do_tisapph_singlet_scan(nv_sig, probe_ns=probe)
 
-        # do_resonance(nv_sig)
+        do_resonance(nv_sig)
         # do_rabi(nv_sig)
 
         # for i in range(3):
-        #     do_resonance(nv_sig)
+        # do_resonance(nv_sig)
         #     do_green_optimize_loop(nv_sig, num_iterations=1)
         #     print(f"Completed resonance scan {i+1}/3, optimizing Z and galvo before next scan")
         #     do_green_optimize_loop(nv_sig, num_iterations=2)  # Optimize after each resonance scan to keep on target
