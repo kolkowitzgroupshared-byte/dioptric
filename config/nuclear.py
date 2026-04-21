@@ -87,6 +87,7 @@ config |= {
         "iq_buffer": 0,
         "iq_delay": 136,  # SBC measured using NVs 4/18/2025
         "temp_reading_interval": 15 * 60,  # for PID
+        "cw_meas_buffer": 5e3,
         # "iq_delay": 140,  # SBC measured using NVs 4/18/2025
     },
     ###
@@ -104,8 +105,9 @@ config |= {
         # "pulse_gen_SWAB_82_ip_2": "192.168.0.160", ## cryo
         "rotation_stage_THOR_ell18k_com": "COM8",
         "sig_gen_BERK_bnc835_visa": "TCPIP::128.104.ramp_to_zero_duration.114::inst0::INSTR",
-        "sig_gen_STAN_sg394_visa": "TCPIP::192.168.0.120::inst0::INSTR",
-        "sig_gen_STAN_sg394_2_visa": "TCPIP::192.168.0.121::inst0::INSTR",
+        "sig_gen_STAN_sg394_0_visa": "TCPIP::192.168.0.120::inst0::INSTR",
+        "sig_gen_STAN_sg394_1_visa": "TCPIP::192.168.0.121::inst0::INSTR",
+        "sig_gen_STAN_sg394_2_visa": "TCPIP::192.168.0.178::inst0::INSTR",
         "sig_gen_STAN_sg394_3_visa": "TCPIP::192.168.0.177::inst0::INSTR",
         "sig_gen_TEKT_tsg4104a_visa": "TCPIP0::128.104.ramp_to_zero_duration.112::5025::SOCKET",
         "tagger_SWAB_20_1_serial": "1740000JEH",
@@ -130,28 +132,19 @@ config |= {
         "PhysicalSigGens": {
             "sig_gen_BERK_bnc835": {"delay": 151, "fm_mod_bandwidth": 100000.0},
             "sig_gen_STAN_sg394": {"delay": 104, "fm_mod_bandwidth": 100000.0},
-            "sig_gen_STAN_sg394_3": {"delay": 151, "fm_mod_bandwidth": 100000.0},
+            "sig_gen_STAN_sg394_2": {"delay": 151, "fm_mod_bandwidth": 100000.0},
             "sig_gen_TEKT_tsg4104a": {"delay": 57},
         },
         "iq_comp_amp": 0.5,
         "iq_delay": 140,
         "VirtualSigGens": {
             0: {
-                "physical_name": "sig_gen_STAN_sg394_3",
-                "uwave_power": 6.0,
+                "physical_name": "sig_gen_STAN_sg394_2",
+                "uwave_power": 10.0,
                 "frequency": 2.800,
-                "rabi_period": 144,
-                "pi_pulse": 72,
-                "pi_on_2_pulse": 36,
-            },
-            # sig gen 1 is iq molulated
-            1: {
-                "physical_name": "sig_gen_STAN_sg394_4",
-                "uwave_power": 6.0,
-                "frequency": 2.8360,
-                "rabi_period": 144,
-                "pi_pulse": 72,
-                "pi_on_2_pulse": 36,
+                "rabi_period": 256,
+                "pi_pulse": 128,
+                "pi_on_2_pulse": 64,
             },
         },
     },
@@ -298,13 +291,13 @@ config |= {
             "scaling_gain": 0.5,
         },
         "PulseGen": {
-            "do_laser_COBO_515_dm": 0,
+            "do_laser_COBO_515_dm": 5,
             "do_laser_COBO_532_dm": 1,
             "do_laser_COBO_638_dm": 2,
             "do_apd_gate": 3,
             "do_sample_clock": 4,
             "do_wavegen": 5,
-            # "do_sig_gen_STAN_sg394_gate": 10,  # This is to the Switch
+            "do_sig_gen_STAN_sg394_2_dm": 7,  # This is to the Switch
         },
         "Tagger": {
             "di_clock": 3,

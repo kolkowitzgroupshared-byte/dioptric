@@ -37,20 +37,20 @@ red_laser_aod = "laser_COBO_638_aod"
 # calibration_coords_red = [[41.956, 88.653],[69.523, 40.383],[90.96, 93.205]]
 
 calibration_coords_pixel = [
-    [355.855, 55.308], 
-    [220.425, 359.764], 
+    [355.855, 55.308],
+    [220.425, 359.764],
     [25.893, 55.843],
-    ]
-calibration_coords_green =[
+]
+calibration_coords_green = [
     [72.218, 124.96],
     [101.986, 72.343],
     [131.603, 130.079],
-    ]
+]
 calibration_coords_red = [
     [41.498, 82.808],
     [68.574, 42.356],
     [89.185, 91.264],
-    ]
+]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
     CoordsKey.PIXEL: calibration_coords_pixel[0],
@@ -75,8 +75,8 @@ calibration_coords_nv3 = {
 #     [0.00140560, 0.01479702, -1.73286644],
 # ]
 pixel_to_sample_affine_transformation_matrix = [
-    [0.06108861, -0.00533755, -12.74624750],    
-    [0.00748424, 0.06162394, -16.62683414],  
+    [0.06108861, -0.00533755, -12.74624750],
+    [0.00748424, 0.06162394, -16.62683414],
 ]
 # endregion
 # region Base config
@@ -95,7 +95,7 @@ config |= {
     # Common durations are in ns
     "CommonDurations": {
         "default_pulse_duration": 1000,
-        "aod_access_time":2.6e3,  # access time in specs is 10us
+        "aod_access_time": 2.6e3,  # access time in specs is 10us
         # "aod_access_time":8e3,  # access time in specs is 10us
         "widefield_operation_buffer": 1e3,
         "uwave_buffer": 0,
@@ -156,7 +156,7 @@ config |= {
                 "uwave_power": 11.0,
                 "frequency": 2.8137,
                 "rabi_period": 256,
-                "pi_pulse":128,
+                "pi_pulse": 128,
                 "pi_on_2_pulse": 64,
             },
             2: {
@@ -578,7 +578,9 @@ opx_config = {
             },
         },
         "do_sig_gen_STAN_sg394_0_dm": {
-            "digitalInputs": {"chan": {"port": ("con1", 9), "delay": iq_delay, "buffer": 0}},
+            "digitalInputs": {
+                "chan": {"port": ("con1", 9), "delay": iq_delay, "buffer": 0}
+            },
             "operations": {
                 "on": "do_on",
                 "off": "do_off",
@@ -600,7 +602,9 @@ opx_config = {
             },
         },
         "do_sig_gen_STAN_sg394_3_dm": {
-            "digitalInputs": {"chan": {"port": ("con1", 3), "delay": iq_delay, "buffer": 0}},
+            "digitalInputs": {
+                "chan": {"port": ("con1", 3), "delay": iq_delay, "buffer": 0}
+            },
             "operations": {
                 "on": "do_on",
                 "off": "do_off",
@@ -961,9 +965,9 @@ opx_config = {
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.40},
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.344}, #1460NVs 
-        "yellow_charge_readout": {"type": "constant", "sample": 0.3614}, 
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.4014}, 
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.344}, #1460NVs
+        "yellow_charge_readout": {"type": "constant", "sample": 0.3614},
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.4014},
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other
@@ -980,6 +984,7 @@ opx_config = {
     # endregion
 }
 # endregion
+
 
 def correct_pulse_params_by_phase(phase_deg):
     # Centralized pulse error values from bootstrap
@@ -1040,7 +1045,10 @@ def generate_iq_pulses(pulse_names, phases):
                     # Define the pulse
                     full_pulse_name = f"ao_{comp}_{pulse_name}_{phase}_{chan}"
                     # print(full_pulse_name)
-                    length = opx_config["pulses"][f"do_{pulse_name}_{chan}"]["length"] + 2*iq_buffer
+                    length = (
+                        opx_config["pulses"][f"do_{pulse_name}_{chan}"]["length"]
+                        + 2 * iq_buffer
+                    )
                     # print(length)
                     opx_config["pulses"][full_pulse_name] = {
                         "operation": "control",
@@ -1053,10 +1061,14 @@ def generate_iq_pulses(pulse_names, phases):
                         f"{pulse_name}_{phase}"
                     ] = full_pulse_name
 
+
 def build_phase_sweep(min_deg=-360, max_deg=360, step_deg=9):
-    phases_unwrapped = np.arange(min_deg, max_deg + 1e-9, step_deg, dtype=int)  # -360..360
-    phases_cmd = (phases_unwrapped % 360)  # wrap to [0,360)
+    phases_unwrapped = np.arange(
+        min_deg, max_deg + 1e-9, step_deg, dtype=int
+    )  # -360..360
+    phases_cmd = phases_unwrapped % 360  # wrap to [0,360)
     return phases_unwrapped.tolist(), phases_cmd.tolist()
+
 
 # ref_img_array = np.array([])
 # generate_iq_pulses(["pi_pulse", "pi_on_2_pulse"], [0, 90, 180, 270])
