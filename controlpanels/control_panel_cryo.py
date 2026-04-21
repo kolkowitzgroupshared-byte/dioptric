@@ -831,13 +831,13 @@ def do_optimize_green_readout_time(nv_sig):
     """
     optimize_green_readout_time.main(
         nv_sig,
-        # readout_times_ns=[400, 425, 450, 478, 500],
-        readout_times_ns=[400],
+        readout_times_ns=[400, 425, 450, 478, 500],
+        # readout_times_ns=[400],
         freq_center_ghz=2.8214,   # park on peak
         num_reps=int(20e4),
-        num_runs=10, #per readout time
+        num_runs=3, #per readout time
         uwave_ind=0,
-        optimize_between_runs=False, #True,
+        optimize_between_runs=True,
     )
 
 
@@ -1317,15 +1317,15 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z = 5.684 #5.028+1.5 #6.4988 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z = 5.6596 #5.028+1.5 #6.4988 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # coord_z = 3.4318
     # pixel_xy = [-0.026, 0.036]  # Old Wu NV 4/14
     # pixel_xy = [-0.071, 0.002]  # New NV Canidate Wu
     # pixel_xy = [-0.12, 0.069]
     # pixel_xy = [-0.018, 0.028]  #NV With Rabi meas Wu
     # pixel_xy = [-0.059, 0.034]  #NV With Rabi meas Wu
-    # pixel_xy = [-0.102, 0.048]  # candidate 1
-    pixel_xy = [-0.068, -0.006]  # candidate 2
+    pixel_xy = [-0.102, 0.048]  # candidate 1
+    # pixel_xy = [-0.068, -0.006]  # candidate 2
 
     # return
     nv_sig = NVSig(
@@ -1346,7 +1346,7 @@ if __name__ == "__main__":
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 75
+    nv_sig.expected_counts = 75.3
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
@@ -1408,7 +1408,7 @@ if __name__ == "__main__":
         # end region Image sample
         #
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=4, voltage_end=6, step_size=0.005) #must be between 1-9V
+        # do_optimize_z_PI(nv_sig, voltage_start=5, voltage_end=6, step_size=0.005) #must be between 1-9V
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)

@@ -87,7 +87,7 @@ def main_with_cxn(
     do_plot,
 ):
     # -------------------- Setup --------------------
-    tb.reset_cfm(cxn)
+    # tb.reset_cfm(cxn)
     kpl.init_kplotlib()
 
     pulsegen_server = tb.get_server_pulse_streamer()
@@ -208,9 +208,9 @@ def main_with_cxn(
             contrasts[i] = (
                 (ref_accum - sig_accum) / ref_accum if ref_accum > 0 else np.nan
             )
-            denom = np.sqrt(ref_accum + sig_accum)
+            denom = np.sqrt(ref_accum**2 - sig_accum**2)  #Update to def of SNR
             snr_per_rep[i] = (
-                (ref_accum - sig_accum) / denom / np.sqrt(n_reps_accum)
+                (ref_accum - sig_accum) / denom 
                 if denom > 0
                 else np.nan
             )
@@ -220,7 +220,7 @@ def main_with_cxn(
             )
             print(
                 f"  contrast={100 * contrasts[i]:.2f}%, "
-                f"SNR/rep={snr_per_rep[i]:.4f}"
+                f"SNR per rep={snr_per_rep[i]:.4f}"
             )
     finally:
         try:
@@ -228,7 +228,7 @@ def main_with_cxn(
         except Exception:
             pass
         vsg["pi_pulse"] = orig_pi_pulse
-        tb.reset_cfm(cxn)
+        # tb.reset_cfm(cxn)
 
     # -------------------- Best & summary --------------------
     ok = np.isfinite(snr_per_rep)
