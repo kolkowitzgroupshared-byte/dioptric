@@ -89,7 +89,7 @@ def do_image_sample(nv_sig):
 
 
 def do_image_sample_zoom(nv_sig):
-    scan_range = 0.05  #0.05 cryo iimage conversion: 37um/V; step size: x,y,z=30,30,40V
+    scan_range = 0.08  #0.05 cryo iimage conversion: 37um/V; step size: x,y,z=30,30,40V
     num_steps = 35
 
     image_sample.confocal_scan(
@@ -801,12 +801,12 @@ def do_rabi(nv_sig):
     rabi.main(
         nv_sig=nv_sig,
         num_reps=int(20e4),
-        num_runs=10, #testing
+        num_runs=5, #testing
         min_tau=20,  # ns
         max_tau=500,  # ns (480+min_tau)
-        num_steps=30,  # 1 step every ~5-10ns
+        num_steps=40,  # 1 step every ~5-10ns
         uwave_ind=0,
-        uwave_freq_ghz=2.8258, # Change to target ms=+1 or ms=-1 transition
+        uwave_freq_ghz= 2.8214,# 2.8225,#2.8213, #2.8304, # Change to target ms=+1 or ms=-1 transition
         optimize_between_runs=True,  # Set to false to turn off optimize between runs
     )
 
@@ -814,13 +814,13 @@ def do_rabi(nv_sig):
 def do_resonance(nv_sig):
     resonance.main(
         nv_sig,
-        freq_center_ghz=2.869332,
-        freq_span_mhz=150.0,
+        freq_center_ghz=2.8225,# 2.869332,
+        freq_span_mhz=50,#150.0,
         num_steps=51,
-        num_reps=20e4,
-        num_runs=10,
+        num_reps=1,#20e4,
+        num_runs=20,
         uwave_ind=0,
-        optimize_between_runs=True,
+        optimize_between_runs=False,
     )
 
 
@@ -831,14 +831,13 @@ def do_optimize_green_readout_time(nv_sig):
     """
     optimize_green_readout_time.main(
         nv_sig,
-        readout_times_ns=[400, 425, 450, 478, 500],
-        freq_center_ghz=2.8728,   # park on peak
-        freq_span_mhz=50.0,       # narrow zoom -- single-peak fit
-        num_steps=10,  #min 4
+        # readout_times_ns=[400, 425, 450, 478, 500],
+        readout_times_ns=[400],
+        freq_center_ghz=2.8214,   # park on peak
         num_reps=int(20e4),
         num_runs=10, #per readout time
         uwave_ind=0,
-        optimize_between_runs=True,
+        optimize_between_runs=False, #True,
     )
 
 
@@ -1318,11 +1317,16 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z = 6.4988 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z = 5.684 #5.028+1.5 #6.4988 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # coord_z = 3.4318
     # pixel_xy = [-0.026, 0.036]  # Old Wu NV 4/14
-    pixel_xy = [-0.072, 0.004]  # New NV Canidate Wu
-    # pixel_xy = [-0.07, 0.048]
+    # pixel_xy = [-0.071, 0.002]  # New NV Canidate Wu
+    # pixel_xy = [-0.12, 0.069]
+    # pixel_xy = [-0.018, 0.028]  #NV With Rabi meas Wu
+    # pixel_xy = [-0.059, 0.034]  #NV With Rabi meas Wu
+    # pixel_xy = [-0.102, 0.048]  # candidate 1
+    pixel_xy = [-0.068, -0.006]  # candidate 2
+
     # return
     nv_sig = NVSig(
         name=f"({get_sample_name()})",
@@ -1336,13 +1340,13 @@ if __name__ == "__main__":
         # expected_counts=13,
         pulse_durations={
             VirtualLaserKey.IMAGING: int(10e6),  # readout is in ns (5e6 = 5ms)
-            VirtualLaserKey.SPIN_READOUT: int(440),  # readout is in ns (5e6 = 5ms)
+            VirtualLaserKey.SPIN_READOUT: int(440), #CW=10ms # readout is in ns (5e6 = 5ms)
             VirtualLaserKey.SPIN_POL: 2000,
             VirtualLaserKey.SINGLET_DRIVE: 100e3,  # placeholder
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 57
+    nv_sig.expected_counts = 75
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
@@ -1404,7 +1408,7 @@ if __name__ == "__main__":
         # end region Image sample
         #
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=6.3, voltage_end=6.6, step_size=0.005) #must be between 1-9V
+        # do_optimize_z_PI(nv_sig, voltage_start=4, voltage_end=6, step_size=0.005) #must be between 1-9V
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
@@ -1415,7 +1419,7 @@ if __name__ == "__main__":
         # do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
 
         #Optimize seq. parameters 
-        # do_optimize_green_readout_time(nv_sig)
+        do_optimize_green_readout_time(nv_sig)
         # do_find_apd_gate_overlap(nv_sig)
         # endregion Optimize
 
@@ -1432,14 +1436,65 @@ if __name__ == "__main__":
         # for probe in probe_ns:
             # do_tisapph_singlet_scan(nv_sig, probe_ns=probe)
 
-        do_resonance(nv_sig)
+        # do_resonance(nv_sig)
         # do_rabi(nv_sig)
 
+  # do_rabi(nv_sig)
+        # try:
+        #     tool_belt.init_safe_stop()
+        #     pos.set_xyz_on_nv(nv_sig)
+
+              # --- TEMPORARY: tagger server diagnostic ---
+            # try:
+            #     import labrad
+            #     import time
+            #     cxn = labrad.connect()
+            #     tagger = cxn.tagger_swab_20
+            #     pulsegen = cxn.pulse_gen_swab_82
+            #     from utils import tool_belt as tb
+            #     seq_args = [200, 2000, 440, 0, "SPIN_POL", "SPIN_READOUT", None]
+            #     seq_args_string = tb.encode_seq_args(seq_args)
+            #     pulsegen.stream_load("rabi.py", seq_args_string)
+            #     tagger.start_tag_stream()
+
+            #     # Test modulo_gates
+            #     tagger.clear_buffer()
+            #     pulsegen.stream_start(20000)
+            #     t0 = time.perf_counter()
+            #     result_mod = tagger.read_counter_modulo_gates(2, 20000)
+            #     t_modulo = time.perf_counter() - t0
+            #     print(f"read_counter_modulo_gates(2, 20000): {t_modulo*1e3:.0f}ms  shape={np.array(result_mod).shape}")
+
+            #     # Test separate_gates
+            #     tagger.clear_buffer()
+            #     pulsegen.stream_start(20000)
+            #     t0 = time.perf_counter()
+            #     result_sep = tagger.read_counter_separate_gates(20000)
+            #     t_separate = time.perf_counter() - t0
+            #     print(f"read_counter_separate_gates(20000):  {t_separate*1e3:.0f}ms  shape={np.array(result_sep).shape}")
+
+            #     tagger.stop_tag_stream()
+            # except Exception as diag_exc:
+            #     print(f"Diagnostic error: {diag_exc}")
+            # sys.exit(0)
+            # # --- end diagnostic ---
+
+            # do_rabi(nv_sig)
+
+        # except Exception as exc:
+        #     tool_belt.traceback.print_exc()
+        #     raise exc
+        # finally:
+        #     tool_belt.reset_cfm()
+        #     tool_belt.reset_safe_stop()
+        #     kpl.show(block=True)
+        
+        
         # for i in range(3):
         # do_resonance(nv_sig)
         #     do_green_optimize_loop(nv_sig, num_iterations=1)
         #     print(f"Completed resonance scan {i+1}/3, optimizing Z and galvo before next scan")
-        #     do_green_optimize_loop(nv_sig, num_iterations=2)  # Optimize after each resonance scan to keep on target
+        #     do_green_optimize_loop(nv_sig, num_iterations=2)  # Optimsize after each resonance scan to keep on target
 
         # do_resonance_state(nv_sig , States.LOW)
         # do_resonance_state(nv_sig, States.HIGH)

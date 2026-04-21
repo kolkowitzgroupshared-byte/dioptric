@@ -106,9 +106,9 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 10, #dbm
-                "frequency": 2.8250, #GHz
-                "rabi_period": 293.1,
-                "pi_pulse": 146.6,
+                "frequency": 2.8214, #GHz
+                "rabi_period": 184.9,
+                "pi_pulse": 92.4,
                 "pi_on_2_pulse": 64, #Half of pi pulse, for use in Ramsey and SE
             },
             # sig gen 1 is iq molulated
@@ -212,7 +212,7 @@ config |= {
         "pixel_to_sample_affine_transformation_matrix": pixel_to_sample_affine_transformation_matrix,
         "cryo_piezos_voltage": 33,
         "z_bias_adjust": 0.0,
-        "optimize_num_steps": 40,
+        "optimize_num_steps": 20,
     },
     ###
     "Servers": {  # Bucket for miscellaneous servers not otherwise listed above

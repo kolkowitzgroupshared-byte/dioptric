@@ -59,10 +59,10 @@ def load_data(data_dir, base_name):
     print(f"Loaded raw counts from {raw_txt.name}, {valid.sum()} valid runs")
     return taus, norm
 
-
+#region File Input
 def main():
     data_dir = r"G:\nvdata\pc_cryo\branch_master\confocal_rabi\2026_04"
-    base_name = "2026_04_10-10_31_03-(lovelace)"
+    base_name = "2026_04_21-12_50_46-(Wu)"
 
     taus_ns, counts = load_data(data_dir, base_name)
 

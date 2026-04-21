@@ -36,7 +36,7 @@ def main(
     laser_power=None,
     optimize_between_runs=True,
     do_plot=True,
-    shuffle=False,
+    shuffle=True,
     norm_mode=NormMode.SINGLE_VALUED,
 ):
     tb.reset_cfm()
@@ -47,9 +47,9 @@ def main(
 
     readout_vkey = VirtualLaserKey.SPIN_READOUT
     vld = tb.get_virtual_laser_dict(readout_vkey)
-    readout_ns = int(nv_sig.pulse_durations.get(readout_vkey, int(vld["duration"])))
-    print(f"Readout duration (ns): {readout_ns}")
-    readout_ns = int(readout_ns)
+    polarization_ns = int(nv_sig.pulse_durations.get(readout_vkey, int(vld["duration"])))
+    print(f"Readout duration (ns): {polarization_ns}")
+    readout_ns = int(polarization_ns)
 
     spin_pol_vkey = VirtualLaserKey.SPIN_POL
     vld_pol = tb.get_virtual_laser_dict(spin_pol_vkey)
@@ -67,10 +67,10 @@ def main(
 
     seq_file = "resonance.py"
     seq_args = [
-        int(pol_ns),
+        # int(pol_ns), #comment for CW
         int(readout_ns),
         int(uwave_ind),
-        spin_pol_vkey,
+        # spin_pol_vkey, #comment for CW
         readout_vkey,
         laser_power,
     ]
@@ -115,6 +115,7 @@ def main(
         # Reload sequence each run (optimization resets servers between runs)
         pulsegen_server.stream_load(seq_file, seq_args_string)
         sig_gen.set_amp(float(uwave_power_dbm)) if uwave_power_dbm is not None else None
+        
         sig_gen.set_freq(float(freq_center_ghz))
         sig_gen.uwave_on()
 
@@ -130,7 +131,8 @@ def main(
                 counter_server.clear_buffer()
                 pulsegen_server.stream_start(int(num_reps))
 
-                new_counts = counter_server.read_counter_modulo_gates(2, int(num_reps))
+                # new_counts = counter_server.read_counter_modulo_gates(2, int(num_reps))
+                new_counts = counter_server.read_counter_separate_gates(int(num_reps))
 
                 # Each row is [ref, sig] for one repetition
                 count_arr = np.array(new_counts, dtype=np.int64)

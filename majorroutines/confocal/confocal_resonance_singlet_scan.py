@@ -365,7 +365,8 @@ def main(
                     counter_server.clear_buffer()
                     pulsegen_server.stream_start(int(num_reps))
 
-                    new_counts = counter_server.read_counter_modulo_gates(4, int(num_reps))
+                    # new_counts = counter_server.read_counter_modulo_gates(4, int(num_reps))
+                    new_counts = counter_server.read_counter_separate_gates(int(num_reps))
                     count_arr = np.array(new_counts, dtype=np.int64)
 
                     ms0_off_counts[run_ind, step_ind] = count_arr[:, 0].sum()

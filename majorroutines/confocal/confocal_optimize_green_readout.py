@@ -173,9 +173,11 @@ def main_with_cxn(
                 try:
                     counter_server.clear_buffer()
                     pulsegen_server.stream_start(int(num_reps))
-                    new_counts = counter_server.read_counter_modulo_gates(
-                        2, int(num_reps)
-                    )
+                    # new_counts = counter_server.read_counter_modulo_gates(
+                    #     2, int(num_reps)
+                    # )
+                    new_counts = counter_server.read_counter_separate_gates(int(num_reps))
+
                 finally:
                     try:
                         counter_server.stop_tag_stream()
