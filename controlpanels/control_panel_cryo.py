@@ -801,21 +801,21 @@ def do_rabi(nv_sig):
     rabi.main(
         nv_sig=nv_sig,
         num_reps=int(20e4),
-        num_runs=1, #testing
+        num_runs=5, #testing
         min_tau=20,  # ns
         max_tau=500,  # ns (480+min_tau)
         num_steps=40,  # 1 step every ~5-10ns
         uwave_ind=0,
         uwave_freq_ghz= 2.8214,# 2.8225,#2.8213, #2.8304, # Change to target ms=+1 or ms=-1 transition
-        optimize_between_runs=False,  # Set to false to turn off optimize between runs
+        optimize_between_runs=True,  # Set to false to turn off optimize between runs
     )
 
 
 def do_resonance(nv_sig):
     resonance.main(
         nv_sig,
-        freq_center_ghz=2.8225,# 2.869332,
-        freq_span_mhz=50,#150.0,
+        freq_center_ghz=2.869332,#2.8225,# 2.869332,
+        freq_span_mhz=150.0,
         num_steps=51,
         num_reps=1,#20e4,
         num_runs=20,
@@ -1317,15 +1317,15 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z = 5.6596 #5.028+1.5 #6.4988 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z = 5.4256 #5.028+1.5 #6.4988 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # coord_z = 3.4318
     # pixel_xy = [-0.026, 0.036]  # Old Wu NV 4/14
     # pixel_xy = [-0.071, 0.002]  # New NV Canidate Wu
     # pixel_xy = [-0.12, 0.069]
     # pixel_xy = [-0.018, 0.028]  #NV With Rabi meas Wu
     # pixel_xy = [-0.059, 0.034]  #NV With Rabi meas Wu
-    pixel_xy = [-0.102, 0.048]  # candidate 1
-    # pixel_xy = [-0.068, -0.006]  # candidate 2
+    pixel_xy = [-0.218, 0.228]  # candidate 1
+    # pixel_xy = [-0.14, 0.164]  # candidate 2
 
     # return
     nv_sig = NVSig(
@@ -1346,7 +1346,7 @@ if __name__ == "__main__":
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 75.3
+    nv_sig.expected_counts = 106
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
@@ -1437,7 +1437,7 @@ if __name__ == "__main__":
             # do_tisapph_singlet_scan(nv_sig, probe_ns=probe)
 
         # do_resonance(nv_sig)
-        do_rabi(nv_sig)
+        # do_rabi(nv_sig)
 
   # do_rabi(nv_sig)
         # try:
@@ -1502,7 +1502,7 @@ if __name__ == "__main__":
         # do_pulsed_re2.sonance_state(nv_sig, States.LOW)
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
         
-        # do_tisapph_singlet_scan(nv_sig)
+        do_tisapph_singlet_scan(nv_sig)
         # do_test_simple_spin_contrast(nv_sig)
 
         # probe_ns = [2e3, 5e3, 10e3, 20e3, 50e3, 100e3]

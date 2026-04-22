@@ -115,19 +115,38 @@ class Counter(LabradServer, ABC):
 
     @setting(212, num_to_read="i", returns="*i")
     def read_counter_summed(self, c, num_to_read=None):
-        """Sum directly during polling — never accumulates the full list."""
+        """Sum all samples server-side, returning one total per gate.
+
+        Transfers only num_gates integers instead of a (num_to_read, num_gates)
+        array, making transfer cost constant and negligible regardless of
+        num_reps. Works for any number of gates (2 for Rabi/resonance,
+        4 for singlet scan, etc.).
+
+        Returns
+        -------
+        list of ints, length = num_gates
+            [gate0_total, gate1_total, ...] summed across all reps and all APDs.
+        """
         if self.stream is None:
             logging.error("read_counter attempted while stream is None.")
             return [0, 0]
-        
-        totals = np.zeros(2, dtype=np.int64)
+
+        totals = None
         num_read = 0
         while num_read < num_to_read:
             chunk = self.read_counter_internal()
             for sample in chunk:
-                totals += np.sum(sample, axis=0, dtype=np.int64)
+                # sample shape: (num_apds, num_gates)
+                # sum APDs axis first → (num_gates,)
+                gate_sums = np.sum(sample, axis=0, dtype=np.int64)
+                if totals is None:
+                    totals = gate_sums.copy()
+                else:
+                    totals += gate_sums
             num_read += len(chunk)
-        
+
+        if totals is None:
+            return [0, 0]
         return totals.tolist()
 
     @abstractmethod

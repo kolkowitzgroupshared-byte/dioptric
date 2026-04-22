@@ -131,11 +131,14 @@ def main(
                 counter_server.clear_buffer()
                 pulsegen_server.stream_start(int(num_reps))
 
-                # read_counter_summed returns [ref_total, sig_total] — 2 integers.
-                # Transfer cost is constant regardless of num_reps.
-                new_counts = counter_server.read_counter_summed(int(num_reps))
-                ref_counts[run_ind, step_ind] = int(new_counts[0])
-                sig_counts[run_ind, step_ind] = int(new_counts[1])
+                # new_counts = counter_server.read_counter_modulo_gates(2, int(num_reps))
+                new_counts = counter_server.read_counter_separate_gates(int(num_reps))
+
+                # Each row is [ref, sig] for one repetition
+                count_arr = np.array(new_counts, dtype=np.int64)
+                print(f"  count_arr shape: {count_arr.shape}")  # should be (num_reps, 2)
+                ref_counts[run_ind, step_ind] = count_arr[:, 0].sum()
+                sig_counts[run_ind, step_ind] = count_arr[:, 1].sum()
     
                 ref_val = ref_counts[run_ind, step_ind]
                 sig_val = sig_counts[run_ind, step_ind]
@@ -152,11 +155,11 @@ def main(
             except Exception:
                 pass
 
-        # Update plot once per run, not per step
         if do_plot:
             with np.errstate(divide="ignore", invalid="ignore"):
                 norm_runs = sig_counts[: run_ind + 1] / ref_counts[: run_ind + 1]
             norm_mean = np.nanmean(norm_runs, axis=0)
+
             line.set_data(freqs_ghz, norm_mean)
             ax.relim()
             ax.autoscale_view()

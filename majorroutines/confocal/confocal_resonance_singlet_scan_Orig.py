@@ -365,14 +365,14 @@ def main(
                     counter_server.clear_buffer()
                     pulsegen_server.stream_start(int(num_reps))
 
-                    # read_counter_summed returns [gate0_total, gate1_total, ...]
-                    # — num_gates integers regardless of num_reps.
-                    # Gate order matches the sequence: ms0_off, ms0_on, ms1_off, ms1_on.
-                    new_counts = counter_server.read_counter_summed(int(num_reps))
-                    ms0_off_counts[run_ind, step_ind] = int(new_counts[0])
-                    ms0_on_counts[run_ind, step_ind]  = int(new_counts[1])
-                    ms1_off_counts[run_ind, step_ind] = int(new_counts[2])
-                    ms1_on_counts[run_ind, step_ind]  = int(new_counts[3])
+                    # new_counts = counter_server.read_counter_modulo_gates(4, int(num_reps))
+                    new_counts = counter_server.read_counter_separate_gates(int(num_reps))
+                    count_arr = np.array(new_counts, dtype=np.int64)
+
+                    ms0_off_counts[run_ind, step_ind] = count_arr[:, 0].sum()
+                    ms0_on_counts[run_ind, step_ind] = count_arr[:, 1].sum()
+                    ms1_off_counts[run_ind, step_ind] = count_arr[:, 2].sum()
+                    ms1_on_counts[run_ind, step_ind] = count_arr[:, 3].sum()
 
                     ms0_off_val = ms0_off_counts[run_ind, step_ind]
                     ms0_on_val = ms0_on_counts[run_ind, step_ind]
