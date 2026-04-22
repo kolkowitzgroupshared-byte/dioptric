@@ -801,13 +801,13 @@ def do_rabi(nv_sig):
     rabi.main(
         nv_sig=nv_sig,
         num_reps=int(20e4),
-        num_runs=5, #testing
+        num_runs=1, #testing
         min_tau=20,  # ns
         max_tau=500,  # ns (480+min_tau)
         num_steps=40,  # 1 step every ~5-10ns
         uwave_ind=0,
         uwave_freq_ghz= 2.8214,# 2.8225,#2.8213, #2.8304, # Change to target ms=+1 or ms=-1 transition
-        optimize_between_runs=True,  # Set to false to turn off optimize between runs
+        optimize_between_runs=False,  # Set to false to turn off optimize between runs
     )
 
 
@@ -831,13 +831,13 @@ def do_optimize_green_readout_time(nv_sig):
     """
     optimize_green_readout_time.main(
         nv_sig,
-        readout_times_ns=[400, 425, 450, 478, 500],
+        readout_times_ns=[400, 410, 420, 430, 440, 450, 460, 470, 480],
         # readout_times_ns=[400],
         freq_center_ghz=2.8214,   # park on peak
         num_reps=int(20e4),
-        num_runs=3, #per readout time
+        num_runs=10, #per readout time
         uwave_ind=0,
-        optimize_between_runs=True,
+        optimize_between_runs=False,
     )
 
 
@@ -1419,7 +1419,7 @@ if __name__ == "__main__":
         # do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
 
         #Optimize seq. parameters 
-        do_optimize_green_readout_time(nv_sig)
+        # do_optimize_green_readout_time(nv_sig)
         # do_find_apd_gate_overlap(nv_sig)
         # endregion Optimize
 
@@ -1437,7 +1437,7 @@ if __name__ == "__main__":
             # do_tisapph_singlet_scan(nv_sig, probe_ns=probe)
 
         # do_resonance(nv_sig)
-        # do_rabi(nv_sig)
+        do_rabi(nv_sig)
 
   # do_rabi(nv_sig)
         # try:

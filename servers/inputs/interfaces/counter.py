@@ -115,28 +115,19 @@ class Counter(LabradServer, ABC):
 
     @setting(212, num_to_read="i", returns="*i")
     def read_counter_summed(self, c, num_to_read=None):
-        """Sum all samples and all APDs into a single [ref_total, sig_total]
-        pair before sending over LabRAD.
-
-        This is the most efficient counter read for experiments that only need
-        total counts per gate (e.g. Rabi, resonance, T1) — it transfers 2
-        integers instead of a (num_to_read, 2) array, making transfer cost
-        constant and negligible regardless of num_reps.
-
-        Returns
-        -------
-        list of 2 ints
-            [ref_total, sig_total] summed across all reps and all APDs.
-        """
-        complete_counts = self.read_counter_setting_internal(num_to_read)
-
-        # complete_counts is a list of num_to_read samples.
-        # Each sample has shape (num_apds, num_gates).
-        # Sum APDs first (axis=0), then sum across all reps → [ref_total, sig_total].
+        """Sum directly during polling — never accumulates the full list."""
+        if self.stream is None:
+            logging.error("read_counter attempted while stream is None.")
+            return [0, 0]
+        
         totals = np.zeros(2, dtype=np.int64)
-        for sample in complete_counts:
-            totals += np.sum(sample, axis=0, dtype=np.int64)
-
+        num_read = 0
+        while num_read < num_to_read:
+            chunk = self.read_counter_internal()
+            for sample in chunk:
+                totals += np.sum(sample, axis=0, dtype=np.int64)
+            num_read += len(chunk)
+        
         return totals.tolist()
 
     @abstractmethod

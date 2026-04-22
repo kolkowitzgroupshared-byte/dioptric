@@ -164,7 +164,7 @@ def main(
     do_save=True,
     norm_mode=NormMode.SINGLE_VALUED,
 ):
-    # print(time.strftime("%Y-%m-%d %H:%M:%S"))
+    print(time.strftime("%Y-%m-%d %H:%M:%S"))
     tb.reset_cfm()
     kpl.init_kplotlib()
 
@@ -252,15 +252,15 @@ def main(
     tb.init_safe_stop()
     print(time.strftime("%Y-%m-%d %H:%M:%S"))
     for run_ind in range(num_runs):
-        # print(f"Run {run_ind + 1}/{num_runs}")
+        print(f"Run {run_ind + 1}/{num_runs}")
 
         if tb.safe_stop():
             break
-        # print(time.strftime("%Y-%m-%d %H:%M:%S"))
+        print(time.strftime("%Y-%m-%d %H:%M:%S"))
 
         if optimize_between_runs:
             targeting.compensate_for_drift(nv_sig)
-        # print(time.strftime("%Y-%m-%d %H:%M:%S"))
+        print(time.strftime("%Y-%m-%d %H:%M:%S"))
 
         # Re-enable sig gen after optimization (reset_cfm turns it off)
         if uwave_power_dbm is not None:
@@ -270,7 +270,7 @@ def main(
 
         # Open tag stream ONCE per run
         counter_server.start_tag_stream()
-        # print(time.strftime("%Y-%m-%d %H:%M:%S"))
+        print(time.strftime("%Y-%m-%d %H:%M:%S"))
         run_t0 = time.perf_counter()
 
         try:
@@ -310,38 +310,23 @@ def main(
                 pulsegen_server.stream_start(int(num_reps))
                 t_stream_start = time.perf_counter() - t0
 
-                # new_counts = counter_server.read_counter_modulo_gates(2, int(num_reps))
-                new_counts = counter_server.read_counter_separate_gates(int(num_reps))
+                # read_counter_summed returns just [ref_total, sig_total] — 2 integers.
+                # Transfer cost is constant (16 bytes) regardless of num_reps,
+                # vs num_reps*16 bytes for read_counter_separate_gates.
+                # Requires counter.py setting 212 to be deployed on the tagger server.
+                new_counts = counter_server.read_counter_summed(int(num_reps))
+
                 step_wall = time.perf_counter() - step_t0
                 t_read = step_wall - t_stream_load - t_clear - t_stream_start
                 step_wall_times[run_ind, step_ind] = step_wall
 
-                # Diagnostic: print raw return shape on first step to verify
-                # how many reps the tagger actually returned.
+                # Diagnostic on first step to verify the new method works
                 if step_ind == 0 and run_ind == 0:
-                    count_arr_diag = np.array(new_counts, dtype=np.int64)
-                    print(
-                        f"  [diag] read_counter returned shape={count_arr_diag.shape} "
-                        f"(expected ({num_reps}, 2)) | "
-                        f"first 3 rows: {count_arr_diag[:3].tolist()}",
-                        flush=True,
-                    )
+                    print(f"  [diag] read_counter_summed returned: {new_counts}", flush=True)
 
-                # Print per-call breakdown on every step of the first run,
-                # then only every 10 steps afterward (avoids terminal flood).
-                _print_detail = (run_ind == 0) or (step_ind % 10 == 0)
-                if _print_detail:
-                    print(
-                        f"    [timing] stream_load={t_stream_load*1e3:.0f}ms  "
-                        f"clear={t_clear*1e3:.0f}ms  "
-                        f"stream_start={t_stream_start*1e3:.0f}ms  "
-                        f"read_counter={t_read*1e3:.0f}ms"
-                    )
-
-                # Sum across all reps (each entry is [ref, sig] for one rep)
-                count_arr = np.array(new_counts, dtype=np.int64)
-                ref_counts[run_ind, step_ind] = count_arr[:, 0].sum()
-                sig_counts[run_ind, step_ind] = count_arr[:, 1].sum()
+                # Unpack directly — no array needed
+                ref_counts[run_ind, step_ind] = int(new_counts[0])
+                sig_counts[run_ind, step_ind] = int(new_counts[1])
 
                 ref_val = ref_counts[run_ind, step_ind]
                 sig_val = sig_counts[run_ind, step_ind]
@@ -476,6 +461,7 @@ def main(
         "num_valid_runs": proc_arrays["num_valid_runs"].tolist(),
     }
 
+    # BUG FIX 5 & 6: Gate saving on do_save flag, and guard fig against None
     if do_save:
         save_timestamp = dm.get_time_stamp()
         file_path = dm.get_file_path(__file__, save_timestamp, getattr(nv_sig, "name", "nv"))
@@ -486,6 +472,84 @@ def main(
 
     tb.reset_cfm()
     return raw_data, proc_data
+
+
+def _diagnose_read_counter(nv_sig, num_reps_list=(1000, 5000, 20000, 50000, 100000)):
+    """
+    Standalone timing diagnostic — does NOT need an NV.
+
+    Loads a fixed rabi.py sequence once, then for each num_reps value:
+      - stream_start
+      - read_counter_modulo_gates(2, num_reps)
+    and prints the wall time vs expected hardware time.
+
+    If read_counter overhead is CONSTANT across num_reps  → tagger polling interval (Cause A).
+    If read_counter overhead SCALES with num_reps         → pulser startup latency (Cause B).
+
+    Call from control_panel_cryo.py:
+        from majorroutines.confocal.confocal_rabi import _diagnose_read_counter
+        _diagnose_read_counter(nv_sig)
+    """
+    from utils.constants import VirtualLaserKey
+
+    tb.reset_cfm()
+    counter_server = tb.get_server_counter()
+    pulsegen_server = tb.get_server_pulse_streamer()
+
+    # Fixed sequence parameters — tau=200 ns, same as a typical Rabi midpoint.
+    tau_ns       = 200
+    pol_vkey     = VirtualLaserKey.SPIN_POL
+    readout_vkey = VirtualLaserKey.SPIN_READOUT
+    pol_dict     = tb.get_virtual_laser_dict(pol_vkey)
+    readout_dict = tb.get_virtual_laser_dict(readout_vkey)
+    polarization_ns = int(nv_sig.pulse_durations.get(pol_vkey,  pol_dict["duration"]))
+    readout_ns      = int(nv_sig.pulse_durations.get(readout_vkey, readout_dict["duration"]))
+
+    seq_args = [tau_ns, polarization_ns, readout_ns, 0,
+                pol_vkey.name, readout_vkey.name, None]
+    seq_args_string = tb.encode_seq_args(seq_args)
+
+    # Load the sequence once — period is fixed regardless of num_reps.
+    ret_vals = pulsegen_server.stream_load("rabi.py", seq_args_string)
+    period_ns = int(ret_vals[0]) if hasattr(ret_vals, '__len__') else int(ret_vals)
+    print(f"\nSequence period: {period_ns} ns")
+    print(f"{'num_reps':>10}  {'exp_s':>7}  {'read_s':>7}  {'overhead_ms':>12}  {'ratio':>6}")
+    print("-" * 55)
+
+    counter_server.start_tag_stream()
+    try:
+        for num_reps in num_reps_list:
+            exp_s = _expected_step_time_s(
+                tau_ns, polarization_ns, readout_ns, num_reps,
+                uwave_delay_ns=151, laser_delay_ns=0,
+            )
+
+            counter_server.clear_buffer()
+
+            t0 = time.perf_counter()
+            pulsegen_server.stream_start(int(num_reps))
+            new_counts = counter_server.read_counter_modulo_gates(2, int(num_reps))
+            wall_s = time.perf_counter() - t0
+
+            overhead_ms = (wall_s - exp_s) * 1e3
+            ratio = wall_s / exp_s if exp_s > 0 else float("nan")
+            count_arr = np.array(new_counts, dtype=np.int64)
+            total_counts = int(count_arr.sum())
+
+            print(
+                f"{num_reps:>10}  {exp_s:>7.3f}s  {wall_s:>7.3f}s  "
+                f"{overhead_ms:>+10.0f}ms  {ratio:>5.2f}x  "
+                f"(total counts={total_counts})"
+            )
+    finally:
+        counter_server.stop_tag_stream()
+
+    tb.reset_cfm()
+    print(
+        "\nInterpretation:\n"
+        "  overhead ~constant across num_reps → tagger polling interval (fix: reduce poll period in tagger server)\n"
+        "  overhead scales with num_reps      → pulser startup latency  (fix: warm-start or pre-arm the pulser)\n"
+    )
 
 
 if __name__ == "__main__":
