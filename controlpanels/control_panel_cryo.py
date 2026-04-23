@@ -801,12 +801,12 @@ def do_rabi(nv_sig):
     rabi.main(
         nv_sig=nv_sig,
         num_reps=int(20e4),
-        num_runs=5, #testing
+        num_runs=10, #testing
         min_tau=20,  # ns
         max_tau=500,  # ns (480+min_tau)
         num_steps=40,  # 1 step every ~5-10ns
         uwave_ind=0,
-        uwave_freq_ghz= 2.8214,# 2.8225,#2.8213, #2.8304, # Change to target ms=+1 or ms=-1 transition
+        uwave_freq_ghz= 2.8513,  # Change to target ms=+1 or ms=-1 transition
         optimize_between_runs=True,  # Set to false to turn off optimize between runs
     )
 
@@ -814,13 +814,13 @@ def do_rabi(nv_sig):
 def do_resonance(nv_sig):
     resonance.main(
         nv_sig,
-        freq_center_ghz=2.869332,#2.8225,# 2.869332,
-        freq_span_mhz=150.0,
+        freq_center_ghz= 2.8513,#2.869332,
+        freq_span_mhz=50.0,
         num_steps=51,
         num_reps=1,#20e4,
-        num_runs=20,
+        num_runs=10,
         uwave_ind=0,
-        optimize_between_runs=False,
+        optimize_between_runs=True,
     )
 
 
@@ -831,13 +831,13 @@ def do_optimize_green_readout_time(nv_sig):
     """
     optimize_green_readout_time.main(
         nv_sig,
-        readout_times_ns=[400, 410, 420, 430, 440, 450, 460, 470, 480],
+        readout_times_ns=[455,456,457,458,459,460,461,462,463,464,465],
         # readout_times_ns=[400],
-        freq_center_ghz=2.8214,   # park on peak
+        freq_center_ghz=2.8513,   # park on peak
         num_reps=int(20e4),
-        num_runs=10, #per readout time
+        num_runs=5, #per readout time
         uwave_ind=0,
-        optimize_between_runs=False,
+        optimize_between_runs=True,
     )
 
 
@@ -1320,12 +1320,8 @@ if __name__ == "__main__":
     coord_z = 5.4256 #5.028+1.5 #6.4988 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # coord_z = 3.4318
     # pixel_xy = [-0.026, 0.036]  # Old Wu NV 4/14
-    # pixel_xy = [-0.071, 0.002]  # New NV Canidate Wu
-    # pixel_xy = [-0.12, 0.069]
-    # pixel_xy = [-0.018, 0.028]  #NV With Rabi meas Wu
-    # pixel_xy = [-0.059, 0.034]  #NV With Rabi meas Wu
-    pixel_xy = [-0.218, 0.228]  # candidate 1
-    # pixel_xy = [-0.14, 0.164]  # candidate 2
+    pixel_xy = [-0.217,0.226]  # candidate 1 z=5.4,ms=2.513,
+    # pixel_xy = [-0.14, 0.164]  # candidate 2 z=6
 
     # return
     nv_sig = NVSig(
@@ -1340,13 +1336,13 @@ if __name__ == "__main__":
         # expected_counts=13,
         pulse_durations={
             VirtualLaserKey.IMAGING: int(10e6),  # readout is in ns (5e6 = 5ms)
-            VirtualLaserKey.SPIN_READOUT: int(440), #CW=10ms # readout is in ns (5e6 = 5ms)
+            VirtualLaserKey.SPIN_READOUT: int(460), #CW=10ms # readout is in ns (5e6 = 5ms)
             VirtualLaserKey.SPIN_POL: 2000,
             VirtualLaserKey.SINGLET_DRIVE: 100e3,  # placeholder
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 106
+    nv_sig.expected_counts = 127.5
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
@@ -1437,7 +1433,7 @@ if __name__ == "__main__":
             # do_tisapph_singlet_scan(nv_sig, probe_ns=probe)
 
         # do_resonance(nv_sig)
-        # do_rabi(nv_sig)
+        do_rabi(nv_sig)
 
   # do_rabi(nv_sig)
         # try:
@@ -1502,7 +1498,7 @@ if __name__ == "__main__":
         # do_pulsed_re2.sonance_state(nv_sig, States.LOW)
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
         
-        do_tisapph_singlet_scan(nv_sig)
+        # do_tisapph_singlet_scan(nv_sig)
         # do_test_simple_spin_contrast(nv_sig)
 
         # probe_ns = [2e3, 5e3, 10e3, 20e3, 50e3, 100e3]

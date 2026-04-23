@@ -219,11 +219,11 @@ def main(
     tb.reset_cfm()
     return raw_data
 
-
+#region file input
 if __name__ == "__main__":
     # example:
     kpl.init_kplotlib()
-    data = dm.get_raw_data(file_stem="2026_04_14-10_27_04-(Wu)", load_npz=True)
+    data = dm.get_raw_data(file_stem="2026_04_22-15_00_43-(Wu)", load_npz=True)
     nv_sig = data["nv_sig"]
     sig_counts = np.asarray(data["sig_counts"]) 
     ref_counts = np.asarray(data["ref_counts"])   
