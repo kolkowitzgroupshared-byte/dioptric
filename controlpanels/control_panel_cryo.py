@@ -831,11 +831,11 @@ def do_optimize_green_readout_time(nv_sig):
     """
     optimize_green_readout_time.main(
         nv_sig,
-        readout_times_ns=[250,300,350,400,450,500,550,600,650,700,750,800,850],
+        readout_times_ns=[550,570,590,610,630,650],
         # readout_times_ns=[400],
-        freq_center_ghz= 2.8316,#2.8513,   # park on peak
+        freq_center_ghz= 2.8320,#2.8316,#2.8513,   # park on peak
         num_reps=int(1e6),
-        num_runs=10, #per readout time
+        num_runs=15, #per readout time
         uwave_ind=0,
         optimize_between_runs=True,
     )
@@ -848,7 +848,7 @@ def do_optimize_apd_gate_width(nv_sig):
     """
     optimize_apd_gate_width.main(
         nv_sig,
-        gate_widths_ns=[50, 100, 150, 200, 300, 400, 500, 700, 1000],
+        gate_widths_ns=[550,570,590,610,630,650],
         freq_center_ghz=2.869332,
         laser_on_ns=1000,
         gate_delay_ns=0,
@@ -1323,7 +1323,7 @@ if __name__ == "__main__":
     pixel_xy = [-0.252,0.268]  # candidate 1 z=5.4,ms=2.513,
     # pixel_xy = [-0.14, 0.164]  # candidate 2 z=6
 
-
+    #region Params
     # return
     nv_sig = NVSig(
         name=f"({get_sample_name()})",
@@ -1337,7 +1337,7 @@ if __name__ == "__main__":
         # expected_counts=13,
         pulse_durations={
             VirtualLaserKey.IMAGING: int(10e6),  # readout is in ns (5e6 = 5ms)
-            VirtualLaserKey.SPIN_READOUT: int(440), #CW=10ms # readout is in ns (5e6 = 5ms)
+            VirtualLaserKey.SPIN_READOUT: int(650), #CW=10ms # readout is in ns (5e6 = 5ms)
             VirtualLaserKey.SPIN_POL: 2000,
             VirtualLaserKey.SINGLET_DRIVE: 100e3,  # placeholder
         },
