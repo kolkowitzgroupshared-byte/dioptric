@@ -6,6 +6,9 @@ Created on Mon Apr  8 19:50:12 2019
 
 @author: mccambria
 
+Edited 4/20/2026
+@author: chemistatcode
+
 ### BEGIN NODE INFO
 [info]
 name = laser_COBO_520
