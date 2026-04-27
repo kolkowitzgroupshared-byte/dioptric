@@ -90,7 +90,7 @@ def main_with_cxn(
     do_plot,
 ):
     # -------------------- Setup --------------------
-    tb.reset_cfm(cxn)
+    tb.reset_cfm()
     kpl.init_kplotlib()
 
     pulsegen_server = tb.get_server_pulse_streamer()
@@ -225,7 +225,7 @@ def main_with_cxn(
         except Exception:
             traceback.print_exc()
         vsg["pi_pulse"] = orig_pi_pulse
-        tb.reset_cfm(cxn)
+        tb.reset_cfm()
 
     # -------------------- Per-readout argmax (optimal power) --------------------
     optimal_powers_mW = [np.nan] * n_readouts
