@@ -936,7 +936,7 @@ def do_optimize_green_power(nv_sig):
         # powers_mW=np.linspace(0.05, 5.0, 10),
         powers_mW=[1,3,5,7,9,10,15,20,25],
         readout_times_ns=[610],
-        num_reps=int(1e6),
+        num_reps= 1000,#int(1e6),
         uwave_ind=0,
         uwave_freq_ghz=2.8320,
         uwave_power_dbm=10.0,
@@ -1417,7 +1417,7 @@ if __name__ == "__main__":
         # do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
 
         #Optimize seq. parameters 
-        do_optimize_green_power(nv_sig)
+        # do_optimize_green_power(nv_sig)
         # do_optimize_green_readout_time(nv_sig)
         # do_find_apd_gate_overlap(nv_sig)
         # endregion Optimize
@@ -1436,7 +1436,7 @@ if __name__ == "__main__":
         # for probe in probe_ns:
             # do_tisapph_singlet_scan(nv_sig, probe_ns=probe)
 
-        # do_resonance(nv_sig)
+        do_resonance(nv_sig)
         # do_rabi(nv_sig)
 
   # do_rabi(nv_sig)
