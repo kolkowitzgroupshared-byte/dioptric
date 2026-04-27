@@ -28,12 +28,17 @@ class LaserCoboBase(LabradServer):
             "E:/Shared drives/Kolkowitz Lab Group/nvdata/pc_{}/labrad_logging/{}.log"
         )
         filename = filename.format(self.pc_name, self.name)
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format="%(asctime)s %(levelname)-8s %(message)s",
-            datefmt="%y-%m-%d_%H-%M-%S",
-            filename=filename,
-        )
+        try:
+            import os
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            logging.basicConfig(
+                level=logging.DEBUG,
+                format="%(asctime)s %(levelname)-8s %(message)s",
+                datefmt="%y-%m-%d_%H-%M-%S",
+                filename=filename,
+            )
+        except Exception:
+            logging.basicConfig(level=logging.DEBUG)
         self.task = None
         self.do_feedthrough = None
         self.di_feedthrough = None
