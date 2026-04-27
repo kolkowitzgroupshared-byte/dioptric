@@ -55,7 +55,9 @@ class LaserCobo520(LaserCoboBase):
             self.laser_serial.reset_input_buffer()
             self.laser_serial.reset_output_buffer()
         except Exception as e:
-            logging.debug(e)
+            logging.error(f"Failed to open serial connection: {e}")
+            print(f"laser_COBO_520: Failed to open serial connection: {e}")
+            raise
 
     def stopServer(self):
         super().stopServer()
