@@ -933,13 +933,14 @@ def do_optimize_green_power(nv_sig):
     """
     optimize_green_power.main(
         nv_sig,
-        powers_mW=np.linspace(0.1, 5.0, 10),
-        readout_times_ns=[300, 500, 1000],
-        num_reps=100000,
+        # powers_mW=np.linspace(0.05, 5.0, 10),
+        powers_mW=[1,3,5,7,9,10,15,20,25],
+        readout_times_ns=[610],
+        num_reps=int(1e6),
         uwave_ind=0,
-        uwave_freq_ghz=2.8214,
+        uwave_freq_ghz=2.8320,
         uwave_power_dbm=10.0,
-        pi_pulse_ns=146,
+        pi_pulse_ns=107.3,
         laser_name="laser_COBO_520",
         settle_time=0.2,
         do_plot=True,
@@ -1320,7 +1321,7 @@ if __name__ == "__main__":
     coord_z = 4.828+1.25#5.4256 #5.028+1.5 #6.4988 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # coord_z = 3.4318
     # pixel_xy = [-0.026, 0.036]  # Old Wu NV 4/14
-    pixel_xy = [-0.237, 0.243]  # candidate 1 z=5.4,ms=2.513,
+    pixel_xy = [-0.299,0.301]  # candidate 1 z=5.4,ms=2.513,
     # pixel_xy = [-0.14, 0.164]  # candidate 2 z=6
 
     #region Params
@@ -1343,7 +1344,7 @@ if __name__ == "__main__":
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 76.5
+    nv_sig.expected_counts = 105.8
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss

@@ -318,7 +318,7 @@ if __name__ == "__main__":
     main(
         nv_sig,
         powers_mW=np.linspace(0.05, 5.0, 10),
-        readout_times_ns=[200, 500, 1000],
+        readout_times_ns=[610],
         num_reps=1000,
         uwave_ind=0,
         laser_name="laser_COBO_520",
