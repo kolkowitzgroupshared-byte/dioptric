@@ -35,12 +35,14 @@ class LaserCoboBase(LabradServer):
             filename=filename,
         )
         self.task = None
-        config = common.get_config_dict()
-        wiring = config["Wiring"]["Daq"]
-        self.do_feedthrough = wiring["do_{}_feedthrough".format(self.name)]
-        self.di_feedthrough = wiring["di_{}_feedthrough".format(self.name)]
-        # Load the feedthrough and just leave it running
+        self.do_feedthrough = None
+        self.di_feedthrough = None
         try:
+            config = common.get_config_dict()
+            wiring = config["Wiring"]["Daq"]
+            self.do_feedthrough = wiring["do_{}_feedthrough".format(self.name)]
+            self.di_feedthrough = wiring["di_{}_feedthrough".format(self.name)]
+            # Load the feedthrough and just leave it running
             self.load_feedthrough(None)
         except Exception as e:
             logging.debug(e)
@@ -50,6 +52,10 @@ class LaserCoboBase(LabradServer):
         self.close_task_internal()
 
     def load_stream_writer(self, c, task_name, stream_bools):
+        if self.do_feedthrough is None or self.di_feedthrough is None:
+            logging.debug("Feedthrough not configured, skipping stream writer")
+            return
+
         # Close the existing task if there is one
         if self.task is not None:
             self.close_task_internal()
@@ -101,6 +107,9 @@ class LaserCoboBase(LabradServer):
 
     @setting(2)
     def laser_on(self, c):
+        if self.do_feedthrough is None:
+            logging.debug("Feedthrough not configured, cannot turn laser on via DAQ")
+            return
         self.close_task_internal()
         with nidaqmx.Task() as task:
             task.do_channels.add_do_chan(self.do_feedthrough)
@@ -108,6 +117,9 @@ class LaserCoboBase(LabradServer):
 
     @setting(3)
     def laser_off(self, c):
+        if self.do_feedthrough is None:
+            logging.debug("Feedthrough not configured, cannot turn laser off via DAQ")
+            return
         self.close_task_internal()
         with nidaqmx.Task() as task:
             task.do_channels.add_do_chan(self.do_feedthrough)
