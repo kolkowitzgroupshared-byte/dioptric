@@ -57,7 +57,6 @@ class LaserCobo520(LaserCoboBase):
         except Exception as e:
             logging.error(f"Failed to open serial connection: {e}")
             print(f"laser_COBO_520: Failed to open serial connection: {e}")
-            raise
 
     def stopServer(self):
         super().stopServer()
