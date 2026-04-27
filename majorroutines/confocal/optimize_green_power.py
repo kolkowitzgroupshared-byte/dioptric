@@ -58,21 +58,21 @@ def main(
     settle_time=0.2,
     do_plot=True,
 ):
-    with common.labrad_connect() as cxn:
-        return main_with_cxn(
-            cxn,
-            nv_sig,
-            powers_mW,
-            readout_times_ns,
-            num_reps,
-            uwave_ind,
-            uwave_freq_ghz,
-            uwave_power_dbm,
-            pi_pulse_ns,
-            laser_name,
-            settle_time,
-            do_plot,
-        )
+    cxn = common.labrad_connect()
+    return main_with_cxn(
+        cxn,
+        nv_sig,
+        powers_mW,
+        readout_times_ns,
+        num_reps,
+        uwave_ind,
+        uwave_freq_ghz,
+        uwave_power_dbm,
+        pi_pulse_ns,
+        laser_name,
+        settle_time,
+        do_plot,
+    )
 
 
 def main_with_cxn(
