@@ -40,37 +40,38 @@ class LaserCobo520(LaserCoboBase):
 
     def initServer(self):
         super().initServer()
-        self.laser_serial = None
-        try:
-            config = common.get_config_dict()
-            device_id = config["DeviceIDs"][f"{self.name}_com"]
-            self.laser_serial = serial.Serial(
-                device_id,
-                115200,
-                serial.EIGHTBITS,
-                serial.PARITY_NONE,
-                serial.STOPBITS_ONE,
-                timeout=1,
-            )
-            self.laser_serial.reset_input_buffer()
-            self.laser_serial.reset_output_buffer()
-        except Exception as e:
-            logging.error(f"Failed to open serial connection: {e}")
-            print(f"laser_COBO_520: Failed to open serial connection: {e}")
+        config = common.get_config_dict()
+        self._com_port = config["DeviceIDs"][f"{self.name}_com"]
 
-    def stopServer(self):
-        super().stopServer()
-        if self.laser_serial is not None:
-            self.laser_serial.close()
+    def _open_serial(self):
+        s = serial.Serial(
+            self._com_port,
+            115200,
+            serial.EIGHTBITS,
+            serial.PARITY_NONE,
+            serial.STOPBITS_ONE,
+            timeout=1,
+        )
+        s.reset_input_buffer()
+        s.reset_output_buffer()
+        return s
 
     def _query(self, cmd):
-        self.laser_serial.reset_input_buffer()
-        self.laser_serial.write(f"{cmd}\r".encode("ascii"))
-        return self.laser_serial.readline().decode("ascii").strip()
+        s = self._open_serial()
+        try:
+            s.reset_input_buffer()
+            s.write(f"{cmd}\r".encode("ascii"))
+            return s.readline().decode("ascii").strip()
+        finally:
+            s.close()
 
     def _write(self, cmd):
-        self.laser_serial.write(f"{cmd}\r".encode("ascii"))
-        self.laser_serial.readline()
+        s = self._open_serial()
+        try:
+            s.write(f"{cmd}\r".encode("ascii"))
+            s.readline()
+        finally:
+            s.close()
 
     @setting(10, power="v[]")
     def set_power(self, c, power):
