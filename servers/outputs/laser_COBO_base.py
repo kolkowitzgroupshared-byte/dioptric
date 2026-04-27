@@ -7,6 +7,9 @@ PulseStreamer through to the DAQ and get a full 5 V TTL from there.
 Created on November 1st, 2021
 
 @author: mccambria
+
+Updated on 4/27/2026
+@author: chemistatcode
 """
 
 from labrad.server import LabradServer
