@@ -883,11 +883,11 @@ def do_optimize_transient(nv_sig):
 def do_tisapph_singlet_scan(nv_sig):
     resonance_tisapph_singlet_scan.main(
         nv_sig,
-        wavelength_start_nm=795.5,
-        wavelength_stop_nm=825,
+        wavelength_start_nm=805,
+        wavelength_stop_nm=815,
         num_steps=51, #51=0.2nm steps, 105=0.1nm steps 
         num_reps=1e4,
-        num_runs=10, 
+        num_runs=3, 
         uwave_ind=0,
         uwave_power_dbm=10.0,
         probe_ns=100e3,
@@ -1320,7 +1320,7 @@ if __name__ == "__main__":
     coord_z = 4.828+1.25#5.4256 #5.028+1.5 #6.4988 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # coord_z = 3.4318
     # pixel_xy = [-0.026, 0.036]  # Old Wu NV 4/14
-    pixel_xy = [-0.252,0.268]  # candidate 1 z=5.4,ms=2.513,
+    pixel_xy = [-0.237, 0.243]  # candidate 1 z=5.4,ms=2.513,
     # pixel_xy = [-0.14, 0.164]  # candidate 2 z=6
 
     #region Params
@@ -1337,13 +1337,13 @@ if __name__ == "__main__":
         # expected_counts=13,
         pulse_durations={
             VirtualLaserKey.IMAGING: int(10e6),  # readout is in ns (5e6 = 5ms)
-            VirtualLaserKey.SPIN_READOUT: int(650), #CW=10ms # readout is in ns (5e6 = 5ms)
+            VirtualLaserKey.SPIN_READOUT: int(610), #CW=10ms # readout is in ns (5e6 = 5ms)
             VirtualLaserKey.SPIN_POL: 2000,
             VirtualLaserKey.SINGLET_DRIVE: 100e3,  # placeholder
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 90
+    nv_sig.expected_counts = 76.5
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
@@ -1405,12 +1405,12 @@ if __name__ == "__main__":
         # end region Image sample
         #
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=4.3, voltage_end=6, step_size=0.005) #must be between 1-9V
+        # do_optimize_z_PI(nv_sig, voltage_start=6, voltage_end=6.3, step_size=0.002) #must be between 1-9V
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
 
-        # do_compensate_for_drift(nv_sig)
+        do_compensate_for_drift(nv_sig)
         # do_optimize_galvo(nv_sig) # optimize xy for drift
         # do_optimize_z(nv_sig) # optimize z for drift
         # do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
@@ -1435,7 +1435,7 @@ if __name__ == "__main__":
             # do_tisapph_singlet_scan(nv_sig, probe_ns=probe)
 
         # do_resonance(nv_sig)
-        do_rabi(nv_sig)
+        # do_rabi(nv_sig)
 
   # do_rabi(nv_sig)
         # try:

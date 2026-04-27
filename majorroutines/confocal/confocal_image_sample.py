@@ -27,6 +27,7 @@ from utils.constants import (
 
 SEQ_FILE_SEQUENCE_SCAN = "simple_readout_laser_free_test.py"  # expects [0, readout_ns, x[], y[]]
 SEQ_FILE_PIXEL_READOUT  = "simple_readout.py"                 # per-pixel readout when we move in Python
+# SEQ_FILE_PIXEL_READOUT  = "simple_readout_Tisapph.py"                 # per-pixel readout when we move in Python
 
 # --- replace the snake helper with a raster helper ---
 def _raster_fill(vals, img, state):
@@ -103,6 +104,7 @@ def confocal_scan(nv_sig: NVSig, x_range, y_range, num_steps, nv_minus_init=Fals
 
     period_ns = pulse.stream_load(
         "simple_readout.py",
+        # "simple_readout_Tisapph.py",
         tb.encode_seq_args([delay_ns, readout_ns, readout_vkey, 100, 1])  # 100ns marker at readout start
     )[0]
 

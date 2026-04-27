@@ -106,9 +106,9 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 10, #dbm
-                "frequency": 2.8316,#2.5316, #2.8513,#2.8214, #GHz
-                "rabi_period":217.5, #223,
-                "pi_pulse": 108.7, #111.5,
+                "frequency": 2.8326,#2.5316, #2.8513,#2.8214, #GHz
+                "rabi_period":214.5, #223,
+                "pi_pulse": 107.3, #111.5,
                 "pi_on_2_pulse": 37, #Half of pi pulse, for use in Ramsey and SE
             },
             # sig gen 1 is iq molulated
@@ -151,7 +151,7 @@ config |= {
 
             VirtualLaserKey.SPIN_READOUT: {
                 "physical_name": green_laser,
-                "duration": 440,
+                "duration": 610,
             },
             # LaserKey.CHARGE_POL: {"physical_name": green_laser, "duration": 10e3},
             VirtualLaserKey.CHARGE_POL: {
