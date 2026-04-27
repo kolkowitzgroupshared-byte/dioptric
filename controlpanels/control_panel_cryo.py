@@ -934,15 +934,17 @@ def do_optimize_green_power(nv_sig):
     optimize_green_power.main(
         nv_sig,
         # powers_mW=np.linspace(0.05, 5.0, 10),
-        powers_mW=[1,3,5,7,9,10,15,20,25],
+        powers_mW=[1, 3, 5, 7, 9, 10, 15, 20, 25],
         readout_times_ns=[610],
-        num_reps= int(1e6),
+        num_reps=int(1e6),
+        num_runs=10,
         uwave_ind=0,
         uwave_freq_ghz=2.8508,
         uwave_power_dbm=10.0,
         pi_pulse_ns=107.3,
         laser_name="laser_COBO_520",
         settle_time=0.2,
+        optimize_between_runs=True,
         do_plot=True,
     )
 
