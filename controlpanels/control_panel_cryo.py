@@ -1344,7 +1344,7 @@ if __name__ == "__main__":
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 105.8
+    nv_sig.expected_counts = 159.6
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
