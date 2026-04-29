@@ -937,7 +937,7 @@ def do_optimize_green_power(nv_sig):
         powers_mW=[1, 2, 3, 4, 4.5, 5, 5.5, 6, 6.5, 7, 8, 9, 10],
         readout_times_ns=[610],
         num_reps=int(1e6),
-        num_runs=30,
+        num_runs=5, #test
         uwave_ind=0,
         uwave_freq_ghz=2.8200,
         uwave_power_dbm=10.0,
