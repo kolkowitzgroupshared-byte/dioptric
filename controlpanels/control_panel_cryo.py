@@ -943,8 +943,10 @@ def do_optimize_green_power(nv_sig):
         uwave_power_dbm=10.0,
         pi_pulse_ns=96.4,
         laser_name="laser_COBO_520",
-        settle_time=0.2,
+        settle_time=1.0,
         optimize_between_runs=True,
+        optimize_every_n_powers=4,
+        randomize_power_order=True,
         do_plot=True,
     )
 

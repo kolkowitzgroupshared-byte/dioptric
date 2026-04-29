@@ -56,8 +56,11 @@ def main(
     uwave_power_dbm=None,
     pi_pulse_ns=None,
     laser_name="laser_COBO_520",
-    settle_time=0.2,
+    settle_time=1.0,
+    settle_tol_frac=0.02,
     optimize_between_runs=False,
+    optimize_every_n_powers=None,
+    randomize_power_order=False,
     do_plot=True,
 ):
     cxn = common.labrad_connect()
@@ -74,7 +77,10 @@ def main(
         pi_pulse_ns,
         laser_name,
         settle_time,
+        settle_tol_frac,
         optimize_between_runs,
+        optimize_every_n_powers,
+        randomize_power_order,
         do_plot,
     )
 
@@ -92,11 +98,15 @@ def main_with_cxn(
     pi_pulse_ns,
     laser_name,
     settle_time,
+    settle_tol_frac,
     optimize_between_runs,
+    optimize_every_n_powers,
+    randomize_power_order,
     do_plot,
 ):
     # -------------------- Setup --------------------
-    tb.reset_cfm()
+    # Don't reset_cfm at entry — match confocal_optimize_green_readout.py so the
+    # green-laser feedthrough state is the same as the comparison routine.
     kpl.init_kplotlib()
 
     pulsegen_server = tb.get_server_pulse_streamer()
@@ -152,6 +162,9 @@ def main_with_cxn(
     # Per-run storage — shape (num_runs, n_readouts, n_powers)
     ref_counts_all = np.full((num_runs, n_readouts, n_powers), np.nan, dtype=float)
     sig_counts_all = np.full((num_runs, n_readouts, n_powers), np.nan, dtype=float)
+    actual_powers_w_all = np.full((num_runs, n_readouts, n_powers), np.nan, dtype=float)
+
+    rng = np.random.default_rng()
 
     # Final summary arrays
     ref_totals = np.full((n_readouts, n_powers), np.nan, dtype=float)
@@ -222,12 +235,57 @@ def main_with_cxn(
                     seq_args_string = tb.encode_seq_args(seq_args)
                     pulsegen_server.stream_load(SEQ_NAME, seq_args_string)
 
-                    for ip, p_w in enumerate(powers_W):
+                    if randomize_power_order:
+                        order = rng.permutation(n_powers)
+                    else:
+                        order = np.arange(n_powers)
+
+                    for step, ip in enumerate(order):
                         if tb.safe_stop():
                             break
+                        ip = int(ip)
+                        p_w = float(powers_W[ip])
 
-                        laser_server.set_power(float(p_w))
-                        time.sleep(settle_time)
+                        if (
+                            optimize_between_runs
+                            and optimize_every_n_powers is not None
+                            and step > 0
+                            and (step % int(optimize_every_n_powers) == 0)
+                        ):
+                            try:
+                                counter_server.stop_tag_stream()
+                            except Exception:
+                                pass
+                            try:
+                                targeting.compensate_for_drift(nv_sig, no_crash=True)
+                            except Exception:
+                                traceback.print_exc()
+                            sig_gen.set_amp(uwave_power_dbm)
+                            sig_gen.set_freq(uwave_freq_ghz)
+                            sig_gen.uwave_on()
+                            counter_server.start_tag_stream()
+                            pulsegen_server.stream_load(SEQ_NAME, seq_args_string)
+
+                        laser_server.set_power(p_w)
+
+                        # Settle-and-verify: wait for the diode to actually reach
+                        # the setpoint before measuring. The COBO 520 takes time
+                        # to ramp, especially when stepping over a large range.
+                        deadline = time.time() + max(float(settle_time), 0.5)
+                        actual_w = np.nan
+                        tol = float(settle_tol_frac) * max(p_w, 1e-4)
+                        while time.time() < deadline:
+                            try:
+                                actual_w = float(laser_server.get_actual_power())
+                                if abs(actual_w - p_w) <= tol:
+                                    break
+                            except Exception:
+                                pass
+                            time.sleep(0.05)
+                        try:
+                            actual_w = float(laser_server.get_actual_power())
+                        except Exception:
+                            pass
 
                         counter_server.clear_buffer()
                         pulsegen_server.stream_start(int(num_reps))
@@ -236,9 +294,14 @@ def main_with_cxn(
 
                         ref_counts_all[run_ind, ir, ip] = int(new_counts[0])
                         sig_counts_all[run_ind, ir, ip] = int(new_counts[1])
+                        actual_powers_w_all[run_ind, ir, ip] = actual_w
 
+                        actual_mW = (
+                            actual_w * 1e3 if np.isfinite(actual_w) else float("nan")
+                        )
                         print(
-                            f"  readout={readout} ns, P={powers_mW[ip]:.3f} mW | "
+                            f"  readout={readout} ns, P_set={powers_mW[ip]:.3f} mW, "
+                            f"P_act={actual_mW:.3f} mW | "
                             f"ref={int(new_counts[0])}, sig={int(new_counts[1])}"
                         )
             finally:
@@ -341,6 +404,7 @@ def main_with_cxn(
         "num_runs": num_runs,
         "ref_counts_all": ref_counts_all.tolist(),
         "sig_counts_all": sig_counts_all.tolist(),
+        "actual_powers_w_all": actual_powers_w_all.tolist(),
         "ref_totals": ref_totals.tolist(),
         "sig_totals": sig_totals.tolist(),
         "contrasts": contrasts.tolist(),
@@ -349,7 +413,12 @@ def main_with_cxn(
         "optimal_snr_per_rep": optimal_snr,
         "sequence": SEQ_NAME,
         "settle_time": settle_time,
+        "settle_tol_frac": float(settle_tol_frac),
         "optimize_between_runs": bool(optimize_between_runs),
+        "optimize_every_n_powers": (
+            None if optimize_every_n_powers is None else int(optimize_every_n_powers)
+        ),
+        "randomize_power_order": bool(randomize_power_order),
     }
     dm.save_raw_data(raw_data, file_path)
     if fig is not None:
