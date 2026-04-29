@@ -24,12 +24,30 @@ Created: 4/27/2026
 # print("pa?:", laser.get_actual_power())
 
 
+# from utils import common
+# cxn = common.labrad_connect()
+# laser = cxn.laser_COBO_520
+
+# for target_w in [0.001, 0.003, 0.005, 0.008, 0.010, 0.020, 0.050, 0.100, 0.005]:
+#     laser.set_power(target_w)
+#     readback = laser.get_power()
+#     print(f"set {target_w*1e3:7.2f} mW  ->  p? = {readback*1e3:7.2f} mW   "
+#         f"(match: {abs(readback - target_w) < 1e-6})")
+
 from utils import common
 cxn = common.labrad_connect()
 laser = cxn.laser_COBO_520
 
-for target_w in [0.001, 0.003, 0.005, 0.008, 0.010, 0.020, 0.050, 0.100, 0.005]:
+print("== p (CW setpoint) ==")
+for target_w in [0.001, 0.003, 0.005, 0.008, 0.010, 0.005]:
     laser.set_power(target_w)
-    readback = laser.get_power()
-    print(f"set {target_w*1e3:7.2f} mW  ->  p? = {readback*1e3:7.2f} mW   "
-        f"(match: {abs(readback - target_w) < 1e-6})")
+    rb = laser.get_power()
+    print(f"  set {target_w*1e3:7.2f} mW  ->  p?     = {rb*1e3:7.2f} mW   "
+        f"({'OK' if abs(rb-target_w)<1e-6 else 'MISMATCH'})")
+
+print("== slmp (modulation setpoint) ==")
+for target_w in [0.001, 0.003, 0.005, 0.008, 0.010, 0.005]:
+    laser.set_modulation_power(target_w)
+    rb = laser.get_modulation_power()
+    print(f"  set {target_w*1e3:7.2f} mW  ->  glmp?  = {rb*1e3:7.2f} mW   "
+        f"({'OK' if abs(rb-target_w)<1e-6 else 'MISMATCH'})")
