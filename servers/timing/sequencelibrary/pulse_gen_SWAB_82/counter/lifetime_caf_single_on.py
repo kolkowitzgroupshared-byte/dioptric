@@ -9,8 +9,8 @@
 #
 # args = [recovery_delay_ns, exc_ns, detect_ns, laser_vkey, laser_power]
 
-from pulsestreamer import Sequence, OutputState
 import numpy as np
+from pulsestreamer import OutputState, Sequence
 
 from utils import tool_belt as tb
 from utils.constants import Digital, VirtualLaserKey
@@ -34,7 +34,7 @@ def _vkey_from_arg(x):
     raise TypeError(f"Bad virtual laser key: {x!r}")
 
 
-def get_seq(config, args):
+def get_seq(pulse_streamer, config, args):
     recovery_delay_ns, exc_ns, detect_ns, laser_vkey_arg, laser_power = args
 
     recovery_delay_ns = _as_int64("recovery_delay_ns", recovery_delay_ns)
@@ -79,20 +79,10 @@ def get_seq(config, args):
     apd_train = [
         (int(front_buffer), LOW),
         # pulse 1
-        (int(exc_ns), LOW),
-
-        # readout 1
-        (int(detect_ns), HIGH),
-
+        (int(exc_ns), HIGH),
+        # # readout 1
+        # (int(detect_ns), HIGH),
         # dark recovery
-        (int(recovery_delay_ns), LOW),
-
-        # pulse 2
-        (int(exc_ns), LOW),
-
-        # readout 2
-        (int(detect_ns), HIGH),
-
         (int(meas_buffer), LOW),
     ]
     seq.setDigital(do_apd_gate, apd_train)
@@ -100,21 +90,10 @@ def get_seq(config, args):
     # Laser ON only for excitation pulses
     laser_train = [
         (int(front_buffer), LOW),
-
         # pulse 1
         (int(exc_ns), HIGH),
-
-        # readout 1
-        (int(detect_ns), LOW),
-        # dark recovery
-        (int(recovery_delay_ns), LOW),
-
-        # pulse 2
-        (int(exc_ns), HIGH),
-
-        # readout 2
-        (int(detect_ns), LOW),
-
+        # # readout 1
+        # (int(detect_ns), LOW),
         (int(meas_buffer), LOW),
     ]
     tb.process_laser_seq(seq, laser_vkey, laser_train)
@@ -129,7 +108,7 @@ if __name__ == "__main__":
     cfg = common.get_config_dict()
 
     # args = [recovery_delay_ns, exc_ns, detect_ns, laser_vkey, laser_power]
-    args = [5000, 1000, 3000, "SPIN_READOUT", None]
+    args = [5000, 10000, 10000, "SPIN_READOUT", None]
 
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])

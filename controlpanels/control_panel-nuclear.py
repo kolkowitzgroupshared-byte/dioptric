@@ -19,9 +19,11 @@ import numpy as np
 import websocket
 
 from majorroutines.caf_spectroscopy import (
+    double_lifetime_recovery,
     laser_char,
     lifetime_caf,
     sideillum_resonance,
+    single_lifetime,
     singlet_search,
     # singlet_search_1043,
     singlet_search_with_etalon,
@@ -67,6 +69,9 @@ def do_caf_resonance(th_sig):
         num_runs=1000,
         uwave_ind=0,
     )
+
+
+# def double_lif
 
 
 def do_resonance(nv_sig):

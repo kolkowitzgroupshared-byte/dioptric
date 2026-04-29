@@ -204,12 +204,11 @@ def main(
     sample_sig,
     num_reps,
     num_runs,
-    min_recovery_delay_ns,
-    max_recovery_delay_ns,
+    min_readout_delay_ns,
+    max_readout_delay_ns,
     num_steps,
-    exc_ns,  # laser
-    detect_ns,  # read out
-    seq_file,
+    exc_ns,
+    detect_ns,
     num_bins=200,
     laser_power=None,
     laser_vkey="SPIN_READOUT",
@@ -222,8 +221,8 @@ def main(
     kpl.init_kplotlib()
 
     recovery_delay_ns_list = np.linspace(
-        int(min_recovery_delay_ns),
-        int(max_recovery_delay_ns),
+        int(min_readout_delay_ns),
+        int(max_readout_delay_ns),
         int(num_steps),
     )
     recovery_delay_ns_list = np.unique(np.rint(recovery_delay_ns_list).astype(int))
@@ -271,8 +270,7 @@ def main(
 
     pulsegen_server = tb.get_server_pulse_streamer()
     counter_server = tb.get_server_counter()
-    # seq_file = "double_lifetime_recovery.py"
-    seq_file = "short_lifetime_recovery.py"
+    seq_file = "lifetime_caf_single_pulse.py"
 
     tb.init_safe_stop()
     start_time = time.time()
@@ -283,17 +281,17 @@ def main(
         if tb.safe_stop():
             break
 
-        for step_ind, recovery_delay_ns in enumerate(recovery_delay_ns_list):
+        for step_ind, readout_delay_ns in enumerate(recovery_delay_ns_list):
             if tb.safe_stop():
                 break
 
             print(
                 f"  step {step_ind + 1}/{len(recovery_delay_ns_list)} | "
-                f"recovery_delay = {int(recovery_delay_ns)} ns"
+                f"recovery_delay = {int(readout_delay_ns)} ns"
             )
 
             seq_args = [
-                int(recovery_delay_ns),
+                int(readout_delay_ns),
                 int(exc_ns),
                 int(detect_ns),
                 laser_vkey,
