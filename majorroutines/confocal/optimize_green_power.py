@@ -11,8 +11,9 @@ This is the standard figure of merit for optimizing green power: raw counts
 rise with power, but shot noise grows with them and charge-state mixing eats
 into contrast at high power, so SNR peaks at an intermediate power.
 
-User-facing power is in mW; conversion to W is done internally before calling
-the laser server's set_power.
+User-facing power is in mW. The laser server's set_modulation_power command
+also takes mW (the Cobolt 520 firmware on this rig uses milliwatts on the
+wire), so no unit conversion is needed.
 
 @author: chemistatcode
 Date: April 15th 2026
@@ -128,14 +129,16 @@ def main_with_cxn(
         uwave_power_dbm = float(uwave_power_dbm)
 
     laser_server = getattr(cxn, laser_name)
-    # Modulation-power setpoint: this is the level the laser emits while its
-    # modulation TTL is HIGH. In digital-modulation mode (where this routine
-    # runs because the sequence gates the laser via TTL for spin readout), the
-    # CW `p` setpoint has no effect on emission — `slmp` does. Capture the
-    # original value so we can restore it on exit.
-    orig_power_w = None
+    # Modulation-power setpoint: the level the laser emits while its modulation
+    # TTL is HIGH. In digital-modulation mode (where this routine runs because
+    # the sequence gates the laser via TTL for spin readout), the CW `p`
+    # setpoint has no effect on emission — `slmp` does. The Cobolt 520 firmware
+    # on this rig takes mW on the wire, so the values we pass in are already
+    # in mW (matching the routine's `powers_mW` argument). Capture the original
+    # value so we can restore it on exit.
+    orig_power_mW = None
     try:
-        orig_power_w = float(laser_server.get_modulation_power())
+        orig_power_mW = float(laser_server.get_modulation_power())
     except Exception:
         pass
 
@@ -147,7 +150,6 @@ def main_with_cxn(
 
     # -------------------- Normalize inputs --------------------
     powers_mW = np.asarray(powers_mW, dtype=float).ravel()
-    powers_W = powers_mW * 1e-3
     num_runs = int(num_runs)
 
     if readout_times_ns is None:
@@ -245,7 +247,7 @@ def main_with_cxn(
                         if tb.safe_stop():
                             break
                         ip = int(ip)
-                        p_w = float(powers_W[ip])
+                        p_mW = float(powers_mW[ip])
 
                         if (
                             optimize_between_runs
@@ -267,7 +269,7 @@ def main_with_cxn(
                             counter_server.start_tag_stream()
                             pulsegen_server.stream_load(SEQ_NAME, seq_args_string)
 
-                        laser_server.set_modulation_power(p_w)
+                        laser_server.set_modulation_power(p_mW)
                         time.sleep(float(settle_time))
 
                         counter_server.clear_buffer()
@@ -331,7 +333,7 @@ def main_with_cxn(
         except Exception:
             pass
         try:
-            restore = orig_power_w if orig_power_w is not None else 0.0
+            restore = orig_power_mW if orig_power_mW is not None else 0.0
             laser_server.set_modulation_power(float(restore))
         except Exception:
             traceback.print_exc()

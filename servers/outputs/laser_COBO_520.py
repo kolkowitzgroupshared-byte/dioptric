@@ -152,22 +152,25 @@ class LaserCobo520(LaserCoboBase):
 
     @setting(10, power="v[]")
     def set_power(self, c, power):
-        """Set the **CW** laser power setpoint in Watts (`p <W>`).
+        """Set the **CW** laser power setpoint in milliwatts (`p <mW>`).
+
+        The Cobolt 520 firmware on this rig uses mW on the wire (verified
+        empirically — `slmp 1.0` was accepted as 1 mW, not refused as 1 W).
 
         Note: in modulation/digital-modulation mode the laser emits at the
         modulation power setpoint, not the CW setpoint. Use
         `set_modulation_power` for sweeps in modulation mode.
         """
-        self._write_checked(f"p {float(power):.6f}")
+        self._write_checked(f"p {float(power):.4f}")
 
     @setting(11, returns="v[]")
     def get_power(self, c):
-        """Read the CW laser power setpoint in Watts (`p?`)."""
+        """Read the CW laser power setpoint in milliwatts (`p?`)."""
         return float(self._query_value("p?"))
 
     @setting(12, returns="v[]")
     def get_actual_power(self, c):
-        """Read the actual laser output power in Watts (`pa?`).
+        """Read the actual laser output power in milliwatts (`pa?`).
 
         In modulation mode this is an instantaneous reading, so it is near 0
         while the modulation TTL gate is LOW and at the modulation-power level
@@ -177,17 +180,17 @@ class LaserCobo520(LaserCoboBase):
 
     @setting(13, power="v[]")
     def set_modulation_power(self, c, power):
-        """Set the laser modulation power setpoint in Watts (`slmp <W>`).
+        """Set the laser modulation power setpoint in milliwatts (`slmp <mW>`).
 
         This is the level the laser emits while its modulation TTL gate is
         HIGH. Used in digital/analog modulation mode (the OEM Cobolt GUI sends
         this command when you change the power slider in mod-mode).
         """
-        self._write_checked(f"slmp {float(power):.6f}")
+        self._write_checked(f"slmp {float(power):.4f}")
 
     @setting(14, returns="v[]")
     def get_modulation_power(self, c):
-        """Read the laser modulation power setpoint in Watts (`glmp?`)."""
+        """Read the laser modulation power setpoint in milliwatts (`glmp?`)."""
         return float(self._query_value("glmp?"))
 
     @setting(15, cmd="s", returns="s")
