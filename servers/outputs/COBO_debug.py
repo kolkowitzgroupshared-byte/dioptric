@@ -34,20 +34,34 @@ Created: 4/27/2026
 #     print(f"set {target_w*1e3:7.2f} mW  ->  p? = {readback*1e3:7.2f} mW   "
 #         f"(match: {abs(readback - target_w) < 1e-6})")
 
+# from utils import common
+# cxn = common.labrad_connect()
+# laser = cxn.laser_COBO_520
+
+# print("== p (CW setpoint) ==")
+# for target_w in [0.001, 0.003, 0.005, 0.008, 0.010, 0.005]:
+#     laser.set_power(target_w)
+#     rb = laser.get_power()
+#     print(f"  set {target_w*1e3:7.2f} mW  ->  p?     = {rb*1e3:7.2f} mW   "
+#         f"({'OK' if abs(rb-target_w)<1e-6 else 'MISMATCH'})")
+
+# print("== slmp (modulation setpoint) ==")
+# for target_w in [0.001, 0.003, 0.005, 0.008, 0.010, 0.005]:
+#     laser.set_modulation_power(target_w)
+#     rb = laser.get_modulation_power()
+#     print(f"  set {target_w*1e3:7.2f} mW  ->  glmp?  = {rb*1e3:7.2f} mW   "
+#         f"({'OK' if abs(rb-target_w)<1e-6 else 'MISMATCH'})")
+
 from utils import common
 cxn = common.labrad_connect()
 laser = cxn.laser_COBO_520
 
-print("== p (CW setpoint) ==")
-for target_w in [0.001, 0.003, 0.005, 0.008, 0.010, 0.005]:
-    laser.set_power(target_w)
-    rb = laser.get_power()
-    print(f"  set {target_w*1e3:7.2f} mW  ->  p?     = {rb*1e3:7.2f} mW   "
-        f"({'OK' if abs(rb-target_w)<1e-6 else 'MISMATCH'})")
+print("glmp? right now:", laser.get_modulation_power())
 
-print("== slmp (modulation setpoint) ==")
-for target_w in [0.001, 0.003, 0.005, 0.008, 0.010, 0.005]:
-    laser.set_modulation_power(target_w)
-    rb = laser.get_modulation_power()
-    print(f"  set {target_w*1e3:7.2f} mW  ->  glmp?  = {rb*1e3:7.2f} mW   "
-        f"({'OK' if abs(rb-target_w)<1e-6 else 'MISMATCH'})")
+try:
+    laser.set_modulation_power(1.0)
+    print("slmp 1.0 accepted; glmp? =", laser.get_modulation_power())
+    print("=> unit is most likely mW")
+except Exception as e:
+    print("slmp 1.0 rejected:", e)
+    print("=> unit is W (Cobolt refused 1 W as out of range)")
