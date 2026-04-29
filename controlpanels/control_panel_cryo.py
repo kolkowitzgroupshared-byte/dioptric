@@ -885,7 +885,7 @@ def do_tisapph_singlet_scan(nv_sig):
         nv_sig,
         wavelength_start_nm=795.5,
         wavelength_stop_nm=845,
-        num_steps=500, #51=0.2nm steps, 105=0.1nm steps 
+        num_steps=100, #100step=0.495nm
         num_reps=20e4,
         num_runs=10, 
         uwave_ind=0,
@@ -934,7 +934,7 @@ def do_optimize_green_power(nv_sig):
     optimize_green_power.main(
         nv_sig,
         # powers_mW=np.linspace(0.05, 5.0, 10),
-        powers_mW=[1, 2, 3, 4, 4.5, 5, 5.5, 6, 6.5, 7, 8, 9, 10],
+        powers_mW=[1, 2, 3, 4, 4.5, 5, 5.5, 6, 6.5, 7, 8, 9, 10, 15, 20, 25],
         readout_times_ns=[610],
         num_reps=int(1e6),
         num_runs=5, #test
@@ -945,7 +945,7 @@ def do_optimize_green_power(nv_sig):
         laser_name="laser_COBO_520",
         settle_time=5,
         optimize_between_runs=True,
-        optimize_every_n_powers=13,
+        optimize_every_n_powers=16,
         randomize_power_order=True,
         do_plot=True,
     )
@@ -1349,8 +1349,8 @@ if __name__ == "__main__":
             VirtualLaserKey.SINGLET_DRIVE: 100e3,  # placeholder
         },
     )
-    nv_sig.expected_counts = None
-    # nv_sig.expected_counts = 112
+    # nv_sig.expected_counts = None
+    nv_sig.expected_counts = 150.3 #6mW Green Power
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
@@ -1423,7 +1423,7 @@ if __name__ == "__main__":
         # do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
 
         #Optimize seq. parameters 
-        do_optimize_green_power(nv_sig)
+        # do_optimize_green_power(nv_sig)
         # do_optimize_green_readout_time(nv_sig)
         # do_find_apd_gate_overlap(nv_sig)
         # endregion Optimize
@@ -1436,7 +1436,7 @@ if __name__ == "__main__":
         # endregion Stationary count
 
         # region Resonance, Pulse Seq., Singlet
-        # do_tisapph_singlet_scan(nv_sig)
+        do_tisapph_singlet_scan(nv_sig)
 
         # probe_ns = [2e3, 5e3, 10e3, 20e3, 50e3, 100e3]
         # for probe in probe_ns:
