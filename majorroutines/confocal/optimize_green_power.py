@@ -128,9 +128,14 @@ def main_with_cxn(
         uwave_power_dbm = float(uwave_power_dbm)
 
     laser_server = getattr(cxn, laser_name)
+    # Modulation-power setpoint: this is the level the laser emits while its
+    # modulation TTL is HIGH. In digital-modulation mode (where this routine
+    # runs because the sequence gates the laser via TTL for spin readout), the
+    # CW `p` setpoint has no effect on emission — `slmp` does. Capture the
+    # original value so we can restore it on exit.
     orig_power_w = None
     try:
-        orig_power_w = float(laser_server.get_power())
+        orig_power_w = float(laser_server.get_modulation_power())
     except Exception:
         pass
 
@@ -262,7 +267,7 @@ def main_with_cxn(
                             counter_server.start_tag_stream()
                             pulsegen_server.stream_load(SEQ_NAME, seq_args_string)
 
-                        laser_server.set_power(p_w)
+                        laser_server.set_modulation_power(p_w)
                         time.sleep(float(settle_time))
 
                         counter_server.clear_buffer()
@@ -327,7 +332,7 @@ def main_with_cxn(
             pass
         try:
             restore = orig_power_w if orig_power_w is not None else 0.0
-            laser_server.set_power(float(restore))
+            laser_server.set_modulation_power(float(restore))
         except Exception:
             traceback.print_exc()
         vsg["pi_pulse"] = orig_pi_pulse
