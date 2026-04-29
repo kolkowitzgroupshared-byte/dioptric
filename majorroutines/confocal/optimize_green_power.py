@@ -57,7 +57,6 @@ def main(
     pi_pulse_ns=None,
     laser_name="laser_COBO_520",
     settle_time=1.0,
-    settle_tol_frac=0.02,
     optimize_between_runs=False,
     optimize_every_n_powers=None,
     randomize_power_order=False,
@@ -77,7 +76,6 @@ def main(
         pi_pulse_ns,
         laser_name,
         settle_time,
-        settle_tol_frac,
         optimize_between_runs,
         optimize_every_n_powers,
         randomize_power_order,
@@ -98,7 +96,6 @@ def main_with_cxn(
     pi_pulse_ns,
     laser_name,
     settle_time,
-    settle_tol_frac,
     optimize_between_runs,
     optimize_every_n_powers,
     randomize_power_order,
@@ -137,15 +134,6 @@ def main_with_cxn(
     except Exception:
         pass
 
-    # Digital channel for the green-laser TTL gate. We hold this HIGH during
-    # the settle window so get_actual_power() reads the actual emitted power;
-    # otherwise the laser is dark between sequences and `pa?` returns ~0 W.
-    cfg = common.get_config_dict()
-    try:
-        green_do_chan = int(cfg["Wiring"]["PulseGen"][f"do_{laser_name}_dm"])
-    except Exception:
-        green_do_chan = None
-
     spin_pol_vkey = VirtualLaserKey.SPIN_POL
     readout_vkey = VirtualLaserKey.SPIN_READOUT
     vld_pol = tb.get_virtual_laser_dict(spin_pol_vkey)
@@ -171,7 +159,6 @@ def main_with_cxn(
     # Per-run storage — shape (num_runs, n_readouts, n_powers)
     ref_counts_all = np.full((num_runs, n_readouts, n_powers), np.nan, dtype=float)
     sig_counts_all = np.full((num_runs, n_readouts, n_powers), np.nan, dtype=float)
-    actual_powers_w_all = np.full((num_runs, n_readouts, n_powers), np.nan, dtype=float)
 
     rng = np.random.default_rng()
 
@@ -276,41 +263,7 @@ def main_with_cxn(
                             pulsegen_server.stream_load(SEQ_NAME, seq_args_string)
 
                         laser_server.set_power(p_w)
-
-                        # Hold the green TTL HIGH during settling so the diode
-                        # is actually emitting and `get_actual_power` returns a
-                        # meaningful reading. Without this the laser is gated
-                        # off between sequences and `pa?` reads ~0 W.
-                        if green_do_chan is not None:
-                            try:
-                                pulsegen_server.constant([green_do_chan])
-                            except Exception:
-                                pass
-
-                        # Settle-and-verify: wait for the diode to actually reach
-                        # the setpoint before measuring. The COBO 520 takes time
-                        # to ramp, especially when stepping over a large range.
-                        deadline = time.time() + max(float(settle_time), 0.5)
-                        actual_w = np.nan
-                        tol = float(settle_tol_frac) * max(p_w, 1e-4)
-                        while time.time() < deadline:
-                            try:
-                                actual_w = float(laser_server.get_actual_power())
-                                if abs(actual_w - p_w) <= tol:
-                                    break
-                            except Exception:
-                                pass
-                            time.sleep(0.05)
-                        try:
-                            actual_w = float(laser_server.get_actual_power())
-                        except Exception:
-                            pass
-
-                        # Reload the sequence — `pulsegen_server.constant` above
-                        # replaced the loaded waveform with a constant output, so
-                        # we need to re-arm the sequence before stream_start.
-                        if green_do_chan is not None:
-                            pulsegen_server.stream_load(SEQ_NAME, seq_args_string)
+                        time.sleep(float(settle_time))
 
                         counter_server.clear_buffer()
                         pulsegen_server.stream_start(int(num_reps))
@@ -319,14 +272,9 @@ def main_with_cxn(
 
                         ref_counts_all[run_ind, ir, ip] = int(new_counts[0])
                         sig_counts_all[run_ind, ir, ip] = int(new_counts[1])
-                        actual_powers_w_all[run_ind, ir, ip] = actual_w
 
-                        actual_mW = (
-                            actual_w * 1e3 if np.isfinite(actual_w) else float("nan")
-                        )
                         print(
-                            f"  readout={readout} ns, P_set={powers_mW[ip]:.3f} mW, "
-                            f"P_act={actual_mW:.3f} mW | "
+                            f"  readout={readout} ns, P={powers_mW[ip]:.3f} mW | "
                             f"ref={int(new_counts[0])}, sig={int(new_counts[1])}"
                         )
             finally:
@@ -429,7 +377,6 @@ def main_with_cxn(
         "num_runs": num_runs,
         "ref_counts_all": ref_counts_all.tolist(),
         "sig_counts_all": sig_counts_all.tolist(),
-        "actual_powers_w_all": actual_powers_w_all.tolist(),
         "ref_totals": ref_totals.tolist(),
         "sig_totals": sig_totals.tolist(),
         "contrasts": contrasts.tolist(),
@@ -438,7 +385,6 @@ def main_with_cxn(
         "optimal_snr_per_rep": optimal_snr,
         "sequence": SEQ_NAME,
         "settle_time": settle_time,
-        "settle_tol_frac": float(settle_tol_frac),
         "optimize_between_runs": bool(optimize_between_runs),
         "optimize_every_n_powers": (
             None if optimize_every_n_powers is None else int(optimize_every_n_powers)
