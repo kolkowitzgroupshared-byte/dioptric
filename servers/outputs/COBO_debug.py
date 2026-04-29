@@ -52,6 +52,7 @@ Created: 4/27/2026
 #     print(f"  set {target_w*1e3:7.2f} mW  ->  glmp?  = {rb*1e3:7.2f} mW   "
 #         f"({'OK' if abs(rb-target_w)<1e-6 else 'MISMATCH'})")
 
+## Unit confirmation
 from utils import common
 cxn = common.labrad_connect()
 laser = cxn.laser_COBO_520
