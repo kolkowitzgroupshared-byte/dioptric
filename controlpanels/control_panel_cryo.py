@@ -943,7 +943,7 @@ def do_optimize_green_power(nv_sig):
         uwave_power_dbm=10.0,
         pi_pulse_ns=96.4,
         laser_name="laser_COBO_520",
-        settle_time=1.0,
+        settle_time=5,
         optimize_between_runs=True,
         optimize_every_n_powers=4,
         randomize_power_order=True,
@@ -1328,7 +1328,7 @@ if __name__ == "__main__":
     # pixel_xy = [-0.324,0.28]  # candidate 1 z=5.673,ms=2.513,
     # pixel_xy = [-0.247,0.256] #previues coordinate
     # pixel_xy = [-0.1, 0.1]
-    pixel_xy = [-0.172, 0.078]  # Not align with magnetic field 04/28
+    pixel_xy = [-0.172, 0.076]  # Not align with magnetic field 04/28
 
     #region Params
     # return
