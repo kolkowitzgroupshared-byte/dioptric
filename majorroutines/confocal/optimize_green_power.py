@@ -137,6 +137,15 @@ def main_with_cxn(
     except Exception:
         pass
 
+    # Digital channel for the green-laser TTL gate. We hold this HIGH during
+    # the settle window so get_actual_power() reads the actual emitted power;
+    # otherwise the laser is dark between sequences and `pa?` returns ~0 W.
+    cfg = common.get_config_dict()
+    try:
+        green_do_chan = int(cfg["Wiring"]["PulseGen"][f"do_{laser_name}_dm"])
+    except Exception:
+        green_do_chan = None
+
     spin_pol_vkey = VirtualLaserKey.SPIN_POL
     readout_vkey = VirtualLaserKey.SPIN_READOUT
     vld_pol = tb.get_virtual_laser_dict(spin_pol_vkey)
@@ -268,6 +277,16 @@ def main_with_cxn(
 
                         laser_server.set_power(p_w)
 
+                        # Hold the green TTL HIGH during settling so the diode
+                        # is actually emitting and `get_actual_power` returns a
+                        # meaningful reading. Without this the laser is gated
+                        # off between sequences and `pa?` reads ~0 W.
+                        if green_do_chan is not None:
+                            try:
+                                pulsegen_server.constant([green_do_chan])
+                            except Exception:
+                                pass
+
                         # Settle-and-verify: wait for the diode to actually reach
                         # the setpoint before measuring. The COBO 520 takes time
                         # to ramp, especially when stepping over a large range.
@@ -286,6 +305,12 @@ def main_with_cxn(
                             actual_w = float(laser_server.get_actual_power())
                         except Exception:
                             pass
+
+                        # Reload the sequence — `pulsegen_server.constant` above
+                        # replaced the loaded waveform with a constant output, so
+                        # we need to re-arm the sequence before stream_start.
+                        if green_do_chan is not None:
+                            pulsegen_server.stream_load(SEQ_NAME, seq_args_string)
 
                         counter_server.clear_buffer()
                         pulsegen_server.stream_start(int(num_reps))
