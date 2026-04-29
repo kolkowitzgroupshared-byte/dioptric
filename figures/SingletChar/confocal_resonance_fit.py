@@ -352,7 +352,7 @@ def fit_one_line(freqs, norm):
 def main():
     # ---- USER SETTINGS ----------------------------------------------------
     data_dir = r"G:\nvdata\pc_cryo\branch_master\confocal_resonance\2026_04"
-    base_name = "2026_04_27-15_13_49-(Wu)"
+    base_name = "2026_04_28-13_54_34-(Wu)"
     # Set to 1 for a zoomed scan over a single transition (e.g. just the
     # m_s=-1 dip); set to 2 for a standard sweep over both Zeeman lines.
     num_peaks = 1

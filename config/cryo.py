@@ -106,9 +106,9 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 10, #dbm
-                "frequency": 2.8326,#2.5316, #2.8513,#2.8214, #GHz
-                "rabi_period":214.5, #223,
-                "pi_pulse": 107.3, #111.5,
+                "frequency": 2.820,#2.5316, #2.8513,#2.8214, #GHz
+                "rabi_period":192.7, #223,
+                "pi_pulse": 96.4, #111.5,
                 "pi_on_2_pulse": 37, #Half of pi pulse, for use in Ramsey and SE
             },
             # sig gen 1 is iq molulated
