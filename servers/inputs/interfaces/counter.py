@@ -113,68 +113,38 @@ class Counter(LabradServer, ABC):
 
         return return_counts
 
-    # @setting(212, num_to_read="i", returns="*i")
-    # def read_counter_summed(self, c, num_to_read=None):
-    #     """Sum all samples server-side, returning one total per gate.
-
-    #     Transfers only num_gates integers instead of a (num_to_read, num_gates)
-    #     array, making transfer cost constant and negligible regardless of
-    #     num_reps. Works for any number of gates (2 for Rabi/resonance,
-    #     4 for singlet scan, etc.).
-
-    #     Returns
-    #     -------
-    #     list of ints, length = num_gates
-    #         [gate0_total, gate1_total, ...] summed across all reps and all APDs.
-    #     """
-    #     if self.stream is None:
-    #         logging.error("read_counter attempted while stream is None.")
-    #         return [0, 0]
-
-    #     totals = None
-    #     num_read = 0
-    #     while num_read < num_to_read:
-    #         chunk = self.read_counter_internal()
-    #         for sample in chunk:
-    #             # sample shape: (num_apds, num_gates)
-    #             # sum APDs axis first → (num_gates,)
-    #             gate_sums = np.sum(sample, axis=0, dtype=np.int64)
-    #             if totals is None:
-    #                 totals = gate_sums.copy()
-    #             else:
-    #                 totals += gate_sums
-    #         num_read += len(chunk)
-
-    #     if totals is None:
-    #         return [0, 0]
-    #     return totals.tolist()
-
     @setting(212, num_to_read="i", returns="*i")
     def read_counter_summed(self, c, num_to_read=None):
-        """Sum all samples server-side, returning one total per gate."""
+        """Sum all samples server-side, returning one total per gate.
+
+        Transfers only num_gates integers instead of a (num_to_read, num_gates)
+        array, making transfer cost constant and negligible regardless of
+        num_reps. Works for any number of gates (2 for Rabi/resonance,
+        4 for singlet scan, etc.).
+
+        Returns
+        -------
+        list of ints, length = num_gates
+            [gate0_total, gate1_total, ...] summed across all reps and all APDs.
+        """
         if self.stream is None:
             logging.error("read_counter attempted while stream is None.")
             return [0, 0]
 
-        import time
         totals = None
         num_read = 0
-        deadline = time.time() + 30  # 30s timeout — prevents infinite hang
 
         while num_read < num_to_read:
-            if time.time() > deadline:
-                logging.error(
-                    f"read_counter_summed timed out after 30s "
-                    f"(got {num_read}/{num_to_read} samples)"
-                )
-                break
-
             chunk = self.read_counter_internal()
+
+            # read_counter_internal can return an empty array if no tags have
+            # arrived yet — skip silently and poll again rather than crashing.
             if len(chunk) == 0:
-                time.sleep(0.001)  # yield briefly if nothing arrived yet
                 continue
 
             for sample in chunk:
+                # sample shape: (num_apds, num_gates)
+                # sum APDs axis first → (num_gates,)
                 gate_sums = np.sum(sample, axis=0, dtype=np.int64)
                 if totals is None:
                     totals = gate_sums.copy()
