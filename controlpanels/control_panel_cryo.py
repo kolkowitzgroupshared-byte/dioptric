@@ -1499,6 +1499,8 @@ if __name__ == "__main__":
         # do_pulsed_re2.sonance_state(nv_sig, States.LOW)
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
         
+        #TiSapph Scans
+        # do_tisapph_singlet_scan_loop(nv_sig, wavelength_start_nm=800, wavelength_stop_nm=820, step_nm=5)
         do_tisapph_singlet_scan(nv_sig)
         # do_test_simple_spin_contrast(nv_sig)
 
