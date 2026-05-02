@@ -879,14 +879,14 @@ def do_optimize_transient(nv_sig):
     )
 
 
-def do_tisapph_singlet_scan(nv_sig, wavelength_start_nm=800, wavelength_stop_nm=805):
+def do_tisapph_singlet_scan(nv_sig,wavelength_start_nm=800,wavelength_stop_nm=805):
     resonance_tisapph_singlet_scan.main(
         nv_sig,
         wavelength_start_nm=wavelength_start_nm,
         wavelength_stop_nm=wavelength_stop_nm,
         num_steps=100, #100step=0.495nm
         num_reps=5e3,
-        num_runs=2000,
+        num_runs=2000, 
         uwave_ind=0,
         uwave_power_dbm=10.0,
         probe_ns=2e6,
@@ -896,27 +896,24 @@ def do_tisapph_singlet_scan(nv_sig, wavelength_start_nm=800, wavelength_stop_nm=
         optimize_between_runs=True,
     )
 
-
 def do_tisapph_singlet_scan_loop(
-    nv_sig, wavelength_start_nm=800, wavelength_stop_nm=820, step_nm=5
-):
+        nv_sig, wavelength_start_nm=800, wavelength_stop_nm=820, step_nm=5):
     tool_belt.init_safe_stop()
     seg_start = wavelength_start_nm
-    seg_idx = 1
-    while seg_start < wavelength_stop_nm:
+    seg_idx=1
+    while seg_start<wavelength_stop_nm:
         if tool_belt.safe_stop():
             break
-        seg_stop = min(seg_start + step_nm, wavelength_stop_nm)
-        print(
-            f"TiSapph singlet scan segment {seg_idx}: {seg_start}-{seg_stop} nm"
-        )
+        seg_stop=min(seg_start+step_nm,wavelength_stop_nm)
+        print(f"TiSapph singlet scan segment {seg_idx}: {seg_start}-{seg_stop} nm")
         do_tisapph_singlet_scan(
             nv_sig,
             wavelength_start_nm=seg_start,
             wavelength_stop_nm=seg_stop,
         )
-        seg_start = seg_stop
-        seg_idx += 1
+        seg_start=seg_stop
+        seg_idx+=1
+
 
 
 def do_odmr_tisapph_short(nv_sig):
