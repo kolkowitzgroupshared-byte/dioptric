@@ -882,14 +882,14 @@ def do_optimize_transient(nv_sig):
 def do_tisapph_singlet_scan(nv_sig):
     resonance_tisapph_singlet_scan.main(
         nv_sig,
-        wavelength_start_nm=795.5,
-        wavelength_stop_nm=815,
-        num_steps=50, #100step=0.495nm
-        num_reps=10e3,
-        num_runs=10, 
+        wavelength_start_nm=800,
+        wavelength_stop_nm=805,
+        num_steps=100, #100step=0.495nm
+        num_reps=5e3,
+        num_runs=2000, 
         uwave_ind=0,
         uwave_power_dbm=10.0,
-        probe_ns=100e3,
+        probe_ns=2e6,
         do_plot=True,
         shuffle=True,
         settle_s=0.3,
@@ -1335,7 +1335,8 @@ if __name__ == "__main__":
     # pixel_xy = [-0.324,0.28]  # candidate 1 z=5.673,ms=2.513,
     # pixel_xy = [-0.247,0.256] #previues coordinate
     # pixel_xy = [-0.1, 0.1]
-    pixel_xy = [-0.143, 0.061]  # Not align with magnetic field 04/28
+    pixel_xy = [-0.143, 0.077]  #Our NV 05/01
+    # pixel_xy = [-0.16, 0.061]  #Off Nv
 
     #region Params
     # return
@@ -1353,11 +1354,11 @@ if __name__ == "__main__":
             VirtualLaserKey.IMAGING: int(10e6),  # readout is in ns (5e6 = 5ms)
             VirtualLaserKey.SPIN_READOUT: int(610), #Pulsed: int(610) #CW=int(10e6),10ms # readout is in ns (5e6 = 5ms)
             VirtualLaserKey.SPIN_POL: 2000,
-            VirtualLaserKey.SINGLET_DRIVE: 100e3,  # placeholder
+            VirtualLaserKey.SINGLET_DRIVE: 500e3,  # placeholder
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 98 #6mW Green Power
+    nv_sig.expected_counts = 105 #6mW Green Power
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
@@ -1443,7 +1444,7 @@ if __name__ == "__main__":
         # endregion Stationary count
 
         # region Resonance, Pulse Seq., Singlet
-        do_tisapph_singlet_scan(nv_sig)
+        # do_tisapph_singlet_scan(nv_sig)
         # do_tisapph_delay_cal(nv_sig)
         # probe_ns = [2e3, 5e3, 10e3, 20e3, 50e3, 100e3]
         # for probe in probe_ns:
@@ -1479,7 +1480,7 @@ if __name__ == "__main__":
         # do_pulsed_re2.sonance_state(nv_sig, States.LOW)
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
         
-        # do_tisapph_singlet_scan(nv_sig)
+        do_tisapph_singlet_scan(nv_sig)
         # do_test_simple_spin_contrast(nv_sig)
 
         # probe_ns = [2e3, 5e3, 10e3, 20e3, 50e3, 100e3]
