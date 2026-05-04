@@ -37,7 +37,7 @@ def _vkey_from_arg(x):
 def get_seq(pulse_streamer, config, args):
     readout_delay_ns, exc_ns, detect_ns, laser_vkey_arg, laser_power = args
 
-    readout_delay_ns = _as_int64("recovery_delay_ns", readout_delay_ns)
+    readout_delay_ns = _as_int64("readout_delay_ns", readout_delay_ns)
     exc_ns = _as_int64("exc_ns", exc_ns)
     detect_ns = _as_int64("detect_ns", detect_ns)
     laser_vkey = _vkey_from_arg(laser_vkey_arg)
@@ -105,8 +105,8 @@ if __name__ == "__main__":
 
     cfg = common.get_config_dict()
 
-    # args = [recovery_delay_ns, exc_ns, detect_ns, laser_vkey, laser_power]
-    args = [500, 1000, 300, "SPIN_READOUT", None]
+    # args = [readout_delay_ns, exc_ns, detect_ns, laser_vkey, laser_power]
+    args = [0, 1000, 300, "SPIN_READOUT", None]
 
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])

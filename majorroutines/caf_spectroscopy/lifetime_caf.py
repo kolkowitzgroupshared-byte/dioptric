@@ -13,6 +13,7 @@ was used to take the measurement (2/20/2020)
 Created on Mon Nov 11 12:49:55 2019
 
 @author: agardill
+@
 """
 
 # Imports
@@ -276,7 +277,7 @@ def main(
     # Compute the centers of the bins
     bin_size_ns = calc_readout_time / num_bins  # ns
     bin_size_s = bin_size_ns / 1e9
-    binned_samples_kcps = binned_samples / bin_size_s / 1e3 / num_reps / num_runs
+    binned_samples_kcps = binned_samples / bin_size_s / 1e4 / num_reps / num_runs
     bin_center_offset = bin_size_ns / 2
     bin_centers_ns = numpy.linspace(0, readout_time, num_bins) + bin_center_offset
 

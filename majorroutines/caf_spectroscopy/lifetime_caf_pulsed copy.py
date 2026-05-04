@@ -258,9 +258,9 @@ if __name__ == "__main__":
         sample_sig=sample_sig,
         apd_indices=[0],
         readout_times=[
-            0.5e3,
-            0.4e3,
             0,
+            1000,
+            300,
         ],  # Note the added 0 here for delay, or just leave as [0.5e3, 0.4e3] to let it default!
         filter_pos=[2, 2],
         num_reps=100000,
