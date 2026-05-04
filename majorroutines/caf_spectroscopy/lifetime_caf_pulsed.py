@@ -1,12 +1,4 @@
-# double_lifetime_recovery_main.py
-#
-# Sweeps the dark recovery delay between two lifetime readouts:
-#   pulse1 -> readout1 -> dark(swept) -> pulse2 -> readout2
-#
-# Reads tag stream, builds lifetime histograms for both readouts,
-# and fits:
-#   1) lifetime decay in each readout
-#   2) recovery ratio vs dark delay
+# Need to find a way to check this... change plotting???
 
 import time
 
