@@ -1,4 +1,10 @@
-import os
+# -*- coding: utf-8 -*-
+"""
+fill this out!
+
+@author:alyssa-matthews
+"""
+
 import time
 
 import matplotlib.pyplot as plt
@@ -85,9 +91,9 @@ def main(
         slider_1_pos, slider_3_pos = None, None
 
     # Extract timings and handle the readout delay (expected by the sequence file)
-    readout_time = int(readout_times[0])  # detect_ns
+    readout_delay = int(readout_times[0])
     pulse_time = int(readout_times[1])  # exc_ns
-    readout_delay = int(readout_times[2]) if len(readout_times) > 2 else 0
+    readout_time = int(readout_times[2]) if len(readout_times) > 2 else 0
 
     # --- Sequence Loading ---
     laser_vkey = "SPIN_READOUT"
@@ -179,6 +185,7 @@ def main(
 
         # Calculate kcps based on the total reps gathered so far
         total_reps_so_far = num_reps * (run_ind + 1)
+        # total_reps_so_far = num_reps / num_runs
         binned_samples_kcps = binned_samples / bin_size_s / 1e3 / total_reps_so_far
 
         bin_center_offset = bin_size_ns / 2
@@ -257,14 +264,10 @@ if __name__ == "__main__":
     main(
         sample_sig=sample_sig,
         apd_indices=[0],
-        readout_times=[
-            0,
-            1000,
-            300,
-        ],  # Note the added 0 here for delay, or just leave as [0.5e3, 0.4e3] to let it default!
+        readout_times=[0, 200, 200],  # readout delay, excitation, readout time
         filter_pos=[2, 2],
         num_reps=100000,
-        num_runs=15,
+        num_runs=1,
         num_bins=2000,
         laser_power=0.1e-3,
         seq_file="lifetime_caf_single_pulse.py",

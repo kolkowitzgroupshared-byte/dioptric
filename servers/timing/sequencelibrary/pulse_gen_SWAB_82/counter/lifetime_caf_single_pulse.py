@@ -105,8 +105,8 @@ if __name__ == "__main__":
 
     cfg = common.get_config_dict()
 
-    # args = [readout_delay_ns, exc_ns, detect_ns, laser_vkey, laser_power]
-    args = [0, 1000, 300, "SPIN_READOUT", None]
+    # args = [exc_ns, detect_ns, readout_delay_ns, laser_vkey, laser_power]
+    args = [1000, 300, 0, "SPIN_READOUT", None]
 
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])

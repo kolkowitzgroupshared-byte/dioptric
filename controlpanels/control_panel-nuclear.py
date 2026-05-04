@@ -22,6 +22,7 @@ from majorroutines.caf_spectroscopy import (
     double_lifetime_recovery,
     laser_char,
     lifetime_caf,
+    lifetime_caf_pulsed_copy,
     sideillum_resonance,
     single_lifetime,
     singlet_search,
@@ -147,6 +148,25 @@ def do_th_lifetime_measurement(caf_sig):
 
     # LOW HIGH HIGH LOW ... LOW HIGH HIGH LOW ... LOW HIGH HIGH LOW
 
+    return
+
+
+def do_lifetime_caf_pulsed_copy(th_sig):
+    lifetime_caf_pulsed_copy.main(
+        sample_sig=th_sig,
+        apd_indices=[0],
+        readout_times=[
+            0,
+            1000,
+            300,
+        ],  # Note the added 0 here for delay, or just leave as [0.5e3, 0.4e3] to let it default!
+        filter_pos=[2, 2],
+        num_reps=100000,
+        num_runs=1,
+        num_bins=2000,
+        laser_power=0.1e-3,
+        seq_file="lifetime_caf_single_pulse.py",
+    )
     return
 
 
@@ -553,7 +573,8 @@ if __name__ == "__main__":
         # ^leave the comma at the end or it will complain
         # do_stationary_count(th_sig, disable_opt=True)
         # do_lifetime_measurement(th_sig)
-        do_th_lifetime_measurement(th_sig)
+        do_lifetime_caf_pulsed_copy(th_sig)
+        # do_th_lifetime_measurement(th_sig)
         # do_awg_test()
         # do_resonance(th_sig)
         # do_stationary_count(th_sig)
