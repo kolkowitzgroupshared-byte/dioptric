@@ -1364,12 +1364,12 @@ def do_opx_constant_ac():
     # )
     # opx.constant_ac([1])  # Just laser
     # Green
-    # opx.constant_ac(
-    #     [4],  # Digital channels
-    #     [3, 4],  # Analog channels
-    #     [0.02, 0.02],  # Analog voltages
-    #     [107.0, 107.0],  # Analog frequencies
-    # )
+    opx.constant_ac(
+        [4],  # Digital channels
+        [3, 4],  # Analog channels
+        [0.15, 0.15],  # Analog voltages
+        [102.0, 102.0],  # Analog frequencies
+    )
     # Green + red
     # opx.constant_ac(
     #     [4, 1],  # Digital channels
@@ -1405,12 +1405,12 @@ def do_opx_constant_ac():
     #     [99, 99, 0],  # Analog frequencies
     # )
     # Red + green + Yellow
-    opx.constant_ac(
-        [4, 1],  # Digital channels1
-        [3, 4, 2, 6, 7],  # Analog channels
-        [0.08, 0.08, 0.08, 0.08, 0.35],  # Analog voltages
-        [102, 102, 67, 67, 0],  # Analog frequencies
-    )
+    # opx.constant_ac(
+    #     [4, 1],  # Digital channels1
+    #     [3, 4, 2, 6, 7],  # Analog channels
+    #     [0.08, 0.08, 0.08, 0.08, 0.35],  # Analog voltages
+    #     [102, 102, 67, 67, 0],  # Analog frequencies
+    # )
     input("Press enter to stop...")
     # sig_gen.uwave_off()
 
@@ -1869,7 +1869,7 @@ if __name__ == "__main__":
         # tb.init_safe_stop()
         # widefield.reset_all_drift()1
         # do_optimize_z(nv_sig)
-        # do_optimize_xyz(nv_sig)
+        # do_optimize_xyz(nv_sig) 
         # pos.set_xyz_on_nv(nv_sig)
         # piezo_voltage_to_pixel_calibration()
 
@@ -1912,7 +1912,7 @@ if __name__ == "__main__":
         # # --- Step 1: Start at (0, 0) ---
         # sample_coord = [0.0, 0.0]
         # z = estimate_z(*sample_coord)
-        # nv_sig.coords[CoordsKey.SAMPLE] = sample_coord
+        # nv_sig.coords[Coo/*rdsKey.SAMPLE] = sample_coord
         # nv_sig.coords[CoordsKey.Z] = z
         # print(f"[START] Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         # do_scanning_image_sample(nv_sig)
@@ -1929,7 +1929,7 @@ if __name__ == "__main__":
         #         print(f"Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         #         do_scanning_image_sample(nv_sig)
 
-        # do_opx_constant_ac()
+        do_opx_constant_ac()
         # do_opx_square_wave()
         # do_green_red_triplet_time_mux()
         
@@ -1986,7 +1986,7 @@ if __name__ == "__main__":
         # do_calibrate_iq_delay(nv_list)
         # do_rabi(nv_list)
         # do_power_rabi(nv_list)
-        do_resonance(nv_list)
+        # do_resonance(nv_list)
         # do_optimize_pol_duration(nv_list)
         # do_rabi(nv_list)
         # do_deer_hahn(nv_list)
