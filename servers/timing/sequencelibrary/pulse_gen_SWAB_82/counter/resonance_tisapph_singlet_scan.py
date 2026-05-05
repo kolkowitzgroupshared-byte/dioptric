@@ -415,7 +415,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
                 (int(transient), LOW),
                 (int(uwave_ns), LOW),
                 (int(transient), LOW),
-                (int(probe_ns), LOW),
+                (int(probe_ns),  LOW),
                 (int(readout_ns), HIGH),  # readout pulse
                 (int(meas_buffer), LOW),
             ])
@@ -445,7 +445,7 @@ def get_seq(pulse_streamer, config, args, num_reps=1):
                 (int(transient), LOW),
                 (int(uwave_ns), LOW),
                 (int(transient), LOW),
-                (int(probe_ns), LOW),
+                (int(probe_ns),  LOW),
                 (int(readout_ns), HIGH),
                 (int(meas_buffer), LOW),
             ])
@@ -459,7 +459,7 @@ if __name__ == "__main__":
     from utils import common
 
     cfg = common.get_config_dict()
-    args = [2000, 10000, 440, 0, "SPIN_POL", "SPIN_READOUT"]
+    args = [2000, 10000, 610, 0, "SPIN_POL", "SPIN_READOUT"]
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])
     seq.plot()

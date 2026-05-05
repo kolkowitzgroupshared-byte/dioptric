@@ -1,21 +1,14 @@
-# double_lifetime_recovery_main.py
-#
-# Sweeps the dark recovery delay between two lifetime readouts:
-#   pulse1 -> readout1 -> dark(swept) -> pulse2 -> readout2
-#
-# Reads tag stream, builds lifetime histograms for both readouts,
-# and fits:
-#   1) lifetime decay in each readout
-#   2) recovery ratio vs dark delay
+# Need to find a way to check this... change plotting???
 
 import time
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 from scipy.optimize import curve_fit
 
-from utils import tool_belt as tb
 from utils import data_manager as dm
 from utils import kplotlib as kpl
+from utils import tool_belt as tb
 
 
 def process_raw_buffer_two_gates(
@@ -38,7 +31,9 @@ def process_raw_buffer_two_gates(
     current_channels_array = np.array(current_channels)
 
     gate_open_inds = np.nonzero(current_channels_array == gate_open_channel)[0].tolist()
-    gate_close_inds = np.nonzero(current_channels_array == gate_close_channel)[0].tolist()
+    gate_close_inds = np.nonzero(current_channels_array == gate_close_channel)[
+        0
+    ].tolist()
 
     num_closed_samples = min(len(gate_open_inds), len(gate_close_inds))
 
@@ -197,87 +192,20 @@ def fit_recovery_delay(delay_ns_list, ratio_mean, ratio_ste=None):
         return None
 
 
-def simulate_double_lifetime_data(
-    recovery_delay_ns_list,
-    detect_ns,
-    num_bins,
-    num_reps,
-    num_runs,
-    tau_lifetime_ns=300.0,
-    tau_meta_ns=8000.0,
-    metastable_loss_frac=0.35,
-    amp_counts_per_rep=15.0,
-    bg_counts_per_rep_per_bin=0.01,
-    rng_seed=1234,
-):
-    """
-    Simulator:
-      - readout 1 has fixed lifetime decay
-      - readout 2 has same decay shape but lower amplitude at short recovery delay
-      - amplitude recovers with dark delay if metastable state empties
-    """
-    rng = np.random.default_rng(rng_seed)
-
-    recovery_delay_ns_list = np.asarray(recovery_delay_ns_list, dtype=float)
-    bin_size_ns = float(detect_ns) / float(num_bins)
-    bin_centers_ns = (
-        np.linspace(0, float(detect_ns), int(num_bins), endpoint=False)
-        + 0.5 * bin_size_ns
-    )
-
-    hist1 = np.zeros((len(recovery_delay_ns_list), num_bins), dtype=float)
-    hist2 = np.zeros((len(recovery_delay_ns_list), num_bins), dtype=float)
-
-    int_counts1 = np.zeros((num_runs, len(recovery_delay_ns_list)), dtype=float)
-    int_counts2 = np.zeros((num_runs, len(recovery_delay_ns_list)), dtype=float)
-
-    base_shape = np.exp(-bin_centers_ns / float(tau_lifetime_ns))
-    base_shape /= np.sum(base_shape)
-
-    for run_ind in range(num_runs):
-        for step_ind, delay_ns in enumerate(recovery_delay_ns_list):
-            amp1 = float(amp_counts_per_rep) * float(num_reps)
-            recovery_factor = 1.0 - float(metastable_loss_frac) * np.exp(
-                -float(delay_ns) / float(tau_meta_ns)
-            )
-            amp2 = amp1 * recovery_factor
-
-            mu1 = amp1 * base_shape + float(num_reps) * float(bg_counts_per_rep_per_bin)
-            mu2 = amp2 * base_shape + float(num_reps) * float(bg_counts_per_rep_per_bin)
-
-            step_hist1 = rng.poisson(mu1)
-            step_hist2 = rng.poisson(mu2)
-
-            hist1[step_ind] += step_hist1
-            hist2[step_ind] += step_hist2
-
-            int_counts1[run_ind, step_ind] = np.sum(step_hist1)
-            int_counts2[run_ind, step_ind] = np.sum(step_hist2)
-
-    return {
-        "bin_centers_ns": bin_centers_ns,
-        "hist_readout_1": hist1,
-        "hist_readout_2": hist2,
-        "int_counts_1": int_counts1,
-        "int_counts_2": int_counts2,
-    }
-
-
 def main(
     sample_sig,
     num_reps,
     num_runs,
-    min_recovery_delay_ns,
-    max_recovery_delay_ns,
+    min_readout_delay_ns,
+    max_readout_delay_ns,
     num_steps,
     exc_ns,
     detect_ns,
     num_bins=200,
     laser_power=None,
     laser_vkey="SPIN_READOUT",
-    do_plot=True,
+    # do_plot=True,
     do_save=True,
-    simulate_only=False,
     fit_lifetime_start_ns=None,
     fit_lifetime_end_ns=None,
 ):
@@ -285,8 +213,8 @@ def main(
     kpl.init_kplotlib()
 
     recovery_delay_ns_list = np.linspace(
-        int(min_recovery_delay_ns),
-        int(max_recovery_delay_ns),
+        int(min_readout_delay_ns),
+        int(max_readout_delay_ns),
         int(num_steps),
     )
     recovery_delay_ns_list = np.unique(np.rint(recovery_delay_ns_list).astype(int))
@@ -301,170 +229,154 @@ def main(
 
     bin_centers_ns = None
 
-    if do_plot:
-        fig, axes = plt.subplots(3, 1, figsize=(9, 12), constrained_layout=True)
+    # if do_plot:
+    #     fig, axes = plt.subplots(3, 1, figsize=(9, 12), constrained_layout=True)
 
-        ax_counts = axes[0]
-        ax_ratio = axes[1]
-        ax_lifetime = axes[2]
+    #     ax_counts = axes[0]
+    #     ax_ratio = axes[1]
+    #     ax_lifetime = axes[2]
 
-        ax_counts.set_ylabel("Integrated counts")
-        ax_counts.set_title("Double lifetime recovery")
+    #     ax_counts.set_ylabel("Integrated counts")
+    #     ax_counts.set_title("Double lifetime recovery")
 
-        ax_ratio.set_xlabel("Dark recovery delay (ns)")
-        ax_ratio.set_ylabel("Readout2 / Readout1")
+    #     ax_ratio.set_xlabel("Dark recovery delay (ns)")
+    #     ax_ratio.set_ylabel("Readout2 / Readout1")
 
-        ax_lifetime.set_xlabel("Time after excitation (ns)")
-        ax_lifetime.set_ylabel("Counts")
+    #     ax_lifetime.set_xlabel("Time after excitation (ns)")
+    #     ax_lifetime.set_ylabel("Counts")
 
-        (line_1,) = ax_counts.plot([], [], "o-", label="readout 1")
-        (line_2,) = ax_counts.plot([], [], "o-", label="readout 2")
-        ax_counts.legend()
+    #     (line_1,) = ax_counts.plot([], [], "o-", label="readout 1")
+    #     (line_2,) = ax_counts.plot([], [], "o-", label="readout 2")
+    #     ax_counts.legend()
 
-        (line_ratio,) = ax_ratio.plot([], [], "o-", label="ratio")
-        ax_ratio.legend()
-    else:
-        fig = None
-        ax_counts = None
-        ax_ratio = None
-        ax_lifetime = None
-        line_1 = None
-        line_2 = None
-        line_ratio = None
+    #     (line_ratio,) = ax_ratio.plot([], [], "o-", label="ratio")
+    #     ax_ratio.legend()
+    # else:
+    #     fig = None
+    #     ax_counts = None
+    #     ax_ratio = None
+    #     ax_lifetime = None
+    #     line_1 = None
+    #     line_2 = None
+    #     line_ratio = None
 
-    if simulate_only:
-        sim = simulate_double_lifetime_data(
-            recovery_delay_ns_list=recovery_delay_ns_list,
-            detect_ns=detect_ns,
-            num_bins=num_bins,
-            num_reps=num_reps,
-            num_runs=num_runs,
-        )
-        hist_readout_1 = sim["hist_readout_1"]
-        hist_readout_2 = sim["hist_readout_2"]
-        int_counts_1 = sim["int_counts_1"]
-        int_counts_2 = sim["int_counts_2"]
-        bin_centers_ns = sim["bin_centers_ns"]
-    else:
-        pulsegen_server = tb.get_server_pulse_streamer()
-        counter_server = tb.get_server_counter()
-        seq_file = "double_lifetime_recovery.py"
+    pulsegen_server = tb.get_server_pulse_streamer()
+    counter_server = tb.get_server_counter()
+    seq_file = "lifetime_caf_single_pulse.py"
 
-        tb.init_safe_stop()
-        start_time = time.time()
+    tb.init_safe_stop()
+    start_time = time.time()
 
-        for run_ind in range(num_runs):
-            print(f"Run {run_ind + 1}/{num_runs}")
+    for run_ind in range(num_runs):
+        print(f"Run {run_ind + 1}/{num_runs}")
 
+        if tb.safe_stop():
+            break
+
+        for step_ind, readout_delay_ns in enumerate(recovery_delay_ns_list):
             if tb.safe_stop():
                 break
 
-            for step_ind, recovery_delay_ns in enumerate(recovery_delay_ns_list):
-                if tb.safe_stop():
-                    break
+            print(
+                f"  step {step_ind + 1}/{len(recovery_delay_ns_list)} | "
+                f"recovery_delay = {int(readout_delay_ns)} ns"
+            )
+
+            seq_args = [
+                int(readout_delay_ns),
+                int(exc_ns),
+                int(detect_ns),
+                laser_vkey,
+                laser_power,
+            ]
+            seq_args_string = tb.encode_seq_args(seq_args)
+            ret_vals = pulsegen_server.stream_load(seq_file, seq_args_string)
+
+            if run_ind == 0 and step_ind == 0:
+                print(f"  Sequence period: {ret_vals[0]} ns")
+
+            counter_server.start_tag_stream()
+            try:
+                pulsegen_server.stream_start(int(num_reps))
+
+                channel_mapping = counter_server.get_channel_mapping()
+                gate_open_channel = channel_mapping[1]
+                gate_close_channel = channel_mapping[2]
+
+                current_tags = []
+                current_channels = []
+
+                gate_counter = 0
+                num_processed_gates = 0
+                target_num_gates = 2 * int(num_reps)
+
+                readout1_tags = []
+                readout2_tags = []
+
+                while num_processed_gates < target_num_gates:
+                    if tb.safe_stop():
+                        break
+
+                    new_tags, new_channels = counter_server.read_tag_stream()
+                    new_tags = np.array(new_tags, dtype=np.int64)
+
+                    g0_tags, g1_tags, num_new_gates, gate_counter = (
+                        process_raw_buffer_two_gates(
+                            new_tags=new_tags,
+                            new_channels=new_channels,
+                            current_tags=current_tags,
+                            current_channels=current_channels,
+                            gate_open_channel=gate_open_channel,
+                            gate_close_channel=gate_close_channel,
+                            gate_counter=gate_counter,
+                        )
+                    )
+
+                    readout1_tags.extend(g0_tags)
+                    readout2_tags.extend(g1_tags)
+                    num_processed_gates += num_new_gates
+
+                step_hist_1, bin_centers_ns = _hist_from_tags(
+                    readout1_tags, detect_ns, num_bins
+                )
+                step_hist_2, _ = _hist_from_tags(readout2_tags, detect_ns, num_bins)
+
+                hist_readout_1[step_ind] += step_hist_1
+                hist_readout_2[step_ind] += step_hist_2
+
+                int_counts_1[run_ind, step_ind] = np.sum(step_hist_1)
+                int_counts_2[run_ind, step_ind] = np.sum(step_hist_2)
 
                 print(
-                    f"  step {step_ind + 1}/{len(recovery_delay_ns_list)} | "
-                    f"recovery_delay = {int(recovery_delay_ns)} ns"
+                    f"    readout1={int(int_counts_1[run_ind, step_ind])}, "
+                    f"readout2={int(int_counts_2[run_ind, step_ind])}"
                 )
 
-                seq_args = [
-                    int(recovery_delay_ns),
-                    int(exc_ns),
-                    int(detect_ns),
-                    laser_vkey,
-                    laser_power,
-                ]
-                seq_args_string = tb.encode_seq_args(seq_args)
-                ret_vals = pulsegen_server.stream_load(seq_file, seq_args_string)
-
-                if run_ind == 0 and step_ind == 0:
-                    print(f"  Sequence period: {ret_vals[0]} ns")
-
-                counter_server.start_tag_stream()
+            finally:
                 try:
-                    pulsegen_server.stream_start(int(num_reps))
+                    counter_server.stop_tag_stream()
+                except Exception:
+                    pass
 
-                    channel_mapping = counter_server.get_channel_mapping()
-                    gate_open_channel = channel_mapping[1]
-                    gate_close_channel = channel_mapping[2]
+            # if do_plot:
+            #     mean_1 = np.nanmean(int_counts_1, axis=0)
+            #     mean_2 = np.nanmean(int_counts_2, axis=0)
+            #     ratio = np.divide(
+            #         mean_2,
+            #         mean_1,
+            #         out=np.full_like(mean_2, np.nan),
+            #         where=mean_1 > 0,
+            #     )
 
-                    current_tags = []
-                    current_channels = []
+            #     line_1.set_data(recovery_delay_ns_list, mean_1)
+            #     line_2.set_data(recovery_delay_ns_list, mean_2)
+            #     line_ratio.set_data(recovery_delay_ns_list, ratio)
 
-                    gate_counter = 0
-                    num_processed_gates = 0
-                    target_num_gates = 2 * int(num_reps)
-
-                    readout1_tags = []
-                    readout2_tags = []
-
-                    while num_processed_gates < target_num_gates:
-                        if tb.safe_stop():
-                            break
-
-                        new_tags, new_channels = counter_server.read_tag_stream()
-                        new_tags = np.array(new_tags, dtype=np.int64)
-
-                        g0_tags, g1_tags, num_new_gates, gate_counter = (
-                            process_raw_buffer_two_gates(
-                                new_tags=new_tags,
-                                new_channels=new_channels,
-                                current_tags=current_tags,
-                                current_channels=current_channels,
-                                gate_open_channel=gate_open_channel,
-                                gate_close_channel=gate_close_channel,
-                                gate_counter=gate_counter,
-                            )
-                        )
-
-                        readout1_tags.extend(g0_tags)
-                        readout2_tags.extend(g1_tags)
-                        num_processed_gates += num_new_gates
-
-                    step_hist_1, bin_centers_ns = _hist_from_tags(
-                        readout1_tags, detect_ns, num_bins
-                    )
-                    step_hist_2, _ = _hist_from_tags(
-                        readout2_tags, detect_ns, num_bins
-                    )
-
-                    hist_readout_1[step_ind] += step_hist_1
-                    hist_readout_2[step_ind] += step_hist_2
-
-                    int_counts_1[run_ind, step_ind] = np.sum(step_hist_1)
-                    int_counts_2[run_ind, step_ind] = np.sum(step_hist_2)
-
-                    print(
-                        f"    readout1={int(int_counts_1[run_ind, step_ind])}, "
-                        f"readout2={int(int_counts_2[run_ind, step_ind])}"
-                    )
-
-                finally:
-                    try:
-                        counter_server.stop_tag_stream()
-                    except Exception:
-                        pass
-
-                if do_plot:
-                    mean_1 = np.nanmean(int_counts_1, axis=0)
-                    mean_2 = np.nanmean(int_counts_2, axis=0)
-                    ratio = np.divide(
-                        mean_2,
-                        mean_1,
-                        out=np.full_like(mean_2, np.nan),
-                        where=mean_1 > 0,
-                    )
-
-                    line_1.set_data(recovery_delay_ns_list, mean_1)
-                    line_2.set_data(recovery_delay_ns_list, mean_2)
-                    line_ratio.set_data(recovery_delay_ns_list, ratio)
-
-                    ax_counts.relim()
-                    ax_counts.autoscale_view()
-                    ax_ratio.relim()
-                    ax_ratio.autoscale_view()
-                    plt.pause(0.01)
+            #     ax_counts.relim()
+            #     ax_counts.autoscale_view()
+            #     ax_ratio.relim()
+            #     ax_ratio.autoscale_view()
+            #     plt.pause(0.01)
 
         print(f"Elapsed time: {time.time() - start_time:.2f} s")
 
@@ -507,60 +419,62 @@ def main(
         ratio_ste=ratio_ste,
     )
 
-    if do_plot and bin_centers_ns is not None:
-        ax_lifetime.clear()
-        ax_lifetime.plot(
-            bin_centers_ns,
-            hist_readout_1[best_ind],
-            "o-",
-            ms=3,
-            label=f"readout 1 @ delay={recovery_delay_ns_list[best_ind]} ns",
-        )
-        ax_lifetime.plot(
-            bin_centers_ns,
-            hist_readout_2[best_ind],
-            "o-",
-            ms=3,
-            label=f"readout 2 @ delay={recovery_delay_ns_list[best_ind]} ns",
-        )
+    # if do_plot and bin_centers_ns is not None:
+    #     ax_lifetime.clear()
+    #     ax_lifetime.plot(
+    #         bin_centers_ns,
+    #         hist_readout_1[best_ind],
+    #         "o-",
+    #         ms=3,
+    #         label=f"readout 1 @ delay={recovery_delay_ns_list[best_ind]} ns",
+    #     )
+    #     ax_lifetime.plot(
+    #         bin_centers_ns,
+    #         hist_readout_2[best_ind],
+    #         "o-",
+    #         ms=3,
+    #         label=f"readout 2 @ delay={recovery_delay_ns_list[best_ind]} ns",
+    #     )
 
-        if lifetime_fit_1 is not None:
-            xfine = np.linspace(np.min(bin_centers_ns), np.max(bin_centers_ns), 400)
-            ax_lifetime.plot(
-                xfine,
-                exp_decay_with_bg(xfine, *lifetime_fit_1["popt"]),
-                "-",
-                label=f"fit1 tau={lifetime_fit_1['popt'][1]:.2f} ns",
-            )
-        if lifetime_fit_2 is not None:
-            xfine = np.linspace(np.min(bin_centers_ns), np.max(bin_centers_ns), 400)
-            ax_lifetime.plot(
-                xfine,
-                exp_decay_with_bg(xfine, *lifetime_fit_2["popt"]),
-                "-",
-                label=f"fit2 tau={lifetime_fit_2['popt'][1]:.2f} ns",
-            )
-        ax_lifetime.legend()
+    #     if lifetime_fit_1 is not None:
+    #         xfine = np.linspace(np.min(bin_centers_ns), np.max(bin_centers_ns), 400)
+    #         ax_lifetime.plot(
+    #             xfine,
+    #             exp_decay_with_bg(xfine, *lifetime_fit_1["popt"]),
+    #             "-",
+    #             label=f"fit1 tau={lifetime_fit_1['popt'][1]:.2f} ns",
+    #         )
+    #     if lifetime_fit_2 is not None:
+    #         xfine = np.linspace(np.min(bin_centers_ns), np.max(bin_centers_ns), 400)
+    #         ax_lifetime.plot(
+    #             xfine,
+    #             exp_decay_with_bg(xfine, *lifetime_fit_2["popt"]),
+    #             "-",
+    #             label=f"fit2 tau={lifetime_fit_2['popt'][1]:.2f} ns",
+    #         )
+    #     ax_lifetime.legend()
 
-        if recovery_fit is not None:
-            xfine = np.linspace(
-                np.min(recovery_delay_ns_list),
-                np.max(recovery_delay_ns_list),
-                500,
-            )
-            ax_ratio.plot(
-                xfine,
-                recovery_model(xfine, *recovery_fit["popt"]),
-                "-",
-                label=f"tau_meta={recovery_fit['popt'][2]:.2f} ns",
-            )
-            ax_ratio.legend()
+    #     if recovery_fit is not None:
+    #         xfine = np.linspace(
+    #             np.min(recovery_delay_ns_list),
+    #             np.max(recovery_delay_ns_list),
+    #             500,
+    #         )
+    #         ax_ratio.plot(
+    #             xfine,
+    #             recovery_model(xfine, *recovery_fit["popt"]),
+    #             "-",
+    #             label=f"tau_meta={recovery_fit['popt'][2]:.2f} ns",
+    #         )
+    #         ax_ratio.legend()
 
-        plt.pause(0.01)
+    #     plt.pause(0.01)
 
     proc_data = {
         "recovery_delay_ns_list": recovery_delay_ns_list.tolist(),
-        "bin_centers_ns": bin_centers_ns.tolist() if bin_centers_ns is not None else None,
+        "bin_centers_ns": bin_centers_ns.tolist()
+        if bin_centers_ns is not None
+        else None,
         "hist_readout_1": hist_readout_1.tolist(),
         "hist_readout_2": hist_readout_2.tolist(),
         "mean_counts_1": mean_counts_1.tolist(),
@@ -573,7 +487,9 @@ def main(
         "ste_kcps_2": ste_kcps_2.tolist(),
         "ratio_mean": ratio_mean.tolist(),
         "ratio_ste": ratio_ste.tolist(),
-        "lifetime_fit_1": None if lifetime_fit_1 is None else {
+        "lifetime_fit_1": None
+        if lifetime_fit_1 is None
+        else {
             "A": float(lifetime_fit_1["popt"][0]),
             "tau_ns": float(lifetime_fit_1["popt"][1]),
             "C": float(lifetime_fit_1["popt"][2]),
@@ -581,7 +497,9 @@ def main(
             "tau_ns_err": float(lifetime_fit_1["perr"][1]),
             "C_err": float(lifetime_fit_1["perr"][2]),
         },
-        "lifetime_fit_2": None if lifetime_fit_2 is None else {
+        "lifetime_fit_2": None
+        if lifetime_fit_2 is None
+        else {
             "A": float(lifetime_fit_2["popt"][0]),
             "tau_ns": float(lifetime_fit_2["popt"][1]),
             "C": float(lifetime_fit_2["popt"][2]),
@@ -589,7 +507,9 @@ def main(
             "tau_ns_err": float(lifetime_fit_2["perr"][1]),
             "C_err": float(lifetime_fit_2["perr"][2]),
         },
-        "recovery_fit": None if recovery_fit is None else {
+        "recovery_fit": None
+        if recovery_fit is None
+        else {
             "R_inf": float(recovery_fit["popt"][0]),
             "A": float(recovery_fit["popt"][1]),
             "tau_meta_ns": float(recovery_fit["popt"][2]),
@@ -622,8 +542,8 @@ def main(
         )
         dm.save_raw_data(raw_data, file_path)
         dm.save_raw_data(proc_data, file_path + "_proc")
-        if fig is not None:
-            dm.save_figure(fig, file_path)
+        # if fig is not None:
+        #     dm.save_figure(fig, file_path)
         print(f"Saved data to {file_path}")
 
     if proc_data["recovery_fit"] is not None:
@@ -638,6 +558,7 @@ def main(
 
 
 if __name__ == "__main__":
+
     class Dummy:
         name = "caf_test"
 

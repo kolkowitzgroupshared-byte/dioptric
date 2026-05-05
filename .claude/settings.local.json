@@ -16,7 +16,8 @@
       "Bash(python -c \"import ast; ast.parse\\(open\\('majorroutines/confocal/confocal_optimize_green_readout.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\('majorroutines/confocal/confocal_apd_gate_overlap_scan.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
       "Bash(python -c \"import ast; [ast.parse\\(open\\(p\\).read\\(\\)\\) for p in ['majorroutines/confocal/confocal_apd_gate_overlap_scan.py', 'controlpanels/control_panel_cryo.py']]; print\\('OK'\\)\")",
-      "Bash(python -c \"import ast; ast.parse\\(open\\('controlpanels/control_panel_cryo.py'\\).read\\(\\)\\); print\\('OK'\\)\")"
+      "Bash(python -c \"import ast; ast.parse\\(open\\('controlpanels/control_panel_cryo.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python *)"
     ]
   }
 }

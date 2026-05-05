@@ -47,8 +47,8 @@ def get_seq(pulse_streamer, config, args):
     seq.setDigital(do_daq_gate, gate_train)
 
     # Laser train: on continuously during both measurements
-    # laser_train = [(int(period), HIGH)]
-    # tb.process_laser_seq(seq, readout_vkey, laser_train)
+    laser_train = [(int(period), HIGH)]
+    tb.process_laser_seq(seq, readout_vkey, laser_train)
 
     tisapph_train = [(int(period), HIGH)]
     seq.setDigital(do_tisapph_aom, tisapph_train)

@@ -235,6 +235,7 @@ def main(
             sig_gen.uwave_off()
         except Exception:
             pass
+        vsg["pi_pulse"] = orig_pi_pulse
         tb.reset_cfm()
 
     # -------------------- Final computation --------------------

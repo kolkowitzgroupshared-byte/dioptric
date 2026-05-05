@@ -11,11 +11,13 @@ This is the standard figure of merit for optimizing green power: raw counts
 rise with power, but shot noise grows with them and charge-state mixing eats
 into contrast at high power, so SNR peaks at an intermediate power.
 
-User-facing power is in mW; conversion to W is done internally before calling
-the laser server's set_power.
+User-facing power is in mW. The laser server's set_modulation_power command
+also takes mW (the Cobolt 520 firmware on this rig uses milliwatts on the
+wire), so no unit conversion is needed.
 
 @author: chemistatcode
 Date: April 15th 2026
+ 
 """
 
 import time
@@ -56,8 +58,10 @@ def main(
     uwave_power_dbm=None,
     pi_pulse_ns=None,
     laser_name="laser_COBO_520",
-    settle_time=0.2,
+    settle_time=1.0,
     optimize_between_runs=False,
+    optimize_every_n_powers=None,
+    randomize_power_order=False,
     do_plot=True,
 ):
     cxn = common.labrad_connect()
@@ -75,6 +79,8 @@ def main(
         laser_name,
         settle_time,
         optimize_between_runs,
+        optimize_every_n_powers,
+        randomize_power_order,
         do_plot,
     )
 
@@ -93,10 +99,13 @@ def main_with_cxn(
     laser_name,
     settle_time,
     optimize_between_runs,
+    optimize_every_n_powers,
+    randomize_power_order,
     do_plot,
 ):
     # -------------------- Setup --------------------
-    tb.reset_cfm()
+    # Don't reset_cfm at entry — match confocal_optimize_green_readout.py so the
+    # green-laser feedthrough state is the same as the comparison routine.
     kpl.init_kplotlib()
 
     pulsegen_server = tb.get_server_pulse_streamer()
@@ -121,9 +130,16 @@ def main_with_cxn(
         uwave_power_dbm = float(uwave_power_dbm)
 
     laser_server = getattr(cxn, laser_name)
-    orig_power_w = None
+    # Modulation-power setpoint: the level the laser emits while its modulation
+    # TTL is HIGH. In digital-modulation mode (where this routine runs because
+    # the sequence gates the laser via TTL for spin readout), the CW `p`
+    # setpoint has no effect on emission — `slmp` does. The Cobolt 520 firmware
+    # on this rig takes mW on the wire, so the values we pass in are already
+    # in mW (matching the routine's `powers_mW` argument). Capture the original
+    # value so we can restore it on exit.
+    orig_power_mW = None
     try:
-        orig_power_w = float(laser_server.get_power())
+        orig_power_mW = float(laser_server.get_modulation_power())
     except Exception:
         pass
 
@@ -135,7 +151,6 @@ def main_with_cxn(
 
     # -------------------- Normalize inputs --------------------
     powers_mW = np.asarray(powers_mW, dtype=float).ravel()
-    powers_W = powers_mW * 1e-3
     num_runs = int(num_runs)
 
     if readout_times_ns is None:
@@ -152,6 +167,8 @@ def main_with_cxn(
     # Per-run storage — shape (num_runs, n_readouts, n_powers)
     ref_counts_all = np.full((num_runs, n_readouts, n_powers), np.nan, dtype=float)
     sig_counts_all = np.full((num_runs, n_readouts, n_powers), np.nan, dtype=float)
+
+    rng = np.random.default_rng()
 
     # Final summary arrays
     ref_totals = np.full((n_readouts, n_powers), np.nan, dtype=float)
@@ -222,12 +239,39 @@ def main_with_cxn(
                     seq_args_string = tb.encode_seq_args(seq_args)
                     pulsegen_server.stream_load(SEQ_NAME, seq_args_string)
 
-                    for ip, p_w in enumerate(powers_W):
+                    if randomize_power_order:
+                        order = rng.permutation(n_powers)
+                    else:
+                        order = np.arange(n_powers)
+
+                    for step, ip in enumerate(order):
                         if tb.safe_stop():
                             break
+                        ip = int(ip)
+                        p_mW = float(powers_mW[ip])
 
-                        laser_server.set_power(float(p_w))
-                        time.sleep(settle_time)
+                        if (
+                            optimize_between_runs
+                            and optimize_every_n_powers is not None
+                            and step > 0
+                            and (step % int(optimize_every_n_powers) == 0)
+                        ):
+                            try:
+                                counter_server.stop_tag_stream()
+                            except Exception:
+                                pass
+                            try:
+                                targeting.compensate_for_drift(nv_sig, no_crash=True)
+                            except Exception:
+                                traceback.print_exc()
+                            sig_gen.set_amp(uwave_power_dbm)
+                            sig_gen.set_freq(uwave_freq_ghz)
+                            sig_gen.uwave_on()
+                            counter_server.start_tag_stream()
+                            pulsegen_server.stream_load(SEQ_NAME, seq_args_string)
+
+                        laser_server.set_modulation_power(p_mW)
+                        time.sleep(float(settle_time))
 
                         counter_server.clear_buffer()
                         pulsegen_server.stream_start(int(num_reps))
@@ -290,8 +334,8 @@ def main_with_cxn(
         except Exception:
             pass
         try:
-            restore = orig_power_w if orig_power_w is not None else 0.0
-            laser_server.set_power(float(restore))
+            restore = orig_power_mW if orig_power_mW is not None else 0.0
+            laser_server.set_modulation_power(float(restore))
         except Exception:
             traceback.print_exc()
         vsg["pi_pulse"] = orig_pi_pulse
@@ -350,6 +394,10 @@ def main_with_cxn(
         "sequence": SEQ_NAME,
         "settle_time": settle_time,
         "optimize_between_runs": bool(optimize_between_runs),
+        "optimize_every_n_powers": (
+            None if optimize_every_n_powers is None else int(optimize_every_n_powers)
+        ),
+        "randomize_power_order": bool(randomize_power_order),
     }
     dm.save_raw_data(raw_data, file_path)
     if fig is not None:
