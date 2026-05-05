@@ -62,7 +62,6 @@ fig_adev, ax_adev = plt.subplots(figsize=(7, 5)) if PLOT_ADEV else (None, None)
 timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 print(f"Current Time Stamp: {timestamp}")
 
-
 # ----------------------------
 # Helpers
 # ----------------------------

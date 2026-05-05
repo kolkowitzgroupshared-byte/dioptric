@@ -1,13 +1,12 @@
-# double_lifetime_recovery.py
+# laser is continuously on for this experiment; want to watch counts decay by varying delay between laser on
+# and readout
 #
-# Sequence:
-#   excitation pulse 1
-#   lifetime readout window 1 (laser OFF, APD gate ON)
-#   dark recovery delay Δ (swept)
-#   excitation pulse 2
-#   lifetime readout window 2 (laser OFF, APD gate ON)
-#
-# args = [recovery_delay_ns, exc_ns, detect_ns, laser_vkey, laser_power]
+# sequence:
+#     front buffer - laser delay: laser turning on
+#     readout_delay: waiting on readout
+#     exc_det: readout and laser on
+#     meas_buffer: everything off
+
 
 import numpy as np
 from pulsestreamer import OutputState, Sequence
@@ -35,11 +34,10 @@ def _vkey_from_arg(x):
 
 
 def get_seq(pulse_streamer, config, args):
-    recovery_delay_ns, exc_ns, detect_ns, laser_vkey_arg, laser_power = args
+    readout_delay_ns, exc_det_ns, laser_vkey_arg, laser_power = args
 
-    recovery_delay_ns = _as_int64("recovery_delay_ns", recovery_delay_ns)
-    exc_ns = _as_int64("exc_ns", exc_ns)
-    detect_ns = _as_int64("detect_ns", detect_ns)
+    readout_delay_ns = _as_int64("readout_delay_ns", readout_delay_ns)
+    exc_det_ns = _as_int64("exc_det_ns", exc_det_ns)
     laser_vkey = _vkey_from_arg(laser_vkey_arg)
 
     pulser_wiring = config["Wiring"]["PulseGen"]
@@ -55,15 +53,7 @@ def get_seq(pulse_streamer, config, args):
     meas_buffer = np.int64(1000)
     front_buffer = np.int64(laser_delay)
 
-    period = np.int64(
-        front_buffer
-        + exc_ns
-        + detect_ns
-        + recovery_delay_ns
-        + exc_ns
-        + detect_ns
-        + meas_buffer
-    )
+    period = np.int64(front_buffer + readout_delay_ns + exc_det_ns + meas_buffer)
 
     seq = Sequence()
 
@@ -77,23 +67,18 @@ def get_seq(pulse_streamer, config, args):
     # gate 0 -> readout 1
     # gate 1 -> readout 2
     apd_train = [
-        (int(front_buffer), LOW),
-        # pulse 1
-        (int(exc_ns), HIGH),
-        # # readout 1
-        # (int(detect_ns), HIGH),
-        # dark recovery
+        (int(front_buffer - laser_delay), LOW),
+        (int(readout_delay_ns), LOW),
+        (int(exc_det_ns), HIGH),
         (int(meas_buffer), LOW),
     ]
     seq.setDigital(do_apd_gate, apd_train)
 
     # Laser ON only for excitation pulses
     laser_train = [
-        (int(front_buffer), LOW),
-        # pulse 1
-        (int(exc_ns), HIGH),
-        # # readout 1
-        # (int(detect_ns), LOW),
+        (int(front_buffer - laser_delay), HIGH),
+        (int(readout_delay_ns), HIGH),
+        (int(exc_det_ns), HIGH),
         (int(meas_buffer), LOW),
     ]
     tb.process_laser_seq(seq, laser_vkey, laser_train)
@@ -107,8 +92,8 @@ if __name__ == "__main__":
 
     cfg = common.get_config_dict()
 
-    # args = [recovery_delay_ns, exc_ns, detect_ns, laser_vkey, laser_power]
-    args = [5000, 10000, 10000, "SPIN_READOUT", None]
+    # args = [readout_delay_ns, exc_det_ns, laser_vkey, laser_power]
+    args = [5000, 10000, "SPIN_READOUT", None]
 
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])
