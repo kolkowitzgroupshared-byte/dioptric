@@ -1330,12 +1330,12 @@ def do_opx_constant_ac():
     # opx.stream_start()
 
     # Yellow
-    # opx.constant_ac(
-    #     [],  # Digital channels
-    #     [7],  # Analog channels
-    #     [0.15],  # Analog voltages
-    #     [0],  # Analog frequencies
-    # )
+    opx.constant_ac(
+        [],  # Digital channels
+        [7],  # Analog channels
+        [0.15],  # Analog voltages
+        [0],  # Analog frequencies
+    )
     # opx.constant_ac([4])  # Just laser
     # Red
     # freqs = [65, 75, 85]
@@ -1364,12 +1364,12 @@ def do_opx_constant_ac():
     # )
     # opx.constant_ac([1])  # Just laser
     # Green
-    opx.constant_ac(
-        [4],  # Digital channels
-        [3, 4],  # Analog channels
-        [0.15, 0.15],  # Analog voltages
-        [102.0, 102.0],  # Analog frequencies
-    )
+    # opx.constant_ac(
+    #     [4],  # Digital channels
+    #     [3, 4],  # Analog channels
+    #     [0.15, 0.15],  # Analog voltages
+    #     [102.0, 102.0],  # Analog frequencies
+    # )
     # Green + red
     # opx.constant_ac(
     #     [4, 1],  # Digital channels
@@ -1691,8 +1691,8 @@ if __name__ == "__main__":
     # magnet_angle = 90
     date_str = "2026_02_20"
     sample_coords = [-0.75, 1.8]
-    # z_coord = -2.4
-    z_coord = -3.0
+    z_coord = -2.4
+    # z_coord = -3.0
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",
@@ -1737,19 +1737,19 @@ if __name__ == "__main__":
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
     pixel_coords_list =[
-        # [209.693, 202.035], 
+        [209.693, 202.035], 
         [355.855, 55.308], 
         [220.425, 359.764], 
         [25.893, 55.843],
         ]
     green_coords_list = [
-        # [101.132, 100.716],
+        [101.132, 100.716],
         [72.218, 124.96],
         [101.986, 72.343],
         [131.603, 130.079],
     ]
     red_coords_list = [
-        # [66.259, 65.255],
+        [66.259, 65.255],
         [41.505, 82.791],
         [68.562, 42.354],
         [89.161, 91.279],
