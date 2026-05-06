@@ -879,17 +879,17 @@ def do_optimize_transient(nv_sig):
     )
 
 
-def do_tisapph_singlet_scan(nv_sig,wavelength_start_nm=800,wavelength_stop_nm=805):
+def do_tisapph_singlet_scan(nv_sig,wavelength_start_nm=800,wavelength_stop_nm=820):
     resonance_tisapph_singlet_scan.main(
         nv_sig,
         wavelength_start_nm=wavelength_start_nm,
         wavelength_stop_nm=wavelength_stop_nm,
         num_steps=100, #100step=0.495nm
-        num_reps=5e3,
-        num_runs=2000, 
+        num_reps=10e3,
+        num_runs=100, 
         uwave_ind=0,
         uwave_power_dbm=10.0,
-        probe_ns=2e6,
+        probe_ns=1e6,
         do_plot=True,
         shuffle=True,
         settle_s=0.3,
