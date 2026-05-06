@@ -27,6 +27,7 @@ from utils.constants import (
 
 SEQ_FILE_SEQUENCE_SCAN = "simple_readout_laser_free_test.py"  # expects [0, readout_ns, x[], y[]]
 SEQ_FILE_PIXEL_READOUT  = "simple_readout.py"                 # per-pixel readout when we move in Python
+# SEQ_FILE_PIXEL_READOUT  = "simple_readout_Tisapph.py"                 # per-pixel readout when we move in Python
 
 # --- replace the snake helper with a raster helper ---
 def _raster_fill(vals, img, state):
@@ -103,6 +104,7 @@ def confocal_scan(nv_sig: NVSig, x_range, y_range, num_steps, nv_minus_init=Fals
 
     period_ns = pulse.stream_load(
         "simple_readout.py",
+        # "simple_readout_Tisapph.py",
         tb.encode_seq_args([delay_ns, readout_ns, readout_vkey, 100, 1])  # 100ns marker at readout start
     )[0]
 
@@ -112,7 +114,8 @@ def confocal_scan(nv_sig: NVSig, x_range, y_range, num_steps, nv_minus_init=Fals
             Xr = []
             Yr = []
             for row in range(h):
-                y = y1d[(h - 1) - row]   # bottom row first
+                y = y1d[(h - 1) - row]
+                # y = y1d[row]   # bottom row first
                 for col in range(w):
                     x = x1d[col]        # left -> right always
                     Xr.append(x); Yr.append(y)
@@ -205,8 +208,8 @@ def confocal_scan(nv_sig: NVSig, x_range, y_range, num_steps, nv_minus_init=Fals
     "x_coords_1d": x1d, "y_coords_1d": y1d,
     }
     path = dm.get_file_path(__file__, ts, getattr(nv_sig, "name", "nv"))
-    dm.save_figure(fig, path)
     dm.save_raw_data(raw, path)
+    dm.save_figure(fig, path)
     kpl.show()
     return img_out, x1d, y1d
 
@@ -218,8 +221,9 @@ def get_coord(coords, key):
     if hasattr(key, "name"):  # Enum
         return coords.get(key, coords.get(key.name))
     return coords.get(key)
+
 if __name__ == "__main__":
-    file_name = "2026_01_05-18_45_52-(Rubin)"
+    file_name = "2026_04_28-12_08_28-(Wu)"
 
     data = dm.get_raw_data(file_name)
     print("Top-level keys in saved file:")

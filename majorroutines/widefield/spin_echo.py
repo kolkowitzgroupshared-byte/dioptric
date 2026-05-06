@@ -5,6 +5,7 @@ Widefield Rabi experiment
 Created on November 29th, 2023
 
 @author: mccambria
+@author: schand
 """
 
 import sys

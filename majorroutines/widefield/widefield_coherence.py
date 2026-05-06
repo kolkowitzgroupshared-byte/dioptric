@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Widefield Rabi experiment
+Widefield coherence experiment
 
-Created on November 29th, 2023
+Created on November 29th, 2024
 
-@author: mccambria
 @author: sbchand
 """
 
@@ -93,8 +92,8 @@ def create_fit_figure(nv_list, phis, norm_counts, norm_counts_ste):
 
     ax_all.set_xlabel("Phase (degrees)")
     ax_all.set_ylabel("Normalized Counts")
-    # ax_all.set_title(r"Cosine Fits ($\frac{\pi}{2}_x$ - xy8 – $\frac{\pi}{2}_\phi$)")
-    ax_all.set_title(r"Cosine Fits")
+    ax_all.set_title(r"Cosine Fits ($\frac{\pi}{2}_x$ - xy8 – $\frac{\pi}{2}_\phi$)")
+    # ax_all.set_title(r"Cosine Fits")
     ax_all.grid(True)
     ax_all.spines["right"].set_visible(False)
     ax_all.spines["top"].set_visible(False)
@@ -123,12 +122,8 @@ def create_fit_figure(nv_list, phis, norm_counts, norm_counts_ste):
         phi_fit = np.linspace(min(phis), max(phis), 200)
         ax_median.plot(phi_fit, cos_func(phi_fit, *popt_median), label="Fit")
         # ax_median.set_title(f"Median Fit  : phase offset ≈ {popt_median[1]:.1f}°")
-        ax_median.set_title(
-            r"Median Fringe: $\pi/2_x$ – $\pi_x$ – $\pi/2_\phi$"
-        )
-        # ax_median.set_title(
-        #     r"Median Fringe: $\pi/2_x$ – XY8 – $\pi/2_\phi$"
-        # )
+        # ax_median.set_title(r"Median Fringe: $\pi/2_x$ – $\pi_x$ – $\pi/2_\phi$")
+        ax_median.set_title(r"Median Fringe: $\pi/2_x$ – XY8 – $\pi/2_\phi$")
 
     ax_median.set_xlabel("Phase, $\phi$ (degrees)")
     ax_median.set_ylabel("Median Normalized Counts")
@@ -162,99 +157,16 @@ def create_fit_figure(nv_list, phis, norm_counts, norm_counts_ste):
     plt.show()
 
 
-# def create_fit_figure(nv_list, phis, norm_counts, norm_counts_ste):
-#     # fit function
-#     def cos_func(phi, amp, phase_offset, offset):
-#         return amp * np.cos(phi - phase_offset) + offset
-
-#     num_nvs = len(nv_list)
-#     fit_fns = []
-#     popts = []
-#     phi_degrees = []
-#     for nv_ind in range(num_nvs):
-#         nv_counts = norm_counts[nv_ind]
-#         nv_counts_ste = norm_counts_ste[nv_ind]
-#         guess_params = [1.0, 0.0, 0.5]  # amp, phase_offset, baseline offset
-
-#         try:
-#             popt, _ = curve_fit(
-#                 cos_func,
-#                 phis,
-#                 nv_counts,
-#                 p0=guess_params,
-#                 sigma=nv_counts_ste,
-#                 absolute_sigma=True,
-#             )
-#         except Exception:
-#             popt = None
-
-#         fit_fns.append(cos_func if popt is not None else None)
-#         popts.append(popt)
-
-#         # Create new figure for this NV
-#         fig, ax = plt.subplots(figsize=(6, 5))
-
-#         # Plot data points
-#         ax.errorbar(
-#             phis,
-#             nv_counts,
-#             yerr=abs(nv_counts_ste),
-#             fmt="o",
-#             label=f"NV {nv_ind}",
-#             capsize=3,
-#         )
-
-#         # Plot fit if successful
-#         if popt is not None:
-#             phi_fit = np.linspace(min(phis), max(phis), 200)
-#             fit_vals = cos_func(phi_fit, *popt)
-#             ax.plot(phi_fit, fit_vals, "-", label="Fit")
-#             residuals = cos_func(phis, *popt) - nv_counts
-#             chi_sq = np.sum((residuals / nv_counts_ste) ** 2)
-#             red_chi_sq = chi_sq / (len(nv_counts) - len(popt))
-#             # print(f"NV {nv_ind} - Reduced chi²: {red_chi_sq:.3f}")
-#             peak = popt[0]  # phase_offset
-#             peak_phi = popt[1]  # phase_offset
-#             offset = popt[2]  # cpitms
-#             # phi_degree = np.degrees(peak_phi)
-#             phi_degree = peak_phi
-#             phi_degrees.append(phi_degree)
-#             print(
-#                 f"Peak Amp = {peak:.2f} Peak occurs at φ ≈ {peak_phi:.2f} rad ≈ {np.degrees(peak_phi):.1f}°, offset = {offset:2f}"
-#             )
-#     # phi_degrees = np.degrees(phi_degrees)
-#     mean_phase_offset = np.mean(phi_degrees)
-#     # Suggest correction
-#     correction_angle = -mean_phase_offset
-
-#     print(f"\nAverage Phase Offset = {mean_phase_offset:.2f}°")
-#     print(f"Suggested Phase Correction = {correction_angle:.2f}°")
-
-#     good_offsets = [phi for phi in phi_degrees if abs(phi) < 0.3]
-#     avg_phase_offset = np.mean(good_offsets)
-#     print(f"Suggested global IQ phase correction: {np.degrees(avg_phase_offset):.1f}°")
-#     ax.set_xlabel("Phase (rad)")
-#     ax.set_ylabel("Normalized Counts")
-#     ax.set_title(f"Cosine Fit for NV {nv_ind}")
-#     # plt.title(f"Fit: A={A_fit:.2f}, δ={np.rad2deg(delta_fit):.1f}°, C={C_fit:.2f}")
-#     ax.legend()
-#     ax.grid(True)
-#     ax.spines["right"].set_visible(False)
-#     ax.spines["top"].set_visible(False)
-#     plt.tight_layout()
-#     plt.show(block=True)
-#     # A_fit, delta_fit, C_fit = popt
-
-#     # plt.plot(phis, signal, "o", label="Data")
-#     # plt.plot(phis, cos_func(phis, *popt), "-", label="Fit")
-#     # plt.xlabel("Phase φ (deg)")
-#     # plt.ylabel("Signal")
-#     # plt.title(f"Fit: A={A_fit:.2f}, δ={np.rad2deg(delta_fit):.1f}°, C={C_fit:.2f}")
-#     # plt.legend()
-#     # plt.show()
-
-
-def main(nv_list, num_steps, num_reps, num_runs, phi_list, evol_time, seq_type, uwave_ind_list):
+def main(
+    nv_list,
+    num_steps,
+    num_reps,
+    num_runs,
+    phi_list,
+    evol_time,
+    seq_type,
+    uwave_ind_list,
+):
     pulse_gen = tb.get_server_pulse_gen()
     seq_file = "widefield_coherence.py"
 
@@ -288,7 +200,7 @@ def main(nv_list, num_steps, num_reps, num_runs, phi_list, evol_time, seq_type, 
     raw_data |= {
         "timestamp": timestamp,
         "phis": phi_list,
-        "phi-units": "deg",     # <-- FIX
+        "phi-units": "deg",
         "evol_time": evol_time,
         "evol_time-unit": "ns",
         "seq_type": seq_type,
@@ -300,7 +212,6 @@ def main(nv_list, num_steps, num_reps, num_runs, phi_list, evol_time, seq_type, 
 
     tb.reset_cfm()
     kpl.show()
-
 
     # if raw_fig is not None:
     #     dm.save_figure(raw_fig, file_path)
@@ -325,8 +236,10 @@ if __name__ == "__main__":
         # file_stem="2025_10_10-21_51_14-rubin-nv0_2025_09_08",  # xy8
         # file_stem="2025_10_11-00_03_47-rubin-nv0_2025_09_08",  # spin echo
         # file_stem="2025_10_13-14_00_31-rubin-nv0_2025_09_08",  # xy8
-        file_stem="2026_01_05-18_44_14-johnson-nv0_2025_10_21",  # xy8
-        # file_stem= "2026_01_05-21_44_23-johnson-nv0_2025_10_21",
+        # file_stem="2026_01_05-18_44_14-johnson-nv0_2025_10_21",  # xy8
+        # file_stem= "2026_01_28-20_06_27-johnson-nv0_2025_10_21", #xy8
+        # file_stem= "2026_01_28-22_36_03-johnson-nv0_2025_10_21",
+        file_stem="2026_01_29-01_18_18-johnson-nv0_2025_10_21",
         load_npz=True,
         use_cache=True,
     )
@@ -350,6 +263,4 @@ if __name__ == "__main__":
     num_steps = len(phis)
     fit_fig = create_fit_figure(nv_list, phis, norm_counts, norm_counts_ste)
 
-
-    
     kpl.show(block=True)

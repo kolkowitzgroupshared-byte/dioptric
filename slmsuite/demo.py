@@ -135,9 +135,23 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import curve_fit
+
 ### green and red calibaton at RT setup 2025-09-15
-pixel_coords_list = [[119.522, 118.997], [111.538, 95.186], [96.194, 118.343]]
-red_coords_list = [[82.395, 81.819], [76.707, 62.056], [63.349, 80.092]]
+# pixel_coords_list = [[119.522, 118.997], [111.538, 95.186], [96.194, 118.343]]
+# red_coords_list = [[82.395, 81.819], [76.707, 62.056], [63.349, 80.092]]
+
+green_coords_list =[
+    [72.2, 124.948],
+    [101.955, 72.349],
+    [131.548, 130.073],
+    ]
+pixel_coords_list = green_coords_list
+red_coords_list = [
+    [41.465, 82.8],
+    [68.524, 42.346],
+    [89.124, 91.245],
+    ]
+
 # Given pixel coordinates and corresponding red coordinates
 # pixel_coords_list = np.array(
 #     [
@@ -167,12 +181,12 @@ if len(pixel_coords_list) >= 3:
 
     # New pixel coordinate for which we want to find the corresponding red coordinate
     new_pixel_coord = np.array(
-        [
-            [107.85, 108.084],
-            [119.238, 119.6],
-            [111.232, 95.81],
-            [95.925, 118.974],
-        ],
+        [       
+        [101.165, 100.701],
+        [72.248, 124.933],
+        [102.003, 72.355],
+        [131.597, 130.11],
+    ],
         dtype=np.float32,
     )
 
@@ -210,10 +224,10 @@ else:
     # New pixel coordinates to transform
     new_pixel_coord = np.array(
         [
-            [108.368, 107.114],
-            [119.483, 121.535],
-            [106.762, 93.524],
-            [93.748, 118.277],
+        [97.704, 96.413],
+        [66.13, 126.461],
+        [98.07, 63.806],
+        [127.092, 126.781]
         ],
         dtype=np.float32,
     )
@@ -238,7 +252,7 @@ else:
     # print("Corresponding red coordinates:", new_red_coord)
 # sys.exit()
 
-min_tau = 200  # ns
+min_tau = 16  # ns
 max_tau = 100e3  # fallback if no revival_period given
 taus = []
 
@@ -275,8 +289,8 @@ def generate_divisible_by_4(min_val, max_val, num_steps):
 
 # Example Usage
 min_duration = 16
-max_duration = 210
-num_steps = 18
+max_duration = 1000
+num_steps = 51
 
 step_values = generate_divisible_by_4(min_duration, max_duration, num_steps)
 print(step_values)

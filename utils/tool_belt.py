@@ -64,7 +64,7 @@ def configure_logging(inst, level=logging.INFO):
 
 def get_mod_mode(laser_name):
     config = common.get_config_dict()
-    mod_mode = config["Optics"][laser_name]["mod_mode"]
+    mod_mode = config["Optics"]["PhysicalLasers"][laser_name]["mod_mode"]
     return mod_mode.name
 
 
@@ -78,7 +78,7 @@ def laser_on(laser_name, laser_power=None):
 
 def laser_switch_sub(turn_on, laser_name, laser_power=None):
     config = common.get_config_dict()
-    mod_mode = config["Optics"][laser_name]["mod_mode"]
+    mod_mode = config["Optics"]["PhysicalLasers"][laser_name]["mod_mode"]
     pulse_gen = get_server_pulse_gen()
 
     if mod_mode is ModMode.DIGITAL:
@@ -170,8 +170,6 @@ def get_laser_server(laser_name):
 
 # endregion
 # region Pulse generator utils
-
-
 def process_laser_seq(seq, virtual_laser_key, train):
     """
     Automatically process simple laser sequences. Simple here means that the modulation
@@ -489,7 +487,8 @@ def cosine_double_sum(t, offset, decay, amp_1, freq_1, amp_2, freq_2):
     two_pi = 2 * np.pi
 
     return offset + np.exp(-t / abs(decay)) * (
-        amp_1 * np.cos(two_pi * freq_1 * t) + amp_2 * np.cos(two_pi * freq_2 * t)
+        amp_1 * np.cos(two_pi * freq_1 * t)
+        + amp_2 * np.cos(two_pi * freq_2 * t)
         # + amp_3 * np.cos(two_pi * freq_3 * t)
     )
 
@@ -760,6 +759,11 @@ def get_server_tagger():
     return common.get_server("tagger")
 
 
+def get_server_wavegen():
+    """Get the photon time tagger server for this setup, e.g. opx or swabian"""
+    return common.get_server("waveform_gen")
+
+
 def get_server_temp_controller():
     return common.get_server("temp_controller")
 
@@ -810,7 +814,7 @@ def get_server_rotation_mount():
     return common.get_server("rotation_mount")
 
 
-def get_tisapph():
+def get_server_tisapph():
     return common.get_server_by_name("tisapph_M2_solstis")
 
 

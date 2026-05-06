@@ -115,6 +115,7 @@ def read_and_process_image(nv_list):
     def get_counts(nv_sig):
         pixel_coords = pos.get_nv_coords(nv_sig, CoordsKey.PIXEL)
         return widefield.integrate_counts(img_array, pixel_coords)
+        # return widefield.integrate_counts_bg_subtracted(img_array, pixel_coords)
 
     counts_list = [get_counts(nv) for nv in nv_list]
 

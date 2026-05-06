@@ -14,7 +14,7 @@ import random
 import sys
 import time
 from random import shuffle
-
+import re
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -32,7 +32,7 @@ from majorroutines.widefield import (
     crosstalk_check,
     image_sample,
     optimize_amp_duration_charge_state_histograms,
-    optimize_charge_state_histograms_mcc,
+    optimize_charge_state_histograms,
     optimize_scc,
     optimize_scc_readout,
     optimize_scc_amp_duration,
@@ -44,7 +44,7 @@ from majorroutines.widefield import (
     relaxation_interleave,
     resonance,
     resonance_dualgen,
-    deer_hahn, 
+    deer_hahn,
     deer_hahn_rabi,
     scc_snr_check,
     simple_correlation_test,
@@ -82,7 +82,7 @@ def do_widefield_image_sample(nv_sig, num_reps=1):
 
 def do_scanning_image_sample(nv_sig):
     scan_range = 15
-    num_steps = 15
+    num_steps =15
     image_sample.scanning(nv_sig, scan_range, scan_range, num_steps)
 
 
@@ -97,15 +97,15 @@ def do_red_calibration_image(nv_sig, coords_list, force_laser_key=None, num_reps
 
 
 def do_scanning_image_full_roi(nv_sig):
-    total_range = 30
-    scan_range = 10
-    num_steps = 10
+    total_range = 63
+    scan_range = 9
+    num_steps = 15
     image_sample.scanning_full_roi(nv_sig, total_range, scan_range, num_steps)
 
 
 def do_scanning_image_sample_zoom(nv_sig):
     scan_range = 0.001
-    num_steps = 5
+    num_steps = 4
     image_sample.scanning(nv_sig, scan_range, scan_range, num_steps)
 
 
@@ -125,10 +125,6 @@ def do_charge_state_histograms(nv_list):
     num_reps = 200
     num_runs = 10
 
-    # 100 ms
-    # num_reps = 100
-    # num_runs = 20
-
     # Test
     # num_runs = 2
 
@@ -147,7 +143,7 @@ def do_optimize_pol_duration(nv_list):
     num_reps = 10
     num_runs = 220
     # num_runs = 2
-    return optimize_charge_state_histograms_mcc.optimize_pol_duration(
+    return optimize_charge_state_histograms.optimize_pol_duration(
         nv_list, num_steps, num_reps, num_runs, min_duration, max_duration
     )
 
@@ -160,7 +156,7 @@ def do_optimize_pol_amp(nv_list):
     num_runs = 220
     min_amp = 0.7
     max_amp = 1.2
-    return optimize_charge_state_histograms_mcc.optimize_pol_amp(
+    return optimize_charge_state_histograms.optimize_pol_amp(
         nv_list, num_steps, num_reps, num_runs, min_amp, max_amp
     )
 
@@ -173,7 +169,7 @@ def do_optimize_readout_duration(nv_list):
     num_runs = 225
     min_duration = 12e6
     max_duration = 108e6
-    return optimize_charge_state_histograms_mcc.optimize_readout_duration(
+    return optimize_charge_state_histograms.optimize_readout_duration(
         nv_list, num_steps, num_reps, num_runs, min_duration, max_duration
     )
 
@@ -184,11 +180,10 @@ def do_optimize_readout_amp(nv_list):
     # num_reps = 150
     # num_runs = 5
     num_reps = 12
-    # num_runs = 200
     num_runs = 400
-    min_amp = 0.8 
+    min_amp = 0.8
     max_amp = 1.2
-    return optimize_charge_state_histograms_mcc.optimize_readout_amp(
+    return optimize_charge_state_histograms.optimize_readout_amp(
         nv_list, num_steps, num_reps, num_runs, min_amp, max_amp
     )
 
@@ -314,16 +309,16 @@ def do_optimize_pixel(nv_sig):
 
 def do_optimize_loop(nv_list, coords_key):
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
-
     opti_coords_list = []
     for nv in nv_list:
         if coords_key == green_laser:
             opti_coords = do_optimize_green(nv)
         elif coords_key == red_laser:
             opti_coords = do_optimize_red(nv, repr_nv_sig)
-        # Adjust for the drift that may have occurred since beginning the loop
-        do_compensate_for_drift(repr_nv_sig)
         opti_coords_list.append(opti_coords)
+        
+        do_compensate_for_drift(repr_nv_sig)
+
 
     # Report back
     for opti_coords in opti_coords_list:
@@ -332,8 +327,8 @@ def do_optimize_loop(nv_list, coords_key):
 
 
 def optimize_slm_Phase_calibration(repr_nv_sig, target_coords):
-    repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
-    target_coords = np.array([[110.186, 129.281], [128.233, 88.007], [86.294, 103.0]])
+    widefield.get_repr_nv_sig(nv_list)
+    np.array([[110.186, 129.281], [128.233, 88.007], [86.294, 103.0]])
     # optimize_slm_calibration.main(repr_nv_sig, target_coords)
 
 
@@ -547,7 +542,7 @@ def do_dm_xy_iq_lockin(nv_list):
             n_pi=n_pi,
             uwave_ind_list=(0, 1),
         )
-    
+
 def do_calibrate_iq_delay(nv_list):
     min_tau = 20
     max_tau = 292
@@ -563,71 +558,92 @@ def do_calibrate_iq_delay(nv_list):
 
 def do_resonance(nv_list):
     freq_center = 2.8785
-    
-    freq_range = 0.36
-    num_steps = 65
-    
-    # freq_range = 0.260
-    # num_steps = 45
-    num_reps = 2
-    num_runs = 800
-    # num_runs = 1
+    # freq_range = 0.36
+    # num_steps = 65
+    freq_range = 0.260
+    num_steps = 45
+    num_reps = 4
+    num_runs = 300
     freqs = calculate_freqs(freq_center, freq_range, num_steps)
     ##
     # Remove duplicates and sort
     freqs = sorted(set(freqs))
     num_steps = len(freqs)
-    resonance.main(
-        nv_list,
-        num_steps,
-        num_reps,
-        num_runs,
-        freqs=freqs,
-        uwave_ind_list=[1],
-    )
-    # for _ in range(2):
-    #     resonance.main(nv_list, num_steps, num_reps, num_runs, freqs=freqs)
-
-def do_deer_hahn(nv_list):
-    freq_center = 0.174
-    freq_range = 0.024
-    # num_steps =  48
-    # num_reps = 6
-    num_reps =2
-    num_runs =600
-    # num_runs = 2
-    # freqs = calculate_freqs(freq_center, freq_range, num_steps)
-    freqs = np.arange(10, 350 + 2, 2)
-    # freqs = np.arange(130, 190 + 1, 1)
-    freqs = freqs / 1000 
-    ##
-    # Remove duplicates and sort
-    freqs = sorted(set(freqs))
-    num_steps = len(freqs)
-    for _ in range(2):
-        do_widefield_image_sample(nv_sig, 50)
-        deer_hahn.main(
-            nv_list, 
+    for _ in range(1):
+        resonance.main(
+            nv_list,
             num_steps,
             num_reps,
             num_runs,
             freqs=freqs,
-            uwave_ind_list=[0,1,2],
+            uwave_ind_list=[1],
         )
+    # for _ in range(2):
+    #     resonance.main(nv_list, num_steps, num_reps, num_runs, freqs=freqs)
+
+# def do_deer_hahn(nv_list):
+#     # freq_center = 0.174
+#     # freq_range = 0.024
+#     # num_steps =  48
+#     # num_reps = 6
+#     num_reps =2
+#     num_runs =300
+#     # num_runs = 2
+#     # freqs = calculate_freqs(freq_center, freq_range, num_steps)
+#     # freqs = np.arange(20, 330 + 2, 2)
+#     freqs = np.arange(40, 300 + 1, 1)
+#     freqs = freqs / 1000
+#     # Remove duplicates and sort
+#     freqs = sorted(set(freqs))
+#     num_steps = len(freqs)
+#     for _ in range(2):
+#         do_widefield_image_sample(nv_sig, 50)
+#         deer_hahn.main(
+#             nv_list,
+#             num_steps,
+#             num_reps,
+#             num_runs,
+#             freqs=freqs,
+#             uwave_ind_list=[0,1,2],
+#         )
+
+def do_deer_hahn(nv_list):
+    num_reps = 1
+    num_runs = 600
+    bands_mhz = [
+        (76, 94, 0.2),  
+        (188, 210, 0.2),
+        (248, 276, 0.2),
+    ]
+    for _ in range(2):
+        do_widefield_image_sample(nv_sig, 50)
+
+        for f0, f1, df in bands_mhz:
+            freqs = np.arange(f0, f1 + df, df) / 1000  # MHz -> GHz
+            freqs = sorted(set(freqs))
+            num_steps = len(freqs)
+
+            deer_hahn.main(
+                nv_list,
+                num_steps,
+                num_reps,
+                num_runs,
+                freqs=freqs,
+                uwave_ind_list=[0, 1, 2],
+            )
 
 def do_deer_hahn_rabi(nv_list):
-    min_tau = 200
-    max_tau = 8000 + min_tau
-    num_steps = 51
+    min_tau = 16
+    max_tau = 996
+    num_steps = 50
     num_reps = 5
-    num_runs = 800
-    # num_runs = 5
-    uwave_ind_list = [0, 1, 2]    
+    num_runs = 200
+    uwave_ind_list = [0, 1, 2]
     deer_hahn_rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
-    # for _ in range(2):
-    #     rabi.main(
-    #         nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
-    #     )
+    for _ in range(3):
+        rabi.main(
+            nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
+        )
     # uwave_ind_list = [0]
     # rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
     # uwave_ind_list = [1]
@@ -649,7 +665,7 @@ def do_resonance_dualgen(nv_list, uwave_ind_list=[0, 1]):
     num_steps   = 60
 
     # outer reps = drift tracking cadence
-    num_reps = 2      
+    num_reps = 2
     num_runs = 400
 
     # inner reps for averaging
@@ -674,46 +690,31 @@ def do_resonance_dualgen(nv_list, uwave_ind_list=[0, 1]):
 
 def do_rabi(nv_list):
     min_tau = 16
-    max_tau = 240 + min_tau
+    # max_tau = 240 + min_tau
     # max_tau = 360 + min_tau
-    # max_tau = 480 + min_tau
+    max_tau = 480 + min_tau
     num_steps = 31
     num_reps = 10
     num_runs = 400
     # num_runs = 5
     uwave_ind_list = [0, 1]
+    # uwave_ind_list = [2]
     rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
-    # for _ in range(2):
-    #     rabi.main(
-    #         nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
-    #     )
-    # uwave_ind_list = [0]
-    # rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
-    # uwave_ind_list = [1]
-    # rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
 
 
 def do_widefield_coherence_test(nv_list, evol_time, seq_type):
-    # num_reps = 11
     num_reps = 15
     num_runs = 150
     # num_runs = 2
-    # phi_list = np.linspace(0, 360, num_steps)
     # fmt: off
     # phi_list = [0, 45, 90, 135, 180, 225, 270, 315, 360]
     phi_list = [0, 18, 36, 54, 72, 90, 108, 126, 144, 162, 180, 198, 216, 234, 252, 270, 288, 306, 324, 342, 360]
-    # phi_list = [-351, -333, -315, -297, -279, -261, -243, -225, -207, -189, -171, -153, -135, -117, -99, -81, -63, -45, -27, -9, 9, 27, 45, 63, 81, 99, 117, 135, 153, 171, 189, 207, 225, 243, 261, 279, 297, 315, 333, 351]
     # fmt: on
     num_steps = len(phi_list)
     uwave_ind_list = [0, 1]  # both are has iq modulation
     widefield_coherence.main(
         nv_list, num_steps, num_reps, num_runs, phi_list, evol_time, seq_type, uwave_ind_list
     )
-    # for _ in range(2):
-    #     spin_echo_phase_scan_test.main(
-    #         nv_list, num_steps, num_reps, num_runs, min_phi, max_phi, uwave_ind_list
-    #     )
-
 
 def do_ac_stark(nv_list):
     min_tau = 0
@@ -814,7 +815,7 @@ def do_spin_echo(nv_list):
 def do_two_block_hahn_correlation(nv_list):
     tau = 44
     # lag_taus = [16, 24, 40, 64, 100, 160, 250, 400, 640, 1000, 1500, 2000]
-    # lag_taus = [16, 40, 64, 88, 108, 132, 156, 180, 208, 236, 272, 316, 364, 424, 488, 568, 640, 740, 856, 988, 1144, 1292, 1496, 1728, 2000] 
+    # lag_taus = [16, 40, 64, 88, 108, 132, 156, 180, 208, 236, 272, 316, 364, 424, 488, 568, 640, 740, 856, 988, 1144, 1292, 1496, 1728, 2000]
     lag_taus = widefield.generate_divisible_by_4(16, 2000, 45)
     # print(lag_taus)
     # sys.exit()
@@ -833,7 +834,7 @@ def do_two_block_hahn_correlation_dm(nv_list):
     #     l = np.logspace(np.log10(tmin_ns), np.log10(tmax_ns), n)
     #     l = np.unique((np.round(l / 4) * 4).astype(int))
     #     l = l[(l >= tmin_ns) & (l <= tmax_ns)]
-    #     return l.tolist() 
+    #     return l.tolist()
 
     lags_A = widefield.generate_divisible_by_4(int(0.2e3), int(20e3), 66)
 
@@ -997,7 +998,6 @@ def build_xy8_dip_taus(
 #         xy.main(nv_list, len(taus), num_reps, num_runs, taus, uwave_ind_list, xy_seq)
 
 
-import re
 import numpy as np
 
 def _quantize_ns(x_ns, q_ns=4):
@@ -1034,7 +1034,7 @@ def _tau_max_ns_for_seq(xy_seq, hahn_max_tau_ns=1_000_000):
 def do_xy(nv_list, xy_seq="xy8-1", min_tau_ns=200, hahn_max_tau_ns=1_000_000, n_points=70, q_ns=4):
     num_reps = 4
     uwave_ind_list = [0, 1]
-    num_runs = 400
+    num_runs = 600
 
     max_tau_ns = _tau_max_ns_for_seq(xy_seq, hahn_max_tau_ns=hahn_max_tau_ns)
     max_tau_ns = max(max_tau_ns, min_tau_ns)
@@ -1043,9 +1043,9 @@ def do_xy(nv_list, xy_seq="xy8-1", min_tau_ns=200, hahn_max_tau_ns=1_000_000, n_
     taus = [int(t) for t in taus]
 
     print("xy_seq:", xy_seq, "num_steps:", len(taus), "ns range:", taus[0], "to", taus[-1])
-    for _ in range(3):
-        do_widefield_image_sample(nv_sig, 50)
-        xy.main(nv_list, len(taus), num_reps, num_runs, taus, uwave_ind_list, xy_seq)
+    # for _ in range(2):
+    do_widefield_image_sample(nv_sig, 50)
+    xy.main(nv_list, len(taus), num_reps, num_runs, taus, uwave_ind_list, xy_seq)
 
 
 def do_xy_uniform_revival_scan(nv_list, xy_seq="xy8-1"):
@@ -1298,7 +1298,6 @@ def do_charge_quantum_jump(nv_list):
     num_reps = 3000
     charge_monitor.charge_quantum_jump(nv_list, num_reps)
 
-
 def do_opx_constant_ac():
     cxn = common.labrad_connect()
     opx = cxn.QM_opx
@@ -1311,18 +1310,18 @@ def do_opx_constant_ac():
     # print((stop - start) / num_reps)
 
     # Microwave test
-    if True:
-        sig_gen = cxn.sig_gen_STAN_sg394_3
-        amp = 0
-        chan = 3
-    else:
-        sig_gen = cxn.sig_gen_STAN_sg394_2
-        amp = 10
-        chan = 10
-    sig_gen.set_amp(amp)  # 12
-    sig_gen.set_freq(0.175)
-    sig_gen.uwave_on()
-    opx.constant_ac([chan])
+    # if True:
+    #     sig_gen = cxn.sig_gen_STAN_sg394_3
+    #     amp = 2
+    #     chan = 3
+    # else:
+    #     sig_gen = cxn.sig_gen_STAN_sg394_2
+    #     amp = 10
+    #     chan = 10
+    # sig_gen.set_amp(amp)  # 12
+    # sig_gen.set_freq(1.0)
+    # sig_gen.uwave_on()
+    # opx.constant_ac([chan])
 
     # Camera frame rate test
     # seq_args = [500]
@@ -1331,12 +1330,12 @@ def do_opx_constant_ac():
     # opx.stream_start()
 
     # Yellow
-    # opx.constant_ac(
-    #     [],  # Digital channels
-    #     [7],  # Analog channels
-    #     [0.35],  # Analog voltages
-    #     [0],  # Analog frequencies
-    # )
+    opx.constant_ac(
+        [],  # Digital channels
+        [7],  # Analog channels
+        [0.15],  # Analog voltages
+        [0],  # Analog frequencies
+    )
     # opx.constant_ac([4])  # Just laser
     # Red
     # freqs = [65, 75, 85]
@@ -1368,27 +1367,27 @@ def do_opx_constant_ac():
     # opx.constant_ac(
     #     [4],  # Digital channels
     #     [3, 4],  # Analog channels
-    #     [0.02, 0.02],  # Analog voltages
-    #     [107.0, 107.0],  # Analog frequencies
+    #     [0.15, 0.15],  # Analog voltages
+    #     [102.0, 102.0],  # Analog frequencies
     # )
     # Green + red
     # opx.constant_ac(
     #     [4, 1],  # Digital channels
     #     [3, 4, 2, 6],  # Analog channels
-    #     [0.15, 0.15, 0.15, 0.15],  # Analog voltages;
-    #     [107, 107, 72, 72],
+    #     [0.11, 0.11, 0.11, 0.11],  # Analog voltages;
+    #     [82.511, 117.235, 66.068, 65.278],
     # )
-    # green_coords_list = [
-    #     [108.302, 107.046],
-    #     [122.658, 98.967],
-    #     [96.376, 95.86],
-    #     [106.999, 119.23],
+    # green_coords_list =[
+    # [101.086, 100.729],
+    # [82.511, 117.235],
+    # [99.165, 77.99],
+    # [126.369, 121.736],
     # ]
     # red_coords_list = [
-    #     [72.722, 71.926],
-    #     [84.601, 66.136],
-    #     [63.555, 62.304],
-    #     [71.244, 81.727],
+    # [66.068, 65.278],
+    # [49.953, 77.617],
+    # [65.656, 46.698],
+    # [85.0, 83.83],
     # ]
     # red
     # opx.constant_ac(
@@ -1398,23 +1397,67 @@ def do_opx_constant_ac():
     #     [72.0, 72.0],  # Analog frequencies
     # )
 
-    # # Green + yellow
+    # Green + yellow
     # opx.constant_ac(
     #     [4],  # Digital channels
     #     [3, 4, 7],  # Analog channels
     #     [0.11, 0.11, 0.30],  # Analog voltages
-    #     [107, 107, 0],  # Analog frequencies
+    #     [99, 99, 0],  # Analog frequencies
     # )
     # Red + green + Yellow
     # opx.constant_ac(
     #     [4, 1],  # Digital channels1
     #     [3, 4, 2, 6, 7],  # Analog channels
-    #     [0.19, 0.19, 0.17, 0.17, 0.25],  # Analog voltages
-    #     [107, 107, 72, 72, 0],  # Analog frequencies
+    #     [0.08, 0.08, 0.08, 0.08, 0.35],  # Analog voltages
+    #     [102, 102, 67, 67, 0],  # Analog frequencies
     # )
     input("Press enter to stop...")
     # sig_gen.uwave_off()
 
+def do_green_red_triplet_time_mux():
+    cxn = common.labrad_connect()
+    opx = cxn.QM_opx
+
+    green_center = np.array([104.0, 104.0], dtype=float)
+    red_center   = np.array([69.0,  69.0], dtype=float)
+
+    green_d = 25.0   # MHz
+    red_d   = 20.0   # MHz
+
+    green_square = [
+        [green_center[0] - green_d, green_center[1] - green_d],  # bottom-left
+        [green_center[0] - green_d, green_center[1] + green_d],  # top-left
+        [green_center[0] + green_d, green_center[1] - green_d],  # bottom-right
+        [green_center[0] + green_d, green_center[1] + green_d],  # top-right
+    ]
+
+    red_square = [
+        [red_center[0] - red_d, red_center[1] - red_d],  # bottom-left
+        [red_center[0] - red_d, red_center[1] + red_d],  # top-left
+        [red_center[0] + red_d, red_center[1] - red_d],  # bottom-right
+        [red_center[0] + red_d, red_center[1] + red_d],  # top-right
+    ]
+    # Start low; raise carefully if needed
+    green_amp = 0.03
+    red_amp = 0.04
+    yellow_amp = None
+    dwell_us = 200
+
+    seq_args = [
+        green_square,
+        red_square,
+        green_amp,
+        red_amp,
+        yellow_amp,
+        dwell_us,
+    ]
+    seq_args_string = tb.encode_seq_args(seq_args)
+
+    opx.stream_load("constant_aod_time_mux.py", seq_args_string)
+    opx.stream_start()
+
+    input("Press enter to stop...")
+#     opx.halt()
 
 def compile_speed_test(nv_list):
     cxn = common.labrad_connect()
@@ -1445,10 +1488,10 @@ def compile_speed_test(nv_list):
 
 def piezo_voltage_to_pixel_calibration():
     cal_voltage_coords = np.array(
-        [[0.4, 0.2], [-0.1999, 0.5464], [-0.2, -0.1464]], dtype="float32"
+        [(1.1, 0.2), (0.20000000000000012, 0.7196152422706632), (0.19999999999999973, -0.319615242270663)], dtype="float32"
     )
     cal_pixel_coords = np.array(
-        [[135.141, 117.788], [97.234, 144.799], [92.568, 98.422]], dtype="float32"
+        [[247.886, 242.951], [234.037, 253.065], [232.579, 236.378]], dtype="float32"
     )
     # Compute the affine transformation matrix
     M = cv2.getAffineTransform(cal_voltage_coords, cal_pixel_coords)
@@ -1476,9 +1519,9 @@ def piezo_voltage_to_pixel_calibration():
 def load_nv_coords(
     file_path="slmsuite/nv_blob_detection/nv_blob_filtered_multiple_nv302.npz",
     x_min=0,
-    x_max=250,
+    x_max=450,
     y_min=0,
-    y_max=250,
+    y_max=450,
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
@@ -1529,6 +1572,114 @@ def scan_equilateral_triangle(nv_sig, center_coord=(0, 0), radius=0.2):
         # print(f"Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         do_scanning_image_sample(nv_sig)
 
+# ----------------------------
+# Empirical calibration data
+# ----------------------------
+GREEN_AMP = np.array([0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.14, 0.16], dtype=float)
+GREEN_PWR = np.array([12, 162, 752, 2170, 4520, 7660, 11500, 15400], dtype=float)
+
+RED_AMP = np.array([0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.14, 0.16], dtype=float)
+RED_PWR = np.array([24, 303, 1430, 4160, 9000, 16200, 25000, 34200], dtype=float)
+
+GREEN_FREQ = np.array([90, 95, 100, 105, 110, 115, 120, 125], dtype=float)
+GREEN_FREQ_PWR = np.array([260, 310, 330, 350, 460, 340, 240, 140], dtype=float)
+
+RED_FREQ = np.array([55, 60, 65, 70, 75, 80, 85, 90], dtype=float)
+RED_FREQ_PWR = np.array([112, 200, 255, 260, 270, 260, 205, 110], dtype=float)
+
+
+def _interp_clipped(x, xp, fp):
+    """
+    1D interpolation with clipping at the calibration range.
+    Works with scalar or array x.
+    """
+    x = np.asarray(x, dtype=float)
+    x_clip = np.clip(x, xp[0], xp[-1])
+    return np.interp(x_clip, xp, fp)
+
+
+def make_aod_amp_scale_fn(
+    amp_pts,
+    pwr_pts,
+    freq_pts,
+    freq_pwr_pts,
+    ref_freq,
+    min_scale=0.5,
+    max_scale=2.0,
+):
+    """
+    Returns a function scale(freq, base_amp), where:
+      - freq is the AOD frequency in MHz
+      - base_amp is the current/global amplitude corresponding to scale=1
+      - output is multiplicative scale factor
+
+    Model:
+        P(a, f) ~ g(a) * h(f)
+    """
+    ref_freq_pwr = _interp_clipped(ref_freq, freq_pts, freq_pwr_pts)
+    rel_eff_pts = freq_pwr_pts / ref_freq_pwr  # h(f), normalized so h(ref_freq)=1
+
+    def scale(freq, base_amp):
+        freq = np.asarray(freq, dtype=float)
+        base_amp = float(base_amp)
+
+        # Power at reference frequency for current/base amplitude
+        target_pwr = _interp_clipped(base_amp, amp_pts, pwr_pts)
+
+        # Relative efficiency at requested frequency
+        rel_eff = _interp_clipped(freq, freq_pts, rel_eff_pts)
+        rel_eff = np.maximum(rel_eff, 1e-9)
+
+        # Power needed from amplitude curve to compensate freq loss
+        needed_pwr = target_pwr / rel_eff
+        needed_pwr = np.clip(needed_pwr, pwr_pts[0], pwr_pts[-1])
+
+        # Invert power->amplitude using the empirical amp sweep
+        needed_amp = _interp_clipped(needed_pwr, pwr_pts, amp_pts)
+
+        scale_factor = needed_amp / base_amp
+        scale_factor = np.clip(scale_factor, min_scale, max_scale)
+
+        if np.ndim(scale_factor) == 0:
+            return float(scale_factor)
+        return scale_factor
+
+    return scale
+
+
+# -------------------------------------------
+# Build compensators
+# Use peak-efficiency frequencies as reference
+# -------------------------------------------
+green_amp_scale_fn = make_aod_amp_scale_fn(
+    GREEN_AMP, GREEN_PWR,
+    GREEN_FREQ, GREEN_FREQ_PWR,
+    ref_freq=110.0,   # green peak
+    min_scale=0.5,
+    max_scale=2.0,
+)
+
+red_amp_scale_fn = make_aod_amp_scale_fn(
+    RED_AMP, RED_PWR,
+    RED_FREQ, RED_FREQ_PWR,
+    ref_freq=75.0,    # red peak
+    min_scale=0.5,
+    max_scale=2.0,
+)
+
+
+def get_freq_from_coords(coords, freq_index=0):
+    """
+    Extract the frequency coordinate used for this calibration.
+    If coords is scalar, returns it directly.
+    If coords is [fx, fy], pick freq_index.
+    """
+    arr = np.asarray(coords, dtype=float).ravel()
+    if len(arr) == 1:
+        return float(arr[0])
+    return float(arr[freq_index])
+
+
 
 ### Run the file
 if __name__ == "__main__":
@@ -1536,24 +1687,28 @@ if __name__ == "__main__":
     green_coords_key = f"coords-{green_laser}"
     red_coords_key = f"coords-{red_laser}"
     pixel_coords_key = "pixel_coords"
-    sample_name = "johnson"
+    sample_name = "qnami"
     # magnet_angle = 90
-    date_str = "2025_10_21"
-    sample_coords = [0.4, 0.8]
-    z_coord = 0.0
+    date_str = "2026_02_20"
+    sample_coords = [-0.75, 1.8]
+    z_coord = -2.4
+    # z_coord = -3.0
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
-        # file_path="slmsuite/nv_blob_detection/nv_blob_308nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_254nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_151nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_136nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_118nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_312nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_230nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_223nvs_reordered.npz",
-        file_path="slmsuite/nv_blob_detection/nv_blob_204nvs_reordered.npz",
+        # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",
+        # file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",
+        # file_path="slmsuite/nv_blob_detection/nv_blob_4966nvs_reordered.npz",
+        # file_path="slmsuite/nv_blob_detection/nv_blob_3986nvs_reordered.npz",
+        # file_path="slmsuite/nv_blob_detection/nv_blob_3554nvs_reordered.npz",
+        # file_path="slmsuite/nv_blob_detection/nv_blob_3325nvs_reordered.npz",   
+        # file_path="slmsuite/nv_blob_detection/nv_blob_1487nvs_reordered.npz",   
+        # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_reordered.npz",   
+        # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz",   
+        # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
+        file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz",   
     ).tolist()
-    # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
+    # pixel_coords_list = [[209.573, 201.991],
+    #     [355.977,  55.633],]
     green_coords_list = [
         [
             round(coord, 3)
@@ -1574,57 +1729,45 @@ if __name__ == "__main__":
         for nv_pixel_coords in pixel_coords_list
     ]
 
-    # Print first coordinate set for verification
-    # print(f"Number of NVs: {green_coords_list}")
-    # print(f"Number of NVs: {red_coords_list}")
+    # print(red_coords_list)
+    # print(green_coords_list)
     # sys.exit()
     print(f"Number of NVs: {len(pixel_coords_list)}")
     print(f"Reference NV:{pixel_coords_list[0]}")
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
-
-    # pixel_coords_list = [[124.195, 127.341],[14.043, 37.334],[106.538, 237.374],[218.314, 23.302]]
-    # green_coords_list = [[107.85, 108.084],[119.238, 119.6],[111.232, 95.81],[95.925, 118.974]]
-    # red_coords_list = [[73.238, 72.351],[82.142, 82.295],[76.435, 62.548],[63.107, 80.591]]
+    pixel_coords_list =[
+        [209.693, 202.035], 
+        [355.855, 55.308], 
+        [220.425, 359.764], 
+        [25.893, 55.843],
+        ]
+    green_coords_list = [
+        [101.132, 100.716],
+        [72.218, 124.96],
+        [101.986, 72.343],
+        [131.603, 130.079],
+    ]
+    red_coords_list = [
+        [66.259, 65.255],
+        [41.505, 82.791],
+        [68.562, 42.354],
+        [89.161, 91.279],
+        ]
 
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
     # fmt: off
-    ## 308nvs
-    # pol_duration_list = [336, 336, 308, 308, 428, 428, 504, 504, 816, 816, 528, 528, 372, 372, 1060, 1060, 852, 852, 852, 852, 612, 612, 484, 484, 1120, 1120, 852, 852, 404, 404, 812, 812, 672, 672, 560, 560, 644, 644, 352, 352, 380, 380, 852, 852, 400, 400, 620, 620, 628, 628, 292, 292, 528, 528, 392, 392, 524, 524, 680, 680, 504, 504, 396, 396, 324, 324, 428, 428, 240, 240, 504, 504, 540, 540, 852, 852, 1188, 1188, 764, 764, 976, 976, 820, 820, 444, 444, 1100, 1100, 488, 488, 604, 604, 972, 972, 380, 380, 352, 352, 660, 660, 592, 592, 416, 416, 452, 452, 620, 620, 576, 576, 316, 316, 660, 660, 660, 660, 720, 720, 620, 620, 1024, 1024, 320, 320, 852, 852, 1396, 1396, 464, 464, 416, 416, 624, 624, 1008, 1008, 460, 460, 508, 508, 668, 668, 448, 448, 440, 440, 668, 668, 852, 852, 852, 852, 844, 844, 1048, 1048, 320, 320, 780, 780, 492, 492, 1476, 1476, 656, 656, 1064, 1064, 456, 456, 344, 344, 852, 852, 540, 540, 352, 352, 524, 524, 852, 852, 1156, 1156, 1388, 1388, 308, 308, 852, 852, 1360, 1360, 572, 572, 204, 204, 316, 316, 696, 696, 504, 504, 1332, 1332, 1012, 1012, 708, 708, 852, 852, 912, 912, 804, 804, 608, 608, 948, 948, 596, 596, 1256, 1256, 808, 808, 852, 852, 392, 392, 568, 568, 872, 872, 1268, 1268, 780, 780, 852, 852, 476, 476, 508, 508, 640, 640, 392, 392, 512, 512, 700, 700, 700, 700, 932, 932, 840, 840, 852, 852, 1248, 1248, 852, 852, 852, 852, 1444, 1444, 620, 620, 852, 852, 852, 852, 660, 660, 752, 752, 1052, 1052, 592, 592, 852, 852, 852, 852, 1248, 1248, 860, 860, 520, 520, 1320, 1320, 1096, 1096, 568, 568, 488, 488, 852, 852, 556, 556, 420, 420, 1192, 1192, 552, 552, 1032, 1032, 508, 508, 1268, 1268, 872, 872, 852, 852, 852, 852, 560, 560, 328, 328, 1232, 1232, 1288, 1288, 500, 500, 356, 356, 836, 836, 852, 852, 392, 392, 940, 940, 1252, 1252, 1428, 1428, 896, 896, 1260, 1260, 1260, 1260, 852, 852, 776, 776, 796, 796, 368, 368, 1164, 1164, 1276, 1276, 1472, 1472, 448, 448, 1000, 1000, 504, 504, 1096, 1096, 612, 612, 584, 584, 660, 660, 776, 776, 684, 684, 1424, 1424, 852, 852, 416, 416, 1452, 1452, 996, 996, 668, 668, 484, 484, 364, 364, 548, 548, 472, 472, 852, 852, 1080, 1080, 852, 852, 1276, 1276, 1188, 1188, 852, 852, 852, 852, 324, 324, 1124, 1124, 300, 300, 512, 512, 884, 884, 852, 852, 1140, 1140, 852, 852, 1124, 1124, 852, 852, 1144, 1144, 852, 852, 824, 824, 852, 852, 1080, 1080, 1000, 1000, 1296, 1296, 852, 852, 1284, 1284, 852, 852, 852, 852, 1196, 1196, 432, 432, 1112, 1112, 696, 696, 400, 400, 852, 852, 852, 852, 440, 440, 852, 852, 1260, 1260, 808, 808, 572, 572, 852, 852, 772, 772, 428, 428, 940, 940, 852, 852, 480, 480, 1196, 1196, 1020, 1020, 492, 492, 1012, 1012, 852, 852, 964, 964, 1284, 1284, 852, 852, 852, 852, 852, 852, 852, 852, 820, 820, 852, 852, 944, 944, 1180, 1180, 852, 852, 528, 528, 1432, 1432, 852, 852, 976, 976, 764, 764, 1048, 1048, 852, 852, 852, 852, 852, 852, 352, 352, 852, 852, 1408, 1408, 564, 564, 852, 852, 852, 852, 1460, 1460, 1072, 1072, 548, 548, 852, 852, 688, 688, 852, 852, 852, 852, 488, 488, 1028, 1028, 540, 540, 1400, 1400, 852, 852, 852, 852, 1000, 1000, 852, 852, 892, 892, 852, 852, 852, 852, 1056, 1056, 852, 852, 1496, 1496, 852, 852, 852, 852, 1316, 1316, 1396, 1396, 1172, 1172, 852, 852, 852, 852, 852, 852, 708, 708]
-    # scc_duration_list = [142, 142, 142, 142, 64, 142, 142, 142, 136, 142, 142, 142, 142, 142, 142, 142, 80, 142, 142, 142, 142, 196, 88, 108, 108, 142, 142, 142, 72, 142, 142, 142, 142, 142, 64, 142, 142, 142, 142, 142, 104, 160, 84, 142, 36, 36, 92, 142, 142, 142, 48, 56, 48, 172, 142, 142, 80, 142, 142, 48, 142, 142, 142, 142, 142, 142, 142, 142, 142, 142, 72, 112, 142, 142, 142, 140, 142, 142, 52, 72, 72, 142, 142, 36, 36, 68, 142, 142, 142, 142, 36, 48, 142, 142, 142, 152, 142, 142, 104, 72, 68, 124, 112, 108, 164, 168, 142, 142, 142, 142, 142, 142, 64, 64, 142, 132, 142, 142, 72, 142, 152, 142, 164, 164, 164, 142, 142, 142, 156, 142, 142, 142, 142, 142, 142, 142, 142, 142, 124, 142, 142, 142, 64, 142, 108, 108, 142, 142, 142, 142, 142, 142, 140, 142, 142, 142, 100, 142, 142, 142, 188, 188, 76, 142, 142, 100, 142, 160, 160, 124, 142, 142, 136, 142, 142, 142, 142, 142, 142, 64, 142, 142, 142, 142, 132, 172, 56, 142, 64, 64, 196, 68, 142, 92, 92, 142, 142, 142, 142, 142, 142, 142, 48, 142, 142, 144, 142, 142, 142, 142, 142, 142, 142, 142, 196, 142, 142, 142, 76, 142, 142, 142, 64, 142, 142, 136, 136, 142, 142, 142, 142, 100, 142, 142, 142, 142, 142, 96, 142, 142, 124, 124, 124, 142, 142, 142, 142, 142, 56, 142, 142, 142, 142, 142, 88, 142, 142, 196, 142, 120, 120, 142, 142, 142, 142, 142, 142, 142, 142, 142, 142, 72, 142, 142, 142, 116, 116, 48, 36, 36, 142, 142, 142, 36, 104, 56, 40, 142, 142, 142, 142, 40, 142, 142, 142, 142, 92, 142, 192, 142, 68, 142, 142, 142, 142, 168, 142, 142]
-    #254NVs
-    # pol_duration_list = [336, 336, 308, 308, 428, 428, 504, 528, 372, 1060, 1060, 852, 852, 852, 612, 484, 1120, 852, 404, 404, 812, 672, 672, 560, 644, 644, 352, 352, 380, 380, 852, 852, 620, 620, 628, 628, 292, 292, 528, 528, 392, 392, 524, 524, 680, 504, 396, 396, 324, 324, 428, 240, 240, 504, 540, 540, 852, 1188, 1188, 764, 764, 976, 976, 820, 820, 444, 444, 1100, 488, 488, 604, 972, 380, 380, 352, 352, 660, 592, 592, 416, 416, 452, 452, 620, 620, 576, 576, 316, 316, 660, 660, 660, 720, 720, 620, 1024, 852, 852, 1396, 1396, 464, 464, 416, 416, 624, 624, 1008, 1008, 460, 460, 508, 508, 668, 668, 448, 448, 440, 668, 668, 852, 852, 852, 852, 844, 1048, 1048, 320, 320, 780, 780, 492, 1476, 1476, 656, 656, 1064, 1064, 456, 344, 344, 852, 540, 352, 524, 852, 852, 1156, 1388, 308, 852, 852, 1360, 1360, 572, 572, 204, 696, 504, 504, 1332, 1332, 1012, 1012, 708, 708, 852, 912, 912, 804, 804, 608, 608, 948, 948, 596, 596, 1256, 1256, 808, 808, 852, 392, 392, 568, 568, 872, 872, 1268, 1268, 780, 780, 852, 852, 476, 476, 508, 508, 640, 640, 392, 392, 512, 700, 700, 700, 700, 932, 932, 840, 840, 852, 852, 1248, 1248, 852, 852, 852, 1444, 1444, 620, 620, 852, 852, 752, 752, 1052, 1052, 852, 852, 852, 852, 1248, 860, 860, 520, 520, 1320, 1320, 1096, 1096, 568, 568, 488, 488, 852, 852, 556, 556, 420, 420, 1192, 1192, 552, 552]
-    # scc_duration_list = [142, 142, 142, 142, 64, 142, 142, 142, 142, 142, 142, 142, 142, 142, 196, 108, 108, 142, 72, 142, 142, 142, 142, 64, 142, 142, 142, 142, 104, 160, 84, 142, 92, 142, 142, 142, 48, 56, 48, 172, 142, 142, 80, 142, 48, 142, 142, 142, 142, 142, 142, 142, 142, 72, 142, 142, 142, 142, 142, 52, 72, 72, 142, 142, 36, 36, 68, 142, 142, 142, 36, 142, 142, 152, 142, 142, 104, 68, 124, 112, 108, 164, 168, 142, 142, 142, 142, 142, 142, 64, 64, 132, 142, 142, 72, 142, 164, 142, 142, 142, 156, 142, 142, 142, 142, 142, 142, 142, 142, 142, 124, 142, 142, 142, 64, 142, 108, 142, 142, 142, 142, 142, 142, 140, 142, 142, 100, 142, 142, 142, 188, 76, 142, 142, 100, 142, 160, 124, 142, 142, 142, 142, 142, 64, 142, 142, 142, 132, 56, 64, 64, 196, 68, 142, 92, 92, 142, 142, 142, 48, 142, 142, 144, 142, 142, 142, 142, 142, 142, 142, 196, 142, 142, 142, 76, 142, 142, 142, 64, 142, 136, 136, 142, 142, 142, 142, 100, 142, 142, 142, 142, 142, 96, 142, 142, 124, 124, 124, 142, 142, 142, 142, 56, 142, 142, 142, 142, 142, 88, 142, 142, 196, 142, 120, 120, 142, 142, 142, 142, 142, 142, 142, 72, 142, 116, 116, 48, 142, 142, 142, 36, 56, 40, 142, 142, 142, 142, 40, 142, 142, 142, 142, 92, 142, 192, 142, 68, 142, 142, 142, 142, 168, 142, 142]
-    # 136NVs
-    # pol_duration_list = [504, 504, 648, 648, 592, 592, 608, 608, 680, 680, 884, 884, 652, 652, 556, 556, 408, 408, 680, 680, 304, 304, 396, 396, 368, 368, 708, 708, 592, 592, 724, 724, 412, 412, 324, 324, 352, 352, 360, 360, 428, 428, 316, 316, 420, 420, 728, 728, 680, 680, 360, 360, 504, 504, 300, 300, 420, 420, 400, 400, 552, 552, 272, 272, 568, 568, 516, 516, 512, 512, 300, 300, 680, 680, 380, 380, 304, 304, 580, 580, 648, 648, 764, 764, 596, 596, 852, 852, 928, 928, 496, 496, 444, 444, 620, 620, 640, 640, 588, 588, 572, 572, 768, 768, 996, 996, 616, 616, 908, 908, 752, 752, 644, 644, 1508, 1508, 664, 664, 928, 928, 1092, 1092, 468, 468, 416, 416, 444, 444, 760, 760, 760, 760, 1052, 1052, 844, 844, 492, 492, 324, 324, 516, 516, 676, 676, 964, 964, 528, 528, 684, 684, 820, 820, 1084, 1084, 552, 552, 752, 752, 952, 952, 956, 956, 968, 968, 1428, 1428, 892, 892, 788, 788, 500, 500, 416, 416, 808, 808, 656, 656, 240, 240, 1352, 1352, 1084, 1084, 964, 964, 680, 680, 592, 592, 680, 680, 1204, 1204, 656, 656, 656, 656, 972, 972, 660, 660, 1476, 1476, 1500, 1500, 808, 808, 568, 568, 832, 832, 520, 520, 1272, 1272, 1152, 1152, 572, 572, 1020, 1020, 680, 680, 1292, 1292, 740, 740, 1264, 1264, 864, 864, 1060, 1060, 1188, 1188, 656, 656, 1392, 1392, 980, 980, 1308, 1308, 868, 868, 1092, 1092, 1784, 1784, 956, 956, 1076, 1076, 680, 680, 1372, 1372, 680, 680, 1924, 1924, 1640, 1640, 1176, 1176, 1676, 1676, 1476, 1476, 972, 972]
-    # scc_duration_list = [76, 88, 116, 92, 88, 104, 108, 80, 80, 88, 100, 96, 96, 92, 72, 112, 96, 92, 92, 140, 96, 76, 100, 112, 72, 96, 92, 72, 92, 80, 100, 76, 80, 104, 80, 76, 96, 60, 68, 80, 80, 128, 92, 112, 80, 96, 80, 112, 72, 76, 76, 124, 124, 104, 108, 72, 84, 100, 112, 92, 180, 116, 76, 108, 112, 140, 120, 100, 72, 84, 128, 96, 100, 140, 96, 120, 136, 100, 128, 108, 92, 96, 96, 96, 96, 84, 92, 164, 88, 100, 132, 124, 100, 88, 84, 96, 124, 80, 88, 176, 128, 112, 172, 88, 140, 112, 108, 144, 104, 104, 112, 108, 244, 140, 108, 120, 100, 96, 164, 100, 140, 180, 108, 180, 92, 112, 124, 108, 176, 132, 120, 192, 232, 128, 104, 144]
-    #118NVs
-    # pol_duration_list =[504, 504, 648, 592, 608, 608, 680, 680, 884, 884, 652, 652, 556, 556, 408, 680, 304, 396, 396, 368, 708, 708, 592, 592, 724, 724, 412, 324, 324, 352, 360, 360, 428, 428, 316, 316, 420, 420, 728, 728, 680, 680, 360, 360, 504, 300, 300, 420, 420, 400, 400, 552, 272, 272, 568, 568, 516, 516, 512, 512, 300, 300, 680, 680, 380, 380, 304, 304, 580, 648, 648, 764, 764, 596, 596, 852, 852, 928, 928, 496, 496, 444, 620, 640, 640, 588, 588, 572, 572, 768, 768, 996, 996, 616, 908, 752, 752, 644, 1508, 1508, 664, 664, 928, 928, 1092, 1092, 468, 416, 444, 444, 760, 760, 760, 760, 1052, 1052, 844, 844]
-    # scc_duration_list =[76, 88, 92, 88, 108, 80, 80, 88, 100, 96, 96, 92, 72, 112, 92, 92, 76, 100, 112, 72, 92, 72, 92, 80, 100, 76, 104, 80, 76, 96, 68, 80, 80, 128, 92, 112, 80, 96, 80, 112, 72, 76, 76, 124, 104, 108, 72, 84, 100, 112, 92, 116, 76, 108, 112, 140, 120, 100, 72, 84, 128, 96, 100, 140, 96, 120, 136, 100, 108, 92, 96, 96, 96, 96, 84, 92, 164, 88, 100, 132, 124, 88, 96, 124, 80, 88, 176, 128, 112, 172, 88, 140, 112, 108, 104, 112, 108, 140, 108, 120, 100, 96, 164, 100, 140, 180, 108, 112, 124, 108, 176, 132, 120, 192, 232, 128, 104, 144]
-    ##johnson 312 NVs
-    # pol_duration_list = [392, 392, 736, 736, 720, 720, 708, 708, 1092, 1092, 772, 772, 1108, 1108, 868, 868, 1204, 1204, 936, 936, 704, 704, 288, 288, 800, 800, 732, 732, 352, 352, 864, 864, 804, 804, 580, 580, 708, 708, 772, 772, 920, 920, 1020, 1020, 1076, 1076, 676, 676, 480, 480, 684, 684, 748, 748, 300, 300, 764, 764, 572, 572, 704, 704, 806, 806, 856, 856, 380, 380, 736, 736, 820, 820, 660, 660, 1888, 1888, 392, 392, 704, 704, 420, 420, 464, 464, 700, 700, 806, 806, 304, 304, 806, 806, 724, 724, 708, 708, 520, 520, 776, 776, 384, 384, 680, 680, 724, 724, 1740, 1740, 716, 716, 952, 952, 876, 876, 660, 660, 1212, 1212, 936, 936, 806, 806, 392, 392, 828, 828, 796, 796, 308, 308, 692, 692, 492, 492, 806, 806, 288, 288, 806, 806, 944, 944, 660, 660, 728, 728, 806, 806, 806, 806, 806, 806, 1360, 1360, 596, 596, 724, 724, 412, 412, 806, 806, 806, 806, 806, 806, 564, 564, 652, 652, 696, 696, 1540, 1540, 728, 728, 652, 652, 392, 392, 448, 448, 304, 304, 392, 392, 968, 968, 772, 772, 640, 640, 548, 548, 664, 664, 468, 468, 806, 806, 504, 504, 806, 806, 700, 700, 1128, 1128, 672, 672, 300, 300, 1536, 1536, 836, 836, 304, 304, 1036, 1036, 1576, 1576, 804, 804, 806, 806, 640, 640, 806, 806, 1776, 1776, 612, 612, 844, 844, 732, 732, 684, 684, 928, 928, 628, 628, 972, 972, 988, 988, 680, 680, 1064, 1064, 708, 708, 780, 780, 1004, 1004, 1484, 1484, 912, 912, 600, 600, 484, 484, 636, 636, 720, 720, 1088, 1088, 806, 806, 824, 824, 608, 608, 956, 956, 708, 708, 692, 692, 428, 428, 836, 836, 806, 806, 396, 396, 760, 760, 384, 384, 524, 524, 852, 852, 1600, 1600, 806, 806, 1268, 1268, 788, 788, 308, 308, 728, 728, 304, 304, 832, 832, 288, 288, 728, 728, 728, 728, 912, 912, 452, 452, 1452, 1452, 588, 588, 1892, 1892, 1896, 1896, 476, 476, 1072, 1072, 580, 580, 1244, 1244, 1656, 1656, 1792, 1792, 1600, 1600, 1172, 1172, 540, 540, 1556, 1556, 668, 668, 704, 704, 504, 504, 792, 792, 376, 376, 716, 716, 684, 684, 692, 692, 1100, 1100, 806, 806, 444, 444, 520, 520, 1404, 1404, 736, 736, 1696, 1696, 428, 428, 600, 600, 1608, 1608, 806, 806, 1220, 1220, 1644, 1644, 1040, 1040, 1376, 1376, 752, 752, 468, 468, 652, 652, 908, 908, 806, 806, 748, 748, 528, 528, 440, 440, 848, 848, 656, 656, 696, 696, 792, 792, 888, 888, 808, 808, 584, 584, 832, 832, 680, 680, 806, 806, 1060, 1060, 806, 806, 1000, 1000, 940, 940, 712, 712, 796, 796, 996, 996, 806, 806, 812, 812, 748, 748, 692, 692, 806, 806, 556, 556, 1032, 1032, 692, 692, 806, 806, 872, 872, 980, 980, 806, 806, 1540, 1540, 768, 768, 308, 308, 806, 806, 872, 872, 1020, 1020, 1512, 1512, 1080, 1080, 960, 960, 1920, 1920, 728, 728, 804, 804, 648, 648, 806, 806, 1180, 1180, 640, 640, 1188, 1188, 1052, 1052, 928, 928, 1816, 1816, 960, 960, 532, 532, 1396, 1396, 1032, 1032, 1336, 1336, 444, 444, 436, 436, 532, 532, 424, 424, 884, 884, 904, 904, 812, 812, 884, 884, 888, 888, 684, 684, 1176, 1176, 636, 636, 460, 460, 924, 924, 984, 984, 1244, 1244, 806, 806, 1552, 1552, 1040, 1040, 896, 896, 980, 980, 940, 940, 1144, 1144, 784, 784, 806, 806, 912, 912, 764, 764, 1120, 1120, 692, 692, 1840, 1840, 996, 996, 1644, 1644, 1796, 1796, 1064, 1064, 816, 816, 732, 732, 848, 848, 952, 952, 806, 806, 1028, 1028, 720, 720, 796, 796, 1268, 1268, 1584, 1584, 1720, 1720, 1768, 1768, 806, 806, 1388, 1388, 924, 924, 1496, 1496]
-    # pol_duration_list = [ round(val/4) * 4 for val in pol_duration_list]
-    # scc_duration_list = [180, 176, 178, 168, 104, 108, 156, 136, 180, 188, 304, 144, 252, 164, 172, 148, 244, 152, 172, 116, 180, 172, 128, 124, 108, 304, 64, 144, 84, 176, 148, 192, 144, 178, 160, 208, 248, 284, 120, 152, 268, 176, 124, 252, 204, 304, 178, 132, 156, 160, 124, 180, 124, 200, 176, 160, 144, 204, 204, 188, 88, 196, 148, 168, 136, 148, 280, 120, 92, 120, 216, 232, 156, 96, 180, 164, 152, 192, 172, 108, 178, 192, 144, 168, 264, 108, 196, 176, 112, 304, 124, 136, 120, 136, 144, 128, 124, 68, 192, 112, 268, 160, 144, 160, 212, 204, 304, 196, 136, 156, 104, 140, 88, 128, 140, 304, 128, 304, 116, 148, 304, 116, 120, 304, 148, 92, 204, 200, 304, 252, 268, 178, 212, 100, 148, 164, 216, 304, 216, 148, 152, 180, 164, 148, 178, 120, 156, 204, 96, 152, 304, 304, 304, 144, 304, 208, 220, 168, 164, 212, 252, 100, 112, 160, 144, 304, 244, 178, 148, 304, 304, 212, 216, 304, 120, 220, 232, 124, 192, 76, 152, 172, 124, 172, 212, 236, 200, 208, 164, 304, 240, 304, 176, 178, 292, 304, 148, 160, 168, 304, 172, 204, 232, 178, 304, 232, 304, 116, 178, 192, 216, 88, 160, 128, 120, 148, 144, 236, 276, 156, 132, 212, 172, 148, 156, 192, 104, 232, 288, 200, 300, 180, 232, 216, 304, 208, 84, 196, 292, 304, 304, 148, 304, 304, 160, 208, 304, 304, 304, 180, 144, 304, 168, 304, 172, 276, 304, 236, 304, 178, 176, 288, 178, 212, 184, 208, 180, 216, 252, 212, 188, 176, 304, 304, 304, 156, 200, 304, 136, 100, 136, 80, 276, 304, 240, 178, 180, 304, 178, 220, 304, 176, 196, 280, 304, 304, 200, 304, 304, 188, 304, 204, 178, 208, 236, 304, 192, 232, 304, 304, 168, 304]
-    # scc_duration_list = [ round(val/4) * 4 for val in scc_duration_list]
-    ##johnson 230 NVs
-    # pol_duration_list = [760, 760, 668, 668, 608, 608, 700, 700, 1008, 1008, 616, 616, 492, 492, 836, 836, 392, 392, 1028, 1028, 312, 312, 772, 772, 600, 600, 1036, 1036, 840, 840, 728, 728, 728, 728, 1076, 1076, 412, 412, 440, 440, 860, 860, 848, 848, 704, 704, 508, 508, 652, 652, 836, 836, 796, 796, 728, 728, 712, 712, 696, 696, 436, 436, 612, 612, 612, 612, 748, 748, 956, 956, 676, 676, 668, 668, 404, 404, 776, 776, 468, 468, 688, 688, 548, 548, 1652, 1652, 652, 652, 1064, 1064, 488, 488, 616, 616, 744, 744, 368, 368, 468, 468, 744, 744, 740, 740, 1252, 1252, 668, 668, 536, 536, 820, 820, 400, 400, 812, 812, 1616, 1616, 984, 984, 576, 576, 920, 920, 624, 624, 548, 548, 692, 692, 692, 692, 536, 536, 552, 552, 508, 508, 684, 684, 672, 672, 492, 492, 388, 388, 496, 496, 1688, 1688, 652, 652, 1112, 1112, 756, 756, 480, 480, 556, 556, 1628, 1628, 1016, 1016, 664, 664, 716, 716, 780, 780, 624, 624, 1320, 1320, 644, 644, 620, 620, 688, 688, 880, 880, 576, 576, 1788, 1788, 744, 744, 1940, 1940, 676, 676, 696, 696, 1940, 1940, 716, 716, 668, 668, 680, 680, 1940, 1940, 692, 692, 712, 712, 944, 944, 776, 776, 796, 796, 732, 732, 684, 684, 668, 668, 752, 752, 856, 856, 596, 596, 776, 776, 1220, 1220, 616, 616, 308, 308, 520, 520, 808, 808, 740, 740, 952, 952, 1112, 1112, 1940, 1940, 1236, 1236, 1140, 1140, 656, 656, 1276, 1276, 1124, 1124, 100, 100, 1940, 1940, 1352, 1352, 640, 640, 1940, 1940, 1044, 1044, 468, 468, 780, 780, 456, 456, 536, 536, 584, 584, 1276, 1276, 760, 760, 396, 396, 600, 600, 1568, 1568, 764, 764, 796, 796, 780, 780, 1828, 1828, 1292, 1292, 1256, 1256, 840, 840, 516, 516, 760, 760, 1940, 1940, 876, 876, 684, 684, 756, 756, 808, 808, 616, 616, 604, 604, 844, 844, 588, 588, 800, 800, 1132, 1132, 1372, 1372, 976, 976, 836, 836, 1556, 1556, 628, 628, 944, 944, 1940, 1940, 460, 460, 892, 892, 444, 444, 960, 960, 700, 700, 1940, 1940, 528, 528, 1364, 1364, 448, 448, 468, 468, 1608, 1608, 1136, 1136, 1140, 1140, 648, 648, 984, 984, 936, 936, 808, 808, 1412, 1412, 600, 600, 748, 748, 912, 912, 1272, 1272, 1024, 1024, 596, 596, 980, 980, 1848, 1848, 640, 640, 912, 912, 1052, 1052, 868, 868, 580, 580, 836, 836, 792, 792, 600, 600, 972, 972, 1076, 1076, 1204, 1204, 1168, 1168, 1116, 1116, 988, 988, 800, 800, 988, 988, 1112, 1112, 1832, 1832, 1656, 1656, 1940, 1940, 964, 964, 1304, 1304, 728, 728, 892, 892, 1940, 1940, 940, 940, 1340, 1340, 1368, 1368, 1416, 1416, 1736, 1736, 1940, 1940, 1636, 1636, 1484, 1484]
-    # scc_duration_list = [88, 92, 84, 112, 88, 92, 156, 88, 80, 100, 84, 84, 92, 72, 104, 92, 92, 68, 100, 72, 100, 96, 92, 76, 88, 88, 88, 92, 84, 108, 116, 92, 72, 96, 116, 112, 76, 92, 100, 88, 84, 72, 64, 88, 76, 68, 72, 88, 120, 80, 96, 88, 92, 116, 80, 92, 112, 104, 156, 116, 80, 80, 92, 92, 92, 84, 100, 96, 116, 80, 76, 72, 76, 84, 84, 88, 176, 88, 96, 92, 92, 76, 68, 84, 128, 80, 84, 116, 88, 36, 84, 88, 96, 76, 112, 96, 80, 140, 92, 96, 100, 76, 84, 72, 80, 120, 80, 88, 124, 100, 76, 116, 68, 80, 92, 84, 96, 92, 104, 92, 136, 116, 136, 112, 76, 84, 92, 176, 108, 104, 120, 96, 92, 92, 88, 88, 84, 92, 124, 84, 112, 92, 68, 88, 88, 92, 80, 136, 92, 92, 124, 88, 72, 104, 100, 120, 108, 108, 84, 88, 92, 112, 112, 88, 112, 96, 132, 96, 88, 112, 116, 108, 100, 84, 96, 116, 100, 88, 132, 88, 92, 148, 96, 100, 92, 140, 88, 84, 84, 92, 96, 144, 112, 100, 100, 112, 104, 96, 84, 104, 104, 116, 76, 120, 148, 128, 92, 92, 100, 92, 108, 108, 92, 108, 112, 104, 112, 120, 144, 88, 100, 120, 100, 116, 144, 112, 104, 116, 132, 108]
-    ##johnson 223 NVs
-    # pol_duration_list = [760, 760, 668, 668, 608, 608, 700, 700, 1008, 1008, 616, 616, 492, 492, 836, 836, 392, 392, 1028, 1028, 312, 312, 772, 772, 600, 600, 1036, 1036, 840, 840, 728, 728, 728, 1076, 1076, 412, 440, 440, 860, 860, 848, 704, 704, 508, 508, 652, 652, 836, 836, 796, 796, 728, 728, 712, 712, 696, 696, 436, 436, 612, 612, 612, 612, 748, 748, 956, 956, 676, 676, 668, 668, 404, 404, 776, 776, 468, 468, 688, 688, 548, 548, 1652, 1652, 652, 652, 1064, 488, 488, 616, 616, 744, 368, 368, 468, 468, 744, 744, 740, 740, 1252, 1252, 668, 668, 536, 536, 820, 400, 400, 812, 812, 1616, 1616, 984, 984, 576, 576, 920, 920, 624, 624, 548, 548, 692, 692, 692, 692, 536, 536, 552, 552, 508, 508, 684, 684, 672, 672, 492, 492, 388, 496, 496, 1688, 1688, 652, 652, 1112, 1112, 756, 756, 480, 480, 556, 556, 1628, 1628, 1016, 1016, 664, 664, 716, 716, 780, 780, 624, 624, 1320, 1320, 644, 644, 620, 620, 688, 688, 880, 880, 576, 576, 1788, 1788, 744, 744, 1940, 1940, 676, 676, 696, 696, 1940, 1940, 716, 716, 668, 668, 680, 680, 1940, 1940, 692, 692, 712, 712, 944, 944, 776, 776, 796, 796, 732, 732, 684, 684, 668, 668, 752, 752, 856, 856, 596, 596, 776, 776, 1220, 1220]
-    # scc_duration_list = [88, 92, 84, 112, 88, 92, 156, 88, 80, 100, 84, 84, 92, 72, 104, 92, 92, 68, 100, 72, 100, 96, 92, 76, 88, 88, 88, 92, 84, 108, 116, 72, 96, 116, 112, 76, 100, 88, 84, 72, 88, 76, 68, 72, 88, 120, 80, 96, 88, 92, 116, 80, 92, 112, 104, 156, 116, 80, 80, 92, 92, 92, 84, 100, 96, 116, 80, 76, 72, 76, 84, 84, 88, 176, 88, 96, 92, 92, 76, 68, 84, 128, 80, 84, 116, 88, 84, 88, 96, 76, 96, 80, 140, 92, 96, 100, 76, 84, 72, 80, 120, 80, 88, 124, 100, 76, 68, 80, 92, 84, 96, 92, 104, 92, 136, 116, 136, 112, 76, 84, 92, 176, 108, 104, 120, 96, 92, 92, 88, 88, 84, 92, 124, 84, 112, 92, 68, 88, 88, 80, 136, 92, 92, 124, 88, 72, 104, 100, 120, 108, 108, 84, 88, 92, 112, 112, 88, 112, 96, 132, 96, 88, 112, 116, 108, 100, 84, 96, 116, 100, 88, 132, 88, 92, 148, 96, 100, 92, 140, 88, 84, 84, 92, 96, 144, 112, 100, 100, 112, 104, 96, 84, 104, 104, 116, 76, 120, 148, 128, 92, 92, 100, 92, 108, 108, 92, 108, 112, 104, 112, 120, 144, 88, 100, 120, 100, 116, 144, 112, 104, 116, 132, 108]
-    ### Johnso 204NVs
-    # pol_duration_list = [760, 760, 668, 668, 608, 608, 700, 1008, 1008, 616, 616, 492, 492, 836, 836, 392, 392, 1028, 1028, 312, 312, 772, 600, 600, 1036, 1036, 840, 840, 728, 728, 728, 412, 440, 440, 860, 860, 848, 704, 704, 508, 508, 652, 652, 836, 836, 796, 728, 728, 712, 696, 436, 436, 612, 612, 612, 612, 748, 956, 956, 676, 676, 668, 668, 404, 404, 776, 776, 468, 468, 688, 688, 548, 548, 1652, 1652, 652, 652, 1064, 488, 488, 616, 616, 744, 368, 368, 468, 468, 744, 740, 740, 1252, 1252, 668, 668, 536, 820, 400, 400, 812, 812, 1616, 1616, 984, 984, 576, 576, 920, 920, 624, 624, 548, 692, 692, 692, 536, 552, 552, 508, 508, 684, 684, 672, 492, 492, 388, 496, 496, 1688, 1688, 652, 652, 1112, 1112, 756, 756, 480, 556, 556, 1628, 1628, 1016, 1016, 664, 664, 716, 780, 780, 624, 624, 1320, 1320, 644, 644, 620, 620, 688, 688, 880, 880, 576, 576, 1788, 1788, 744, 744, 1940, 1940, 676, 676, 696, 696, 1940, 1940, 716, 716, 668, 668, 680, 1940, 1940, 692, 712, 712, 944, 944, 776, 776, 796, 796, 732, 684, 684, 668, 668, 752, 752, 856, 856, 596, 596, 776, 776, 1220, 1220]
-    # pol_duration_list = [740, 740, 948, 948, 1112, 1112, 556, 556, 948, 948, 756, 756, 756, 756, 824, 824, 1184, 1184, 804, 804, 744, 744, 828, 828, 1644, 1644, 948, 948, 560, 560, 876, 876, 1320, 1320, 948, 948, 972, 972, 748, 748, 1084, 1084, 948, 948, 1076, 1076, 1196, 1196, 840, 840, 1264, 1264, 760, 760, 936, 936, 864, 864, 856, 856, 812, 812, 852, 852, 872, 872, 760, 760, 732, 732, 800, 800, 952, 952, 1556, 1556, 892, 892, 936, 936, 1472, 1472, 720, 720, 700, 700, 944, 944, 788, 788, 808, 808, 768, 768, 1072, 1072, 784, 784, 832, 832, 776, 776, 1516, 1516, 996, 996, 972, 972, 864, 864, 940, 940, 800, 800, 980, 980, 916, 916, 836, 836, 936, 936, 764, 764, 788, 788, 760, 760, 800, 800, 1888, 1888, 692, 692, 876, 876, 932, 932, 948, 948, 1420, 1420, 728, 728, 928, 928, 848, 848, 912, 912, 876, 876, 884, 884, 1224, 1224, 1308, 1308, 856, 856, 1172, 1172, 960, 960, 1048, 1048, 1060, 1060, 824, 824, 844, 844, 800, 800, 1560, 1560, 756, 756, 1652, 1652, 1080, 1080, 816, 816, 864, 864, 876, 876, 900, 900, 812, 812, 892, 892, 1224, 1224, 1608, 1608, 960, 960, 780, 780, 504, 504, 1188, 1188, 972, 972, 968, 968, 1036, 1036, 924, 924, 852, 852, 948, 948, 1016, 1016, 1744, 1744, 924, 924, 884, 884, 816, 816, 796, 796, 816, 816, 1008, 1008, 952, 952, 796, 796, 936, 936, 1220, 1220, 948, 948, 888, 888, 1672, 1672, 848, 848, 880, 880, 1748, 1748, 1752, 1752, 1008, 1008, 824, 824, 844, 844, 980, 980, 948, 948, 1116, 1116, 784, 784, 988, 988, 904, 904, 804, 804, 832, 832, 864, 864, 1196, 1196, 1844, 1844, 948, 948, 1000, 1000, 896, 896, 936, 936, 1100, 1100, 948, 948, 824, 824, 1064, 1064, 1000, 1000, 1128, 1128, 912, 912, 948, 948, 1424, 1424, 948, 948, 832, 832, 928, 928, 948, 948, 908, 908, 940, 940, 1076, 1076, 976, 976, 1164, 1164, 1112, 1112, 1488, 1488, 920, 920, 944, 944, 960, 960, 948, 948, 1280, 1280, 880, 880, 1064, 1064, 1720, 1720, 848, 848, 1064, 1064, 1064, 1064, 1116, 1116, 1216, 1216, 1028, 1028, 880, 880, 1084, 1084, 888, 888, 1416, 1416, 1272, 1272, 1144, 1144, 948, 948, 1492, 1492, 1440, 1440, 948, 948, 948, 948, 1224, 1224, 976, 976, 1000, 1000, 940, 940, 948, 948, 1076, 1076, 1388, 1388, 1656, 1656, 1228, 1228, 1496, 1496, 948, 948, 1224, 1224, 1532, 1532]
-    pol_duration_list = [616, 616, 1248, 1248, 744, 744, 676, 676, 800, 800, 940, 940, 712, 712, 816, 816, 1048, 1048, 776, 776, 752, 752, 992, 992, 708, 708, 804, 804, 808, 808, 804, 804, 884, 884, 804, 804, 300, 300, 804, 804, 848, 848, 732, 732, 768, 768, 1280, 1280, 568, 568, 744, 744, 536, 536, 540, 540, 960, 960, 228, 228, 880, 880, 764, 764, 804, 804, 804, 804, 840, 840, 860, 860, 792, 792, 844, 844, 692, 692, 308, 308, 1172, 1172, 920, 920, 516, 516, 768, 768, 792, 792, 972, 972, 856, 856, 888, 888, 780, 780, 804, 804, 804, 804, 804, 804, 720, 720, 232, 232, 304, 304, 664, 664, 868, 868, 612, 612, 744, 744, 744, 744, 648, 648, 768, 768, 844, 844, 712, 712, 712, 712, 740, 740, 464, 464, 804, 804, 988, 988, 1096, 1096, 752, 752, 840, 840, 292, 292, 976, 976, 760, 760, 1220, 1220, 1256, 1256, 500, 500, 828, 828, 740, 740, 952, 952, 304, 304, 740, 740, 804, 804, 1232, 1232, 704, 704, 808, 808, 720, 720, 784, 784, 732, 732, 828, 828, 800, 800, 704, 704, 784, 784, 900, 900, 788, 788, 784, 784, 756, 756, 956, 956, 820, 820, 748, 748, 800, 800, 764, 764, 684, 684, 740, 740, 812, 812, 932, 932, 804, 804, 968, 968, 304, 304, 872, 872, 804, 804, 692, 692, 828, 828, 828, 828, 1048, 1048, 560, 560, 700, 700, 572, 572, 832, 832, 792, 792, 804, 804, 744, 744, 816, 816, 740, 740, 788, 788, 1124, 1124, 868, 868, 724, 724, 852, 852, 856, 856, 756, 756, 1216, 1216, 860, 860, 424, 424, 868, 868, 416, 416, 796, 796, 572, 572, 292, 292, 924, 924, 940, 940, 1004, 1004, 840, 840, 872, 872, 308, 308, 832, 832, 1304, 1304, 836, 836, 752, 752, 776, 776, 852, 852, 772, 772, 1028, 1028, 1356, 1356, 1256, 1256, 528, 528, 736, 736, 1084, 1084, 648, 648, 848, 848, 804, 804, 764, 764, 760, 760, 580, 580, 1000, 1000, 300, 300, 744, 744, 784, 784, 1212, 1212, 804, 804, 712, 712, 860, 860, 1160, 1160, 816, 816, 676, 676, 828, 828, 804, 804, 808, 808, 844, 844, 924, 924, 868, 868, 844, 844, 1004, 1004, 784, 784, 900, 900, 804, 804, 776, 776, 808, 808, 924, 924, 1416, 1416, 720, 720, 908, 908, 764, 764, 456, 456, 900, 900, 560, 560, 948, 948, 828, 828, 964, 964, 1192, 1192, 1164, 1164, 1408, 1408, 908, 908]
-    # scc_duration_list = [88, 92, 84, 112, 88, 92, 88, 80, 100, 84, 84, 92, 72, 104, 92, 92, 68, 100, 72, 100, 96, 92, 88, 88, 88, 92, 84, 108, 116, 72, 96, 76, 100, 88, 84, 72, 88, 76, 68, 72, 88, 120, 80, 96, 88, 92, 80, 92, 112, 156, 80, 80, 92, 92, 92, 84, 96, 116, 80, 76, 72, 76, 84, 84, 88, 176, 88, 96, 92, 92, 76, 68, 84, 128, 80, 84, 116, 88, 84, 88, 96, 76, 96, 80, 140, 92, 96, 76, 84, 72, 80, 120, 80, 88, 100, 76, 68, 80, 92, 84, 96, 92, 104, 92, 136, 116, 136, 112, 76, 84, 92, 108, 120, 96, 92, 88, 88, 84, 92, 124, 84, 92, 68, 88, 88, 80, 136, 92, 92, 124, 88, 72, 104, 100, 120, 108, 84, 88, 92, 112, 112, 88, 112, 96, 96, 88, 112, 116, 108, 100, 84, 96, 116, 100, 88, 132, 88, 92, 148, 96, 100, 92, 140, 88, 84, 84, 92, 96, 144, 112, 100, 100, 112, 104, 96, 84, 104, 104, 76, 120, 128, 92, 92, 100, 92, 108, 108, 92, 108, 104, 112, 120, 144, 88, 100, 120, 100, 116, 144, 112, 104, 116, 132, 108]
-    # scc_duration_list = [88, 92, 80, 88, 96, 96, 92, 108, 96, 100, 88, 88, 88, 92, 88, 108, 64, 96, 72, 116, 84, 88, 80, 76, 92, 88, 84, 104, 120, 84, 100, 112, 140, 84, 100, 76, 88, 76, 88, 76, 80, 156, 84, 96, 88, 100, 72, 84, 84, 188, 88, 96, 84, 108, 104, 84, 84, 96, 84, 88, 76, 80, 96, 84, 100, 160, 104, 80, 96, 152, 84, 80, 80, 120, 80, 96, 108, 80, 84, 100, 100, 80, 96, 72, 128, 72, 76, 100, 92, 76, 76, 124, 88, 96, 84, 100, 88, 76, 100, 96, 80, 80, 120, 96, 120, 160, 148, 100, 80, 96, 92, 96, 112, 116, 92, 88, 92, 76, 108, 124, 84, 92, 88, 120, 100, 84, 124, 96, 112, 116, 88, 92, 96, 76, 148, 96, 92, 88, 92, 104, 116, 96, 116, 96, 92, 88, 108, 100, 104, 88, 80, 96, 112, 108, 108, 120, 96, 88, 112, 116, 116, 108, 140, 96, 92, 92, 96, 164, 160, 92, 108, 116, 96, 92, 100, 124, 100, 108, 96, 112, 148, 92, 84, 96, 100, 124, 96, 92, 84, 104, 108, 108, 124, 76, 92, 132, 104, 104, 160, 112, 160, 148, 220, 140]
-    # scc_duration_list = [60, 72, 64, 72, 68, 76, 68, 72, 88, 76, 64, 76, 72, 72, 64, 68, 68, 76, 68, 80, 92, 64, 72, 68, 76, 76, 64, 76, 88, 68, 60, 64, 100, 76, 68, 68, 84, 64, 64, 60, 80, 84, 72, 68, 84, 72, 72, 84, 80, 112, 96, 88, 76, 68, 72, 72, 72, 84, 68, 64, 60, 52, 68, 68, 76, 76, 64, 60, 76, 92, 72, 56, 64, 80, 60, 88, 76, 68, 92, 80, 68, 64, 88, 64, 92, 68, 72, 68, 72, 68, 60, 92, 60, 88, 76, 60, 60, 64, 92, 72, 68, 72, 84, 72, 76, 112, 108, 92, 76, 72, 100, 88, 76, 84, 88, 64, 80, 68, 80, 104, 76, 80, 68, 100, 76, 68, 96, 76, 120, 96, 72, 56, 80, 68, 104, 88, 76, 60, 68, 76, 100, 76, 100, 88, 68, 76, 88, 80, 80, 72, 88, 84, 92, 96, 84, 84, 80, 60, 120, 80, 80, 76, 124, 88, 72, 68, 76, 76, 104, 80, 88, 92, 100, 76, 80, 96, 72, 88, 76, 96, 112, 84, 76, 104, 96, 96, 100, 84, 84, 92, 96, 100, 124, 76, 96, 120, 76, 88, 112, 100, 108, 128, 120, 112] 
-    scc_duration_list = [76, 72, 64, 80, 80, 84, 68, 72, 80, 72, 76, 80, 72, 80, 68, 80, 76, 84, 64, 100, 80, 72, 68, 68, 76, 80, 76, 80, 96, 64, 68, 72, 112, 84, 68, 64, 80, 80, 60, 64, 84, 92, 72, 80, 80, 72, 80, 76, 88, 128, 100, 72, 68, 72, 76, 80, 68, 76, 80, 68, 60, 56, 80, 64, 84, 104, 76, 72, 72, 84, 76, 64, 68, 84, 72, 92, 84, 72, 72, 96, 80, 64, 84, 72, 104, 76, 68, 68, 68, 64, 64, 92, 72, 68, 96, 68, 68, 68, 88, 72, 80, 72, 84, 76, 88, 128, 108, 92, 68, 72, 104, 96, 92, 84, 88, 68, 84, 76, 88, 104, 76, 84, 72, 96, 84, 72, 84, 80, 100, 104, 88, 72, 80, 64, 132, 88, 76, 64, 68, 84, 100, 76, 100, 100, 84, 80, 108, 88, 88, 84, 76, 92, 108, 92, 92, 84, 80, 72, 104, 92, 120, 84, 108, 84, 84, 80, 72, 84, 116, 80, 84, 84, 104, 84, 76, 76, 96, 104, 80, 100, 104, 80, 80, 88, 96, 120, 96, 76, 88, 92, 112, 96, 132, 68, 88, 124, 100, 100, 148, 96, 108, 112, 148, 124]
+    ### Johnso 205NVs
+    # pol_duration_list = [296, 296, 944, 944, 1288, 1288, 440, 440, 972, 972, 652, 652, 836, 836, 868, 868, 756, 756, 1904, 1904, 836, 836, 220, 220, 440, 440, 1616, 1616, 448, 448, 868, 868, 740, 740, 708, 708, 796, 796, 472, 472, 948, 948, 876, 876, 596, 596, 660, 660, 1040, 1040, 852, 852, 1424, 1424, 720, 720, 860, 860, 252, 252, 732, 732, 808, 808, 644, 644, 836, 836, 724, 724, 228, 228, 960, 960, 1812, 1812, 856, 856, 804, 804, 648, 648, 612, 612, 848, 848, 552, 552, 972, 972, 876, 876, 1028, 1028, 556, 556, 912, 912, 1732, 1732, 340, 340, 792, 792, 724, 724, 756, 756, 1272, 1272, 908, 908, 884, 884, 980, 980, 868, 868, 668, 668, 1236, 1236, 892, 892, 460, 460, 344, 344, 844, 844, 952, 952, 720, 720, 836, 836, 872, 872, 1004, 1004, 896, 896, 740, 740, 452, 452, 944, 944, 788, 788, 212, 212, 776, 776, 968, 968, 308, 308, 720, 720, 1376, 1376, 396, 396, 756, 756, 832, 832, 864, 864, 924, 924, 904, 904, 792, 792, 608, 608, 624, 624, 788, 788, 412, 412, 660, 660, 444, 444, 764, 764, 912, 912, 560, 560, 984, 984, 788, 788, 900, 900, 820, 820, 780, 780, 840, 840, 576, 576, 1560, 1560, 836, 836, 524, 524, 900, 900, 580, 580, 220, 220, 816, 816, 1224, 1224, 1048, 1048, 1108, 1108, 976, 976, 564, 564, 824, 824, 864, 864, 992, 992, 896, 896, 1320, 1320, 868, 868, 860, 860, 752, 752, 768, 768, 808, 808, 724, 724, 844, 844, 744, 744, 1236, 1236, 808, 808, 836, 836, 772, 772, 696, 696, 1344, 1344, 936, 936, 1124, 1124, 688, 688, 836, 836, 676, 676, 1408, 1408, 404, 404, 1072, 1072, 1304, 1304, 752, 752, 748, 748, 232, 232, 784, 784, 732, 732, 764, 764, 836, 836, 908, 908, 1436, 1436, 676, 676, 748, 748, 696, 696, 1064, 1064, 1652, 1652, 904, 904, 1308, 1308, 804, 804, 1532, 1532, 1528, 1528, 1336, 1336, 1008, 1008, 864, 864, 1896, 1896, 872, 872, 1276, 1276, 224, 224, 812, 812, 832, 832, 1136, 1136, 752, 752, 1284, 1284, 1296, 1296, 1096, 1096, 1672, 1672, 892, 892, 664, 664, 836, 836, 868, 868, 860, 860, 948, 948, 948, 948, 736, 736, 856, 856, 796, 796, 1028, 1028, 1588, 1588, 796, 796, 736, 736, 864, 864, 764, 764, 832, 832, 1916, 1916, 712, 712, 208, 208, 836, 836, 756, 756, 836, 836, 1024, 1024, 936, 936, 836, 836, 688, 688]
+    # scc_duration_list = [96, 72, 108, 84, 72, 72, 168, 60, 60, 132, 96, 60, 76, 112, 64, 88, 80, 72, 72, 112, 68, 96, 80, 84, 76, 92, 100, 76, 76, 128, 124, 68, 68, 96, 80, 76, 104, 92, 84, 152, 84, 108, 200, 136, 76, 80, 80, 112, 92, 68, 68, 76, 68, 68, 76, 60, 116, 64, 76, 68, 72, 68, 96, 80, 80, 96, 68, 76, 60, 72, 80, 96, 76, 72, 76, 96, 84, 136, 116, 76, 140, 68, 68, 116, 84, 68, 100, 96, 196, 84, 72, 104, 96, 120, 96, 68, 100, 96, 100, 72, 92, 72, 96, 136, 172, 136, 144, 152, 176, 92, 96, 68, 88, 76, 64, 144, 92, 88, 72, 108, 72, 112, 96, 108, 96, 184, 88, 116, 80, 76, 144, 136, 96, 80, 120, 100, 76, 96, 168, 188, 112, 112, 72, 76, 100, 116, 92, 164, 96, 196, 100, 76, 88, 100, 96, 144, 96, 84, 116, 84, 76, 108, 88, 96, 96, 96, 96, 96, 172, 116, 128, 100, 84, 84, 100, 96, 76, 96, 96, 96, 104, 88, 152, 108, 100, 104, 96, 124, 96, 124, 96, 116, 96, 132, 172, 128, 180, 96, 96, 124, 140, 96, 96, 120, 120]
     # median = np.median(scc_duration_list)
-    # scc_duration_list = [int(median) if (val < 24 or val > 200) else val for val in scc_duration_list]
-    # print(scc_duration_list)
+    # scc_duration_list = [int(median) if (val < 60 or val > 200) else val for val in scc_duration_list]
+    # pol_duration_list = [int((val/4)*4)  for val in scc_duration_list]
+    # pol_duration_list = [((val + 2) // 4) * 4 for val in pol_duration_list]
+    # print(pol_duration_list)
     # sys.exit()
+    
     # arranged_scc_amp_list = [None] * num_nvs
     # arranged_scc_duration_list = [None] * num_nvs
     # arranged_pol_duration_list = [None] * len(pol_duration_list)
@@ -1635,13 +1778,44 @@ if __name__ == "__main__":
     # # # Assign back to original lists
     # scc_duration_list = arranged_scc_duration_list
     # pol_duration_list = arranged_pol_duration_list
-    # scc_amp_list = arranged_scc_amp_list 
-    indices_113_MHz = [0, 1, 3, 6, 10, 14, 16, 17, 19, 23, 24, 25, 26, 27, 32, 33, 34, 35, 37, 38, 41, 49, 50, 51, 53, 54, 55, 60, 62, 63, 64, 66, 67, 68, 70, 72, 73, 74, 75, 76, 78, 80, 81, 82, 83, 84, 86, 88, 90, 92, 93, 95, 96, 99, 100, 101, 102, 103, 105, 108, 109, 111, 113, 114]
-    indices_217_MHz = [0, 2, 4, 5, 7, 8, 9, 11, 12, 13, 15, 18, 20, 21, 22, 28, 29, 30, 31, 36, 39, 40, 42, 43, 44, 45, 46, 47, 48, 52, 56, 57, 58, 59, 61, 65, 69, 71, 77, 79, 85, 87, 89, 91, 94, 97, 98, 104, 106, 107, 110, 112, 115, 116, 117]
-    # scc_amp_list = [1.0] * num_nv
-    # scc_duration_list = [88] * num_nvs
-    # pol_duration_list = [600] * num_nvs
-    # pol_duration_list = [1000] * num_nvs
+    # scc_amp_list = arranged_scc_amp_list
+
+    scc_duration_list = [88] * num_nvs
+    pol_duration_list = [1000] * num_nvs
+    
+    # -------------------------------------------
+    # Choose the current/base amplitudes
+    # scale=1.0 means these base values
+    # -------------------------------------------
+    pol_base_amp = 0.11   # current green CHARGE_POL amplitude
+    scc_base_amp = 0.13   # current red SCC amplitude
+
+    # IMPORTANT:
+    # freq_index should match the AOD axis you actually calibrated.
+    # If your calibration corresponds to the first AOD frequency, use 0.
+    # If second axis, use 1.
+    freq_index_green = 0
+    freq_index_red = 0
+
+    charge_pol_amps = [
+        green_amp_scale_fn(
+            get_freq_from_coords(green_coords_list[i], freq_index_green),
+            pol_base_amp,
+        )
+        for i in range(num_nvs)
+    ]
+
+    scc_amp_list = [
+        red_amp_scale_fn(
+            get_freq_from_coords(red_coords_list[i], freq_index_red),
+            scc_base_amp,
+        )
+        for i in range(num_nvs)
+    ]
+
+    # print("charge_pol_amps range:", min(charge_pol_amps), max(charge_pol_amps))
+    # print("scc_amp_list range:", min(scc_amp_list), max(scc_amp_list))
+    # sys.exit()
     # nv_list[i] will have the ith coordinates from the above lists
     nv_list: list[NVSig] = []
     for ind in range(num_nvs):
@@ -1675,20 +1849,16 @@ if __name__ == "__main__":
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
-    # nv_sig.expected_counts = 900
-    # nv_sig.expected_counts = 1400
-    nv_sig.expected_counts = 1300
-    # nv_sig.expected_counts = 1250
-    # nv_sig.expected_counts = 1800
-
+    # nv_sig.expected_counts = 1100.0
+    # nv_sig.expected_counts = 1700
     # nv_list = nv_list[::-1]  # flipping the order of NVs
-    # nv_list = nv_list[:1]
+    # nv_list = nv_list[:150]
     print(f"length of NVs list:{len(nv_list)}")
     # sys.exit()
     # endregion
 
     # region Functions to run
-    email_recipient = "mccambria@berkeley.edu"
+    email_recipient = "schand@berkeley.edu"
     do_email = False
     try:
         # this is to create a flag that tell expt is runnig
@@ -1697,36 +1867,43 @@ if __name__ == "__main__":
         # pass
         kpl.init_kplotlib()
         # tb.init_safe_stop()
-        # widefield.reset_all_drift()
+        # widefield.reset_all_drift()1
         # do_optimize_z(nv_sig)
-        # do_optimize_xyz(nv_sig)
+        # do_optimize_xyz(nv_sig) 
         # pos.set_xyz_on_nv(nv_sig)
         # piezo_voltage_to_pixel_calibration()
 
         ### warning: this direclty iamge the laser spo, boftfor starign this makesure the red laser so set to 1mw on GUI
-        ### ⚠️ CAUTION: direct laser imaging, check power
-        ### ⚠️ CAUTION Set RED ≈ 0.1 mW • Exposure ≤ 0.1ms • Low em gain ≤ 10 / ND filter if needed
+        ### CAUTION: direct laser imaging, check power
+        ### CAUTION Set RED ≈ 0.1 mW • Exposure ≤ 0.1ms • Low em gain ≤ 10 / ND filter if needed
         # do_red_calibration_image(
         #     nv_sig,
-        #     red_coords_list,
-        #     force_laser_key=VirtualLaserKey.RED_IMAGING,
+        #     red_coords_list, 
+        #     force_laser_key=VirtualLaserKey.RED_IMAGIN,
+        # )
+        
+        # do_compensate_for_drift(nv_sig)
+        
+        # do_red_calibration_image(
+        #     nv_sig,
+        #     green_coords_list,
+        #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_compensate_for_drift(nv_sig)
         # do_widefield_image_sample(nv_sig, 50)
-        # do_widefield_image_sample(nv_sig, 400)
+        # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list:
-            # do_scanning_image_sample_zoom(nv)
+        #     do_scanning_image_sample_zoom(nv)
 
         # do_scanning_image_sample(nv_sig)
         # do_scanning_image_sample_zoom(nv_sig)
         # do_scanning_image_full_roi(nv_sig)
 
-        # scan_equilateral_triangle(nv_sig, center_coord=sample_coords, radius=0.4)
+        # scan_equilateral_triangle(nv_sig, center_coord=sample_coords, radius=0.6)
         # do_image_nv_list(nv_list)
         # do_image_single_nv(nv_sig)
-        # z_range = np.linspace(1.5, 1.9, 11)
+        # z_range = np.linspace(0, 3.0, 31)
         # for z in z_range:
         #     nv_sig.coords[CoordsKey.Z] = z
         #     do_scanning_image_sample(nv_sig)
@@ -1735,7 +1912,7 @@ if __name__ == "__main__":
         # # --- Step 1: Start at (0, 0) ---
         # sample_coord = [0.0, 0.0]
         # z = estimate_z(*sample_coord)
-        # nv_sig.coords[CoordsKey.SAMPLE] = sample_coord
+        # nv_sig.coords[Coo/*rdsKey.SAMPLE] = sample_coord
         # nv_sig.coords[CoordsKey.Z] = z
         # print(f"[START] Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         # do_scanning_image_sample(nv_sig)
@@ -1752,14 +1929,15 @@ if __name__ == "__main__":
         #         print(f"Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         #         do_scanning_image_sample(nv_sig)
 
-        # do_opx_constant_ac()
+        do_opx_constant_ac()
         # do_opx_square_wave()
-
+        # do_green_red_triplet_time_mux()
+        
         # do_optimize_pixel(nv_sig)
         # do_optimize_green(nv_sig)
         # repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
         # do_optimize_red(nv_sig, repr_nv_sig)
-        # do_optimize_z(nv_sig).
+        # do_optimize_z(nv_sig)
 
         # do_optimize_sample(nv_sig)
         # optimize.optimize_pixel_and_z(nv_sig, do_plot=True)
@@ -1767,7 +1945,7 @@ if __name__ == "__main__":
         # coords_key = green_laser
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
-
+ 
         # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
@@ -1775,8 +1953,10 @@ if __name__ == "__main__":
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
         # do_optimize_readout_amp(nv_list)
+        # do_optimize_pol_duration(nv_list)
+    
         # do_optimize_readout_duration(nv_list)
-        # optimize_readout_amp_and_duration(nv_list) 
+        # optimize_readout_amp_and_duration(nv_list)
         # do_optimize_spin_pol_amp(nv_list)
         # do_check_readout_fidelity(nv_list)
         # do_optimize_aod_access_time(nv_list)
@@ -1793,18 +1973,21 @@ if __name__ == "__main__":
         # do_spin_echo_phase_scan_test(nv_list)  # for iq mod test
         # evol_time_list = [18000, 19600, 21000]
 
-        # evol_time_list = [15000]  # ns
-        # seq_types = ["hahn", "xy4", "xy8"]  # or add "ramsey", "xy16"
+        # evol_time_list = [16]
+        # seq_types = ["hahn", "xy4", "xy8"]
         # for seq_type in seq_types:
         #     for evol_time in evol_time_list:
         #         print(f"Running {seq_type} at evol_time={evol_time} ns")
         #         do_widefield_coherence_test(nv_list, evol_time, seq_type)
+
+        # do_widefield_coherence_test(nv_list, 800, "xy8")
 
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_calibrate_iq_delay(nv_list)
         # do_rabi(nv_list)
         # do_power_rabi(nv_list)
         # do_resonance(nv_list)
+        # do_optimize_pol_duration(nv_list)
         # do_rabi(nv_list)
         # do_deer_hahn(nv_list)
         # do_deer_hahn_rabi(nv_list)
@@ -1817,7 +2000,7 @@ if __name__ == "__main__":
         # do_two_block_hahn_spatial_correlation(nv_list)
         # do_T2_correlation_test(nv_list)
         # do_two_block_hahn_correlation(nv_list)
-        # do_resonance(nv_list) 
+        # do_reson1ance(nv_list)
         # do_sq_relaxation(nv_list)
         # do_dq_relaxation(nv_list)
         # do_detect_cosmic_rays(nv_list)
@@ -1836,9 +2019,9 @@ if __name__ == "__main__":
         # do_xy_revival_scan(nv_list, xy_seq="xy4-1")
         # do_all_xy_log(nv_list, T2_us=600, blocks=1)
         # same calling style as before
-        AVAILABLE_XY = ["xy8-1", "hahn-1", "xy2-1", "xy4-1", "xy16-1"]
-        for seq in AVAILABLE_XY:
-            do_xy(nv_list, xy_seq=seq, min_tau_ns=200, hahn_max_tau_ns=1_000_000)  # 1 ms max tau for Hahn
+        # AVAILABLE_XY = ["xy8-1", "hahn-1", "xy2-1", "xy4-1", "xy16-1"]
+        # for seq in AVAILABLE_XY:
+        #     do_xy(nv_list, xy_seq=seq, min_tau_ns=200, hahn_max_tau_ns=600_000)  # 1 ms max tau for Hahn
         # for nv in nv_list:
         #     nv.spin_flip = False
         # for nv in nv_list[: num_nvs // 2]:

@@ -22,6 +22,7 @@ from analysis.spin_echo_work.echo_plot_helpers import (
     plot_branch_pairs,
     compare_two_fields,
     plot_branch_correlation_by_orientation,
+    plot_c13_candidates_only,
 )
 from multiplicity_calculation import (
     find_c3v_orbits_from_nv2,
@@ -1127,7 +1128,7 @@ def make_echo_plus_matched_site_plot(
         tau_is_half_time=use_half_time_as_tau,
         default_rev_for_plot=39.2,
     )
-
+    plot_c13_candidates_only(aux)
     return fig
 
 
@@ -2732,15 +2733,19 @@ if __name__ == "__main__":
         ),
         dict(
             label="62G",
-            fit_file_stem="2025_12_25-04_45_34-sample_204nv_s1-752556",
-            counts_file_stem="2025_12_24-19_56_03-johnson_204nv_s6-ff5e17",
+            # fit_file_stem="2025_12_25-04_45_34-sample_204nv_s1-752556",
+            # counts_file_stem="2025_12_24-19_56_03-johnson_204nv_s6-ff5e17",
+            fit_file_stem="2026_01_07-22_29_55-sample_204nv_s1-c9580a",
+            counts_file_stem="2026_01_07-17_30_14-johnson_204nv_s12-06bcdd",
             B_G=np.array([-48.67047318, -32.07615947, 22.49657427]),
             catalog_json="analysis/spin_echo_work/essem_freq_kappa_catalog_22A_62G.json",
         ),
         dict(
             label="65G",
-            fit_file_stem="2025_11_30-04_35_04-sample_204nv_s1-d278ee",
-            counts_file_stem="2025_11_28-16_39_32-johnson_204nv_s6-902522",
+            # fit_file_stem="2025_11_30-04_35_04-sample_204nv_s1-d278ee",
+            # counts_file_stem="2025_11_28-16_39_32-johnson_204nv_s6-902522",
+            fit_file_stem="2026_01_07-23_43_15-sample_204nv_s1-27e4dc",
+            counts_file_stem="2026_01_07-17_48_21-johnson_204nv_s10-34f8b7",
             B_G=np.array([-31.61263115, -56.58135644, -6.5512002]),
             catalog_json="analysis/spin_echo_work/essem_freq_kappa_catalog_22A_65G.json",
         ),
@@ -2901,12 +2906,11 @@ if __name__ == "__main__":
     B_G = [-31.61263115 - 56.58135644 - 6.5512002]
     B_G = 65.143891267575
     B_G = [-0.48527391 - 0.86855967 - 0.10056507]
-    fit_file_stem = "2025_11_30-04_35_04-sample_204nv_s1-d278ee"  # site encoded, all freqs (nysq band)
-    counts_file_stem = "2025_11_28-16_39_32-johnson_204nv_s6-902522"
-
-    # fit_file_stem = "2026_01_07-23_43_15-sample_204nv_s1-27e4dc"  # site encoded, all freqs (nysq band)
-    # counts_file_stem = "2026_01_07-17_48_21-johnson_204nv_s10-34f8b7"
-    catalog_json = "analysis/spin_echo_work/essem_freq_kappa_catalog_22A_56G.json"
+    # fit_file_stem = "2025_11_30-04_35_04-sample_204nv_s1-d278ee"  # site encoded, all freqs (nysq band)
+    # counts_file_stem = "2025_11_28-16_39_32-johnson_204nv_s6-902522"
+    fit_file_stem = "2026_01_07-23_43_15-sample_204nv_s1-27e4dc"  # site encoded, all freqs (nysq band)
+    counts_file_stem = "2026_01_07-17_48_21-johnson_204nv_s10-34f8b7"
+    catalog_json = "analysis/spin_echo_work/essem_freq_kappa_catalog_22A_65G.json"
 
     # --- Magnetic field (crystal axes) ---"59G"
     # B_G = np.array([-41.57848995, -32.77145194, -27.5799348])
@@ -3005,8 +3009,8 @@ if __name__ == "__main__":
 
     # nv_list = [0, 1, 2, 137]  # whatever NVs you care about
 
-    # nv_list = [0, 1, 2, 137, 196]  # whatever NVs you care about
-    nv_list = nv_kept
+    nv_list = [0, 1]  # whatever NVs you care about
+    # nv_list = nv_kept
     figs = make_echo_plus_matched_site_plots_batch(
         counts_file_stem=counts_file_stem,
         fit_file_stem=fit_file_stem,

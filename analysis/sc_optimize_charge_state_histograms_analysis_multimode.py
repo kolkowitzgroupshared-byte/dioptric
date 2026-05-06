@@ -1,0 +1,773 @@
+# -*- coding: utf-8 -*-
+"""
+Illuminate an area, collecting onto the camera. Interleave a signal and control sequence
+and plot the difference
+Created on Fall 2024
+@author: saroj chand
+"""
+
+import matplotlib.pyplot as plt
+import numpy as np
+from joblib import Parallel, delayed
+from scipy.optimize import curve_fit
+import analysis.bimodal_histogram as bh
+import sys
+from pathlib import Path
+import sys
+from pathlib import Path
+
+# Ensure this script's repo is first on sys.path
+repo_root = Path(__file__).resolve().parents[1]  # .../GitHub/dioptric
+sys.path.insert(0, str(repo_root))
+print(
+    "HAS fit_binomial_multinv_histogram:", hasattr(bh, "fit_binomial_multinv_histogram")
+)
+from analysis.bimodal_histogram import (
+    ProbDist,
+    fit_binomial_multinv_histogram,  # per-step fit (p, rate0, delta)
+    analyze_charge_histogram_multinv_binomial,  # estimate N once per NV
+    determine_threshold_any_minus_binomial_multinv,  # per-step binary threshold + fidelity
+)
+
+from utils import data_manager as dm
+from utils import kplotlib as kpl
+
+
+def find_optimal_value_geom_mean(
+    step_vals, prep_fidelity, readout_fidelity, goodness_of_fit, weights=(1, 1, 1)
+):
+    """
+    Finds the optimal step value using a weighted geometric mean of fidelities and goodness of fit.
+
+    """
+    w1, w2, w3 = weights
+
+    # Remove the first entry from each list
+    step_vals = step_vals[2:]
+    prep_fidelity = prep_fidelity[2:]
+    readout_fidelity = readout_fidelity[2:]
+    goodness_of_fit = goodness_of_fit[2:]
+    # Normalize metrics (avoid division by zero)
+    norm_prep_fidelity = (prep_fidelity - np.nanmin(prep_fidelity)) / (
+        np.nanmax(prep_fidelity) - np.nanmin(prep_fidelity) + 1e-12
+    )
+    norm_readout_fidelity = (readout_fidelity - np.nanmin(readout_fidelity)) / (
+        np.nanmax(readout_fidelity) - np.nanmin(readout_fidelity) + 1e-12
+    )
+    norm_goodness = (goodness_of_fit - np.nanmin(goodness_of_fit)) / (
+        np.nanmax(goodness_of_fit) - np.nanmin(goodness_of_fit) + 1e-12
+    )
+    inverted_goodness = 1 - norm_goodness  # Minimize goodness of fit
+
+    # Compute weighted geometric mean
+    # combined_score = (
+    #     (norm_readout_fidelity**w1) * (norm_prep_fidelity**w2) * (inverted_goodness**w3)
+    # ) ** (1 / (w1 + w2 + w3))
+    combined_score = (
+        w1 * norm_prep_fidelity + w2 * norm_readout_fidelity + w3 * inverted_goodness
+    )
+    # Find the step value corresponding to the maximum combined score
+    max_index = np.nanargmax(combined_score)
+    max_combined_score = combined_score[max_index]
+    optimal_step_val = step_vals[max_index]
+    optimal_prep_fidelity = prep_fidelity[max_index]
+    optimal_readout_fidelity = readout_fidelity[max_index]
+
+    return (
+        optimal_step_val,
+        optimal_prep_fidelity,
+        optimal_readout_fidelity,
+        max_combined_score,
+    )
+
+
+def fit_fn(tau, delay, slope, decay):
+    """
+    Fit function modeling the preparation fidelity as a function of polarization duration.
+    """
+    tau = np.array(tau) - delay
+    return slope * tau * np.exp(-tau / decay)
+
+
+def process_and_plot(raw_data, do_plot=False):
+    nv_list = raw_data["nv_list"]
+    num_nvs = len(nv_list)
+    min_step_val = raw_data["min_step_val"]
+    max_step_val = raw_data["max_step_val"]
+    num_steps = raw_data["num_steps"]
+    step_vals = np.linspace(min_step_val, max_step_val, num_steps)
+    optimize_pol_or_readout = raw_data["optimize_pol_or_readout"]
+    optimize_duration_or_amp = raw_data["optimize_duration_or_amp"]
+    # a, b, c = 3.7e5, 6.97, 8e-14 # old para
+    # a, b, c = 161266.751, 6.617, -19.492  # new para
+    # a, b, c = 1.16306103e04, 2.81008145e00, -2.50774288e01  # UPDATED 2025-09-14
+    a, b, c = 1.5133e04, 2.6976, -38.63
+    # get yellow amplitude
+    yellow_charge_readout_amp = raw_data["opx_config"]["waveforms"][
+        "yellow_charge_readout"
+    ]["sample"]
+    green_aod_cw_charge_pol_amp = raw_data["opx_config"]["waveforms"][
+        "green_aod_cw-charge_pol"
+    ]["sample"]
+
+    counts = np.array(raw_data["counts"])
+    # [nv_ind, run_ind, steq_ind, rep_ind]
+    ref_exp_ind = 1
+    condensed_counts = [
+        [
+            counts[ref_exp_ind, nv_ind, :, step_ind, :].flatten()
+            for step_ind in range(num_steps)
+        ]
+        for nv_ind in range(num_nvs)
+    ]
+    condensed_counts = np.array(condensed_counts)
+
+    prob_dist = ProbDist.COMPOUND_POISSON
+
+    prob_dist = ProbDist.COMPOUND_POISSON
+    max_nvs_per_position = 3  # allow 1/2/3 NVs
+
+    # Estimate N for each NV spot once (using all steps pooled)
+    n_est_by_nv = np.ones(num_nvs, dtype=int)
+    for nv_ind in range(num_nvs):
+        pooled = condensed_counts[nv_ind].reshape(-1)  # all step shots together
+        fitN = analyze_charge_histogram_multinv_binomial(
+            pooled,
+            prob_dist=prob_dist,
+            max_nvs=max_nvs_per_position,
+            force_nvs=None,  # or set 1/2/3 if you know from imaging
+            seed=nv_ind,
+        )
+    n_est_by_nv[nv_ind] = int(fitN["n_nvs"]) if fitN.get("ok", False) else 1
+    # prob_dist = ProbDist.COMPOUND_POISSON_WITH_IONIZATION
+
+    # Function to process a single NV and step
+    def process_nv_step(nv_ind, step_ind):
+        counts_data = condensed_counts[nv_ind, step_ind]
+
+        try:
+            N = int(n_est_by_nv[nv_ind])  # fixed per NV spot
+
+            popt, pcov, red_chi_sq = fit_binomial_multinv_histogram(
+                counts_data,
+                prob_dist,
+                N,
+                no_print=True,
+                no_plot=True,
+                n_restarts=4,
+                seed=1000 * nv_ind + step_ind,
+            )
+            if popt is None:
+                return np.nan, np.nan, np.nan
+
+            x_max = int(round(np.max(counts_data)))
+            threshold, readout_fidelity = (
+                determine_threshold_any_minus_binomial_multinv(
+                    popt,
+                    prob_dist,
+                    N,
+                    x_max=x_max,
+                    ret_fidelity=True,
+                )
+            )
+
+            # popt[0] = p_minus (per-NV). Convert to your “prep fidelity”:
+            # P(any NV-) = 1 - (1 - p_minus)^N
+            p_minus = float(popt[0])
+            prep_fidelity = 1.0 - (1.0 - p_minus) ** N
+
+            return float(readout_fidelity), float(prep_fidelity), float(red_chi_sq)
+
+        except Exception as e:
+            print(f"Error processing NV {nv_ind}, step {step_ind}: {e}")
+            return np.nan, np.nan, np.nan
+
+    # Parallel processing using all available cores
+    results = Parallel(n_jobs=-1)(
+        delayed(process_nv_step)(nv_ind, step_ind)
+        for nv_ind in range(num_nvs)
+        for step_ind in range(num_steps)
+    )
+
+    # Reshape results into a 3D array: (num_nvs, num_steps, 3)
+    try:
+        results = np.array(results, dtype=float).reshape(num_nvs, num_steps, 3)
+    except ValueError as e:
+        print(f"Error reshaping results: {e}")
+        # Debugging: check the length and structure of `results`
+        print(f"Length of results: {len(results)}")
+        for i, res in enumerate(results[:10]):  # Print first 10 entries
+            print(f"Result {i}: {res}")
+        raise
+
+    # Reshape results into arrays
+    results = np.array(results).reshape(num_nvs, num_steps, 3)
+    readout_fidelity_arr = results[:, :, 0]
+    prep_fidelity_arr = results[:, :, 1]
+    goodness_of_fit_arr = results[:, :, 2]
+
+    ### Plotting
+    if optimize_pol_or_readout:
+        if optimize_duration_or_amp:
+            # step_vals *= 1e-3
+            step_vals = step_vals
+            x_label = "Polarization duration (ns)"
+        else:
+            step_vals *= green_aod_cw_charge_pol_amp
+            x_label = "Polarization amplitude"
+    else:
+        if optimize_duration_or_amp:
+            step_vals *= 1e-6
+            x_label = "Readout duration (ms)"
+        else:
+            step_vals *= yellow_charge_readout_amp
+            # x_label = "Readout amplitude"
+            step_vals = a * (step_vals**b) + c
+            x_label = "Readout amplitude (uW)"
+    print(step_vals)
+    # return
+    # print(step_vals)
+    optimal_values = []
+    optimal_step_vals = []
+    nv_indces = []
+
+    # # Find index of manually set step value
+    # manual_step_val = 226.98624137
+    # manual_index = np.where(np.isclose(step_vals, manual_step_val))[0][0]
+
+    for nv_ind in range(num_nvs):
+        try:
+            # Calculate the optimal step value
+            (
+                optimal_step_val,
+                optimal_readout_fidality,
+                optimal_prep_fidality,
+                max_combined_score,
+            ) = find_optimal_value_geom_mean(
+                step_vals,
+                readout_fidelity_arr[nv_ind],
+                prep_fidelity_arr[nv_ind],
+                goodness_of_fit_arr[nv_ind],
+                weights=(1.0, 1.0, 1.5),
+            )
+            # Manually override for the first NV
+            # if nv_ind == 0:
+            #     optimal_step_val = manual_step_val
+            #     optimal_prep_fidality = prep_fidelity_arr[nv_ind][manual_index]
+            #     optimal_readout_fidality = readout_fidelity_arr[nv_ind][manual_index]
+            #     max_combined_score = (
+            #         1.5 * optimal_prep_fidality
+            #         + 1 * optimal_readout_fidality
+            #         + 1 * (1 - goodness_of_fit_arr[nv_ind][manual_index])
+            #     )
+            optimal_step_vals.append(optimal_step_val)
+            nv_indces.append(nv_ind)
+            optimal_values.append(
+                (
+                    nv_ind,
+                    optimal_step_val,
+                    optimal_prep_fidality,
+                    optimal_readout_fidality,
+                    max_combined_score,
+                )
+            )
+
+        except Exception as e:
+            print(f"Failed to process NV{nv_ind}: {e}")
+            optimal_values.append((nv_ind, np.nan, np.nan))
+            continue
+
+        if do_plot:
+            # # Plotting
+            fig, ax1 = plt.subplots(figsize=(7, 5))
+            # Plot readout fidelity
+            ax1.plot(
+                step_vals,
+                readout_fidelity_arr[nv_ind],
+                label="Readout Fidelity",
+                color="orange",
+            )
+            ax1.plot(
+                step_vals,
+                prep_fidelity_arr[nv_ind],
+                label="Prep Fidelity",
+                linestyle="--",
+                color="green",
+            )
+            ax1.set_xlabel(x_label)
+            ax1.set_ylabel("Fidelity")
+            ax1.tick_params(axis="y", labelcolor="blue")
+            ax1.grid(True, linestyle="--", alpha=0.6)
+
+            # Plot Goodness of Fit ()
+            ax2 = ax1.twinx()
+            ax2.plot(
+                step_vals,
+                goodness_of_fit_arr[nv_ind],
+                color="gray",
+                linestyle="--",
+                label=r"Goodness of Fit ($\chi^2_{\text{reduced}}$)",
+                alpha=0.7,
+            )
+            ax2.set_ylabel(r"Goodness of Fit ($\chi^2_{\text{reduced}}$)", color="gray")
+            ax2.tick_params(axis="y", labelcolor="gray")
+
+            # Highlight optimal step value
+            ax1.axvline(
+                optimal_step_val,
+                color="red",
+                linestyle="--",
+                label=f"Optimal Step Val: {optimal_step_val:.3f}",
+            )
+            ax2.axvline(
+                optimal_step_val,
+                color="red",
+                linestyle="--",
+            )
+
+            # Combine legends
+            lines, labels = ax1.get_legend_handles_labels()
+            lines2, labels2 = ax2.get_legend_handles_labels()
+            ax1.legend(lines + lines2, labels + labels2, loc="upper left", fontsize=11)
+            ax1.set_title(f"NV{nv_ind} - Optimal Step Val: {optimal_step_val:.3f}")
+            plt.tight_layout()
+            plt.show(block=True)
+
+    # save opimal step values
+    total_power = np.sum(optimal_step_vals) / len(optimal_step_vals)
+    aom_voltage = ((total_power - c) / a) ** (1 / b)
+    # Compute total power and AOM voltage
+    valid_step_vals = [val for val in optimal_step_vals if not np.isnan(val)]
+    if not valid_step_vals:
+        raise ValueError("No valid step values found.")
+    total_power = np.sum(valid_step_vals) / len(valid_step_vals)
+    optimal_weigths = valid_step_vals / total_power
+    aom_voltage = ((total_power - c) / a) ** (1 / b)
+    print(len(optimal_weigths))
+    print(list(optimal_weigths))
+    results = {
+        "optimal_weigths": optimal_weigths,
+        "total_power": total_power,
+        "aom_voltage": aom_voltage,
+    }
+    # results = {"nv_indices": nv_indces, "optimal step values": optimal_step_vals}
+    timestamp = dm.get_time_stamp()
+    file_name = f"optimal_values_{file_id}"
+    file_path = dm.get_file_path(__file__, timestamp, file_name)
+    # dm.save_raw_data(results, file_path)
+    print(results)
+    # Get NV indices where readout fidelity is greater than 0.5
+    count_above_threshold = sum(
+        1 for val in optimal_values if val[2] > 0.4 and val[3] > 0.8
+    )
+    nv_indices_above_threshold = [
+        val[0] for val in optimal_values if val[2] > 0.4 and val[3] > 0.8
+    ]
+
+    print(f"Number of optimal values with pre fidelity > 0.5: {count_above_threshold}")
+    print("NV indices with prep fidelity > 0.5:", nv_indices_above_threshold)
+    print(f"Processed data saved to '{file_path}'.")
+    # return
+    ### Calculate Averages
+    avg_readout_fidelity = np.nanmean(readout_fidelity_arr, axis=0)
+    avg_prep_fidelity = np.nanmean(prep_fidelity_arr, axis=0)
+    avg_goodness_of_fit = np.nanmean(goodness_of_fit_arr, axis=0)
+    # Calculate the optimal step value
+    (
+        optimal_step_val,
+        optimal_readout_fidelity,
+        optimal_prep_fidelity,
+        max_combined_score,
+    ) = find_optimal_value_geom_mean(
+        step_vals,
+        avg_readout_fidelity,
+        avg_prep_fidelity,
+        avg_goodness_of_fit,
+        weights=(1, 1, 1),
+    )
+    # Plot average readout and prep fidelity
+    fig, ax1 = plt.subplots(figsize=(7, 5))
+    ax1.plot(
+        step_vals,
+        avg_readout_fidelity,
+        label="Avg. Readout Fidelity",
+        color="orange",
+    )
+    ax1.plot(
+        step_vals,
+        avg_prep_fidelity,
+        label="Avg. Prep Fidelity",
+        color="green",
+    )
+    ax1.set_xlabel(x_label)
+    ax1.set_ylabel("Fidelity")
+    ax1.tick_params(axis="y")
+
+    # Plot average Goodness of Fit (reduced chi-squared))
+    ax2 = ax1.twinx()
+    ax2.plot(
+        step_vals,
+        avg_goodness_of_fit,
+        color="gray",
+        linestyle="--",
+        label=r"Goodness of Fit ($\chi^2_{\text{reduced}}$)",
+    )
+    ax2.set_ylabel(r"Goodness of Fit ($\chi^2_{\text{reduced}}$)", color="gray")
+
+    ax2.tick_params(axis="y", labelcolor="gray")
+    ax2.axvline(
+        optimal_step_val,
+        color="red",
+        linestyle="--",
+    )
+    optimal_text = (
+        f"Optimal {x_label}: {optimal_step_val:.3f}\n"
+        f"Optimal Prep Fidelity: {optimal_prep_fidelity:.3f}\n"
+        f"Optimal Readout Fidelity: {optimal_readout_fidelity:.3f}"
+    )
+    ax1.text(
+        0.01,
+        0.99,
+        optimal_text,
+        transform=ax1.transAxes,
+        fontsize=8,
+        verticalalignment="top",
+        bbox=dict(
+            boxstyle="round,pad=0.1", alpha=0.5, edgecolor="gray", facecolor="white"
+        ),
+    )
+    # Combine legends
+    lines_1, labels_1 = ax1.get_legend_handles_labels()
+    lines_2, labels_2 = ax2.get_legend_handles_labels()
+    ax2.legend(lines_1 + lines_2, labels_1 + labels_2, loc="upper right", fontsize=8)
+
+    # Title and layout
+    ax1.set_title(f"Average Metrics Across All NVs ({file_id})", fontsize=16)
+    fig.tight_layout()
+    plt.show()
+    ### Calculate Medians
+    median_readout_fidelity = np.nanmedian(readout_fidelity_arr, axis=0)
+    median_prep_fidelity = np.nanmedian(prep_fidelity_arr, axis=0)
+    median_goodness_of_fit = np.nanmedian(goodness_of_fit_arr, axis=0)
+
+    (
+        optimal_step_val,
+        optimal_readout_fidelity,
+        optimal_prep_fidelity,
+        max_combined_score,
+    ) = find_optimal_value_geom_mean(
+        step_vals,
+        median_readout_fidelity,
+        median_prep_fidelity,
+        median_goodness_of_fit,
+        weights=(1, 1, 2),
+    )
+
+    # Plot average and median readout and prep fidelity
+    fig, ax1 = plt.subplots(figsize=(7, 5))
+    ax1.plot(
+        step_vals,
+        median_readout_fidelity,
+        label="Median Readout Fidelity",
+        color="orange",
+    )
+    ax1.plot(
+        step_vals,
+        median_prep_fidelity,
+        label="Median Prep Fidelity",
+        color="green",
+    )
+    ax1.set_xlabel(x_label)
+    ax1.set_ylabel("Fidelity")
+    ax1.tick_params(axis="y")
+
+    # Plot average and median Goodness of Fit (reduced chi-squared))
+    ax2 = ax1.twinx()
+    ax2.plot(
+        step_vals,
+        median_goodness_of_fit,
+        color="gray",
+        linestyle="--",
+        label=r"Goodness of Fit ($\chi^2_{\text{reduced}}$)",
+    )
+    ax2.set_ylabel(r"Goodness of Fit ($\chi^2_{\text{reduced}}$)", color="gray")
+
+    ax2.tick_params(axis="y", labelcolor="gray")
+    ax2.axvline(
+        optimal_step_val,
+        color="red",
+        linestyle="--",
+    )
+    # Add a box with optimal values on the left
+    optimal_text = (
+        f"Optimal {x_label}: {optimal_step_val:.3f}\n"
+        f"Optimal Prep Fidelity: {optimal_prep_fidelity:.3f}\n"
+        f"Optimal Readout Fidelity: {optimal_readout_fidelity:.3f}"
+    )
+    ax1.text(
+        0.01,
+        0.99,
+        optimal_text,
+        transform=ax1.transAxes,
+        fontsize=8,
+        verticalalignment="top",
+        bbox=dict(
+            boxstyle="round,pad=0.1", alpha=0.5, edgecolor="black", facecolor="white"
+        ),
+    )
+    # Combine legends
+    lines_1, labels_1 = ax1.get_legend_handles_labels()
+    lines_2, labels_2 = ax2.get_legend_handles_labels()
+    ax2.legend(lines_1 + lines_2, labels_1 + labels_2, loc="upper right", fontsize=8)
+
+    # Title and layout
+    ax1.set_title(f"Median Metrics Across All NVs ({file_id})", fontsize=16)
+    fig.tight_layout()
+    plt.show(block=False)
+
+
+def process_nv_step(
+    nv_ind, step_ind, condensed_counts, n_est_by_nv, prob_dist=ProbDist.COMPOUND_POISSON
+):
+    counts_data = condensed_counts[nv_ind, step_ind]
+
+    try:
+        N = int(n_est_by_nv[nv_ind])  # fixed per NV spot (1/2/3)
+
+        popt, pcov, chi_squared = fit_binomial_multinv_histogram(
+            counts_data,
+            prob_dist,
+            N,
+            no_print=True,
+            no_plot=True,
+            n_restarts=4,
+            seed=1000 * nv_ind + step_ind,
+        )
+        if popt is None:
+            return np.nan, np.nan, np.nan
+
+        x_max = int(np.max(counts_data)) if len(counts_data) else 0
+
+        # binary threshold: k=0 vs k>=1 ("any NV-")
+        threshold_any, readout_fidelity = (
+            determine_threshold_any_minus_binomial_multinv(
+                popt,
+                prob_dist,
+                N,
+                x_max=x_max,
+                ret_fidelity=True,
+            )
+        )
+
+        # popt[0] = p_minus (per-NV). Convert to "any NV-" probability:
+        p_minus = float(popt[0])
+        prep_fidelity = 1.0 - (1.0 - p_minus) ** N
+
+        return float(readout_fidelity), float(prep_fidelity), float(chi_squared)
+
+    except Exception as e:
+        print(f"Error processing NV {nv_ind}, step {step_ind}: {e}")
+        return np.nan, np.nan, np.nan
+
+
+def process_and_plot_charge(raw_data, do_plot=False):
+    nv_list = raw_data["nv_list"]
+    num_nvs = len(nv_list)
+    min_step_val = raw_data["min_step_val"]
+    max_step_val = raw_data["max_step_val"]
+    num_steps = raw_data["num_steps"]
+    step_vals = np.linspace(min_step_val, max_step_val, num_steps)
+
+    counts = np.array(raw_data["counts"])
+    ref_exp_ind = 1
+    condensed_counts = np.array(
+        [
+            [
+                counts[ref_exp_ind, nv_ind, :, step_ind, :].flatten()
+                for step_ind in range(num_steps)
+            ]
+            for nv_ind in range(num_nvs)
+        ]
+    )
+
+    # Process each NV-step pair in parallel
+    results = Parallel(n_jobs=-1)(
+        delayed(process_nv_step)(nv_ind, step_ind, condensed_counts)
+        for nv_ind in range(num_nvs)
+        for step_ind in range(num_steps)
+    )
+
+    try:
+        results = np.array(results, dtype=float).reshape(num_nvs, num_steps, 3)
+    except ValueError as e:
+        print(f"Error reshaping results: {e}")
+        return
+
+    prep_fidelity = results[:, :, 1]
+    readout_fidelity = results[:, :, 0]
+    ### **Perform Fitting**
+    opti_durs, opti_fidelities = [], []
+
+    # --- Saturation models (with offset) ---
+    def sat_decay_fit_fn(t, F0, A, t0, tau_r, tau_d):
+        t = np.asarray(t, dtype=float)
+        x = np.maximum(t - t0, 0.0)  # gate before t0
+        tau_r = np.maximum(tau_r, 1e-12)
+        tau_d = np.maximum(tau_d, 1e-12)
+        return F0 + 2 * A * (1.0 - np.exp(-x / tau_r)) * np.exp(-x / tau_d)
+        # return A * (1.0 - np.exp(-x / tau_r)) * np.exp(-x / tau_d)
+
+    def sat_decay_x_peak(tau_r, tau_d):
+        tau_r = max(float(tau_r), 1e-12)
+        tau_d = max(float(tau_d), 1e-12)
+        return tau_r * np.log(1.0 + tau_d / tau_r)
+
+    # --- Robust initial guesses + bounds ---
+    def sat_decay_initial_guess(x, y):
+        x = np.asarray(x, float)
+        y = np.asarray(y, float)
+        span = float(x[-1] - x[0]) if x[-1] > x[0] else 1.0
+        dt = np.median(np.diff(x))
+
+        # Baseline & amplitude
+        F0_0 = float(np.nanpercentile(y, 5))
+        ymax = float(np.nanpercentile(y, 95))
+        A_0 = float(max(1e-4, ymax - F0_0))  # if fidelity, cap elsewhere if you want
+
+        # Onset t0 near strongest rise
+        dy = np.diff(y, prepend=y[0])
+        i_rise = int(np.clip(np.argmax(dy), 0, len(x) - 1))
+        t0_0 = float(max(x[0], x[i_rise] - 0.5 * dt))
+
+        # Time constants: start with τd >> τr so peak isn't too early
+        tau_r0 = max(dt, 0.15 * span)
+        tau_d0 = max(5 * tau_r0, 1.0 * span)
+
+        p0 = [F0_0, A_0, t0_0, tau_r0, tau_d0]
+
+        # Bounds (adjust if your y is guaranteed in [0,1])
+        F0_lo, F0_hi = min(y) - 0.2 * abs(y).max(), max(y) + 0.2 * abs(y).max()
+        A_lo, A_hi = 0.0, max(1.5 * (ymax - F0_0), 1e-3)
+        t0_lo, t0_hi = x[0] - 2 * span, x[-1] + 2 * span
+        tr_lo, tr_hi = dt / 10, 2 * span
+        td_lo, td_hi = dt / 10, 10 * span
+
+        lo = [F0_lo, A_lo, t0_lo, tr_lo, td_lo]
+        hi = [F0_hi, A_hi, t0_hi, tr_hi, td_hi]
+        return p0, (lo, hi)
+
+    for nv_ind in range(num_nvs):
+        r = readout_fidelity[nv_ind].astype(float)
+        y = prep_fidelity[nv_ind].astype(float)
+        x = step_vals.astype(float)
+        # Clean
+        x = np.asarray(x, float)
+        y = np.asarray(y, float)
+        m = np.isfinite(x) & np.isfinite(y)
+        x_f, y_f = x[m], y[m]
+        if x_f.size < 4:
+            raise RuntimeError("Not enough points for fit.")
+
+        p0, bounds = sat_decay_initial_guess(x_f, y_f)
+        popt, pcov = curve_fit(
+            sat_decay_fit_fn, x_f, y_f, p0=p0, bounds=bounds, maxfev=200000
+        )
+        F0, A, t0, tau_r, tau_d = popt
+
+        # analytic peak
+        x_pk_rel = sat_decay_x_peak(tau_r, tau_d)
+        t_peak = float(t0 + x_pk_rel)
+        y_peak = float(sat_decay_fit_fn(t_peak, *popt))
+
+        results = {"params": popt, "cov": pcov, "t_peak": t_peak, "y_peak": y_peak}
+
+        return_curve = True
+        grid = None
+        if return_curve:
+            if grid is None:
+                grid = np.linspace(x_f.min(), x_f.max(), 1000)
+            y_model = sat_decay_fit_fn(grid, *popt)
+            results.update({"grid_t": grid, "grid_y": y_model})
+
+        F0, A, t0, tau_r, tau_d = results["params"]
+        opti_dur = float(np.clip(results["t_peak"], min_step_val, max_step_val))
+        opti_fid = float(results["y_peak"])
+        opti_durs.append(round(opti_dur / 4) * 4)
+        opti_fidelities.append(round(opti_fid, 3))
+
+        # Snap to hardware grid
+        opti_durs.append(round(opti_dur / 4) * 4)
+        opti_fidelities.append(round(opti_fid, 3))
+
+        if do_plot:
+            # --- Plot ---
+            plt.figure(figsize=(6, 5))
+            plt.scatter(x_f, y_f, label="Measured")
+            plt.plot(results["grid_t"], results["grid_y"], label="Sat-Decay Fit")
+            plt.axvline(
+                opti_dur,
+                color="green",
+                linestyle="--",
+                label=f"Peak ≈ {opti_dur:.0f} ns",
+            )
+            plt.scatter([opti_dur], [opti_fid], color="green", zorder=5)
+            plt.xlabel("Duration (ns)")
+            plt.ylabel("Fidelity")
+            plt.ylim(0, 1)
+            plt.grid(True, alpha=0.3)
+            plt.legend()
+            plt.show(block=True)
+
+    if opti_durs:
+        print("Optimal Polarization Durations:", opti_durs)
+
+        # Filter out None values to compute median
+        numeric_durations = [d for d in opti_durs if d is not None]
+        median_duration = int(np.nanmedian(numeric_durations))
+        # Replace None or out-of-range values with median
+        opti_durs = [
+            (
+                median_duration
+                if (d is None or (100 <= d <= 200) or (1930 <= d <= 2000))
+                else d
+            )
+            for d in opti_durs
+        ]
+
+        print("Updated Optimal Durations:", opti_durs)
+        # print("Optimal Preparation Fidelities:", opti_fidelities)
+        print(f"Median Optimal Duration: {np.median(opti_durs)} ns")
+        print(f"Median Optimal Fidelity: {np.median(opti_fidelities)}")
+        print(f"Max Optimal Duration: {np.max(opti_durs)} ns")
+        print(f"Min Optimal Duration: {np.min(opti_durs)} ns")
+        ###
+        plt.figure()
+        plt.scatter(opti_durs, opti_fidelities)
+        plt.xlabel("Polarization Duration (ns)")
+        plt.ylabel("Preparation Fidelity")
+        plt.title(f"NV Num: {nv_ind}")
+        plt.legend()
+        plt.show(block=True)
+
+    return
+
+
+if __name__ == "__main__":
+    kpl.init_kplotlib()
+    ### readout amp
+    file_id = "2026_03_03-02_22_47-qnami-nv0_2026_02_20"
+
+    ### pol amp var
+    # file_id = "2026_02_10-00_47_07-johnson-nv0_2025_10_21"
+
+    ### pol dur var
+    # file_id = "2026_02_10-03_18_17-johnson-nv0_2025_10_21"
+
+    # dm.USE_NEW_CLOUD = False
+    raw_data = dm.get_raw_data(file_stem=file_id, load_npz=True)
+    # file_name = dm.get_file_name(file_id=file_id)
+    # print(f"{file_name}_{file_id}")
+    process_and_plot(raw_data, do_plot=True)
+    # process_and_plot_charge(raw_data, do_plot=True)
+    # print(dm.get_file_name(1717056176426))
+    plt.show(block=True)

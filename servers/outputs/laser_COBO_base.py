@@ -7,6 +7,10 @@ PulseStreamer through to the DAQ and get a full 5 V TTL from there.
 Created on November 1st, 2021
 
 @author: mccambria
+
+Updated on 4/27/2026
+
+@author: chemistatcode
 """
 
 from labrad.server import LabradServer
@@ -28,19 +32,26 @@ class LaserCoboBase(LabradServer):
             "E:/Shared drives/Kolkowitz Lab Group/nvdata/pc_{}/labrad_logging/{}.log"
         )
         filename = filename.format(self.pc_name, self.name)
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format="%(asctime)s %(levelname)-8s %(message)s",
-            datefmt="%y-%m-%d_%H-%M-%S",
-            filename=filename,
-        )
-        self.task = None
-        config = common.get_config_dict()
-        wiring = config["Wiring"]["Daq"]
-        self.do_feedthrough = wiring["do_{}_feedthrough".format(self.name)]
-        self.di_feedthrough = wiring["di_{}_feedthrough".format(self.name)]
-        # Load the feedthrough and just leave it running
         try:
+            import os
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            logging.basicConfig(
+                level=logging.DEBUG,
+                format="%(asctime)s %(levelname)-8s %(message)s",
+                datefmt="%y-%m-%d_%H-%M-%S",
+                filename=filename,
+            )
+        except Exception:
+            logging.basicConfig(level=logging.DEBUG)
+        self.task = None
+        self.do_feedthrough = None
+        self.di_feedthrough = None
+        try:
+            config = common.get_config_dict()
+            wiring = config["Wiring"]["Daq"]
+            self.do_feedthrough = wiring["do_{}_feedthrough".format(self.name)]
+            self.di_feedthrough = wiring["di_{}_feedthrough".format(self.name)]
+            # Load the feedthrough and just leave it running
             self.load_feedthrough(None)
         except Exception as e:
             logging.debug(e)
@@ -50,6 +61,10 @@ class LaserCoboBase(LabradServer):
         self.close_task_internal()
 
     def load_stream_writer(self, c, task_name, stream_bools):
+        if self.do_feedthrough is None or self.di_feedthrough is None:
+            logging.debug("Feedthrough not configured, skipping stream writer")
+            return
+
         # Close the existing task if there is one
         if self.task is not None:
             self.close_task_internal()
@@ -101,6 +116,9 @@ class LaserCoboBase(LabradServer):
 
     @setting(2)
     def laser_on(self, c):
+        if self.do_feedthrough is None:
+            logging.debug("Feedthrough not configured, cannot turn laser on via DAQ")
+            return
         self.close_task_internal()
         with nidaqmx.Task() as task:
             task.do_channels.add_do_chan(self.do_feedthrough)
@@ -108,6 +126,9 @@ class LaserCoboBase(LabradServer):
 
     @setting(3)
     def laser_off(self, c):
+        if self.do_feedthrough is None:
+            logging.debug("Feedthrough not configured, cannot turn laser off via DAQ")
+            return
         self.close_task_internal()
         with nidaqmx.Task() as task:
             task.do_channels.add_do_chan(self.do_feedthrough)

@@ -30,6 +30,7 @@ from analysis.bimodal_histogram import (
     ProbDist,
     determine_threshold,
     fit_bimodal_histogram,
+    analyze_charge_histogram_multinv_binomial,
 )
 from majorroutines.widefield import base_routine
 from utils import common, widefield
@@ -379,24 +380,24 @@ def main(
         keys_to_compress = None
 
     # Histograms
-    try:
-        hist_figs = process_and_plot(raw_data, do_plot_histograms=do_plot_histograms)
-        # Save
-        if hist_figs is not None:
-            num_nvs = len(nv_list)
-            for nv_ind in range(num_nvs):
-                fig = hist_figs[nv_ind]
-                nv_sig = nv_list[nv_ind]
-                nv_name = nv_sig.name
-                file_path = dm.get_file_path(__file__, timestamp, nv_name)
-                dm.save_figure(fig, file_path)
-    except Exception:
-        print(traceback.format_exc())
+    # try:
+    #     hist_figs = process_and_plot(raw_data, do_plot_histograms=do_plot_histograms)
+    #     # Save
+    #     if hist_figs is not None:
+    #         num_nvs = len(nv_list)
+    #         for nv_ind in range(num_nvs):
+    #             fig = hist_figs[nv_ind]
+    #             nv_sig = nv_list[nv_ind]
+    #             nv_name = nv_sig.name
+    #             file_path = dm.get_file_path(__file__, timestamp, nv_name)
+    #             dm.save_figure(fig, file_path)
+    # except Exception:
+    #     print(traceback.format_exc())
 
-    try:
-        del raw_data["img_arrays"]
-    except Exception:
-        pass
+    # try:
+    #     del raw_data["img_arrays"]
+    # except Exception:
+    #     pass
 
     ### Save raw data
 
@@ -415,35 +416,12 @@ def main(
     return raw_data
 
 
+
 if __name__ == "__main__":
     kpl.init_kplotlib()
-    # data = dm.get_raw_data(file_id=1733583334808, load_npz=False)
-    # data = dm.get_raw_data(file_id=1766803842180, load_npz=False)  # 50ms readout
-    # data = dm.get_raw_data(file_id=1766834596476, load_npz=False)  # 100ms readout
-    # data = dm.get_raw_data(file_id=1769860748790, load_npz=False)  # 24ms readout
-
-    # rubin
-    # data = dm.get_raw_data(file_id=1798326378514, load_npz=False)  # 60ms readout
-    # data = dm.get_raw_data(file_id=1798728176452, load_npz=False)
-    # data = dm.get_raw_data(file_id=1798741474977, load_npz=False)
-    # data = dm.get_raw_data(file_id=1798741474977, load_npz=False)
-
-    # data = dm.get_raw_data(file_id=1800336690568, load_npz=False)
-    # 300 NVs
-    # data = dm.get_raw_data(file_id=1802802596578, load_npz=False)
-    # 200 NVs
-    # data = dm.get_raw_data(file_id=1804953793322, load_npz=False)
-    # 154 NVs
-    # data = dm.get_raw_data(file_id=1806214782623, load_npz=False)
-    # data = dm.get_raw_data(file_id=1806222218365, load_npz=False)
-    # data = dm.get_raw_data(file_id=1806227898070, load_npz=False)
-    # data = dm.get_raw_data(file_id=1806410973406, load_npz=False)
-    # data = dm.get_raw_data(
-    #     file_stem="2025_10_23-17_31_05-johnson-nv0_2025_10_21", load_npz=True
-    # )
-    # process_and_plot(data, do_plot_histograms=True)
     data = dm.get_raw_data(
-        file_stem="2025_10_26-17_45_04-johnson-nv0_2025_10_21", load_npz=True
+        # file_stem="2026_03_17-20_16_39-qnami-nv0_2026_02_20", load_npz=True,
+        file_stem="2026_03_25-14_10_27-qnami-nv0_2026_02_20", load_npz=True
     )
-    process_and_plot(data, do_plot_histograms=True)
+    process_and_plot(data, do_plot_histograms=False)
     kpl.show(block=True)

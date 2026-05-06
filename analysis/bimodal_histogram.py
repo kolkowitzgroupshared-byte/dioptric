@@ -14,8 +14,9 @@ import time
 from enum import Enum, auto
 from functools import cache
 from inspect import signature
-
+import warnings
 import numpy as np
+import math
 from matplotlib import pyplot as plt
 from scipy.integrate import quad
 from scipy.special import factorial, gammainc, gammaincc, gammaln, xlogy
@@ -244,8 +245,6 @@ def exponential_integral(nu, z):
 
 
 # endregion
-
-
 def fit_bimodal_histogram(
     counts_list, prob_dist: ProbDist, no_print=True, no_plot=True
 ):
@@ -384,292 +383,507 @@ def fit_bimodal_histogram(
 
 
 def determine_threshold(
-    popt, prob_dist: ProbDist, dark_mode_weight=None, do_print=False, ret_fidelity=False
+    popt,
+    prob_dist: "ProbDist",
+    dark_mode_weight=None,
+    do_print=False,
+    ret_fidelity=False,
 ):
-    """Determine the optimal threshold for assigning a state based on a measured number of counts
-
-    Parameters
-    ----------
-    popt : np.ndarray
-        Optimized fit parameters
-    prob_dist : ProbDist
-        Probability distribution uses in the fit
-    dark_mode_weight : float, optional
-        Portion of measurements that project into the dark mode, by default popt[0],
-        the dark mode weight parameter from the fit
-    no_print : bool, optional
-        Whether to skip printing out the results of the determination, by default False
-    ret_fidelity : bool, optional
-        Whether to return the readout fidelity expected under the optimal threshold, by default False
-
-    Returns
-    -------
-    float | list(float)
-        The threshold or the threshold and the expected readout fidelity
+    """Determine the optimal threshold for assigning a state based on measured counts.
+    Returns None (and None fidelity) gracefully if thresholding can't be determined.
     """
-    if popt is None:
-        if ret_fidelity:
-            return None, None
-        else:
-            return None
 
+    # ---------- Basic validation ----------
+    if popt is None:
+        return (None, None) if ret_fidelity else None
+
+    popt = np.asarray(popt, dtype=float)
+    if popt.size < 3 or np.any(~np.isfinite(popt)):
+        warnings.warn(
+            f"determine_threshold: invalid popt (size={popt.size}, finite={np.all(np.isfinite(popt))}). Returning None."
+        )
+        return (None, None) if ret_fidelity else None
+
+    # ---------- Weights ----------
     if dark_mode_weight is None:
         dark_mode_weight = popt[0]
-    bright_mode_weight = 1 - dark_mode_weight
+    try:
+        dark_mode_weight = float(dark_mode_weight)
+    except Exception:
+        dark_mode_weight = 0.5
 
+    if not np.isfinite(dark_mode_weight):
+        dark_mode_weight = 0.5
+    dark_mode_weight = float(np.clip(dark_mode_weight, 0.0, 1.0))
+    bright_mode_weight = 1.0 - dark_mode_weight
+
+    # ---------- Params / means ----------
     num_single_mode_params = get_single_mode_num_params(prob_dist)
-
-    # Calculate fidelity (probability of calling state correctly) for given threshold
-    # mean_counts_dark, mean_counts_bright = popt[1], popt[1 + num_single_mode_params]
-    # MCC hack for including ionization
-    mean_counts_dark, mean_counts_bright = popt[1], popt[2]
-    mean_counts_dark = round(mean_counts_dark)
-    mean_counts_bright = round(mean_counts_bright)
-    thresh_options = np.arange(mean_counts_dark - 0.5, mean_counts_bright + 0.5, 1)
-    fidelities = []
-    left_fidelities = []
-    right_fidelities = []
     single_mode_cdf = get_single_mode_cdf(prob_dist)
-    for val in thresh_options:
-        dark_left_prob = single_mode_cdf(val, *popt[1 : 1 + num_single_mode_params])
-        bright_left_prob = single_mode_cdf(val, *popt[1 + num_single_mode_params :])
-        # MCC hack for including ionization
-        # dark_mode_cdf = get_single_mode_cdf(ProbDist.COMPOUND_POISSON)
-        # dark_left_prob = dark_mode_cdf(val, popt[1])
-        # bright_mode_cdf = get_single_mode_cdf(ProbDist.COMPOUND_POISSON_WITH_IONIZATION)
-        # bright_left_prob = bright_mode_cdf(val, *popt[1:])
-        # bright_left_prob = bright_mode_cdf(
-        #     val, popt[1], popt[2], popt[3]
-        # )  # Pass lambda_0, lambda_m, ion
 
-        dark_right_prob = 1 - dark_left_prob
-        bright_right_prob = 1 - bright_left_prob
+    # NOTE: You currently use a "hack" mean definition:
+    # mean_counts_dark = popt[1], mean_counts_bright = popt[2]
+    # Keep it, but guard it.
+    mean_counts_dark = popt[1]
+    mean_counts_bright = popt[2]
 
-        fidelity = (
-            dark_mode_weight * dark_left_prob + bright_mode_weight * bright_right_prob
+    if not (np.isfinite(mean_counts_dark) and np.isfinite(mean_counts_bright)):
+        warnings.warn("determine_threshold: non-finite mean counts. Returning None.")
+        return (None, None) if ret_fidelity else None
+
+    # Build threshold candidates robustly (never empty)
+    lo = min(mean_counts_dark, mean_counts_bright)
+    hi = max(mean_counts_dark, mean_counts_bright)
+
+    # Candidate thresholds are half-integers spanning the region between modes
+    start = np.floor(lo) - 0.5
+    stop = np.ceil(hi) + 0.5 + 1e-12  # +eps to avoid arange edge emptiness
+    thresh_options = np.arange(start, stop, 1.0, dtype=float)
+
+    # If means are extremely close (or weird), ensure at least one option
+    if thresh_options.size == 0:
+        thresh_options = np.array(
+            [(mean_counts_dark + mean_counts_bright) / 2.0], dtype=float
         )
-        fidelities.append(fidelity)
 
-        # Two-sided
-        # left_fidelity = (dark_ratio * dark_left_prob) / (
-        #     dark_ratio * dark_left_prob + bright_ratio * bright_left_prob
-        # )
-        # right_fidelity = (bright_ratio * bright_right_prob) / (
-        #     bright_ratio * bright_right_prob + dark_ratio * dark_right_prob
-        # )
-        # left_fidelities.append(left_fidelity)
-        # right_fidelities.append(right_fidelity)
-    fidelity = np.max(fidelities)
-    threshold = thresh_options[np.argmax(fidelities)]
+    # ---------- Search for best threshold ----------
+    best_fid = -np.inf
+    best_thresh = None
+
+    for val in thresh_options:
+        try:
+            dark_left_prob = float(
+                single_mode_cdf(val, *popt[1 : 1 + num_single_mode_params])
+            )
+            bright_left_prob = float(
+                single_mode_cdf(val, *popt[1 + num_single_mode_params :])
+            )
+        except Exception:
+            continue
+
+        if not (np.isfinite(dark_left_prob) and np.isfinite(bright_left_prob)):
+            continue
+
+        # Keep probabilities in [0, 1] in case numerical routines drift slightly
+        dark_left_prob = float(np.clip(dark_left_prob, 0.0, 1.0))
+        bright_left_prob = float(np.clip(bright_left_prob, 0.0, 1.0))
+
+        bright_right_prob = 1.0 - bright_left_prob
+
+        fid = dark_mode_weight * dark_left_prob + bright_mode_weight * bright_right_prob
+        if np.isfinite(fid) and fid > best_fid:
+            best_fid = fid
+            best_thresh = val
+
+    # ---------- Fallback if everything failed ----------
+    if best_thresh is None:
+        best_thresh = (mean_counts_dark + mean_counts_bright) / 2.0
+        best_fid = np.nan
+        warnings.warn(
+            "determine_threshold: could not evaluate any candidate thresholds (CDF failures / bad params). "
+            f"Falling back to midpoint threshold={best_thresh} with fidelity=nan."
+        )
 
     if do_print:
-        print(
-            f"Optimum readout fidelity {round(fidelity, 3)} achieved at threshold {threshold}"
+        if np.isfinite(best_fid):
+            print(
+                f"Optimum readout fidelity {round(best_fid, 3)} achieved at threshold {best_thresh}"
+            )
+        else:
+            print(f"Using fallback threshold {best_thresh} (fidelity unavailable)")
+
+    return (best_thresh, best_fid) if ret_fidelity else best_thresh
+
+
+# -----------------------------
+# Structured N-NV binomial model
+# -----------------------------
+def _binom_coeffs(n: int) -> np.ndarray:
+    return np.array([math.comb(n, k) for k in range(n + 1)], dtype=float)
+
+
+def _binom_weights(n: int, p: float) -> np.ndarray:
+    p = float(np.clip(p, 0.0, 1.0))
+    ks = np.arange(n + 1, dtype=float)
+    coeff = _binom_coeffs(n)
+    w = coeff * (p**ks) * ((1.0 - p) ** (n - ks))
+    s = float(np.sum(w))
+    if s <= 0 or not np.isfinite(s):
+        w = np.zeros(n + 1, dtype=float)
+        w[0] = 1.0
+        return w
+    return w / s
+
+
+def get_binomial_multinv_pdf(prob_dist: ProbDist, n_nvs: int):
+    """
+    Mixture over k=0..N with binomial weights and rate_k = N*rate0 + k*delta.
+    Parameters:
+      p_minus in [0,1]
+      rate0 > 0 (per-NV NV0 rate)
+      delta >= 0 (increment per NV-)
+    Works best for ProbDist.COMPOUND_POISSON or ProbDist.POISSON.
+    """
+    if prob_dist is ProbDist.COMPOUND_POISSON_WITH_IONIZATION:
+        raise ValueError(
+            "Binomial multinv model is for *reference* histograms (no ionization)."
         )
 
-    if ret_fidelity:
-        return threshold, fidelity
-    else:
-        return threshold
+    single_pdf = get_single_mode_pdf(prob_dist)
+    coeff = _binom_coeffs(n_nvs)
+    K = n_nvs + 1
+
+    def fn(x, p_minus, rate0, delta):
+        p_minus = float(np.clip(p_minus, 0.0, 1.0))
+        rate0 = float(max(rate0, 1e-9))
+        delta = float(max(delta, 0.0))
+
+        ks = np.arange(K, dtype=float)
+        w = coeff * (p_minus**ks) * ((1.0 - p_minus) ** (n_nvs - ks))
+        s = float(np.sum(w))
+        if s <= 0 or not np.isfinite(s):
+            w = np.zeros(K, dtype=float)
+            w[0] = 1.0
+        else:
+            w = w / s
+
+        # lambda_k = N*rate0 + k*delta
+        x_arr = np.asarray(x, dtype=float)
+        y = np.zeros_like(x_arr, dtype=float)
+        base = n_nvs * rate0
+        for k in range(K):
+            lam_k = base + k * delta
+            y += w[k] * single_pdf(x_arr, lam_k)
+        return y
+
+    return fn
 
 
-def determine_dual_threshold(
+def fit_binomial_multinv_histogram(
     counts_list,
-    bright_ratio=None,
-    min_fidelity=0.9,
-    no_print=False,
+    prob_dist: ProbDist,
+    n_nvs: int,
+    no_print=True,
+    no_plot=True,
+    n_restarts: int = 5,
+    seed: int = 0,
 ):
-    """Not fully implemented yet. Version of determine_threshold for a trinary
-    threshold system where for a < b: if counts < a, we call dark state; if
-    counts > b, we call bright state; and if a < counts < b, we make no call.
     """
+    Fits (p_minus, rate0, delta) using the same histogram + curve_fit style as fit_bimodal_histogram().
+    Returns: popt, pcov, red_chi_sq
+    """
+    from utils.tool_belt import curve_fit  # same wrapper you already use
 
-    counts_list = counts_list.flatten()
+    counts_list = np.asarray(counts_list).flatten()
 
-    # Remove outliers
+    # Remove outliers (same logic as your current fitter) :contentReference[oaicite:2]{index=2}
     median = np.median(counts_list)
     std = np.std(counts_list)
-    counts_list = counts_list[counts_list < median + 10 * std]
+    if np.isfinite(std) and std > 0:
+        counts_list = counts_list[counts_list < median + 10 * std]
+    num_samples = len(counts_list)
+    if num_samples < 50:
+        return None, None, None
 
-    # Histogram the counts
-    counts_list = np.array([round(el) for el in counts_list])
-    max_count = max(counts_list)
+    max_count = int(round(float(np.max(counts_list))))
     x_vals = np.linspace(0, max_count, max_count + 1)
+
     hist, _ = np.histogram(
         counts_list, bins=max_count + 1, range=(0, max_count), density=True
     )
 
-    # Fit the histogram
-    fit_fn = bimodal_skew_gaussian_pdf
-    num_single_dist_params = 3
-    mean_dark_guess = round(np.quantile(counts_list, 0.2))
-    mean_bright_guess = round(np.quantile(counts_list, 0.98))
-    guess_params = (
-        0.7,
-        mean_dark_guess,
-        2 * np.sqrt(mean_dark_guess),  # 1.5 factor for broadening
-        2,
-        mean_bright_guess,
-        2 * np.sqrt(mean_bright_guess),
-        -2,
+    # histogram errors (same as your fitter) :contentReference[oaicite:3]{index=3}
+    hist_errs = np.sqrt(hist / num_samples)
+    min_err = 1 / num_samples
+    hist_errs = np.where(hist_errs > min_err, hist_errs, min_err)
+
+    # ---- Initial guesses from quantiles ----
+    q02 = float(np.quantile(counts_list, 0.02))
+    q15 = float(np.quantile(counts_list, 0.15))
+    q65 = float(np.quantile(counts_list, 0.65))
+    q98 = float(np.quantile(counts_list, 0.98))
+    mean_tot = float(np.mean(counts_list))
+
+    # total rates for k=0 and k=N roughly live near low/high quantiles
+    rate0_guess = max(1e-3, q15 / n_nvs)
+    rateN_guess = max(rate0_guess + 1e-3, q65 / n_nvs)
+    delta_guess = max(1e-3, (rateN_guess - rate0_guess))  # per-NV increment
+
+    # estimate p from mean_total ≈ N*(rate0 + p*delta)
+    mean_per = mean_tot / n_nvs
+    p_guess = (mean_per - rate0_guess) / max(delta_guess, 1e-9)
+    p_guess = float(np.clip(p_guess, 0.05, 0.95))
+
+    # Bounds (conservative)
+    rate0_min = max(1e-6, q02 / max(n_nvs, 1))
+    rate0_max = max(rate0_min + 1e-3, q98 / max(n_nvs, 1))
+    delta_max = max(1e-3, (q98 - q02) / max(n_nvs, 1))
+
+    bounds = (
+        (0.0, rate0_min, 0.0),
+        (1.0, rate0_max, delta_max),
     )
-    popt, _ = curve_fit(fit_fn, x_vals, hist, p0=guess_params)
-    if not no_print:
-        print(popt)
 
-    if bright_ratio is None:
-        bright_ratio = 1 - popt[0]
-    dark_ratio = 1 - bright_ratio
+    fit_fn = get_binomial_multinv_pdf(prob_dist, n_nvs)
 
-    # Calculate fidelities for given threshold
-    mean_counts_dark, mean_counts_bright = popt[1], popt[1 + num_single_dist_params]
-    mean_counts_dark = round(mean_counts_dark)
-    mean_counts_bright = round(mean_counts_bright)
-    thresh_options = np.arange(0.5, np.max(counts_list) + 0.5, 1)
-    num_options = len(thresh_options)
-    fidelities = []
-    left_fidelities = []
-    right_fidelities = []
-    for val in thresh_options:
-        dark_left_prob = skew_gaussian_cdf(val, *popt[1 : 1 + num_single_dist_params])
-        bright_left_prob = skew_gaussian_cdf(val, *popt[1 + num_single_dist_params :])
-        dark_right_prob = 1 - dark_left_prob
-        bright_right_prob = 1 - bright_left_prob
-        fidelity = dark_ratio * dark_left_prob + bright_ratio * bright_right_prob
-        left_fidelity = (dark_ratio * dark_left_prob) / (
-            dark_ratio * dark_left_prob + bright_ratio * bright_left_prob
-        )
-        right_fidelity = (bright_ratio * bright_right_prob) / (
-            bright_ratio * bright_right_prob + dark_ratio * dark_right_prob
-        )
-        fidelities.append(fidelity)
-        left_fidelities.append(left_fidelity)
-        right_fidelities.append(right_fidelity)
-    single_threshold = thresh_options[np.argmax(fidelities)]
-    best_fidelity = np.max(fidelities)
+    # Multi-start to avoid local minima
+    rng = np.random.default_rng(seed)
+    best = None
+    for r in range(max(1, n_restarts)):
+        p0 = np.array([p_guess, rate0_guess, delta_guess], dtype=float)
+        if r > 0:
+            p0[0] = float(np.clip(p0[0] + 0.10 * rng.standard_normal(), 0.05, 0.95))
+            p0[1] = float(
+                np.clip(
+                    p0[1] * (1.0 + 0.20 * rng.standard_normal()),
+                    bounds[0][1],
+                    bounds[1][1],
+                )
+            )
+            p0[2] = float(
+                np.clip(p0[2] * (1.0 + 0.20 * rng.standard_normal()), 0.0, bounds[1][2])
+            )
 
-    # Calculate normalized probabilities for given integrated counts value
-    norm_dark_probs = []
-    norm_bright_probs = []
-    for val in x_vals:
-        dark_prob = skew_gaussian_pdf(val, *popt[1 : 1 + num_single_dist_params])
-        bright_prob = skew_gaussian_pdf(val, *popt[1 + num_single_dist_params :])
-        norm_dark_prob = (
-            dark_ratio
-            * dark_prob
-            / (dark_ratio * dark_prob + bright_ratio * bright_prob)
-        )
-        norm_bright_prob = (
-            bright_ratio
-            * bright_prob
-            / (dark_ratio * dark_prob + bright_ratio * bright_prob)
-        )
-        norm_dark_probs.append(norm_dark_prob)
-        norm_bright_probs.append(norm_bright_prob)
-    if not single_or_dual:
-        ### Manual approach
-        # threshold = [single_threshold - 4, single_threshold + 1]
+        try:
+            popt, pcov, red_chi_sq = curve_fit(
+                fit_fn, x_vals, hist, p0, hist_errs, bounds=bounds
+            )
+            if (best is None) or (red_chi_sq < best[2]):
+                best = (popt, pcov, red_chi_sq)
+        except Exception:
+            continue
 
-        ### CDF
-        # threshold = [np.min(thresh_options), np.max(thresh_options)]
-        # for ind in range(num_options):
-        #     left_fidelity = left_fidelities[ind]
-        #     right_fidelity = right_fidelities[ind]
-        #     thresh_option = thresh_options[ind]
-        #     if (
-        #         left_fidelity > dual_threshold_min_fidelity
-        #         and thresh_option > threshold[0]
-        #     ):
-        #         threshold[0] = thresh_option
-        #     if (
-        #         right_fidelity > dual_threshold_min_fidelity
-        #         and thresh_option < threshold[1]
-        #     ):
-        #         threshold[1] = thresh_option
+    if best is None:
+        return None, None, None
 
-        ### PDF
-        norm_dark_probs = np.array(norm_dark_probs)
-        norm_bright_probs = np.array(norm_bright_probs)
-        adj_norm_dark_probs = np.where(
-            norm_dark_probs > min_fidelity, norm_dark_probs, 1
-        )
-        adj_norm_bright_probs = np.where(
-            norm_bright_probs > min_fidelity, norm_bright_probs, 1
-        )
-        threshold = [
-            x_vals[np.argmin(adj_norm_dark_probs)] + 0.5,
-            x_vals[np.argmin(adj_norm_bright_probs)] - 0.5,
-        ]
-
-    # if there's no ambiguous zone for dual-thresholding just use a single value
-    if single_or_dual or threshold[0] >= threshold[1]:
-        # if single_or_dual:
-        threshold = single_threshold
-
-    # if not single_or_dual:
-    if False:
-        smooth_x_vals = np.linspace(0, max_count, 10 * (max_count + 1))
-        fig, ax = plt.subplots()
-        max_data = max(counts_list)
-        rng = (-0.5, max_data + 0.5)
-        nbins = max_data + 1
-        color = "#1f77b4"
-        alpha = 0.3
-        hex_alpha = hex(round(alpha * 255))
-        if len(hex_alpha) == 3:
-            hex_alpha = f"0{hex_alpha[-1]}"
-        else:
-            hex_alpha = hex_alpha[-2:]
-        facecolor = f"{color}{hex_alpha}"
-        ax.hist(
-            counts_list,
-            histtype="step",
-            bins=nbins,
-            facecolor=facecolor,
-            fill=True,
-            range=rng,
-            # label="Histogram",
-            density=True,
-        )
-        # ax.plot(x_vals, fit_fn(x_vals, *guess_params))
-        # popt: prob_dark, mean_dark, std_dark, skew_dark, mean_bright, std_bright, skew_bright
-        ax.plot(
-            smooth_x_vals,
-            popt[0] * skew_gaussian_pdf(smooth_x_vals, *popt[1:4]),
-            color="#d62728",
-            label="NV⁰ mode",
-        )
-        ax.plot(
-            smooth_x_vals,
-            (1 - popt[0]) * skew_gaussian_pdf(smooth_x_vals, *popt[4:]),
-            color="#2ca02c",
-            label="NV⁻ mode",
-        )
-        ax.plot(
-            smooth_x_vals,
-            fit_fn(smooth_x_vals, *popt),
-            color="#1f77b4",
-            label="Combined",
-        )
-        if single_or_dual:
-            ax.axvline(threshold, color="#7f7f7f", linestyle="dashed", linewidth=2)
-        else:
-            ax.axvline(threshold[0], color="red")
-            ax.axvline(threshold[1], color="black")
-        ax.set_xlabel("Integrated counts")
-        ax.set_ylabel("Probability")
-        ax.legend()
-        plt.show(block=True)
-
-    # if not single_or_dual:
-    #     threshold = threshold[1]
+    popt, pcov, red_chi_sq = best
 
     if not no_print:
-        print(f"Optimum threshold: {threshold}")
-        if single_or_dual:
-            print(f"Fidelity: {best_fidelity}")
+        print(f"[binomial multinv] N={n_nvs} popt={popt} red_chi_sq={red_chi_sq}")
 
-    return threshold
+    return popt, pcov, red_chi_sq
+
+
+def determine_multithreshold_binomial_multinv(
+    popt,
+    prob_dist: ProbDist,
+    n_nvs: int,
+    x_max: int,
+    ret_fidelity: bool = True,
+):
+    """
+    Multi-class Bayes-optimal thresholds for classes k=0..N (k = #NV-).
+    Returns thresholds (length N) at half-integers and overall fidelity.
+    """
+    if popt is None:
+        return (None, None) if ret_fidelity else None
+
+    single_cdf = get_single_mode_cdf(prob_dist)
+
+    p_minus, rate0, delta = [float(v) for v in popt]
+    weights = _binom_weights(n_nvs, p_minus)  # length N+1
+    K = n_nvs + 1
+
+    # sort by k already monotonic in lambda_k = N*rate0 + k*delta
+    T = np.arange(-0.5, float(x_max) + 0.5 + 1e-12, 1.0, dtype=float)
+    Ngrid = T.size
+
+    # CDF table: (K, Ngrid)
+    cdfs = np.zeros((K, Ngrid), dtype=float)
+    base = n_nvs * max(rate0, 1e-9)
+    delta = max(delta, 0.0)
+    for k in range(K):
+        lam_k = base + k * delta
+        # vectorize CDF eval
+        cdfs[k, :] = np.array([single_cdf(t, lam_k) for t in T], dtype=float)
+    cdfs = np.clip(cdfs, 0.0, 1.0)
+
+    # DP over ordered thresholds
+    dp = np.full((K - 1, Ngrid), -np.inf, dtype=float)
+    back = np.full((K - 1, Ngrid), -1, dtype=int)
+
+    dp[0, :] = weights[0] * cdfs[0, :]
+
+    for i in range(1, K - 1):
+        for j in range(Ngrid):
+            best_val = -np.inf
+            best_k = -1
+            for k0 in range(j):
+                val = dp[i - 1, k0] + weights[i] * (cdfs[i, j] - cdfs[i, k0])
+                if val > best_val:
+                    best_val = val
+                    best_k = k0
+            dp[i, j] = best_val
+            back[i, j] = best_k
+
+    best_total = -np.inf
+    best_j = 0
+    for j in range(Ngrid):
+        val = dp[K - 2, j] + weights[K - 1] * (1.0 - cdfs[K - 1, j])
+        if val > best_total:
+            best_total = float(val)
+            best_j = j
+
+    idxs = [best_j]
+    for i in range(K - 2, 0, -1):
+        best_j = back[i, best_j]
+        idxs.append(best_j)
+    idxs = list(reversed(idxs))
+    thresholds = [float(T[ii]) for ii in idxs]  # length K-1 = N
+
+    return (thresholds, float(best_total)) if ret_fidelity else thresholds
+
+
+def determine_threshold_any_minus_binomial_multinv(
+    popt,
+    prob_dist: ProbDist,
+    n_nvs: int,
+    x_max: int,
+    ret_fidelity: bool = True,
+):
+    """
+    Binary threshold: class 0 (k=0) vs class >=1 (any NV-).
+    This keeps the meaning closest to your original NV0 vs NV- thresholding.
+    """
+    if popt is None:
+        return (None, None) if ret_fidelity else None
+
+    single_cdf = get_single_mode_cdf(prob_dist)
+    single_pdf = get_single_mode_pdf(prob_dist)
+
+    p_minus, rate0, delta = [float(v) for v in popt]
+    weights = _binom_weights(n_nvs, p_minus)
+    w0 = float(weights[0])
+    wrest = 1.0 - w0
+    if wrest <= 1e-12:
+        # effectively always k=0; threshold irrelevant
+        t = 0.5
+        fid = 1.0
+        return (t, fid) if ret_fidelity else t
+
+    base = n_nvs * max(rate0, 1e-9)
+    delta = max(delta, 0.0)
+
+    # Build mixture CDF for rest (k>=1), normalized
+    T = np.arange(-0.5, float(x_max) + 0.5 + 1e-12, 1.0, dtype=float)
+
+    cdf0 = np.array([single_cdf(t, base + 0 * delta) for t in T], dtype=float)
+    cdf_rest = np.zeros_like(T, dtype=float)
+    for k in range(1, n_nvs + 1):
+        lam_k = base + k * delta
+        cdf_k = np.array([single_cdf(t, lam_k) for t in T], dtype=float)
+        cdf_rest += float(weights[k]) * cdf_k
+    cdf_rest = cdf_rest / wrest
+
+    # Bayes accuracy for threshold t:
+    # correct = w0*P0(left) + wrest*Prest(right)
+    best_fid = -np.inf
+    best_t = None
+    for i, t in enumerate(T):
+        p0_left = float(np.clip(cdf0[i], 0.0, 1.0))
+        prest_left = float(np.clip(cdf_rest[i], 0.0, 1.0))
+        fid = w0 * p0_left + wrest * (1.0 - prest_left)
+        if fid > best_fid:
+            best_fid = float(fid)
+            best_t = float(t)
+
+    return (best_t, best_fid) if ret_fidelity else best_t
+
+
+def analyze_charge_histogram_multinv_binomial(
+    counts_list,
+    prob_dist: ProbDist = ProbDist.COMPOUND_POISSON,
+    max_nvs: int = 3,
+    force_nvs: int | None = None,
+    bic_extra_nv_penalty: float = 1.0,
+    seed: int = 0,
+):
+    """
+    Try N=1..max_nvs (or force_nvs), fit binomial-structured model, select N by BIC
+    with an additional mild penalty per extra NV to discourage "always choose 3".
+    Returns a dict with consistent keys.
+    """
+    x = np.asarray(counts_list, dtype=float).ravel()
+    x = x[np.isfinite(x)]
+    if x.size < 50:
+        return {"ok": False, "reason": "too_few_samples"}
+
+    # same outlier trim as your fitter
+    med = np.median(x)
+    std = np.std(x)
+    if np.isfinite(std) and std > 0:
+        x = x[x < med + 10 * std]
+
+    max_count = int(round(float(np.max(x))))
+    xs_int = np.arange(0, max_count + 1, dtype=float)
+
+    # histogram as counts for LL
+    xi = np.rint(np.clip(x, 0, None)).astype(int)
+    bin_counts = np.bincount(xi, minlength=max_count + 1).astype(float)
+    n_samp = float(np.sum(bin_counts))
+
+    Ns = [int(force_nvs)] if force_nvs is not None else list(range(1, int(max_nvs) + 1))
+    best = None
+
+    for N in Ns:
+        popt, pcov, red = fit_binomial_multinv_histogram(
+            x,
+            prob_dist,
+            N,
+            no_print=True,
+            no_plot=True,
+            n_restarts=5,
+            seed=seed + 19 * N,
+        )
+        if popt is None:
+            continue
+
+        pdf_fn = get_binomial_multinv_pdf(prob_dist, N)
+        p = np.asarray(pdf_fn(xs_int, *popt), dtype=float)
+        p = np.clip(p, 1e-300, None)
+        p = p / float(np.sum(p))  # normalize defensively
+
+        ll = float(np.sum(bin_counts * np.log(p)))
+
+        # parameter count: 3 + (N-1) "structural" penalty
+        k_free = 3 + (N - 1)
+        bic = float(
+            k_free * np.log(max(n_samp, 1.0))
+            - 2.0 * ll
+            + bic_extra_nv_penalty * (N - 1)
+        )
+
+        # thresholds + fidelities
+        thresholds, fid_multi = determine_multithreshold_binomial_multinv(
+            popt, prob_dist, N, x_max=max_count, ret_fidelity=True
+        )
+        thr_any, fid_any = determine_threshold_any_minus_binomial_multinv(
+            popt, prob_dist, N, x_max=max_count, ret_fidelity=True
+        )
+
+        res = dict(
+            ok=True,
+            prob_dist=prob_dist,
+            n_nvs=int(N),
+            popt=popt,
+            pcov=pcov,
+            red_chi_sq=red,
+            ll=ll,
+            bic=bic,
+            weights=_binom_weights(N, float(popt[0])),
+            thresholds=thresholds,  # length N (multi-class)
+            threshold_any=thr_any,  # legacy binary (k=0 vs >=1)
+            fidelity_any=fid_any,
+            fidelity_multiclass=fid_multi,
+            x_max=max_count,
+        )
+
+        if (best is None) or (res["bic"] < best["bic"]):
+            best = res
+
+    if best is None:
+        return {"ok": False, "reason": "fit_failed"}
+    return best
 
 
 if __name__ == "__main__":

@@ -275,6 +275,16 @@ class PosXyThorGvs212(LabradServer, PosXyStream):
     @setting(34, coords_y="*v[]", continuous="b")
     def load_stream_y(self, c, coords_y, continuous=False):
         return self._load_stream_single_ax(coords_y, self.daq_ao_galvo_y, continuous)
+    
+    @setting(35, returns="*v[]")
+    def read_x(self, c):
+        """Return last commanded X"""
+        return [self._last_x]
+
+    @setting(36, returns="*v[]")
+    def read_y(self, c):
+        """Return last commanded Y"""
+        return [self._last_y]
 
     @setting(3)
     def reset(self, c):

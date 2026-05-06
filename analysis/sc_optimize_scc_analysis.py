@@ -664,35 +664,35 @@ def process_and_plot_durations(data):
             optimal_durations[nv_index] = median_duration
 
     # # Plot individual NV fits
-    # for nv_index in selected_indices:
-    #     plt.figure(figsize=(6, 4))
-    #     plt.errorbar(
-    #         taus,
-    #         avg_snr[nv_index],
-    #         yerr=avg_snr_ste[nv_index],
-    #         fmt="o",
-    #         label="SNR Data",
-    #     )
-    #     if optimal_durations[nv_index] is not None:
-    #         tau_linspace = np.linspace(min(taus), max(taus), 1000)
-    #         popt, fit_fn = fit_duration(taus, avg_snr[nv_index], avg_snr_ste[nv_index])
-    #         plt.plot(
-    #             tau_linspace,
-    #             fit_fn(tau_linspace, *popt),
-    #             label="Fitted Curve",
-    #         )
-    #         plt.axvline(
-    #             optimal_durations[nv_index],
-    #             color="r",
-    #             linestyle="--",
-    #             label=f"Optimal Duration: {optimal_durations[nv_index]}",
-    #         )
-    #     plt.title(f"NV {nv_index} - Duration Optimization")
-    #     plt.xlabel("Duration")
-    #     plt.ylabel("SNR")
-    #     plt.legend()
-    #     plt.grid(alpha=0.3)
-    #     plt.show(block=True)
+    for nv_index in selected_indices:
+        plt.figure(figsize=(6, 4))
+        plt.errorbar(
+            taus,
+            avg_snr[nv_index],
+            yerr=avg_snr_ste[nv_index],
+            fmt="o",
+            label="SNR Data",
+        )
+        if optimal_durations[nv_index] is not None:
+            tau_linspace = np.linspace(min(taus), max(taus), 1000)
+            popt, fit_fn = fit_duration(taus, avg_snr[nv_index], avg_snr_ste[nv_index])
+            plt.plot(
+                tau_linspace,
+                fit_fn(tau_linspace, *popt),
+                label="Fitted Curve",
+            )
+            plt.axvline(
+                optimal_durations[nv_index],
+                color="r",
+                linestyle="--",
+                label=f"Optimal Duration: {optimal_durations[nv_index]}",
+            )
+        plt.title(f"NV {nv_index} - Duration Optimization")
+        plt.xlabel("Duration")
+        plt.ylabel("SNR")
+        plt.legend()
+        plt.grid(alpha=0.3)
+        plt.show(block=True)
 
     # Print lists of durations and SNRs
     print("Optimal Durations:")
@@ -702,8 +702,8 @@ def process_and_plot_durations(data):
     print(optimal_durations)
     optimal_snrs = [optimal_snrs[nv] for nv in selected_indices]
     print(optimal_snrs)
-    # median = np.median(optimal_durations)
-    # optimal_durations = [int(median) if (val < 24 or val > 200) else val for val in optimal_durations]
+    median = np.median(optimal_durations)
+    optimal_durations = [int(median) if (val < 24 or val > 200) else val for val in optimal_durations]
     plt.figure(figsize=(6, 5))
     plt.scatter(
         optimal_durations,
@@ -745,7 +745,7 @@ if __name__ == "__main__":
 
     #duration
     data = dm.get_raw_data(
-        file_stem="2026_01_21-05_05_21-johnson-nv0_2025_10_21", load_npz=True
+        file_stem="2026_02_10-14_23_31-johnson-nv0_2025_10_21", load_npz=True
     )
 
     results = process_and_plot_durations(data)

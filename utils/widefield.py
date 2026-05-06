@@ -114,44 +114,6 @@ def _calc_dist_matrix(radius=None):
     x_crop_mesh, y_crop_mesh = np.meshgrid(x_crop, y_crop)
     return np.sqrt((x_crop_mesh) ** 2 + (y_crop_mesh) ** 2)
 
-
-# def integrate_counts(img_array, pixel_coords, radius=None):
-#     """Add up the counts around a target set of pixel coordinates in the passed image array.
-#     Use for getting the total number of photons coming from a target NV.
-
-#     Parameters
-#     ----------
-#     img_array : ndarray
-#         Image array in units of photons (convert from ADUs with adus_to_photons)
-#     pixel_coords : 2-tuple
-#         Pixel coordinates to integrate around
-#     radius : _type_, optional
-#         Radius of disk to integrate over, by default retrieved from config
-
-#     Returns
-#     -------
-#     float
-#         Integrated counts (just an estimate, as adus_to_photons is also just an estimate)
-#     """
-#     pixel_x = pixel_coords[0]
-#     pixel_y = pixel_coords[1]
-
-#     if radius is None:
-#         radius = _get_camera_spot_radius()
-
-#     # Don't work through all the pixels, just the ones that might be relevant
-#     left = round(pixel_x - radius)
-#     right = round(pixel_x + radius)
-#     top = round(pixel_y - radius)
-#     bottom = round(pixel_y + radius)
-#     img_array_crop = img_array[top : bottom + 1, left : right + 1]
-#     dist = _calc_dist_matrix()
-
-
-#     counts = np.sum(img_array_crop, where=dist < radius)
-#     return counts
-
-
 # SBC: update on 9/9/2024
 def integrate_counts(img_array, pixel_coords, radius=None):
     """
@@ -196,6 +158,51 @@ def integrate_counts(img_array, pixel_coords, radius=None):
 
     return counts
 
+def integrate_counts_bg_subtracted(
+    img_array,
+    pixel_coords,
+    radius=None,
+    bg_inner_radius=None,
+    bg_outer_radius=None,
+):
+    """
+    Integrate counts in a disk around the NV and subtract local background
+    estimated from an annulus around the same NV.
+    """
+    pixel_x = pixel_coords[0]
+    pixel_y = pixel_coords[1]
+
+    if radius is None:
+        radius = _get_camera_spot_radius()
+
+    if bg_inner_radius is None:
+        bg_inner_radius = radius + 2.0
+    if bg_outer_radius is None:
+        bg_outer_radius = radius + 3.0
+
+    half_width = int(np.ceil(bg_outer_radius))
+    left = max(0, round(pixel_x - half_width))
+    right = min(img_array.shape[1] - 1, round(pixel_x + half_width))
+    top = max(0, round(pixel_y - half_width))
+    bottom = min(img_array.shape[0] - 1, round(pixel_y + half_width))
+
+    img_crop = img_array[top : bottom + 1, left : right + 1]
+
+    y_coords, x_coords = np.ogrid[top : bottom + 1, left : right + 1]
+    dist = np.sqrt((x_coords - pixel_x) ** 2 + (y_coords - pixel_y) ** 2)
+
+    sig_mask = dist < radius
+    bg_mask = (dist >= bg_inner_radius) & (dist < bg_outer_radius)
+
+    sig_sum = np.sum(img_crop[sig_mask])
+
+    if np.count_nonzero(bg_mask) == 0:
+        return sig_sum
+
+    bg_mean = np.mean(img_crop[bg_mask])
+    bg_subtracted_counts = sig_sum - bg_mean * np.count_nonzero(sig_mask)
+
+    return bg_subtracted_counts
 
 def fit_max_counts(img_array, pixel_coords, radius=None):
     """
@@ -337,11 +344,13 @@ def _validate_counts_structure(counts):
         raise RuntimeError("Passed counts object is not a numpy array.")
     if counts.ndim != 4:
         raise RuntimeError("Passed counts object has the wrong number of dimensions.")
-    
+
+
 # Axes constants
 run_ax = 1
 rep_ax = 3
 run_rep_axes = (run_ax, rep_ax)
+
 
 def average_counts(sig_counts, ref_counts=None):
     """
@@ -377,19 +386,22 @@ def average_counts(sig_counts, ref_counts=None):
         # Means per NV across all other axes
         ms0_mean = _mean_nan(ms0_ref_counts, axis=(1, 2, 3))
         ms1_mean = _mean_nan(ms1_ref_counts, axis=(1, 2, 3))
-        norms = [ _nan0(ms0_mean), _nan0(ms1_mean) ]
+        norms = [_nan0(ms0_mean), _nan0(ms1_mean)]
 
     return _nan0(avg_counts), _nan0(avg_counts_ste), norms
 
 
 _SAFE_EPS = 1e-12
 
+
 def _safe_to_f64(x):
     return np.asarray(x, dtype=np.float64)
+
 
 def _nan0(x):
     # Replace NaN/Inf with 0 to avoid propagation
     return np.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
+
 
 def _std_ddof_guard(x, axes):
     """
@@ -403,13 +415,15 @@ def _std_ddof_guard(x, axes):
     for ax in axes:
         n *= x.shape[ax]
     ddof = 1 if n >= 2 else 0
-    with np.errstate(all='ignore'):
+    with np.errstate(all="ignore"):
         return np.nanstd(x, axis=axes, ddof=ddof)
+
 
 def _mean_nan(x, axis=None):
     x = _safe_to_f64(x)
-    with np.errstate(all='ignore'):
+    with np.errstate(all="ignore"):
         return np.nanmean(x, axis=axis)
+
 
 def _safe_div(num, den):
     num = _safe_to_f64(num)
@@ -421,6 +435,7 @@ def _safe_div(num, den):
     np.divide(num, den, out=out, where=valid)
     return _nan0(out)
 
+
 def calc_snr(sig_counts, ref_counts):
     """Calculate SNR for a single shot"""
     avg_contrast, avg_contrast_ste = calc_contrast(sig_counts, ref_counts)
@@ -428,11 +443,12 @@ def calc_snr(sig_counts, ref_counts):
     # Noise is quadrature sum of sig/ref standard deviations over (run, rep)
     std_sig = _std_ddof_guard(sig_counts, run_rep_axes)
     std_ref = _std_ddof_guard(ref_counts, run_rep_axes)
-    noise = np.hypot(std_sig, std_ref)                    # sqrt(sig^2 + ref^2)
+    noise = np.hypot(std_sig, std_ref)  # sqrt(sig^2 + ref^2)
 
-    avg_snr     = _safe_div(avg_contrast,     noise)
+    avg_snr = _safe_div(avg_contrast, noise)
     avg_snr_ste = _safe_div(avg_contrast_ste, noise)
     return avg_snr, avg_snr_ste
+
 
 def calc_contrast(sig_counts, ref_counts):
     """Calculate contrast for a single shot"""
@@ -444,10 +460,10 @@ def calc_contrast(sig_counts, ref_counts):
 
     avg_contrast = _safe_to_f64(avg_sig_counts) - _safe_to_f64(avg_ref_counts)
     # STEs add in quadrature
-    avg_contrast_ste = np.hypot(_safe_to_f64(avg_sig_counts_ste),
-                                _safe_to_f64(avg_ref_counts_ste))
+    avg_contrast_ste = np.hypot(
+        _safe_to_f64(avg_sig_counts_ste), _safe_to_f64(avg_ref_counts_ste)
+    )
     return _nan0(avg_contrast), _nan0(avg_contrast_ste)
-
 
 
 # def average_counts(sig_counts, ref_counts=None):
@@ -554,10 +570,14 @@ def process_multiple_files(file_ids, load_npz=True):
     )
     counts = np.array(combined_data["counts"])
     print(f"combined data shape : {counts.shape}")
+    seq_xy = combined_data.get("xy_seq", "xy8").lower()
+    print(seq_xy)
     for file_id in file_ids[1:]:
         new_data = dm.get_raw_data(
             file_stem=file_id, load_npz=load_npz, use_cache=False
         )
+        seq_xy = combined_data.get("xy_seq", "xy8").lower()
+        print(seq_xy)
         new_counts = np.array(new_data["counts"])
         print(f"new data shape : {new_counts.shape}")
         combined_data["num_runs"] += new_data["num_runs"]
@@ -1229,6 +1249,7 @@ def generate_log_spaced_taus(min_tau, max_tau, num_steps, base=4):
     taus = np.logspace(np.log10(min_tau), np.log10(max_tau), num_steps)
     taus = np.floor(taus / base) * base
     return taus
+
 
 def generate_divisible_by_4(min_val, max_val, num_steps):
     step_size = (max_val - min_val) / (num_steps - 1)

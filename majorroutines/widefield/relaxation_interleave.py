@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Widefield Rabi experiment
-
+Widefield Relaxation experiment
 Created on November 29th, 2023
-
 @author: mccambria
+@author: schand
 """
 
 import sys
