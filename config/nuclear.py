@@ -173,7 +173,7 @@ config |= {
     "Optics": {
         "PhysicalLasers": {
             green_laser: {
-                "delay": 90,
+                "delay": 80,
                 "mod_mode": ModMode.DIGITAL,
                 "positioner": CoordsKey.PIXEL,
             },

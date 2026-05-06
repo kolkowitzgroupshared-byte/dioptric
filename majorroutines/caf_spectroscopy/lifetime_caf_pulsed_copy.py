@@ -5,14 +5,20 @@ fill this out!
 @author:alyssa-matthews
 """
 
+import csv
+import json
+import os
 import time
 
+import labrad
 import matplotlib.pyplot as plt
-import numpy as np
+import numpy
+from scipy.optimize import curve_fit
 
+import majorroutines.targeting as targeting
+import utils.tool_belt as tool_belt
+from utils import common
 from utils import data_manager as dm
-from utils import kplotlib as kpl
-from utils import tool_belt as tb
 
 
 def process_raw_buffer(
@@ -23,34 +29,31 @@ def process_raw_buffer(
     gate_open_channel,
     gate_close_channel,
 ):
-    """
-    Process a single gate window for standard lifetime measurements.
-    """
+
     current_tags.extend(new_tags)
     current_channels.extend(new_channels)
-    current_channels_array = np.array(current_channels)
+    current_channels_array = numpy.array(current_channels)
 
-    result = np.nonzero(current_channels_array == gate_open_channel)
+    result = numpy.nonzero(current_channels_array == gate_open_channel)
     gate_open_click_inds = result[0].tolist()
 
-    result = np.nonzero(current_channels_array == gate_close_channel)
+    result = numpy.nonzero(current_channels_array == gate_close_channel)
     gate_close_click_inds = result[0].tolist()
 
     new_processed_tags = []
 
-    num_closed_samples = min(len(gate_open_click_inds), len(gate_close_click_inds))
-
+    num_closed_samples = len(gate_close_click_inds)
     for list_ind in range(num_closed_samples):
         gate_open_click_ind = gate_open_click_inds[list_ind]
         gate_close_click_ind = gate_close_click_inds[list_ind]
 
         rep = current_tags[gate_open_click_ind + 1 : gate_close_click_ind]
-        rep = np.array(rep, dtype=np.int64)
+        rep = numpy.array(rep, dtype=numpy.int64)
         rep -= current_tags[gate_open_click_ind]
         new_processed_tags.extend(rep.astype(int).tolist())
 
-    if num_closed_samples > 0:
-        leftover_start = gate_close_click_inds[num_closed_samples - 1]
+    if len(gate_close_click_inds) > 0:
+        leftover_start = gate_close_click_inds[-1]
         del current_tags[0 : leftover_start + 1]
         del current_channels[0 : leftover_start + 1]
 
@@ -58,87 +61,88 @@ def process_raw_buffer(
 
 
 def main(
-    sample_sig,
+    nv_sig,
     apd_indices,
     readout_times,
     filter_pos,
     num_reps,
     num_runs,
     num_bins,
+    sequence_file,  # Moved up! Required positional argument
     laser_power=None,
-    seq_file="lifetime_caf_single_pulse.py",
 ):
     if len(apd_indices) > 1:
         msg = "Currently lifetime only supports single APDs!!"
         raise NotImplementedError(msg)
 
-    tb.reset_cfm()
-    kpl.init_kplotlib()
-    repr_th_name = "lifetime"
+    tool_belt.reset_cfm()
+    repr_th_name = "irr4"
 
-    # --- Hardware Setup ---
-    pulsegen_server = tb.get_server_pulse_streamer()
-    counter_server = tb.get_server_counter()
+    pulsegen_server = tool_belt.get_server_pulse_streamer()
+    counter_server = tool_belt.get_server_counter()
 
     if len(filter_pos) != 0:
-        slider_1 = tb.get_server_slider_1()
-        slider_3 = tb.get_server_slider_3()
+        slider_1 = tool_belt.get_server_slider_1()
+        slider_3 = tool_belt.get_server_slider_3()
 
-        slider_1_pos, slider_3_pos = filter_pos[0], filter_pos[1]
+        slider_1_pos, slider_3_pos = filter_pos
         slider_1.set_filter(slider_1_pos)
         slider_3.set_filter(slider_3_pos)
+
+    # Handle the readout_times list for both sequences
+    # Expected format passed from wrapper: [delay_ns, exc_ns, detect_ns]
+    if len(readout_times) >= 3:
+        delay_ns = int(
+            readout_times[0]
+        )  # readout_delay OR recovery_delay depending on sequence
+        pulse_time = int(readout_times[1])  # exc_ns
+        readout_time = int(readout_times[2])  # detect_ns
     else:
-        slider_1_pos, slider_3_pos = None, None
+        # Fallback if only 2 arguments are provided
+        delay_ns = 0
+        readout_time = int(readout_times[0])  # detect_ns
+        pulse_time = int(readout_times[1])  # exc_ns
 
-    # Extract timings and handle the readout delay (expected by the sequence file)
-    readout_delay = int(readout_times[0])
-    pulse_time = int(readout_times[1])  # exc_ns
-    readout_time = int(readout_times[2]) if len(readout_times) > 2 else 0
+    calc_readout_time = readout_time
 
-    # --- Sequence Loading ---
+    # Set the virtual laser key
     laser_vkey = "SPIN_READOUT"
 
-    # Matches: readout_delay_ns, exc_ns, detect_ns, laser_vkey_arg, laser_power
+    print(f"Loading sequence: {sequence_file}")
+
+    # Map variables to the exact format expected by BOTH sequence files
+    # args = [delay_ns, exc_ns, detect_ns, laser_vkey, laser_power]
     seq_args = [
-        readout_delay,
+        delay_ns,
         pulse_time,
         readout_time,
         laser_vkey,
         laser_power,
     ]
-    seq_args_string = tb.encode_seq_args(seq_args)
-    ret_vals = pulsegen_server.stream_load(seq_file, seq_args_string)
+
+    seq_args_string = tool_belt.encode_seq_args(seq_args)
+    ret_vals = pulsegen_server.stream_load(sequence_file, seq_args_string)  # LOAD
     seq_time = ret_vals[0]
 
     seq_time_s = seq_time / (10**9)  # s
-    expected_run_time_m = (num_runs * (num_reps * seq_time_s + 1)) / 60  # m
-    print(f" \nExpected run time: {expected_run_time_m:.2f} minutes. ")
+    expected_run_time = num_runs * (num_reps * seq_time_s + 1)  # s
+    expected_run_time_m = expected_run_time / 60  # m
+    print(" \nExpected run time: {:.2f} minutes. ".format(expected_run_time_m))
 
-    # --- Live Plot Setup ---
-    plt.ion()
-    fig, ax = plt.subplots(1, 1, figsize=(10, 8.5))
-    ax2 = ax.twinx()
-
-    ax.set_title("Lifetime")
-    ax.set_xlabel("Time after illumination (us)")
-    ax.set_ylabel("kcps", color="r")
-    ax2.set_ylabel("Total Raw Counts", color="k")
-
-    (line_kcps,) = ax.plot([], [], "r-", label="kcps")
-    (line_raw,) = ax2.plot([], [], "k-", alpha=0.7, label="Raw Counts")
-
-    # --- Execution ---
     startFunctionTime = time.time()
     start_timestamp = dm.get_time_stamp()
 
     processed_tags = []
-    tb.init_safe_stop()
+
+    tool_belt.init_safe_stop()
 
     for run_ind in range(num_runs):
-        print(f" \nRun index: {run_ind + 1}/{num_runs}")
+        print(" \nRun index: {}".format(run_ind))
 
-        if tb.safe_stop():
+        if tool_belt.safe_stop():
             break
+
+        seq_args_string = tool_belt.encode_seq_args(seq_args)
 
         counter_server.start_tag_stream()
         pulsegen_server.stream_start(int(num_reps))
@@ -152,13 +156,13 @@ def main(
         num_processed_reps = 0
 
         while num_processed_reps < num_reps:
-            if tb.safe_stop():
+            if tool_belt.safe_stop():
                 break
 
             new_tags, new_channels = counter_server.read_tag_stream()
-            new_tags = np.array(new_tags, dtype=np.int64)
+            new_tags = numpy.array(new_tags, dtype=numpy.int64)
 
-            new_processed_tags, num_new_processed_reps = process_raw_buffer(
+            ret_vals = process_raw_buffer(
                 new_tags,
                 new_channels,
                 current_tags,
@@ -167,57 +171,36 @@ def main(
                 gate_close_channel,
             )
 
+            new_processed_tags, num_new_processed_reps = ret_vals
             if num_new_processed_reps > 750000:
-                print(f"Processed {num_new_processed_reps} reps out of 10^6 max")
+                print(
+                    "Processed {} reps out of 10^6 max".format(num_new_processed_reps)
+                )
                 print("Tell Matt that the time tagger is too slow!")
 
             num_processed_reps += num_new_processed_reps
+
             processed_tags.extend(new_processed_tags)
 
         counter_server.stop_tag_stream()
 
-        # --- Live Plotting Update ---
-        readout_time_ps = 1000 * readout_time
-        binned_samples, _ = np.histogram(processed_tags, num_bins, (0, readout_time_ps))
-
-        bin_size_ns = readout_time / num_bins
-        bin_size_s = bin_size_ns / 1e9
-
-        # Calculate kcps based on the total reps gathered so far
-        total_reps_so_far = num_reps * (run_ind + 1)
-        # total_reps_so_far = num_reps / num_runs
-        binned_samples_kcps = binned_samples / bin_size_s / 1e3 / total_reps_so_far
-
-        bin_center_offset = bin_size_ns / 2
-        bin_centers_ns = (
-            np.linspace(0, readout_time, num_bins, endpoint=False) + bin_center_offset
-        )
-        x_data_us = np.array(bin_centers_ns) / 1e3
-
-        line_kcps.set_data(x_data_us, binned_samples_kcps)
-        line_raw.set_data(x_data_us, binned_samples)
-
-        ax.relim()
-        ax.autoscale_view()
-        ax2.relim()
-        ax2.autoscale_view()
-
-        fig.canvas.draw()
-        fig.canvas.flush_events()
-
-        # --- Incremental Data Saving ---
+        # Save the data we have incrementally for long measurements
         raw_data = {
             "start_timestamp": start_timestamp,
-            "sample_sig": getattr(sample_sig, "name", "sample"),
+            "sequence_file": sequence_file,
+            "nv_sig": nv_sig,
             "laser_power": laser_power,
-            "slider_1_pos": slider_1_pos,
-            "slider_3_pos": slider_3_pos,
+            "laser_vkey": laser_vkey,
+            "slider_1_pos": filter_pos[0],
+            "slider_3_pos": filter_pos[1],
+            "delay_ns": delay_ns,
+            "delay_ns-units": "ns",
             "readout_time": readout_time,
             "readout_time-units": "ns",
             "pulse_time": pulse_time,
             "pulse_time-units": "ns",
-            "readout_delay": readout_delay,
-            "readout_delay-units": "ns",
+            "calc_readout_time": calc_readout_time,
+            "calc_readout_time-units": "ns",
             "num_reps": num_reps,
             "num_runs": num_runs,
             "run_ind": run_ind,
@@ -229,46 +212,85 @@ def main(
         file_path = dm.get_file_path(__file__, start_timestamp, repr_th_name)
         dm.save_raw_data(raw_data, file_path)
 
-    # --- Final Wrap-up ---
-    tb.reset_cfm()
+    tool_belt.reset_cfm()
+
+    readout_time_ps = 1000 * calc_readout_time
+    binned_samples, bin_edges = numpy.histogram(
+        processed_tags, num_bins, (0, readout_time_ps)
+    )
+
+    bin_size_ns = calc_readout_time / num_bins
+    bin_size_s = bin_size_ns / 1e9
+    binned_samples_kcps = binned_samples / bin_size_s / 1e3 / num_reps / num_runs
+    bin_center_offset = bin_size_ns / 2
+    bin_centers_ns = numpy.linspace(0, readout_time, num_bins) + bin_center_offset
+
+    fig, ax = plt.subplots(1, 1, figsize=(10, 8.5))
+    ax2 = ax.twinx()
+    ax.plot(numpy.array(bin_centers_ns) / 10**3, binned_samples_kcps, "r-")
+    ax2.plot(numpy.array(bin_centers_ns) / 10**3, binned_samples, "r-")
+
+    ax.set_xlabel("X data")
+    ax.set_ylabel("kcps", color="k")
+    ax2.set_ylabel("Total Raw Counts", color="k")
+
+    ax.set_title("Lifetime")
+    ax.set_xlabel("Time after illumination (us)")
+
+    fig.canvas.draw()
+    fig.set_tight_layout(True)
+    fig.canvas.flush_events()
 
     endFunctionTime = time.time()
     time_elapsed = endFunctionTime - startFunctionTime
 
-    raw_data.update(
-        {
-            "time_elapsed": time_elapsed,
-            "binned_samples": binned_samples.tolist(),
-            "bin_centers": bin_centers_ns.tolist(),
-        }
-    )
+    # Final save mapping
+    raw_data = {
+        "start_timestamp": start_timestamp,
+        "time_elapsed": time_elapsed,
+        "sequence_file": sequence_file,
+        "nv_sig": nv_sig,
+        "laser_power": laser_power,
+        "laser_vkey": laser_vkey,
+        "slider_1_pos": filter_pos[0],
+        "slider_3_pos": filter_pos[1],
+        "delay_ns": delay_ns,
+        "delay_ns-units": "ns",
+        "readout_time": readout_time,
+        "readout_time-units": "ns",
+        "pulse_time": pulse_time,
+        "pulse_time-units": "ns",
+        "calc_readout_time": calc_readout_time,
+        "calc_readout_time-units": "ns",
+        "num_bins": num_bins,
+        "num_reps": num_reps,
+        "num_runs": num_runs,
+        "binned_samples": binned_samples.tolist(),
+        "bin_centers": bin_centers_ns.tolist(),
+        "processed_tags": processed_tags,
+        "processed_tags-units": "ps",
+    }
+    print(file_path)
 
-    print(f"Saved final data to: {file_path}")
     dm.save_figure(fig, file_path)
+    file_path = dm.get_file_path(__file__, start_timestamp, repr_th_name)
     dm.save_raw_data(raw_data, file_path)
     print("FIN --")
 
-    plt.ioff()
-    plt.show()
 
-    return raw_data
+def lifetime_json_to_csv(
+    file, folder, nv_data_dir="E:/Shared drives/Kolkowitz Lab Group/nvdata"
+):
+    data = tool_belt.get_raw_data(file, folder)
+    binned_samples = data["binned_samples"]
+    bin_centers = data["bin_centers"]
 
+    csv_data = []
 
-if __name__ == "__main__":
+    for bin_ind in range(len(bin_centers)):
+        row = []
+        row.append(bin_centers[bin_ind])
+        row.append(binned_samples[bin_ind])
+        csv_data.append(row)
 
-    class Dummy:
-        name = "caf_test"
-
-    sample_sig = Dummy()
-
-    main(
-        sample_sig=sample_sig,
-        apd_indices=[0],
-        readout_times=[0, 200, 200],  # readout delay, excitation, readout time
-        filter_pos=[2, 2],
-        num_reps=100000,
-        num_runs=1,
-        num_bins=2000,
-        laser_power=0.1e-3,
-        seq_file="lifetime_caf_single_pulse.py",
-    )
+    tool_belt.write_csv(csv_data, file, folder)

@@ -136,7 +136,7 @@ def do_th_lifetime_measurement(caf_sig):
         readout_times=time_args,
         filter_pos=[2, 2],  # [2, 1],  # Slider 1 and 3  0, 2
         num_reps=100000,
-        num_runs=15,
+        num_runs=1,
         num_bins=2000,
         laser_power=0.1e-3,
     )
@@ -153,19 +153,16 @@ def do_th_lifetime_measurement(caf_sig):
 
 def do_lifetime_caf_pulsed_copy(th_sig):
     lifetime_caf_pulsed_copy.main(
-        sample_sig=th_sig,
+        nv_sig=th_sig,
         apd_indices=[0],
-        readout_times=[
-            0,
-            1000,
-            300,
-        ],  # Note the added 0 here for delay, or just leave as [0.5e3, 0.4e3] to let it default!
+        readout_times=[0, 1000, 1000],
         filter_pos=[2, 2],
         num_reps=100000,
         num_runs=1,
-        num_bins=2000,
-        laser_power=0.1e-3,
-        seq_file="lifetime_caf_single_pulse.py",
+        num_bins=200,
+        sequence_file="lifetime_caf_single_pulse.py",
+        # lifetime_caf_single_pulse or lifetime_caf_single_on
+        laser_power=None,
     )
     return
 
@@ -573,8 +570,8 @@ if __name__ == "__main__":
         # ^leave the comma at the end or it will complain
         # do_stationary_count(th_sig, disable_opt=True)
         # do_lifetime_measurement(th_sig)
-        do_lifetime_caf_pulsed_copy(th_sig)
-        # do_th_lifetime_measurement(th_sig)
+        # do_lifetime_caf_pulsed_copy(th_sig)
+        do_th_lifetime_measurement(th_sig)
         # do_awg_test()
         # do_resonance(th_sig)
         # do_stationary_count(th_sig)

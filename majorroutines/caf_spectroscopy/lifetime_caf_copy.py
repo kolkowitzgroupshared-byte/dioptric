@@ -265,14 +265,6 @@ def lifetime_json_to_csv(
     tool_belt.write_csv(csv_data, file, folder)
 
 
-def decayExp(t, amplitude, decay):
-    return amplitude * numpy.exp(-t / decay)
-
-
-def dobule_decay(t, a1, d1, a2, d2):
-    return decayExp(t, a1, d1) + decayExp(t, a2, d2)
-
-
 # %%
 if __name__ == "__main__":
     folder = "pc_rabi/branch_master/lifetime_v2/2022_09"
