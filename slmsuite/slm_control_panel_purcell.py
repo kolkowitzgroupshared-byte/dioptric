@@ -10,6 +10,7 @@ Created on Spring, 2024
 import os
 import warnings
 from datetime import datetime
+import time
 
 # os.environ["QT_QPA_PLATFORM"] = "offscreen"
 import cv2
@@ -24,13 +25,15 @@ from IPython.display import Image
 from slmsuite.hardware.cameras.thorlabs import ThorCam
 from slmsuite.hardware.cameraslms import FourierSLM
 from slmsuite.hardware.slms.thorlabs import ThorSLM
+from slmsuite.hardware.slms.meadowlark import Meadowlark
 from slmsuite.holography import analysis, toolbox
 from slmsuite.holography.algorithms import SpotHologram
 
 warnings.filterwarnings("ignore")
 mpl.rc("image", cmap="Blues")
+import inspect
 
-
+print("Meadowlark class loaded from:", inspect.getfile(Meadowlark), flush=True)
 def plot_phase(phase, angle):
     # Initialize the figure and axes outside the loop
     fig, ax = plt.subplots(1, 3, figsize=(15, 5))
@@ -170,12 +173,11 @@ def evaluate_uniformity(vectors=None, size=25):
     plt.hist(powers / np.mean(powers))
     plt.show()
 
-
 # Test pattern
 def circles():
     cam.set_exposure(0.1)
     center = (750, 530)  # Center of the circle
-    radii = np.linspace(50, 200, num=4)  # Adjust the number of circles as needed
+    radii = np.linspace(50, 400, num=4)  # Adjust the number of circles as needed
     circle_points = []
     for radius in radii:
         num_points = int(2 * np.pi * radius / 60)
@@ -211,9 +213,10 @@ def circles():
     filename = f"slm_phase_circles_{date_time_str}.npy"
     # file_path = dm.get_file_path(__file__, filename)
     # Save the phase data
-    save(phase, file_path, filename)
+    # save(phase, file_path, filename)
+    print("before write", flush=True)
     slm.write(phase, settle=True)
-
+    input("Pattern displayed. Press Enter to continue...")
     # cam_plot()
     # evaluate_uniformity(vectors=circle)
 
@@ -230,14 +233,71 @@ def circles():
     # cam_plot()
     # evaluate_uniformity(vectors=circle)
 
+def square_array(
+    center=(750, 530),
+    nx=9,
+    ny=9,
+    spacing=70,
+    maxiter=20,
+):
+    """
+    Generate a square array of SLM spots.
+
+    center: camera-coordinate center of the array
+    nx, ny: number of spots in x and y
+    spacing: spot spacing in camera pixels
+    """
+
+    cam.set_exposure(0.1)
+
+    cx, cy = center
+
+    xs = cx + spacing * (np.arange(nx) - (nx - 1) / 2)
+    ys = cy + spacing * (np.arange(ny) - (ny - 1) / 2)
+
+    xv, yv = np.meshgrid(xs, ys)
+
+    square_points = np.vstack(
+        [
+            xv.ravel(),
+            yv.ravel(),
+        ]
+    )
+
+    print(f"Writing square array: {nx} x {ny} = {square_points.shape[1]} spots")
+    print("x range:", xs.min(), xs.max())
+    print("y range:", ys.min(), ys.max())
+
+    hologram = SpotHologram(
+        shape=(2048, 2048),
+        spot_vectors=square_points,
+        basis="ij",
+        cameraslm=fs,
+    )
+
+    hologram.optimize(
+        "WGS-Kim",
+        maxiter=maxiter,
+        feedback="computational_spot",
+        stat_groups=["computational_spot"],
+    )
+
+    phase = hologram.extract_phase()
+
+    print("Writing square array phase to SLM...", flush=True)
+    slm.write(phase, settle=True)
+
+    input("Square array displayed. Keep this running while DMD script makes movie...")
+
+    return square_points, phase
 
 # region "nv phase calulation"
 def calibration_triangle():
     cam.set_exposure(0.1)
-
     # Define parameters for the equilateral triangle
     center = (690, 560)  # Center of the triangle
-    side_length = 400  # Length of each side of the triangle\
+    # side_length = 400  # Length of each side of the triangle\
+    side_length = 400  # DMD
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
     theta = np.linspace(0, 2 * np.pi, 4)[:-1]  # Exclude the last point to avoid overlap
@@ -261,6 +321,7 @@ def calibration_triangle():
 
     phase = hologram.extract_phase()
     slm.write(phase, settle=True)
+    input("Pattern displayed. Press Enter to continue...")
     # file_path = r"slmsuite\calibration"
     # num_nvs = len(nuvu_pixel_coords)
     # now = datetime.now()
@@ -269,7 +330,6 @@ def calibration_triangle():
     # Save the phase data
     # save(phase, file_path, filename)
     # cam_plot()
-
 
 def nuvu2thorcam_calibration(coords):
     """
@@ -292,6 +352,49 @@ def nuvu2thorcam_calibration(coords):
 
     return thorcam_coords
 
+def write_small_slm_triangle_near_zero_order(zero_order=(750, 530), spacing=20):
+    """
+    Write a small 3-spot triangle close to the visible 0th order.
+    This is for finding the SLM-generated spots inside the current camera FOV.
+    """
+
+    x0, y0 = zero_order
+
+    requested_cam_pts = np.array(
+        [
+            [x0 - spacing, y0],
+            [x0 + spacing, y0],
+            [x0, y0 + spacing],
+        ],
+        dtype=np.float32,
+    )
+
+    print("Requested camera points:")
+    print(requested_cam_pts)
+
+    hologram = SpotHologram(
+        shape=(2048, 2048),
+        spot_vectors=requested_cam_pts.T,
+        basis="ij",
+        cameraslm=fs,
+    )
+
+    hologram.optimize(
+        "WGS-Kim",
+        maxiter=20,
+        feedback="computational_spot",
+        stat_groups=["computational_spot"],
+    )
+
+    phase = hologram.extract_phase()
+
+    print("Writing small triangle phase to SLM...", flush=True)
+    slm.write(phase, settle=True)
+    print("SLM pattern written.", flush=True)
+
+    input("Inspect camera. Press Enter to continue...")
+
+    return requested_cam_pts, phase
 
 def load_nv_coords(
     # file_path="slmsuite/nv_blob_detection/nv_blob_308nvs_reordered.npz",
@@ -312,16 +415,16 @@ def load_nv_coords(
     return nv_coordinates, spot_weights
 
 
-nuvu_pixel_coords, spot_weights = load_nv_coords()
-# nuvu_pixel_coords = np.array(
-#     [
-#         [124.195, 127.341],
-#         [6.768, 210.203],
-#         [239.681, 215.048],
-#         [123.376, 19.656],
-#     ]
-# )
-# spot_weights = np.array([0.8, 1.0, 1.0, 1.0])
+# nuvu_pixel_coords, spot_weights = load_nv_coords()
+nuvu_pixel_coords = np.array(
+    [
+        [124.195, 127.341],
+        [6.768, 210.203],
+        [239.681, 215.048],
+        [123.376, 19.656],
+    ]
+)
+spot_weights = np.array([0.8, 1.0, 1.0, 1.0])
 print(f"Total NV coordinates: {len(nuvu_pixel_coords)}")
 thorcam_coords = nuvu2thorcam_calibration(nuvu_pixel_coords).T
 # sys.exit()
@@ -375,28 +478,66 @@ def save(data, path, filename):
         os.makedirs(path)
     np.save(os.path.join(path, filename), data)
 
+def sparse_circle_subset():
+    cam.set_exposure(0.1)
+
+    pts = np.array([
+        [600, 350],
+        [750, 350],
+        [900, 350],
+        [650, 520],
+        [850, 520],
+    ], dtype=np.float32).T
+
+    hologram = SpotHologram(
+        shape=(2048, 2048),
+        spot_vectors=pts,
+        basis="ij",
+        cameraslm=fs,
+    )
+
+    hologram.optimize(
+        "WGS-Kim",
+        maxiter=20,
+        feedback="computational_spot",
+        stat_groups=["computational_spot"],
+    )
+
+    phase = hologram.extract_phase()
+    slm.write(phase, settle=True)
+
+    input("Sparse SLM spots displayed. Keep this running and run DMD script...")
 
 try:
-    slm = ThorSLM()
-    # slm = Meadowlark()
+    # slm = ThorSLM()
+    slm = Meadowlark()
     cam = ThorCam(serial="26438", verbose=True)
     fs = FourierSLM(cam, slm)
     # cam = tb.get_server_thorcam()
     # slm = tb.get_server_thorslm()
     # fourier_calibration()
     load_fourier_calibration()
+    # write_small_slm_triangle_near_zero_order()
     # test_wavefront_calibration()
     # wavefront_calibration()
     # load_wavefront_calibration()
-    compute_and_write_nvs_phase()
+    # compute_and_write_nvs_phase()
     # calibration_triangle()
-    # circles()
+    circles()
+    # square_array(
+    # center=(750, 530),
+    # nx=11,
+    # ny=11,
+    # spacing=60,
+    # )
+    # sparse_circle_subset()
     # write_pre_computed_circles()
     # smiley()
     # cam_plot()
 finally:
     print("Closing")
-    slm.close_window()
-    slm.close_device()
+    # slm.close_window()
+    # slm.close_device()
+    slm.close()
     cam.close()
 # endregions

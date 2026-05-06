@@ -15,6 +15,7 @@ python environment via ``pip``.
 import os
 import sys
 import time
+from pathlib import Path
 
 import numpy as np
 
@@ -28,31 +29,74 @@ from slmsuite.hardware.cameras.camera import Camera
 # )
 
 
-def configure_path():
-    absolute_path_to_dlls = "C:\\Users\\\matth\\GitHub\\dioptric\\slmsuite\\hardware\\cameras\\dlls\\Native_64_lib"
+# def configure_path():
+#     absolute_path_to_dlls = "C:\\Users\\\matth\\GitHub\\dioptric\\slmsuite\\hardware\\cameras\\dlls\\Native_64_lib"
 
-    os.environ["PATH"] = absolute_path_to_dlls + os.pathsep + os.environ["PATH"]
+#     os.environ["PATH"] = absolute_path_to_dlls + os.pathsep + os.environ["PATH"]
+
+#     try:
+#         # Python 3.8 introduces a new method to specify dll directory
+#         os.add_dll_directory(absolute_path_to_dlls)
+#     except AttributeError:
+#         pass
+
+
+# try:
+#     # if on Windows, use the provided setup script to add the DLLs folder to the PATH
+#     configure_path()
+# except ImportError:
+#     configure_path = None
+
+# try:
+#     from thorlabs_tsi_sdk.tl_camera import OPERATION_MODE, ROI, TLCameraSDK
+# except ImportError:
+#     print(
+#         "thorlabs.py: thorlabs_tsi_sdk not installed. Install to use Thorlabs cameras."
+#     )
+
+# from pathlib import Path
+# import os
+
+
+from pathlib import Path
+import os
+
+
+def find_repo_root(start: Path) -> Path:
+    for p in [start, *start.parents]:
+        if (p / "slmsuite").exists():
+            return p
+    raise FileNotFoundError("Could not find repo root containing 'slmsuite'")
+
+
+def configure_path():
+    this_file = Path(__file__).resolve()
+    repo_root = find_repo_root(this_file.parent)
+
+    dll_path = repo_root / "slmsuite" / "hardware" / "cameras" / "dlls" / "Native_64_lib"
+
+    if not dll_path.exists():
+        raise FileNotFoundError(f"DLL folder does not exist: {dll_path}")
+
+    dll_path_str = str(dll_path)
+
+    os.environ["PATH"] = dll_path_str + os.pathsep + os.environ.get("PATH", "")
 
     try:
-        # Python 3.8 introduces a new method to specify dll directory
-        os.add_dll_directory(absolute_path_to_dlls)
+        os.add_dll_directory(dll_path_str)
     except AttributeError:
         pass
 
+    return dll_path
 
-try:
-    # if on Windows, use the provided setup script to add the DLLs folder to the PATH
-    configure_path()
-except ImportError:
-    configure_path = None
+
+dll_path = configure_path()
+print("Using DLL path:", dll_path)
 
 try:
     from thorlabs_tsi_sdk.tl_camera import OPERATION_MODE, ROI, TLCameraSDK
 except ImportError:
-    print(
-        "thorlabs.py: thorlabs_tsi_sdk not installed. Install to use Thorlabs cameras."
-    )
-
+    print("thorlabs_tsi_sdk not installed. Install it to use Thorlabs cameras.")
 
 class ThorCam(Camera):
     """

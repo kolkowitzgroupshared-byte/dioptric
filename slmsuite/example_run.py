@@ -1164,7 +1164,7 @@ try:
     # square_array_cirle()
     # save_initial_phase()
     # animate_wavefront_shifts()
-    # real_time_dynamical_tweezers()
+    real_time_dynamical_tweezers()
     # selected_dynamical_tweezers()
     # camp2phase_calibration()
     # initial_phase()
