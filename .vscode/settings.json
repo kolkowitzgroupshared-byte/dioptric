@@ -1,28 +1,17 @@
 {
   // --- your existing env bits ---
   "python.envFile": "${workspaceFolder}/.vscode/.env",
-  "python-envs.defaultEnvManager": "ms-python.python:conda",
-  "python-envs.defaultPackageManager": "ms-python.python:conda",
-
+  "python-envs.defaultPackageManager": "ms-python.python:pip",
+  "python-envs.defaultEnvManager": "ms-python.python:system",
   // --- Python / Pylance ---
   "python.analysis.typeCheckingMode": "off",
-  "python.defaultInterpreterPath": "C:\\Users\\Saroj Chand\\miniconda3\\envs\\dioptric\\python.exe",
-  "python.terminal.activateEnvironment": true,   // VS Code will 'conda activate' for you
-
-  // --- Make every new terminal start in (dioptric) on PowerShell ---
-  "terminal.integrated.profiles.windows": {
-    "Conda (dioptric, PowerShell)": {
-      "source": "PowerShell",
-      "icon": "terminal-powershell",
-      "args": [
-        "-NoExit",
-        "-Command",
-        "(& 'C:\\Users\\Saroj Chand\\miniconda3\\condabin\\conda.bat' 'shell.powershell' 'hook') | Out-String | Invoke-Expression; conda activate dioptric"
-      ]
-    }
-  },
-  "terminal.integrated.defaultProfile.windows": "Conda (dioptric, PowerShell)"
-
+  // --- Universal Environment Activation ---
+  // VS Code will automatically activate whatever environment (Conda, uv, venv)
+  // the current user has selected on their specific machine.
+  "python.terminal.activateEnvironment": true,
+  // --- Standardize Terminal ---
+  // Opens a standard, clean PowerShell and lets the Python extension do the heavy lifting
+  "terminal.integrated.defaultProfile.windows": "PowerShell"
   // Optional nice-to-haves (uncomment if you want)
   // "editor.formatOnSave": true,
   // "editor.codeActionsOnSave": {
@@ -30,5 +19,3 @@
   //   "source.fixAll": "explicit"
   // }
 }
-
-

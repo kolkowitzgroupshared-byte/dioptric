@@ -86,8 +86,13 @@ def main(
         slider_3 = tool_belt.get_server_slider_3()
 
         slider_1_pos, slider_3_pos = filter_pos
+        # print(slider_1_pos, slider_3_pos)
+
         slider_1.set_filter(slider_1_pos)
         slider_3.set_filter(slider_3_pos)
+        # print("main is started")
+
+    # print("main is started")
 
     # Handle the readout_times list for both sequences
     # Expected format passed from wrapper: [delay_ns, exc_ns, detect_ns]

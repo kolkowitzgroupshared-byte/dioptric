@@ -26,20 +26,16 @@
 //         }
 //     ]
 // }
-
-
 {
   // --- your existing env bits ---
   "python.envFile": "${workspaceFolder}/.vscode/.env",
   "python-envs.defaultEnvManager": "ms-python.python:conda",
   "python-envs.defaultPackageManager": "ms-python.python:conda",
   "python-envs.pythonProjects": [],
-
   // --- Python / Pylance ---
   "python.analysis.typeCheckingMode": "off",
   "python.defaultInterpreterPath": "C:\\Users\\Saroj Chand\\miniconda3\\envs\\dioptric\\python.exe",
-  "python.terminal.activateEnvironment": true,   // VS Code will 'conda activate' for you
-
+  "python.terminal.activateEnvironment": true, // VS Code will 'conda activate' for you
   // --- Make every new terminal start in (dioptric) on PowerShell ---
   "terminal.integrated.profiles.windows": {
     "Conda (dioptric, PowerShell)": {

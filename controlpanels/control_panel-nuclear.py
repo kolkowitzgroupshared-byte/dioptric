@@ -155,9 +155,9 @@ def do_lifetime_caf_pulsed_copy(th_sig):
     lifetime_caf_pulsed_copy.main(
         nv_sig=th_sig,
         apd_indices=[0],
-        readout_times=[0, 1000, 1000],
+        readout_times=[50, 100, 30],
         filter_pos=[2, 2],
-        num_reps=100000,
+        num_reps=200000,
         num_runs=1,
         num_bins=200,
         sequence_file="lifetime_caf_single_pulse.py",

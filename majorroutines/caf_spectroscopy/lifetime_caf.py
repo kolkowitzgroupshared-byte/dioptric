@@ -95,6 +95,7 @@ def main(
     num_bins,
     laser_power=None,
 ):
+    print("main is started")
     if len(apd_indices) > 1:
         msg = "Currently lifetime only supports single APDs!!"
         raise NotImplementedError(msg)
@@ -112,6 +113,7 @@ def main(
 
         # Set filter translators
         slider_1_pos, slider_3_pos = filter_pos
+        print(slider_1_pos, slider_3_pos)
         slider_1.set_filter(slider_1_pos)
         slider_3.set_filter(slider_3_pos)
 
@@ -128,8 +130,8 @@ def main(
 
     # Analyze the sequence
     # pulls the file of the sequence from serves/timing/sequencelibrary
-    file_name = os.path.basename(__file__)
-    print(file_name)
+    # file_name = os.path.basename(__file__)
+    # print(file_name)
     seq_args = [
         readout_time,
         pulse_time,

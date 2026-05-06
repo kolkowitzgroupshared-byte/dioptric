@@ -103,8 +103,8 @@ if __name__ == "__main__":
     cfg = common.get_config_dict()
 
     # args = [readout_delay_ns, exc_ns, detect_ns, laser_vkey, laser_power]
-    args = [0, 1000, 1000, "SPIN_READOUT", None]
-
+    args = [0, 1000, 500, "SPIN_READOUT", None]
+    # ^ first arg should be a variable
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])
     seq.plot()
