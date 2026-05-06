@@ -1,14 +1,3 @@
-# double_lifetime_recovery.py
-#
-# Sequence:
-#   excitation pulse 1
-#   lifetime readout window 1 (laser OFF, APD gate ON)
-#   dark recovery delay Δ (swept)
-#   excitation pulse 2
-#   lifetime readout window 2 (laser OFF, APD gate ON)
-#
-# args = [recovery_delay_ns, exc_ns, detect_ns, laser_vkey, laser_power]
-
 import numpy as np
 from pulsestreamer import OutputState, Sequence
 
@@ -83,17 +72,25 @@ def get_seq(pulse_streamer, config, args):
     ]
     seq.setDigital(do_apd_gate, apd_train)
 
-    # Laser ON only for excitation pulses
-    laser_train = [
-        (int(front_buffer - laser_delay), HIGH),
-        # pulse 1
-        (int(exc_ns), HIGH),
-        # readout delay
-        (int(readout_delay_ns), LOW),
-        # readout 1
-        (int(detect_ns), LOW),
-        (int(meas_buffer), LOW),
-    ]
+    # --- CORRECTED LASER TRAIN ---
+    laser_train = []
+
+    # 1. Calculate pre-trigger shift to account for physical hardware delay
+    init_wait = int(front_buffer - laser_delay)
+
+    # Prevent illegal 0-duration steps.
+    if init_wait > 0:
+        laser_train.append((init_wait, LOW))
+
+    # 2. Fire the laser TTL early to align the physical light pulse with the APD
+    laser_train.append((int(exc_ns), HIGH))
+
+    # 3. Pad the remainder of the sequence perfectly to match 'period'
+    # This prevents the drift bug from breaking synchronicity across repetitions
+    current_laser_len = sum([step[0] for step in laser_train])
+    if current_laser_len < period:
+        laser_train.append((int(period - current_laser_len), LOW))
+
     tb.process_laser_seq(seq, laser_vkey, laser_train)
 
     final = OutputState([], 0.0, 0.0)

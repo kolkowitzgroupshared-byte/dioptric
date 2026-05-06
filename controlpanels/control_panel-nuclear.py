@@ -570,8 +570,8 @@ if __name__ == "__main__":
         # ^leave the comma at the end or it will complain
         # do_stationary_count(th_sig, disable_opt=True)
         # do_lifetime_measurement(th_sig)
-        # do_lifetime_caf_pulsed_copy(th_sig)
-        do_th_lifetime_measurement(th_sig)
+        do_lifetime_caf_pulsed_copy(th_sig)
+        # do_th_lifetime_measurement(th_sig)
         # do_awg_test()
         # do_resonance(th_sig)
         # do_stationary_count(th_sig)
