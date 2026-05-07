@@ -1,3 +1,9 @@
+"""
+press play to see sequence. pulsed single shot lifetime measurement
+
+@author:alyssa-matthews
+"""
+
 import numpy as np
 from pulsestreamer import OutputState, Sequence
 

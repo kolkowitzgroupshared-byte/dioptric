@@ -22,7 +22,7 @@ from majorroutines.caf_spectroscopy import (
     double_lifetime_recovery,
     laser_char,
     lifetime_caf,
-    lifetime_caf_pulsed_copy,
+    lifetime_caf_single_shot,
     sideillum_resonance,
     single_lifetime,
     singlet_search,
@@ -152,7 +152,7 @@ def do_th_lifetime_measurement(caf_sig):
 
 
 def do_lifetime_caf_pulsed_copy(th_sig):
-    lifetime_caf_pulsed_copy.main(
+    lifetime_caf_single_shot.main(
         nv_sig=th_sig,
         apd_indices=[0],
         readout_times=[50, 100, 30],

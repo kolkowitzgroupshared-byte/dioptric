@@ -1,13 +1,3 @@
-# double_lifetime_recovery_main.py
-#
-# Sweeps the dark recovery delay between two lifetime readouts:
-#   pulse1 -> readout1 -> dark(swept) -> pulse2 -> readout2
-#
-# Reads tag stream, builds lifetime histograms for both readouts,
-# and fits:
-#   1) lifetime decay in each readout
-#   2) recovery ratio vs dark delay
-
 import time
 
 import matplotlib.pyplot as plt
@@ -15,7 +5,6 @@ import numpy as np
 from scipy.optimize import curve_fit
 
 from utils import data_manager as dm
-from utils import kplotlib as kpl
 from utils import tool_belt as tb
 
 
@@ -213,13 +202,11 @@ def main(
     num_bins=200,
     laser_power=None,
     laser_vkey="SPIN_READOUT",
-    do_plot=True,
     do_save=True,
     fit_lifetime_start_ns=None,
     fit_lifetime_end_ns=None,
 ):
     tb.reset_cfm()
-    kpl.init_kplotlib()
 
     recovery_delay_ns_list = np.linspace(
         int(min_recovery_delay_ns),
@@ -238,48 +225,18 @@ def main(
 
     bin_centers_ns = None
 
-    if do_plot:
-        fig, axes = plt.subplots(3, 1, figsize=(9, 12), constrained_layout=True)
-
-        ax_counts = axes[0]
-        ax_ratio = axes[1]
-        ax_lifetime = axes[2]
-
-        ax_counts.set_ylabel("Integrated counts")
-        ax_counts.set_title("Double lifetime recovery")
-
-        ax_ratio.set_xlabel("Dark recovery delay (ns)")
-        ax_ratio.set_ylabel("Readout2 / Readout1")
-
-        ax_lifetime.set_xlabel("Time after excitation (ns)")
-        ax_lifetime.set_ylabel("Counts")
-
-        (line_1,) = ax_counts.plot([], [], "o-", label="readout 1")
-        (line_2,) = ax_counts.plot([], [], "o-", label="readout 2")
-        ax_counts.legend()
-
-        (line_ratio,) = ax_ratio.plot([], [], "o-", label="ratio")
-        ax_ratio.legend()
-    else:
-        fig = None
-        ax_counts = None
-        ax_ratio = None
-        ax_lifetime = None
-        line_1 = None
-        line_2 = None
-        line_ratio = None
-
     pulsegen_server = tb.get_server_pulse_streamer()
     counter_server = tb.get_server_counter()
-    # seq_file = "double_lifetime_recovery.py"
-    seq_file = "lifetime_caf_recovery.py"
-
     tb.init_safe_stop()
+
+    # --- NEW PROGRESS TRACKING SETUP ---
+    total_steps = num_runs * len(recovery_delay_ns_list)
+    current_step = 0
+    print("Starting experiment...")
+
     start_time = time.time()
 
     for run_ind in range(num_runs):
-        print(f"Run {run_ind + 1}/{num_runs}")
-
         if tb.safe_stop():
             break
 
@@ -287,10 +244,107 @@ def main(
             if tb.safe_stop():
                 break
 
+            seq_args = [
+                int(recovery_delay_ns),
+                int(exc_ns),
+                int(detect_ns),
+                laser_vkey,
+                laser_power,
+            ]
+            seq_args_string = tb.encode_seq_args(seq_args)
+            ret_vals = pulsegen_server.stream_load(seq_file, seq_args_string)
+
+            # We can keep this one so you see the sequence period once at the very start
+            if run_ind == 0 and step_ind == 0:
+                print(f"Sequence period: {ret_vals[0]} ns\n")
+
+            counter_server.start_tag_stream()
+            try:
+                pulsegen_server.stream_start(int(num_reps))
+
+                channel_mapping = counter_server.get_channel_mapping()
+                gate_open_channel = channel_mapping[1]
+                gate_close_channel = channel_mapping[2]
+
+                current_tags = []
+                current_channels = []
+
+                gate_counter = 0
+                num_processed_gates = 0
+                target_num_gates = 2 * int(num_reps)
+
+                readout1_tags = []
+                readout2_tags = []
+
+                while num_processed_gates < target_num_gates:
+                    if tb.safe_stop():
+                        break
+
+                    new_tags, new_channels = counter_server.read_tag_stream()
+                    new_tags = np.array(new_tags, dtype=np.int64)
+
+                    g0_tags, g1_tags, num_new_gates, gate_counter = (
+                        process_raw_buffer_two_gates(
+                            new_tags=new_tags,
+                            new_channels=new_channels,
+                            current_tags=current_tags,
+                            current_channels=current_channels,
+                            gate_open_channel=gate_open_channel,
+                            gate_close_channel=gate_close_channel,
+                            gate_counter=gate_counter,
+                        )
+                    )
+
+                    readout1_tags.extend(g0_tags)
+                    readout2_tags.extend(g1_tags)
+                    num_processed_gates += num_new_gates
+
+                step_hist_1, bin_centers_ns = _hist_from_tags(
+                    readout1_tags, detect_ns, num_bins
+                )
+                step_hist_2, _ = _hist_from_tags(readout2_tags, detect_ns, num_bins)
+
+                hist_readout_1[step_ind] += step_hist_1
+                hist_readout_2[step_ind] += step_hist_2
+
+                int_counts_1[run_ind, step_ind] = np.sum(step_hist_1)
+                int_counts_2[run_ind, step_ind] = np.sum(step_hist_2)
+
+            finally:
+                try:
+                    counter_server.stop_tag_stream()
+                except Exception:
+                    pass
+
+            # --- NEW CLEAN PROGRESS BAR & ETA ---
+            current_step += 1
+            elapsed = time.time() - start_time
+            time_per_step = elapsed / current_step
+            eta_seconds = time_per_step * (total_steps - current_step)
+
+            # Format ETA into mm:ss
+            mins, secs = divmod(int(eta_seconds), 60)
+            eta_str = f"{mins:02d}:{secs:02d}"
+
+            # \r forces the cursor to the start of the line, end="" prevents a new line, flush=True forces the terminal to update
             print(
-                f"  step {step_ind + 1}/{len(recovery_delay_ns_list)} | "
-                f"recovery_delay = {int(recovery_delay_ns)} ns"
+                f"\rProgress: [{current_step}/{total_steps}] steps | ETA: {eta_str}   ",
+                end="",
+                flush=True,
             )
+
+    # Print a new line at the very end so the final summary text doesn't overwrite our completed progress bar
+    print(
+        f"\n\nExperiment finished! Total elapsed time: {time.time() - start_time:.2f} s"
+    )
+
+    for run_ind in range(num_runs):
+        if tb.safe_stop():
+            break
+
+        for step_ind, recovery_delay_ns in enumerate(recovery_delay_ns_list):
+            if tb.safe_stop():
+                break
 
             seq_args = [
                 int(recovery_delay_ns),
@@ -357,39 +411,15 @@ def main(
                 int_counts_1[run_ind, step_ind] = np.sum(step_hist_1)
                 int_counts_2[run_ind, step_ind] = np.sum(step_hist_2)
 
-                print(
-                    f"    readout1={int(int_counts_1[run_ind, step_ind])}, "
-                    f"readout2={int(int_counts_2[run_ind, step_ind])}"
-                )
-
             finally:
                 try:
                     counter_server.stop_tag_stream()
                 except Exception:
                     pass
 
-            if do_plot:
-                mean_1 = np.nanmean(int_counts_1, axis=0)
-                mean_2 = np.nanmean(int_counts_2, axis=0)
-                ratio = np.divide(
-                    mean_2,
-                    mean_1,
-                    out=np.full_like(mean_2, np.nan),
-                    where=mean_1 > 0,
-                )
-
-                line_1.set_data(recovery_delay_ns_list, mean_1)
-                line_2.set_data(recovery_delay_ns_list, mean_2)
-                line_ratio.set_data(recovery_delay_ns_list, ratio)
-
-                ax_counts.relim()
-                ax_counts.autoscale_view()
-                ax_ratio.relim()
-                ax_ratio.autoscale_view()
-                plt.pause(0.01)
-
         print(f"Elapsed time: {time.time() - start_time:.2f} s")
 
+    # --- Data Processing (Kept identical so your fits still save correctly) ---
     mean_counts_1, ste_counts_1, mean_kcps_1, ste_kcps_1 = _compute_step_stats(
         int_counts_1, detect_ns, num_reps
     )
@@ -408,7 +438,6 @@ def main(
         np.maximum(np.sum(np.isfinite(ratio_runs), axis=0), 1)
     )
 
-    # choose longest delay as "most recovered" lifetime trace
     best_ind = int(np.nanargmax(recovery_delay_ns_list))
 
     lifetime_fit_1 = fit_lifetime(
@@ -429,56 +458,41 @@ def main(
         ratio_ste=ratio_ste,
     )
 
-    if do_plot and bin_centers_ns is not None:
-        ax_lifetime.clear()
-        ax_lifetime.plot(
-            bin_centers_ns,
-            hist_readout_1[best_ind],
-            "o-",
-            ms=3,
-            label=f"readout 1 @ delay={recovery_delay_ns_list[best_ind]} ns",
+    # --- Simplified Static Plotting at the End ---
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
+
+    ax1.errorbar(
+        recovery_delay_ns_list,
+        mean_counts_1,
+        yerr=ste_counts_1,
+        fmt="ro-",
+        label="Readout 1",
+    )
+    ax1.errorbar(
+        recovery_delay_ns_list,
+        mean_counts_2,
+        yerr=ste_counts_2,
+        fmt="bo-",
+        label="Readout 2",
+    )
+    ax1.set_ylabel("Integrated Counts")
+    ax1.set_title("Double Lifetime Recovery Summary")
+    ax1.legend()
+
+    ax2.errorbar(recovery_delay_ns_list, ratio_mean, yerr=ratio_ste, fmt="ko-")
+
+    # Optional: Plot the recovery fit line if it succeeded
+    if recovery_fit is not None:
+        xfine = np.linspace(
+            min(recovery_delay_ns_list), max(recovery_delay_ns_list), 200
         )
-        ax_lifetime.plot(
-            bin_centers_ns,
-            hist_readout_2[best_ind],
-            "o-",
-            ms=3,
-            label=f"readout 2 @ delay={recovery_delay_ns_list[best_ind]} ns",
-        )
+        ax2.plot(xfine, recovery_model(xfine, *recovery_fit["popt"]), "k--", alpha=0.5)
 
-        if lifetime_fit_1 is not None:
-            xfine = np.linspace(np.min(bin_centers_ns), np.max(bin_centers_ns), 400)
-            ax_lifetime.plot(
-                xfine,
-                exp_decay_with_bg(xfine, *lifetime_fit_1["popt"]),
-                "-",
-                label=f"fit1 tau={lifetime_fit_1['popt'][1]:.2f} ns",
-            )
-        if lifetime_fit_2 is not None:
-            xfine = np.linspace(np.min(bin_centers_ns), np.max(bin_centers_ns), 400)
-            ax_lifetime.plot(
-                xfine,
-                exp_decay_with_bg(xfine, *lifetime_fit_2["popt"]),
-                "-",
-                label=f"fit2 tau={lifetime_fit_2['popt'][1]:.2f} ns",
-            )
-        ax_lifetime.legend()
+    ax2.set_xlabel("Dark Recovery Delay (ns)")
+    ax2.set_ylabel("Ratio (Readout 2 / Readout 1)")
 
-        if recovery_fit is not None:
-            xfine = np.linspace(
-                np.min(recovery_delay_ns_list),
-                np.max(recovery_delay_ns_list),
-                500,
-            )
-            ax_ratio.plot(
-                xfine,
-                recovery_model(xfine, *recovery_fit["popt"]),
-                "-",
-                label=f"tau_meta={recovery_fit['popt'][2]:.2f} ns",
-            )
-            ax_ratio.legend()
-
-        plt.pause(0.01)
+    plt.tight_layout()
+    plt.show()
 
     proc_data = {
         "recovery_delay_ns_list": recovery_delay_ns_list.tolist(),
@@ -552,8 +566,8 @@ def main(
         )
         dm.save_raw_data(raw_data, file_path)
         dm.save_raw_data(proc_data, file_path + "_proc")
-        if fig is not None:
-            dm.save_figure(fig, file_path)
+        # if fig is not None:
+        #     dm.save_figure(fig, file_path)
         print(f"Saved data to {file_path}")
 
     if proc_data["recovery_fit"] is not None:
@@ -588,9 +602,7 @@ if __name__ == "__main__":
         num_bins=150,
         laser_power=None,
         laser_vkey="SPIN_READOUT",
-        do_plot=True,
         do_save=False,
-        # simulate_only=True,
         fit_lifetime_start_ns=0,
         fit_lifetime_end_ns=2500,
     )
