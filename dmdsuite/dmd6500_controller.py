@@ -25,7 +25,10 @@ from scipy.optimize import curve_fit
 from skimage.feature import blob_log
 from skimage.filters import gaussian
 from skimage.draw import disk
-
+import time
+import cv2
+import imageio
+import matplotlib.pyplot as plt
 # Geometry from vendor docs
 DMD_WIDTH = 1920
 DMD_HEIGHT = 1080
@@ -538,9 +541,6 @@ def corner_dots_pattern():
     return img
 
 
-import numpy as np
-
-
 def all_off_pattern():
     return np.zeros((DMD_HEIGHT, DMD_WIDTH), dtype=np.uint8)
 
@@ -585,87 +585,6 @@ def center_square_pattern(size=500):
     y1 = min(DMD_HEIGHT, cy + size // 2)
     img[y0:y1, x0:x1] = 255
     return img
-
-
-# if __name__ == "__main__":
-#     lib_path = r"C:\Users\jkdol\OneDrive\Documents\Github\dioptric\dmdsuite\Windows_x86_64\DLL_x64\x64\Release\DLP6500_DLL.dll"
-
-#     dmd = Dmd6500(lib_path)
-#     print(dmd.list_devices(), "device(s) found")
-
-#     try:
-#         dmd.connect(0)
-#         dmd.send_binary_plane(200, all_off_pattern())
-#         dmd.send_binary_plane(201, all_on_pattern())
-#         dmd.send_binary_plane(202, left_half_pattern())
-#         dmd.send_binary_plane(203, vertical_stripe_pattern())
-#         dmd.send_binary_plane(204, horizontal_stripe_pattern())
-#         dmd.send_binary_plane(205, center_square_pattern())
-
-
-#         for plane, name in [
-#             (200, "OFF"),
-#             (201, "ALL ON"),
-#             (202, "LEFT HALF"),
-#             (203, "VERTICAL STRIPE"),
-#             (204, "HORIZONTAL STRIPE"),
-#             (205, "CENTER SQUARE"),
-#             (200, "OFF"),
-#         ]:
-#             print(f"Showing {name}")
-#             dmd.show_plane(plane)
-#             input(f"Inspect {name}, then press Enter...")
-
-#     finally:
-#         dmd.disconnect()
-# sys.exit()
-
-# ============================================================
-# OFF-state-pass DMD calibration:
-#   1. block 0th order
-#   2. triangle calibration -> camera-to-DMD affine
-#   3. circle movie using affine mapping
-# ============================================================
-
-import os
-import time
-import cv2
-import imageio
-import numpy as np
-import matplotlib.pyplot as plt
-
-# ============================================================
-# Basic DMD states for YOUR current alignment
-# ============================================================
-
-
-def dmd_pass_all_pattern():
-    """
-    Your current alignment:
-        black / 0 / DMD OFF = pass to camera.
-    """
-    return np.zeros((DMD_HEIGHT, DMD_WIDTH), dtype=np.uint8)
-
-
-def dmd_block_all_pattern():
-    """
-    Your current alignment:
-        white / 255 / DMD ON = deflect/block from camera.
-    """
-    return np.full((DMD_HEIGHT, DMD_WIDTH), 255, dtype=np.uint8)
-
-
-def all_off_pattern():
-    # Kept for compatibility.
-    # In your current alignment this is PASS ALL.
-    return dmd_pass_all_pattern()
-
-
-def all_on_pattern():
-    # Kept for compatibility.
-    # In your current alignment this is BLOCK ALL.
-    return dmd_block_all_pattern()
-
 
 # ============================================================
 # Camera helpers
@@ -865,7 +784,6 @@ def block_spots_mask(dmd_pts, block_indices, radius_px=20):
 
     return mask
 
-
 def pass_selected_spots_mask(dmd_pts, pass_indices, radius_px=20):
     """
     BLOCK everywhere, PASS selected spots.
@@ -925,8 +843,6 @@ def sort_spots_clockwise(cam_pts):
 # ============================================================
 # Blocking-drop scans
 # ============================================================
-
-
 def scan_dmd_axis_for_spots_blocking(
     dmd,
     cam,
@@ -1079,7 +995,6 @@ def find_dmd_xy_for_camera_spots_blocking(
 # Local refinement in OFF-pass mode
 # ============================================================
 
-
 def refine_dmd_point_for_spot_blocking(
     dmd,
     cam,
@@ -1196,7 +1111,6 @@ def refine_subset_blocking(
 # Affine camera -> DMD mapping
 # ============================================================
 
-
 def fit_cam_to_dmd_affine(cam_pts_subset, dmd_pts_subset):
     """
     Fit affine map from camera xy to DMD xy.
@@ -1225,7 +1139,6 @@ def apply_affine(M, pts):
 # ============================================================
 # Movie: cumulative OFF then ON, with 0th-order blocked
 # ============================================================
-
 
 def make_cumulative_off_then_on_movie_offpass(
     dmd,
@@ -2280,15 +2193,63 @@ def map_new_pattern_camera_points_to_dmd(
     dmd_pts = apply_affine(M_cam_to_dmd, cam_pts).astype(np.float32)
     return dmd_pts
 
+def dmd_pass_all_pattern():
+    """
+    Your current alignment:
+        black / 0 / DMD OFF = pass to camera.
+    """
+    return np.zeros((DMD_HEIGHT, DMD_WIDTH), dtype=np.uint8)
+
+
+def dmd_block_all_pattern():
+    """
+    Your current alignment:
+        white / 255 / DMD ON = deflect/block from camera.
+    """
+    return np.full((DMD_HEIGHT, DMD_WIDTH), 255, dtype=np.uint8)
 
 # ============================================================
 # Movie for NEW SLM pattern using saved triangle affine
 # ============================================================
 
+if __name__ == "__main__":
+    from slmsuite.hardware.cameras.thorlabs import ThorCam
+
+    lib_path = r"dmdsuite\Windows_x86_64\DLL_x64\x64\Release\DLP6500_DLL.dll"
+
+    # Planes
+    PASS_PLANE = 200          # black/pass
+    BLOCK_PLANE = 201         # white/block
+    
+    # Imaging/movie parameters
+    EXPOSURE_PATTERN = 0.0001
+    EXPOSURE_MOVIE = 0.0001
+    ZERO_BLOCK_RADIUS = 30
+    DEFAULT_MOVIE_RADIUS = 25
+
+    dmd = Dmd6500(lib_path)
+    cam = ThorCam(serial="26438", verbose=True)
+
+    try:
+        dmd.connect(0)
+
+        # Upload basic planes
+        dmd.send_binary_plane(PASS_PLANE, dmd_pass_all_pattern())
+        dmd.show_plane(PASS_PLANE)
+        input("\nDone. Press Enter to block all and exit...")
+        dmd.send_binary_plane(BLOCK_PLANE, dmd_block_all_pattern())
+        input("\nDone. Press Enter to block all and exit...")
+        dmd.show_plane(BLOCK_PLANE)
+
+    finally:
+        dmd.disconnect()
+        cam.close()
+
+sys.exit()     
 # if __name__ == "__main__":
 #     from slmsuite.hardware.cameras.thorlabs import ThorCam
 
-#     lib_path = r"C:\Users\jkdol\OneDrive\Documents\Github\dioptric\dmdsuite\Windows_x86_64\DLL_x64\x64\Release\DLP6500_DLL.dll"
+#     lib_path = r"dmdsuite\Windows_x86_64\DLL_x64\x64\Release\DLP6500_DLL.dll"
 
 #     # Planes
 #     PASS_PLANE = 200          # black/pass
@@ -2413,9 +2374,7 @@ def map_new_pattern_camera_points_to_dmd(
 # ============================================================
 if __name__ == "__main__":
     from slmsuite.hardware.cameras.thorlabs import ThorCam
-
-    lib_path = r"C:\Users\jkdol\OneDrive\Documents\Github\dioptric\dmdsuite\Windows_x86_64\DLL_x64\x64\Release\DLP6500_DLL.dll"
-
+    lib_path = r"dmdsuite\Windows_x86_64\DLL_x64\x64\Release\DLP6500_DLL.dll"
     # Planes
     PASS_PLANE = 200  # black/pass-all except zero after update
     BLOCK_PLANE = 201  # white/block-all
@@ -2464,13 +2423,21 @@ if __name__ == "__main__":
         # ----------------------------------------------------
         # Step 1: no SLM pattern. Find 0th order.
         # ----------------------------------------------------
+        dmd.show_plane(BLOCK_PLANE)
+
+        input(
+            "\nSTEP 1: Make sure NO SLM hologram/pattern is written.\n"
+            "DMD is block-all. Confirm only 0th order is visible, then press Enter..."
+        )
+
         dmd.show_plane(PASS_PLANE)
 
         input(
             "\nSTEP 1: Make sure NO SLM hologram/pattern is written.\n"
             "DMD is black/pass-all. Confirm only 0th order is visible, then press Enter..."
         )
-
+        
+   
         img_zero = safe_get_image(cam, exposure=EXPOSURE_ZERO)
         zero_cam_xy = brightest_spot_centroid(img_zero, plot=True)
 
