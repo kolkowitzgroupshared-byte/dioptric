@@ -2245,7 +2245,7 @@ if __name__ == "__main__":
         dmd.disconnect()
         cam.close()
 
-sys.exit()     
+    sys.exit()     
 # if __name__ == "__main__":
 #     from slmsuite.hardware.cameras.thorlabs import ThorCam
 
@@ -2369,309 +2369,309 @@ sys.exit()
 #         dmd.disconnect()
 #         cam.close()
 # sys.exit()
-# ============================================================
-# Main
-# ============================================================
-if __name__ == "__main__":
-    from slmsuite.hardware.cameras.thorlabs import ThorCam
-    lib_path = r"dmdsuite\Windows_x86_64\DLL_x64\x64\Release\DLP6500_DLL.dll"
-    # Planes
-    PASS_PLANE = 200  # black/pass-all except zero after update
-    BLOCK_PLANE = 201  # white/block-all
-    ZERO_BLOCK_PLANE = 202  # black/pass + white zero block
-    X_SCAN_PLANE = 220
-    Y_SCAN_PLANE = 221
-    REFINE_PLANE = 240
-    MOVIE_PLANE = 230
+# # ============================================================
+# # Main
+# # ============================================================
+# if __name__ == "__main__":
+#     from slmsuite.hardware.cameras.thorlabs import ThorCam
+#     lib_path = r"dmdsuite\Windows_x86_64\DLL_x64\x64\Release\DLP6500_DLL.dll"
+#     # Planes
+#     PASS_PLANE = 200  # black/pass-all except zero after update
+#     BLOCK_PLANE = 201  # white/block-all
+#     ZERO_BLOCK_PLANE = 202  # black/pass + white zero block
+#     X_SCAN_PLANE = 220
+#     Y_SCAN_PLANE = 221
+#     REFINE_PLANE = 240
+#     MOVIE_PLANE = 230
 
-    # Exposures
-    EXPOSURE_ZERO = 0.0001
-    EXPOSURE_TRIANGLE = 0.0002
-    EXPOSURE_CIRCLE = 0.0001
-    EXPOSURE_SCAN = 0.0001
-    EXPOSURE_MOVIE = 0.0001
+#     # Exposures
+#     EXPOSURE_ZERO = 0.0001
+#     EXPOSURE_TRIANGLE = 0.0002
+#     EXPOSURE_CIRCLE = 0.0001
+#     EXPOSURE_SCAN = 0.0001
+#     EXPOSURE_MOVIE = 0.0001
 
-    # Scan ranges
-    X_SCAN_POSITIONS = np.arange(875, 905, 2)
-    Y_SCAN_POSITIONS = np.arange(445, 475, 2)
-    STRIPE_WIDTH = 20
+#     # Scan ranges
+#     X_SCAN_POSITIONS = np.arange(875, 905, 2)
+#     Y_SCAN_POSITIONS = np.arange(445, 475, 2)
+#     STRIPE_WIDTH = 20
 
-    # Refinement only for triangle spots
-    REFINEMENT_SEARCH_RADIUS = 30
-    REFINEMENT_STEP = 10
-    REFINEMENT_APERTURE_RADIUS = 15
+#     # Refinement only for triangle spots
+#     REFINEMENT_SEARCH_RADIUS = 30
+#     REFINEMENT_STEP = 10
+#     REFINEMENT_APERTURE_RADIUS = 15
 
-    # Movie
-    MOVIE_RADIUS = 25
-    ZERO_BLOCK_RADIUS = 40
+#     # Movie
+#     MOVIE_RADIUS = 25
+#     ZERO_BLOCK_RADIUS = 40
 
-    dmd = Dmd6500(lib_path)
-    cam = ThorCam(serial="26438", verbose=True)
+#     dmd = Dmd6500(lib_path)
+#     cam = ThorCam(serial="26438", verbose=True)
 
-    try:
-        dmd.connect(0)
+#     try:
+#         dmd.connect(0)
 
-        os.makedirs("dmdsuite/calibration", exist_ok=True)
+#         os.makedirs("dmdsuite/calibration", exist_ok=True)
 
-        # ----------------------------------------------------
-        # Step 0: upload basic planes
-        # ----------------------------------------------------
-        print("Uploading PASS and BLOCK planes for OFF-pass alignment...")
-        dmd.send_binary_plane(PASS_PLANE, dmd_pass_all_pattern())
-        dmd.send_binary_plane(BLOCK_PLANE, dmd_block_all_pattern())
+#         # ----------------------------------------------------
+#         # Step 0: upload basic planes
+#         # ----------------------------------------------------
+#         print("Uploading PASS and BLOCK planes for OFF-pass alignment...")
+#         dmd.send_binary_plane(PASS_PLANE, dmd_pass_all_pattern())
+#         dmd.send_binary_plane(BLOCK_PLANE, dmd_block_all_pattern())
 
-        # ----------------------------------------------------
-        # Step 1: no SLM pattern. Find 0th order.
-        # ----------------------------------------------------
-        dmd.show_plane(BLOCK_PLANE)
+#         # ----------------------------------------------------
+#         # Step 1: no SLM pattern. Find 0th order.
+#         # ----------------------------------------------------
+#         dmd.show_plane(BLOCK_PLANE)
 
-        input(
-            "\nSTEP 1: Make sure NO SLM hologram/pattern is written.\n"
-            "DMD is block-all. Confirm only 0th order is visible, then press Enter..."
-        )
+#         input(
+#             "\nSTEP 1: Make sure NO SLM hologram/pattern is written.\n"
+#             "DMD is block-all. Confirm only 0th order is visible, then press Enter..."
+#         )
 
-        dmd.show_plane(PASS_PLANE)
+#         dmd.show_plane(PASS_PLANE)
 
-        input(
-            "\nSTEP 1: Make sure NO SLM hologram/pattern is written.\n"
-            "DMD is black/pass-all. Confirm only 0th order is visible, then press Enter..."
-        )
+#         input(
+#             "\nSTEP 1: Make sure NO SLM hologram/pattern is written.\n"
+#             "DMD is black/pass-all. Confirm only 0th order is visible, then press Enter..."
+#         )
         
    
-        img_zero = safe_get_image(cam, exposure=EXPOSURE_ZERO)
-        zero_cam_xy = brightest_spot_centroid(img_zero, plot=True)
+#         img_zero = safe_get_image(cam, exposure=EXPOSURE_ZERO)
+#         zero_cam_xy = brightest_spot_centroid(img_zero, plot=True)
 
-        print("Finding DMD coordinate of 0th order by blocking-drop scan...")
+#         print("Finding DMD coordinate of 0th order by blocking-drop scan...")
 
-        zero_dmd_pts, zxpos, zypos, zxdrop, zydrop = (
-            find_dmd_xy_for_camera_spots_blocking(
-                dmd=dmd,
-                cam=cam,
-                cam_pts=np.array([zero_cam_xy], dtype=np.float32),
-                x_positions=X_SCAN_POSITIONS,
-                y_positions=Y_SCAN_POSITIONS,
-                stripe_width=STRIPE_WIDTH,
-                x_plane=X_SCAN_PLANE,
-                y_plane=Y_SCAN_PLANE,
-                pass_plane=PASS_PLANE,
-                exposure=EXPOSURE_SCAN,
-                roi=10,
-                zero_dmd_xy=None,
-                zero_radius_px=ZERO_BLOCK_RADIUS,
-                plot=True,
-            )
-        )
+#         zero_dmd_pts, zxpos, zypos, zxdrop, zydrop = (
+#             find_dmd_xy_for_camera_spots_blocking(
+#                 dmd=dmd,
+#                 cam=cam,
+#                 cam_pts=np.array([zero_cam_xy], dtype=np.float32),
+#                 x_positions=X_SCAN_POSITIONS,
+#                 y_positions=Y_SCAN_POSITIONS,
+#                 stripe_width=STRIPE_WIDTH,
+#                 x_plane=X_SCAN_PLANE,
+#                 y_plane=Y_SCAN_PLANE,
+#                 pass_plane=PASS_PLANE,
+#                 exposure=EXPOSURE_SCAN,
+#                 roi=10,
+#                 zero_dmd_xy=None,
+#                 zero_radius_px=ZERO_BLOCK_RADIUS,
+#                 plot=True,
+#             )
+#         )
 
-        zero_dmd_xy = zero_dmd_pts[0]
+#         zero_dmd_xy = zero_dmd_pts[0]
 
-        ZERO_BLOCK_RADIUS = estimate_block_radius_from_scan(
-            x_positions=zxpos,
-            x_drop=zxdrop,
-            y_positions=zypos,
-            y_drop=zydrop,
-            spot_index=0,
-            safety_factor=1.6,
-            min_radius=40,
-            max_radius=150,
-        )
+#         ZERO_BLOCK_RADIUS = estimate_block_radius_from_scan(
+#             x_positions=zxpos,
+#             x_drop=zxdrop,
+#             y_positions=zypos,
+#             y_drop=zydrop,
+#             spot_index=0,
+#             safety_factor=1.6,
+#             min_radius=40,
+#             max_radius=150,
+#         )
 
-        print("Using ZERO_BLOCK_RADIUS =", ZERO_BLOCK_RADIUS)
+#         print("Using ZERO_BLOCK_RADIUS =", ZERO_BLOCK_RADIUS)
 
-        print("0th order camera xy:", zero_cam_xy)
-        print("0th order DMD xy:", zero_dmd_xy)
+#         print("0th order camera xy:", zero_cam_xy)
+#         print("0th order DMD xy:", zero_dmd_xy)
 
-        # Upload permanent zero block plane.
-        zero_block_mask = apply_zero_block(
-            dmd_pass_all_pattern(),
-            zero_dmd_xy,
-            zero_radius_px=ZERO_BLOCK_RADIUS,
-        )
+#         # Upload permanent zero block plane.
+#         zero_block_mask = apply_zero_block(
+#             dmd_pass_all_pattern(),
+#             zero_dmd_xy,
+#             zero_radius_px=ZERO_BLOCK_RADIUS,
+#         )
 
-        dmd.send_binary_plane(ZERO_BLOCK_PLANE, zero_block_mask)
-        dmd.show_plane(ZERO_BLOCK_PLANE)
-        time.sleep(0.2)
+#         dmd.send_binary_plane(ZERO_BLOCK_PLANE, zero_block_mask)
+#         dmd.show_plane(ZERO_BLOCK_PLANE)
+#         time.sleep(0.2)
 
-        input(
-            "\nCheck the before/after image. Press Enter if 0th order is sufficiently blocked..."
-        )
-        # input("\n0th order should now be blocked. Check camera, then press Enter...")
+#         input(
+#             "\nCheck the before/after image. Press Enter if 0th order is sufficiently blocked..."
+#         )
+#         # input("\n0th order should now be blocked. Check camera, then press Enter...")
 
-        img_zero_blocked, zero_before_val, zero_after_val, zero_residual = (
-            check_zero_order_block(
-                dmd=dmd,
-                cam=cam,
-                zero_cam_xy=zero_cam_xy,
-                zero_dmd_xy=zero_dmd_xy,
-                img_zero_before=img_zero,
-                zero_block_plane=ZERO_BLOCK_PLANE,
-                zero_block_radius_px=ZERO_BLOCK_RADIUS,
-                exposure=EXPOSURE_ZERO,
-                roi=12,
-                save_path="dmdsuite/calibration/zero_order_block_check.npz",
-                plot=True,
-            )
-        )
+#         img_zero_blocked, zero_before_val, zero_after_val, zero_residual = (
+#             check_zero_order_block(
+#                 dmd=dmd,
+#                 cam=cam,
+#                 zero_cam_xy=zero_cam_xy,
+#                 zero_dmd_xy=zero_dmd_xy,
+#                 img_zero_before=img_zero,
+#                 zero_block_plane=ZERO_BLOCK_PLANE,
+#                 zero_block_radius_px=ZERO_BLOCK_RADIUS,
+#                 exposure=EXPOSURE_ZERO,
+#                 roi=12,
+#                 save_path="dmdsuite/calibration/zero_order_block_check.npz",
+#                 plot=True,
+#             )
+#         )
 
-        np.savez(
-            "dmdsuite/calibration/zero_order_offpass.npz",
-            zero_cam_xy=zero_cam_xy,
-            zero_dmd_xy=zero_dmd_xy,
-            image_zero=img_zero,
-            x_positions=zxpos,
-            y_positions=zypos,
-            x_drop=zxdrop,
-            y_drop=zydrop,
-        )
+#         np.savez(
+#             "dmdsuite/calibration/zero_order_offpass.npz",
+#             zero_cam_xy=zero_cam_xy,
+#             zero_dmd_xy=zero_dmd_xy,
+#             image_zero=img_zero,
+#             x_positions=zxpos,
+#             y_positions=zypos,
+#             x_drop=zxdrop,
+#             y_drop=zydrop,
+#         )
 
-        # ----------------------------------------------------
-        # Step 2: write SLM triangle and calibrate affine
-        # ----------------------------------------------------
-        input(
-            "\nSTEP 2: Now write the SLM TRIANGLE pattern in the SLM script.\n"
-            "Keep the SLM script paused/running.\n"
-            "When triangle spots are visible with 0th order blocked, press Enter here..."
-        )
+#         # ----------------------------------------------------
+#         # Step 2: write SLM triangle and calibrate affine
+#         # ----------------------------------------------------
+#         input(
+#             "\nSTEP 2: Now write the SLM TRIANGLE pattern in the SLM script.\n"
+#             "Keep the SLM script paused/running.\n"
+#             "When triangle spots are visible with 0th order blocked, press Enter here..."
+#         )
 
-        dmd.show_plane(ZERO_BLOCK_PLANE)
-        img_triangle = safe_get_image(cam, exposure=EXPOSURE_TRIANGLE)
+#         dmd.show_plane(ZERO_BLOCK_PLANE)
+#         img_triangle = safe_get_image(cam, exposure=EXPOSURE_TRIANGLE)
 
-        tri_cam_pts = detect_top_n_spots(
-            img_triangle,
-            n=3,
-            threshold_percentile=99.0,
-            min_area=3,
-            max_area=50000,
-            zero_order_xy=zero_cam_xy,
-            zero_order_exclusion_radius=40,
-            min_separation_px=30,
-            refine_roi=6,
-            blob_sigma=2.0,
-            smoothing_sigma=0.5,
-            integration_radius=5,
-            plot=True,
-            title="Triangle calibration spots",
-        )
+#         tri_cam_pts = detect_top_n_spots(
+#             img_triangle,
+#             n=3,
+#             threshold_percentile=99.0,
+#             min_area=3,
+#             max_area=50000,
+#             zero_order_xy=zero_cam_xy,
+#             zero_order_exclusion_radius=40,
+#             min_separation_px=30,
+#             refine_roi=6,
+#             blob_sigma=2.0,
+#             smoothing_sigma=0.5,
+#             integration_radius=5,
+#             plot=True,
+#             title="Triangle calibration spots",
+#         )
 
-        if len(tri_cam_pts) < 3:
-            raise RuntimeError(
-                f"Need at least 3 triangle spots for affine calibration; detected {len(tri_cam_pts)}."
-            )
+#         if len(tri_cam_pts) < 3:
+#             raise RuntimeError(
+#                 f"Need at least 3 triangle spots for affine calibration; detected {len(tri_cam_pts)}."
+#             )
 
-        if len(tri_cam_pts) > 3:
-            print(
-                f"WARNING: Detected {len(tri_cam_pts)} triangle-like spots. "
-                "Using the 3 brightest/first detected spots. If wrong, adjust threshold/exposure."
-            )
-            tri_cam_pts = tri_cam_pts[:3]
+#         if len(tri_cam_pts) > 3:
+#             print(
+#                 f"WARNING: Detected {len(tri_cam_pts)} triangle-like spots. "
+#                 "Using the 3 brightest/first detected spots. If wrong, adjust threshold/exposure."
+#             )
+#             tri_cam_pts = tri_cam_pts[:3]
 
-        input("Check triangle labels. Press Enter to scan DMD for triangle spots...")
+#         input("Check triangle labels. Press Enter to scan DMD for triangle spots...")
 
-        tri_coarse_dmd_pts, txpos, typos, txdrop, tydrop = (
-            find_dmd_xy_for_camera_spots_blocking(
-                dmd=dmd,
-                cam=cam,
-                cam_pts=tri_cam_pts,
-                x_positions=np.arange(200, 1200, 5),
-                y_positions=np.arange(200, 800, 5),
-                stripe_width=STRIPE_WIDTH,
-                x_plane=X_SCAN_PLANE,
-                y_plane=Y_SCAN_PLANE,
-                pass_plane=ZERO_BLOCK_PLANE,
-                exposure=EXPOSURE_SCAN,
-                roi=8,
-                zero_dmd_xy=zero_dmd_xy,
-                zero_radius_px=ZERO_BLOCK_RADIUS,
-                plot=True,
-            )
-        )
+#         tri_coarse_dmd_pts, txpos, typos, txdrop, tydrop = (
+#             find_dmd_xy_for_camera_spots_blocking(
+#                 dmd=dmd,
+#                 cam=cam,
+#                 cam_pts=tri_cam_pts,
+#                 x_positions=np.arange(200, 1200, 5),
+#                 y_positions=np.arange(200, 800, 5),
+#                 stripe_width=STRIPE_WIDTH,
+#                 x_plane=X_SCAN_PLANE,
+#                 y_plane=Y_SCAN_PLANE,
+#                 pass_plane=ZERO_BLOCK_PLANE,
+#                 exposure=EXPOSURE_SCAN,
+#                 roi=8,
+#                 zero_dmd_xy=zero_dmd_xy,
+#                 zero_radius_px=ZERO_BLOCK_RADIUS,
+#                 plot=True,
+#             )
+#         )
 
-        print("Coarse triangle DMD points:")
-        for i, (c, d) in enumerate(zip(tri_cam_pts, tri_coarse_dmd_pts)):
-            print(f"triangle {i}: camera {c} -> coarse DMD {d}")
+#         print("Coarse triangle DMD points:")
+#         for i, (c, d) in enumerate(zip(tri_cam_pts, tri_coarse_dmd_pts)):
+#             print(f"triangle {i}: camera {c} -> coarse DMD {d}")
 
-        input(
-            "Press Enter to do dense center scan + radius optimization for triangle spots..."
-        )
+#         input(
+#             "Press Enter to do dense center scan + radius optimization for triangle spots..."
+#         )
 
-        tri_refined_dmd_pts, MOVIE_RADIUS, center_reports, radius_reports = (
-            refine_triangle_centers_and_radii_blocking(
-                dmd=dmd,
-                cam=cam,
-                tri_cam_pts=tri_cam_pts,
-                tri_coarse_dmd_pts=tri_coarse_dmd_pts,
-                center_search_radius=25,
-                center_step=3,
-                center_aperture_radius=15,
-                radius_values=np.arange(5, 41, 2),
-                center_plane=246,
-                radius_plane=247,
-                pass_plane=ZERO_BLOCK_PLANE,
-                exposure=EXPOSURE_SCAN,
-                roi=8,
-                zero_dmd_xy=zero_dmd_xy,
-                zero_radius_px=ZERO_BLOCK_RADIUS,
-                leakage_weight=0.7,
-            )
-        )
+#         tri_refined_dmd_pts, MOVIE_RADIUS, center_reports, radius_reports = (
+#             refine_triangle_centers_and_radii_blocking(
+#                 dmd=dmd,
+#                 cam=cam,
+#                 tri_cam_pts=tri_cam_pts,
+#                 tri_coarse_dmd_pts=tri_coarse_dmd_pts,
+#                 center_search_radius=25,
+#                 center_step=3,
+#                 center_aperture_radius=15,
+#                 radius_values=np.arange(5, 41, 2),
+#                 center_plane=246,
+#                 radius_plane=247,
+#                 pass_plane=ZERO_BLOCK_PLANE,
+#                 exposure=EXPOSURE_SCAN,
+#                 roi=8,
+#                 zero_dmd_xy=zero_dmd_xy,
+#                 zero_radius_px=ZERO_BLOCK_RADIUS,
+#                 leakage_weight=0.7,
+#             )
+#         )
 
-        print("Refined triangle DMD points and optimized radius:")
-        for i, (c, d) in enumerate(zip(tri_cam_pts, tri_refined_dmd_pts)):
-            print(f"triangle {i}: camera {c} -> refined DMD {d}")
+#         print("Refined triangle DMD points and optimized radius:")
+#         for i, (c, d) in enumerate(zip(tri_cam_pts, tri_refined_dmd_pts)):
+#             print(f"triangle {i}: camera {c} -> refined DMD {d}")
 
-        print("Updated MOVIE_RADIUS =", MOVIE_RADIUS)
+#         print("Updated MOVIE_RADIUS =", MOVIE_RADIUS)
 
-        print("Refined triangle DMD points:")
-        for i, (c, d) in enumerate(zip(tri_cam_pts, tri_refined_dmd_pts)):
-            print(f"triangle {i}: camera {c} -> refined DMD {d}")
+#         print("Refined triangle DMD points:")
+#         for i, (c, d) in enumerate(zip(tri_cam_pts, tri_refined_dmd_pts)):
+#             print(f"triangle {i}: camera {c} -> refined DMD {d}")
 
-        M_cam_to_dmd, inliers = fit_cam_to_dmd_affine(
-            tri_cam_pts,
-            tri_refined_dmd_pts,
-        )
+#         M_cam_to_dmd, inliers = fit_cam_to_dmd_affine(
+#             tri_cam_pts,
+#             tri_refined_dmd_pts,
+#         )
 
-        print("Affine camera -> DMD matrix:")
-        print(M_cam_to_dmd)
-        print("Affine inliers:", inliers.ravel() if inliers is not None else None)
+#         print("Affine camera -> DMD matrix:")
+#         print(M_cam_to_dmd)
+#         print("Affine inliers:", inliers.ravel() if inliers is not None else None)
 
-        optimized_movie_radius = (MOVIE_RADIUS,)
-        center_best_xy = (np.array([r["best_xy"] for r in center_reports]),)
-        center_best_score = (np.array([r["best_score"] for r in center_reports]),)
-        center_target_extinction = (
-            np.array([r["best_target_extinction"] for r in center_reports]),
-        )
-        center_leakage = (np.array([r["best_leakage"] for r in center_reports]),)
-        radius_best = (np.array([r["best_radius"] for r in radius_reports]),)
-        radius_best_area_mirrors = (
-            np.array([r["best_area_mirrors"] for r in radius_reports]),
-        )
-        np.savez(
-            "dmdsuite/calibration/triangle_affine_offpass.npz",
-            zero_cam_xy=zero_cam_xy,
-            zero_dmd_xy=zero_dmd_xy,
-            triangle_camera_points=tri_cam_pts,
-            triangle_coarse_dmd_points=tri_coarse_dmd_pts,
-            triangle_refined_dmd_points=tri_refined_dmd_pts,
-            M_cam_to_dmd=M_cam_to_dmd,
-            image_triangle=img_triangle,
-            x_positions=txpos,
-            y_positions=typos,
-            x_drop=txdrop,
-            y_drop=tydrop,
-            optimized_movie_radius=MOVIE_RADIUS,
-            center_best_xy=np.array([r["best_xy"] for r in center_reports]),
-            center_best_score=np.array([r["best_score"] for r in center_reports]),
-            center_target_extinction=np.array(
-                [r["best_target_extinction"] for r in center_reports]
-            ),
-            center_leakage=np.array([r["best_leakage"] for r in center_reports]),
-            radius_best=np.array([r["best_radius"] for r in radius_reports]),
-            radius_best_area_mirrors=np.array(
-                [r["best_area_mirrors"] for r in radius_reports]
-            ),
-        )
+#         optimized_movie_radius = (MOVIE_RADIUS,)
+#         center_best_xy = (np.array([r["best_xy"] for r in center_reports]),)
+#         center_best_score = (np.array([r["best_score"] for r in center_reports]),)
+#         center_target_extinction = (
+#             np.array([r["best_target_extinction"] for r in center_reports]),
+#         )
+#         center_leakage = (np.array([r["best_leakage"] for r in center_reports]),)
+#         radius_best = (np.array([r["best_radius"] for r in radius_reports]),)
+#         radius_best_area_mirrors = (
+#             np.array([r["best_area_mirrors"] for r in radius_reports]),
+#         )
+#         np.savez(
+#             "dmdsuite/calibration/triangle_affine_offpass.npz",
+#             zero_cam_xy=zero_cam_xy,
+#             zero_dmd_xy=zero_dmd_xy,
+#             triangle_camera_points=tri_cam_pts,
+#             triangle_coarse_dmd_points=tri_coarse_dmd_pts,
+#             triangle_refined_dmd_points=tri_refined_dmd_pts,
+#             M_cam_to_dmd=M_cam_to_dmd,
+#             image_triangle=img_triangle,
+#             x_positions=txpos,
+#             y_positions=typos,
+#             x_drop=txdrop,
+#             y_drop=tydrop,
+#             optimized_movie_radius=MOVIE_RADIUS,
+#             center_best_xy=np.array([r["best_xy"] for r in center_reports]),
+#             center_best_score=np.array([r["best_score"] for r in center_reports]),
+#             center_target_extinction=np.array(
+#                 [r["best_target_extinction"] for r in center_reports]
+#             ),
+#             center_leakage=np.array([r["best_leakage"] for r in center_reports]),
+#             radius_best=np.array([r["best_radius"] for r in radius_reports]),
+#             radius_best_area_mirrors=np.array(
+#                 [r["best_area_mirrors"] for r in radius_reports]
+#             ),
+#         )
 
-        input("\nDone. Press Enter to block all and exit...")
-        dmd.show_plane(BLOCK_PLANE)
-    finally:
-        dmd.disconnect()
-        cam.close()
+#         input("\nDone. Press Enter to block all and exit...")
+#         dmd.show_plane(BLOCK_PLANE)
+#     finally:
+#         dmd.disconnect()
+#         cam.close()

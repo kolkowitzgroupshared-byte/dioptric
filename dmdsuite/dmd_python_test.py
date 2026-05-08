@@ -1,170 +1,138 @@
-import ctypes
-from pathlib import Path
-from PIL import Image
+import sys
 import time
+import argparse
+from pathlib import Path
+import numpy as np
+from dmdsuite.dmd6500_api import Dmd6500, DMD_WIDTH, DMD_HEIGHT
 
-DLL_PATH = r"C:\Users\jkdol\OneDrive\Documents\Github\dioptric\dmdsuite\Windows_x86_64\DLL_x64\x64\Release\DLP6500_DLL.dll"
-IMAGE_PATH = r"C:\Users\jkdol\OneDrive\Documents\Github\dioptric\dmdsuite\Windows_x86_64\opticaltweezers.jpg"
+# Make repo importable
+repo = Path(__file__).resolve().parents[1]
+if str(repo) not in sys.path:
+    sys.path.append(str(repo))
 
-DMD_W = 1920
-DMD_H = 1080
-DMD_N = DMD_W * DMD_H
+PASS_VALUE = 255   # ON / white = pass
+BLOCK_VALUE = 0    # OFF / black = block
 
-PLANE_OFF = 200
-PLANE_SPOT = 201
-
-dll_path = Path(DLL_PATH)
-if not dll_path.exists():
-    raise FileNotFoundError(f"DLL not found: {dll_path}")
-
-DlpDLL = ctypes.WinDLL(str(dll_path))
-
-GetDevice_Proto = ctypes.WINFUNCTYPE(ctypes.c_void_p)
-GetDevice = GetDevice_Proto(("GetDevice", DlpDLL), ())
-
-Connect_Proto = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_int)
-Connect = Connect_Proto(("Connect", DlpDLL), ((1, "hdev"), (1, "dev_id")))
-
-Disconnect_Proto = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p)
-Disconnect = Disconnect_Proto(("Disconnect", DlpDLL), ((1, "hdev"),))
-
-DeleteDevice_Proto = ctypes.WINFUNCTYPE(None, ctypes.c_void_p)
-DeleteDevice = DeleteDevice_Proto(("DeleteDevice", DlpDLL), ((1, "hdev"),))
-
-StopSequence_Proto = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p)
-StopSequence = StopSequence_Proto(("StopSequence", DlpDLL), ((1, "hdev"),))
-
-RunSequence_Proto = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_int)
-RunSequence = RunSequence_Proto(("RunSequence", DlpDLL), ((1, "hdev"), (1, "startpos")))
-
-SendImageMono_Proto = ctypes.WINFUNCTYPE(
-    ctypes.c_int,
-    ctypes.c_void_p,
-    ctypes.c_int,
-    ctypes.c_ubyte * DMD_N
-)
-SendImageMono_c = SendImageMono_Proto(
-    ("SendImageMono", DlpDLL),
-    ((1, "hdev"), (1, "planenr"), (1, "buffer"))
-)
-
-ListControllers_Proto = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.POINTER(ctypes.c_uint))
-ListControllers = ListControllers_Proto(("ListControllers", DlpDLL), ((1, "count"),))
-
-GetDevID_Proto = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_uint, ctypes.POINTER(ctypes.c_int))
-GetDevID = GetDevID_Proto(("GetDevID", DlpDLL), ((1, "index"), (1, "dev_id")))
-
-IsConnected_Proto = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.POINTER(ctypes.c_bool))
-IsConnected = IsConnected_Proto(("IsConnected", DlpDLL), ((1, "hdev"), (1, "connected")))
+PASS_PLANE = 200
+BLOCK_PLANE = 201
 
 
-def make_off_plane():
-    return Image.new("L", (DMD_W, DMD_H), 0)
-
-
-def make_canvas_from_image(path, threshold=128):
-    im = Image.open(path).convert("L")
-    print("original size:", im.size, flush=True)
-    print("original mode:", im.mode, flush=True)
-
-    if im.size[0] > DMD_W or im.size[1] > DMD_H:
-        im.thumbnail((DMD_W, DMD_H))
-
-    canvas = Image.new("L", (DMD_W, DMD_H), 0)
-    x0 = (DMD_W - im.size[0]) // 2
-    y0 = (DMD_H - im.size[1]) // 2
-    canvas.paste(im, (x0, y0))
-
-    if threshold is not None:
-        canvas = canvas.point(lambda p: 255 if p >= threshold else 0)
-
-    return canvas
-
-
-def send_image_mono(hdev, planenr, pil_image):
-    if pil_image.mode != "L":
-        raise ValueError(f"Image mode must be L, got {pil_image.mode}")
-    if pil_image.size != (DMD_W, DMD_H):
-        raise ValueError(f"Image size must be {(DMD_W, DMD_H)}, got {pil_image.size}")
-
-    greyvals = bytearray(pil_image.tobytes())
-    if len(greyvals) != DMD_N:
-        raise ValueError(f"Expected {DMD_N} bytes, got {len(greyvals)}")
-
-    buf = (ctypes.c_ubyte * DMD_N).from_buffer(greyvals)
-    return SendImageMono_c(hdev, planenr, buf)
-
-
-def require_zero(name, rc):
-    print(f"{name}: {rc}", flush=True)
-    if rc != 0:
-        raise RuntimeError(f"{name} failed with rc={rc}")
+def all_mask(value):
+    return np.full((DMD_HEIGHT, DMD_WIDTH), value, dtype=np.uint8)
 
 
 def main():
-    print("creating handle...", flush=True)
-    hdev = GetDevice()
-    print("hdev =", hdev, flush=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--method",
+        choices=["binary", "mono"],
+        default="binary",
+        help="binary uses SendPlane; mono uses SendImageMono",
+    )
+    args = parser.parse_args()
 
-    count = ctypes.c_uint(0)
-    require_zero("ListControllers", ListControllers(ctypes.byref(count)))
-    print("controller count =", count.value, flush=True)
-    if count.value < 1:
-        raise RuntimeError("No DMD controllers found")
+    dll_path = (
+        repo
+        / "dmdsuite"
+        / "Windows_x86_64"
+        / "DLL_x64"
+        / "x64"
+        / "Release"
+        / "DLP6500_DLL.dll"
+    )
 
-    dev_id = ctypes.c_int(-1)
-    require_zero("GetDevID", GetDevID(0, ctypes.byref(dev_id)))
-    print("dev_id =", dev_id.value, flush=True)
+    print("DLL path:", dll_path, flush=True)
 
-    time.sleep(0.2)
+    dmd = None
 
-    require_zero("Connect", Connect(hdev, dev_id.value))
+    try:
+        print("Creating Dmd6500 object...", flush=True)
+        dmd = Dmd6500(str(dll_path))
+        print("Dmd6500 object created.", flush=True)
 
-    connected = ctypes.c_bool(False)
-    require_zero("IsConnected", IsConnected(hdev, ctypes.byref(connected)))
-    print("connected =", connected.value, flush=True)
-    if not connected.value:
-        raise RuntimeError("Device reports not connected")
+        print("Listing devices...", flush=True)
+        n = dmd.list_devices()
+        print("Devices found:", n, flush=True)
 
-    off = make_off_plane()
-    spot = make_canvas_from_image(IMAGE_PATH, threshold=128)
-    print("off size:", off.size, "spot size:", spot.size, flush=True)
+        print("Connecting to DMD...", flush=True)
+        dmd.connect(0)
+        print("Connected.", flush=True)
 
-    require_zero("SendImageMono off", send_image_mono(hdev, PLANE_OFF, off))
-    require_zero("SendImageMono spot", send_image_mono(hdev, PLANE_SPOT, spot))
+        print("Firmware version...", flush=True)
+        fw = dmd.firmware_version()
+        print("Firmware:", fw, flush=True)
 
-    require_zero("StopSequence", StopSequence(hdev))
-    require_zero("RunSequence off", RunSequence(hdev, PLANE_OFF))
-    input("Check OFF plane, then press Enter...")
+        # ------------------------------------------------------------
+        # PASS plane: white / ON
+        # ------------------------------------------------------------
+        pass_mask = all_mask(PASS_VALUE)
 
-    require_zero("StopSequence", StopSequence(hdev))
-    require_zero("RunSequence spot", RunSequence(hdev, PLANE_SPOT))
-    input("Check SPOT plane, then press Enter...")
+        if args.method == "binary":
+            print("before send_binary_plane PASS", flush=True)
+            dmd.send_binary_plane(PASS_PLANE, pass_mask)
+            print("after send_binary_plane PASS", flush=True)
+        else:
+            print("before send_image_mono PASS", flush=True)
+            dmd.send_image_mono(PASS_PLANE, pass_mask)
+            print("after send_image_mono PASS", flush=True)
 
-    require_zero("StopSequence", StopSequence(hdev))
-    require_zero("RunSequence off again", RunSequence(hdev, PLANE_OFF))
-    input("Check OFF again, then press Enter to exit...")
+        print("before show_plane PASS", flush=True)
+        dmd.show_plane(PASS_PLANE)
+        print("after show_plane PASS", flush=True)
 
+        print("PASS state should be visible now.")
+        time.sleep(2)
 
-    # show OFF for 1 second
-    require_zero("StopSequence", StopSequence(hdev))
-    require_zero("RunSequence off", RunSequence(hdev, PLANE_OFF))
-    time.sleep(1.0)
+        # ------------------------------------------------------------
+        # BLOCK plane: black / OFF
+        # ------------------------------------------------------------
+        block_mask = all_mask(BLOCK_VALUE)
 
-    # show SPOT for 1 second
-    require_zero("StopSequence", StopSequence(hdev))
-    require_zero("RunSequence spot", RunSequence(hdev, PLANE_SPOT))
-    time.sleep(1.0)
+        if args.method == "binary":
+            print("before send_binary_plane BLOCK", flush=True)
+            dmd.send_binary_plane(BLOCK_PLANE, block_mask)
+            print("after send_binary_plane BLOCK", flush=True)
+        else:
+            print("before send_image_mono BLOCK", flush=True)
+            dmd.send_image_mono(BLOCK_PLANE, block_mask)
+            print("after send_image_mono BLOCK", flush=True)
 
-    # back to OFF
-    require_zero("StopSequence", StopSequence(hdev))
-    require_zero("RunSequence off again", RunSequence(hdev, PLANE_OFF))
-    time.sleep(1.0)
+        print("before show_plane BLOCK", flush=True)
+        dmd.show_plane(BLOCK_PLANE)
+        print("after show_plane BLOCK", flush=True)
 
-    print("disconnect:", Disconnect(hdev), flush=True)
-    DeleteDevice(hdev)
-    print("done", flush=True)
+        print("BLOCK state should be visible now.")
+        time.sleep(2)
+
+        print("Test completed successfully.", flush=True)
+
+    finally:
+        if dmd is not None:
+            print("Disconnecting DMD...", flush=True)
+            try:
+                dmd.disconnect()
+                print("Disconnected.", flush=True)
+            except Exception as exc:
+                print("Disconnect failed:", repr(exc), flush=True)
 
 
 if __name__ == "__main__":
     main()
+
+
+
+# import labrad
+
+# cxn = labrad.connect(username="", password="")
+# dmd = cxn.dmd_dlp6500
+
+# print(dmd.get_state())
+
+# input("Press Enter to PASS all...")
+# dmd.pass_all(False)
+
+# input("Press Enter to BLOCK all...")
+# dmd.block_all()
+
+# input("Press Enter to PASS all again...")
+# dmd.pass_all(False)

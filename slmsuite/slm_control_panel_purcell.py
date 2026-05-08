@@ -174,65 +174,103 @@ def evaluate_uniformity(vectors=None, size=25):
     plt.show()
 
 
-# Test pattern
+# # Test pattern
+# def circles():
+#     cam.set_exposure(0.1)
+#     center = (750, 530)  # Center of the circle
+#     radii = np.linspace(10, 60, num=6)  # Adjust the number of circles as needed
+#     circle_points = []
+#     for radius in radii:
+#         num_points = int(2 * np.pi * radius / 60)
+#         # Generate points within the circle using polar coordinates
+#         theta = np.linspace(0, 2 * np.pi, num_points)  # Angle values
+#         x_circle = center[0] + radius * np.cos(theta)  # X coordinates
+#         y_circle = center[1] + radius * np.sin(theta)  # Y coordinates
+
+#         # Convert to grid format for the current circle
+#         circle = np.vstack((x_circle, y_circle))
+
+#         circle_points.append(circle)
+
+#     # Combine the points of all circles
+#     circles = np.concatenate(circle_points, axis=1)
+#     hologram = SpotHologram(
+#         shape=(2048, 2048), spot_vectors=circles, basis="ij", cameraslm=fs
+#     )
+
+#     # # Precondition computationally.
+#     hologram.optimize(
+#         "WGS-Kim",
+#         maxiter=20,
+#         feedback="computational_spot",
+#         stat_groups=["computational_spot"],
+#     )
+#     phase = hologram.extract_phase()
+#     # Define the path to save the phase data1
+#     # file_path = r"slmsuite\circles"
+#     # now = datetime.now()
+#     # date_time_str = now.strftime("%Y%m%d_%H%M%S")
+#     # filename = f"slm_phase_circles_{date_time_str}.npy"
+#     # file_path = dm.get_file_path(__file__, filename)
+#     # Save the phase data
+#     # save(phase, file_path, filename)
+#     slm.write(phase, settle=True)
+
+#     # cam_plot()
+#     # evaluate_uniformity(vectors=circle)
+
+#     # Hone the result with experimental feedback.
+#     # hologram.optimize(
+#     #     "WGS-Kim",
+#     #     maxiter=20,
+#     #     feedback="experimental_spot",
+#     #     stat_groups=["computational_spot", "experimental_spot"],
+#     #     fixed_phase=False,
+#     # )
+#     # phase = hologram.extract_phase()
+#     # slm.write(phase, settle=True)
+#     # cam_plot()
+#     # evaluate_uniformity(vectors=circle)
+
 def circles():
     cam.set_exposure(0.1)
-    center = (750, 530)  # Center of the circle
-    radii = np.linspace(10, 60, num=4)  # Adjust the number of circles as needed
+
+    center = (750, 530)
+
+    # Use larger radii and more spacing
+    radii = np.linspace(50, 200, num=5)
+
     circle_points = []
     for radius in radii:
-        num_points = int(2 * np.pi * radius / 60)
+        # more points per ring
+        num_points = max(12, int(2 * np.pi * radius / 30))
 
-        # Generate points within the circle using polar coordinates
-        theta = np.linspace(0, 2 * np.pi, num_points)  # Angle values
-        x_circle = center[0] + radius * np.cos(theta)  # X coordinates
-        y_circle = center[1] + radius * np.sin(theta)  # Y coordinates
+        theta = np.linspace(0, 2 * np.pi, num_points, endpoint=False)
 
-        # Convert to grid format for the current circle
+        x_circle = center[0] + radius * np.cos(theta)
+        y_circle = center[1] + radius * np.sin(theta)
+
         circle = np.vstack((x_circle, y_circle))
-
         circle_points.append(circle)
 
-    # Combine the points of all circles
     circles = np.concatenate(circle_points, axis=1)
+
     hologram = SpotHologram(
-        shape=(2048, 2048), spot_vectors=circles, basis="ij", cameraslm=fs
+        shape=(2048, 2048),
+        spot_vectors=circles,
+        basis="ij",
+        cameraslm=fs,
     )
 
-    # # Precondition computationally.
     hologram.optimize(
         "WGS-Kim",
         maxiter=20,
         feedback="computational_spot",
         stat_groups=["computational_spot"],
     )
+
     phase = hologram.extract_phase()
-    # Define the path to save the phase data1
-    file_path = r"slmsuite\circles"
-    now = datetime.now()
-    date_time_str = now.strftime("%Y%m%d_%H%M%S")
-    filename = f"slm_phase_circles_{date_time_str}.npy"
-    # file_path = dm.get_file_path(__file__, filename)
-    # Save the phase data
-    save(phase, file_path, filename)
     slm.write(phase, settle=True)
-
-    # cam_plot()
-    # evaluate_uniformity(vectors=circle)
-
-    # Hone the result with experimental feedback.
-    # hologram.optimize(
-    #     "WGS-Kim",
-    #     maxiter=20,
-    #     feedback="experimental_spot",
-    #     stat_groups=["computational_spot", "experimental_spot"],
-    #     fixed_phase=False,
-    # )
-    # phase = hologram.extract_phase()
-    # slm.write(phase, settle=True)
-    # cam_plot()
-    # evaluate_uniformity(vectors=circle)
-
 
 # region "nv phase calulation"
 def calibration_triangle():
@@ -412,15 +450,19 @@ try:
     # wavefront_calibration()
     # load_wavefront_calibration()
     
-    compute_and_write_nvs_phase()
+    # compute_and_write_nvs_phase()
     # calibration_triangle()
     
-    # circles()
+    circles()
     # smiley()
     # cam_plot()
+    input("Pattern displayed and held. Press Enter to close...")
 finally:
     print("Closing")
-    slm.close_window()
-    slm.close_device()
-    # cam.close()
+
+    if slm is not None:
+        slm.close()
+
+    if cam is not None:
+        cam.close()
 # endregions
