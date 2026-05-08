@@ -1,13 +1,8 @@
-# double_lifetime_recovery.py
-#
-# Sequence:
-#   excitation pulse 1
-#   lifetime readout window 1 (laser OFF, APD gate ON)
-#   dark recovery delay Δ (swept)
-#   excitation pulse 2
-#   lifetime readout window 2 (laser OFF, APD gate ON)
-#
-# args = [recovery_delay_ns, exc_ns, detect_ns, laser_vkey, laser_power]
+"""
+press play to see sequence. continuous single shot lifetime measurement
+
+@author:alyssa-matthews
+"""
 
 import numpy as np
 from pulsestreamer import OutputState, Sequence
@@ -79,9 +74,9 @@ def get_seq(pulse_streamer, config, args):
     apd_train = [
         (int(front_buffer), LOW),
         # pulse 1
-        (int(exc_ns), HIGH),
+        (int(exc_ns), LOW),
         # # readout 1
-        # (int(detect_ns), HIGH),
+        (int(detect_ns), HIGH),
         # dark recovery
         (int(meas_buffer), LOW),
     ]
@@ -93,7 +88,7 @@ def get_seq(pulse_streamer, config, args):
         # pulse 1
         (int(exc_ns), HIGH),
         # # readout 1
-        # (int(detect_ns), LOW),
+        (int(detect_ns), HIGH),
         (int(meas_buffer), LOW),
     ]
     tb.process_laser_seq(seq, laser_vkey, laser_train)

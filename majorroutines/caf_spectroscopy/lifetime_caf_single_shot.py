@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-fill this out!
+performs single shot lifetime measurements for caf. can do either continuous or pulsed depending on sequence selected
 
 @author:alyssa-matthews
 """

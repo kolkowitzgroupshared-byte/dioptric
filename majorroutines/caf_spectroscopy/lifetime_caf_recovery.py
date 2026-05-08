@@ -199,7 +199,8 @@ def main(
     exc_ns,  # laser
     detect_ns,  # read out
     seq_file,
-    num_bins=200,
+    num_bins,
+    filter_pos,
     laser_power=None,
     laser_vkey="SPIN_READOUT",
     do_save=True,
@@ -207,7 +208,15 @@ def main(
     fit_lifetime_end_ns=None,
 ):
     tb.reset_cfm()
+    if len(filter_pos) != 0:
+        slider_1 = tb.get_server_slider_1()
+        slider_3 = tb.get_server_slider_3()
 
+        slider_1_pos, slider_3_pos = filter_pos
+        # print(slider_1_pos, slider_3_pos)
+
+        slider_1.set_filter(slider_1_pos)
+        slider_3.set_filter(slider_3_pos)
     recovery_delay_ns_list = np.linspace(
         int(min_recovery_delay_ns),
         int(max_recovery_delay_ns),
@@ -581,48 +590,48 @@ def main(
     return raw_data, proc_data
 
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
 
-    class Dummy:
-        name = "caf_test"
+#     class Dummy:
+#         name = "caf_test"
 
-    sample_sig = Dummy()
+#     sample_sig = Dummy()
 
-    # simulation test
-    raw_data, proc_data = main(
-        sample_sig=sample_sig,
-        num_reps=2000,
-        num_runs=5,
-        min_recovery_delay_ns=0,
-        max_recovery_delay_ns=30000,
-        num_steps=31,
-        exc_ns=1000,
-        detect_ns=3000,
-        seq_file="lifetime_caf_recovery.py",
-        num_bins=150,
-        laser_power=None,
-        laser_vkey="SPIN_READOUT",
-        do_save=False,
-        fit_lifetime_start_ns=0,
-        fit_lifetime_end_ns=2500,
-    )
+#     # simulation test
+#     raw_data, proc_data = main(
+#         sample_sig=sample_sig,
+#         num_reps=2000,
+#         num_runs=5,
+#         min_recovery_delay_ns=0,
+#         max_recovery_delay_ns=30000,
+#         num_steps=31,
+#         exc_ns=1000,
+#         detect_ns=3000,
+#         seq_file="lifetime_caf_recovery.py",
+#         num_bins=150,
+#         laser_power=None,
+#         laser_vkey="SPIN_READOUT",
+#         do_save=False,
+#         fit_lifetime_start_ns=0,
+#         fit_lifetime_end_ns=2500,
+#     )
 
-    # for real experiment:
-    # raw_data, proc_data = main(
-    #     sample_sig=sample_sig,
-    #     num_reps=5000,
-    #     num_runs=10,
-    #     min_recovery_delay_ns=0,
-    #     max_recovery_delay_ns=50000,
-    #     num_steps=41,
-    #     exc_ns=1000,
-    #     detect_ns=4000,
-    #     num_bins=200,
-    #     laser_power=None,
-    #     laser_vkey="SPIN_READOUT",
-    #     do_plot=True,
-    #     do_save=True,
-    #     simulate_only=False,
-    #     fit_lifetime_start_ns=0,
-    #     fit_lifetime_end_ns=3500,
-    # )
+# for real experiment:
+# raw_data, proc_data = main(
+#     sample_sig=sample_sig,
+#     num_reps=5000,
+#     num_runs=10,
+#     min_recovery_delay_ns=0,
+#     max_recovery_delay_ns=50000,
+#     num_steps=41,
+#     exc_ns=1000,
+#     detect_ns=4000,
+#     num_bins=200,
+#     laser_power=None,
+#     laser_vkey="SPIN_READOUT",
+#     do_plot=True,
+#     do_save=True,
+#     simulate_only=False,
+#     fit_lifetime_start_ns=0,
+#     fit_lifetime_end_ns=3500,
+# )

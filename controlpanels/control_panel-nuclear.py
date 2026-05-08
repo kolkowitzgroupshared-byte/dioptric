@@ -19,9 +19,10 @@ import numpy as np
 import websocket
 
 from majorroutines.caf_spectroscopy import (
-    double_lifetime_recovery,
+    double_lifetime_recovery_from_nv,
     laser_char,
     lifetime_caf,
+    lifetime_caf_recovery,
     lifetime_caf_single_shot,
     sideillum_resonance,
     single_lifetime,
@@ -151,18 +152,40 @@ def do_th_lifetime_measurement(caf_sig):
     return
 
 
-def do_lifetime_caf_pulsed_copy(th_sig):
+def do_lifetime_caf_single_shot(th_sig):
     lifetime_caf_single_shot.main(
         nv_sig=th_sig,
         apd_indices=[0],
-        readout_times=[50, 100, 30],
+        readout_times=[0, 100, 150],  # delay, excitation, detection
         filter_pos=[2, 2],
         num_reps=200000,
         num_runs=1,
-        num_bins=200,
-        sequence_file="lifetime_caf_single_pulse.py",
+        num_bins=100,
+        sequence_file="lifetime_caf_single_on.py",
         # lifetime_caf_single_pulse or lifetime_caf_single_on
         laser_power=None,
+    )
+    return
+
+
+def do_lifetime_caf_recovery(th_sig):
+    lifetime_caf_recovery.main(
+        sample_sig=th_sig,
+        num_reps=200000,
+        num_runs=1,
+        min_recovery_delay_ns=0,
+        max_recovery_delay_ns=5000,
+        num_steps=10,
+        exc_ns=100,  # laser
+        detect_ns=20,  # read out
+        seq_file="lifetime_caf_recovery.py",
+        num_bins=200,
+        # filter_pos=[2, 2],
+        laser_power=None,
+        laser_vkey="SPIN_READOUT",
+        do_save=True,
+        fit_lifetime_start_ns=None,
+        fit_lifetime_end_ns=None,
     )
     return
 
@@ -570,7 +593,8 @@ if __name__ == "__main__":
         # ^leave the comma at the end or it will complain
         # do_stationary_count(th_sig, disable_opt=True)
         # do_lifetime_measurement(th_sig)
-        do_lifetime_caf_pulsed_copy(th_sig)
+        # do_lifetime_caf_single_shot(th_sig)
+        do_lifetime_caf_recovery(th_sig)
         # do_th_lifetime_measurement(th_sig)
         # do_awg_test()
         # do_resonance(th_sig)
