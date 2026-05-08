@@ -156,7 +156,7 @@ def do_lifetime_caf_single_shot(th_sig):
     lifetime_caf_single_shot.main(
         nv_sig=th_sig,
         apd_indices=[0],
-        readout_times=[0, 100, 150],  # delay, excitation, detection
+        readout_times=[0, 100, 5000],  # delay, excitation, detection
         filter_pos=[2, 2],
         num_reps=200000,
         num_runs=1,
@@ -180,7 +180,7 @@ def do_lifetime_caf_recovery(th_sig):
         detect_ns=20,  # read out
         seq_file="lifetime_caf_recovery.py",
         num_bins=200,
-        # filter_pos=[2, 2],
+        filter_pos=[2, 2],
         laser_power=None,
         laser_vkey="SPIN_READOUT",
         do_save=True,
@@ -593,8 +593,8 @@ if __name__ == "__main__":
         # ^leave the comma at the end or it will complain
         # do_stationary_count(th_sig, disable_opt=True)
         # do_lifetime_measurement(th_sig)
-        # do_lifetime_caf_single_shot(th_sig)
-        do_lifetime_caf_recovery(th_sig)
+        do_lifetime_caf_single_shot(th_sig)
+        # do_lifetime_caf_recovery(th_sig)
         # do_th_lifetime_measurement(th_sig)
         # do_awg_test()
         # do_resonance(th_sig)

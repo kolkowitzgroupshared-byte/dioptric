@@ -92,7 +92,9 @@ class TaggerSwab20(Tagger, LabradServer):
         _, buffer_channels = self.read_raw_stream()
 
         buffer_channels = np.asarray(buffer_channels, dtype=np.int32).reshape(-1)
-        self.leftover_channels = np.asarray(self.leftover_channels, dtype=np.int32).reshape(-1)
+        self.leftover_channels = np.asarray(
+            self.leftover_channels, dtype=np.int32
+        ).reshape(-1)
 
         apd_channels = np.asarray(
             [self.tagger_di_apd[val] for val in self.stream_apd_indices],
@@ -107,7 +109,9 @@ class TaggerSwab20(Tagger, LabradServer):
             self.leftover_channels,
         )
 
-        self.leftover_channels = np.asarray(leftover_channels, dtype=np.int32).reshape(-1)
+        self.leftover_channels = np.asarray(leftover_channels, dtype=np.int32).reshape(
+            -1
+        )
         return return_counts
 
     def stop_tag_stream_internal(self):
