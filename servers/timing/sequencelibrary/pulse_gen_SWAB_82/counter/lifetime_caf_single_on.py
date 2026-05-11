@@ -66,10 +66,10 @@ def get_seq(pulse_streamer, config, args):
     # gate 0 -> readout 1
     # gate 1 -> readout 2
     apd_train = [
-        (int(front_buffer), LOW),
+        (int(front_buffer), HIGH),
         # pulse 1
-        (int(recovery_delay_ns), LOW),
-        (int(exc_ns), LOW),
+        (int(recovery_delay_ns), HIGH),
+        (int(exc_ns), HIGH),
         # # readout 1
         (int(detect_ns), HIGH),
         # dark recovery

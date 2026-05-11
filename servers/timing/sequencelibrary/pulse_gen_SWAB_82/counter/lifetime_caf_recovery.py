@@ -30,13 +30,10 @@ def _vkey_from_arg(x):
 
 
 def get_seq(pulse_streamer, config, args):
-    recovery_delay_ns, exc_ns, detect_ns, laser_buffer, laser_vkey_arg, laser_power = (
-        args
-    )
+    recovery_delay_ns, exc_ns, detect_ns, laser_vkey_arg, laser_power = args
 
     recovery_delay_ns = _as_int64("recovery_delay_ns", recovery_delay_ns)
     exc_ns = _as_int64("exc_ns", exc_ns)
-    laser_buffer = _as_int64("laser_buffer", laser_buffer)
     detect_ns = _as_int64("detect_ns", detect_ns)
     laser_vkey = _vkey_from_arg(laser_vkey_arg)
 
@@ -61,8 +58,6 @@ def get_seq(pulse_streamer, config, args):
         + exc_ns
         + detect_ns
         + meas_buffer
-        + laser_buffer  # take out eventually
-        + laser_buffer
     )
 
     seq = Sequence()
@@ -77,17 +72,15 @@ def get_seq(pulse_streamer, config, args):
     # gate 0 -> readout 1
     # gate 1 -> readout 2
     apd_train = [
-        (int(front_buffer), LOW),
+        (int(front_buffer), HIGH),
         # pulse 1
-        (int(exc_ns), LOW),
-        (int(laser_buffer), LOW),
+        (int(exc_ns), HIGH),
         # readout 1
         (int(detect_ns), HIGH),
         # dark recovery
         (int(recovery_delay_ns), LOW),
         # pulse 2
-        (int(exc_ns), LOW),
-        (int(laser_buffer), LOW),
+        (int(exc_ns), HIGH),
         # readout 2
         (int(detect_ns), HIGH),
         (int(meas_buffer), LOW),
@@ -99,14 +92,12 @@ def get_seq(pulse_streamer, config, args):
         (int(front_buffer), LOW),
         # pulse 1
         (int(exc_ns), HIGH),
-        (int(laser_buffer), LOW),
         # readout 1
         (int(detect_ns), LOW),
         # dark recovery
         (int(recovery_delay_ns), LOW),
         # pulse 2
         (int(exc_ns), HIGH),
-        (int(laser_buffer), LOW),
         # readout 2
         (int(detect_ns), LOW),
         (int(meas_buffer), LOW),
@@ -123,7 +114,7 @@ if __name__ == "__main__":
     cfg = common.get_config_dict()
 
     # args = [recovery_delay_ns, exc_ns, detect_ns, laser_buffer, laser_vkey, laser_power]
-    args = [5000, 1000, 3000, 54, "SPIN_READOUT", None]
+    args = [5000, 1000, 3000, "SPIN_READOUT", None]
 
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])
