@@ -28,26 +28,23 @@ message = 987654321
 timeout = 5
 ### END NODE INFO
 """
-
+import sys
+import time
 import json
 import logging
 import socket
-import sys
 from pathlib import Path
-import time
 import numpy as np
 from labrad.server import LabradServer, setting
 
 from utils import common
 from utils import tool_belt as tb
 
-
 # ---------------------------------------------------------------------
 # Import DMD API wrapper
 # --------------------------------------------------------------------
 
 from dmdsuite.dmd6500_api import Dmd6500, DMD_WIDTH, DMD_HEIGHT
-
 
 
 class DmdDlp6500(LabradServer):
@@ -67,12 +64,12 @@ class DmdDlp6500(LabradServer):
     # -----------------------------------------------------------------
     # Server lifecycle
     # -----------------------------------------------------------------
-
     def initServer(self):
         tb.configure_logging(self)
 
         self.config = common.get_config_dict()
         self.repo_path = common.get_repo_path()
+        device_ids = self.config.get("DeviceIDs", {})
 
         default_dll_path = (
             self.repo_path
@@ -84,13 +81,13 @@ class DmdDlp6500(LabradServer):
             / "DLP6500_DLL.dll"
         )
 
-        self.dll_path = self.config.get("DeviceIDs", {}).get(
+        self.dll_path = device_ids.get(
             f"{self.name}_dll",
             str(default_dll_path),
         )
 
         self.device_index = int(
-            self.config.get("DeviceIDs", {}).get(
+            device_ids.get(
                 f"{self.name}_device_id",
                 0,
             )
@@ -100,30 +97,39 @@ class DmdDlp6500(LabradServer):
         #   "pass"            -> all white/pass
         #   "pass_zero_block" -> all white/pass except zero-order black/block
         #   "block"           -> all black/block
-        self.init_state = self.config.get("DeviceIDs", {}).get(
+        self.init_state = device_ids.get(
             f"{self.name}_init_state",
             "pass_zero_block",
         )
 
-        self.init_calib_path = self.config.get("DeviceIDs", {}).get(
+        # IMPORTANT:
+        # This should point to the FINAL chain file, not triangle_affine_onpass.npz.
+        # The final chain file contains:
+        #   M_cam_to_dmd
+        #   zero_dmd_xy
+        #   zero_cam_xy
+        #   dmd_points / pattern_dmd_points
+        self.init_calib_path = device_ids.get(
             f"{self.name}_init_calib_path",
-            "dmdsuite/calibration/triangle_affine_onpass.npz",
+            "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1277.npz",
         )
 
         self.zero_radius_px = int(
-            self.config.get("DeviceIDs", {}).get(
+            device_ids.get(
                 f"{self.name}_zero_radius_px",
                 30,
             )
         )
-
 
         logging.info(f"Using DMD DLL: {self.dll_path}")
         logging.info(f"Using DMD device index: {self.device_index}")
         logging.info(f"Initial DMD state: {self.init_state}")
         logging.info(f"Initial calibration path: {self.init_calib_path}")
 
-        # Calibration state
+        # -----------------------------------------------------------------
+        # Minimal calibration state.
+        # The final chain file provides zero-order blocking and NV index points.
+        # -----------------------------------------------------------------
         self.M_cam_to_dmd = None
         self.zero_dmd_xy = None
         self.zero_cam_xy = None
@@ -134,9 +140,9 @@ class DmdDlp6500(LabradServer):
         self.dmd = None
         self.connected = False
 
-        # ------------------------------------------------------------
-        # Connect DMD hardware during initServer.
-        # ------------------------------------------------------------
+        # -----------------------------------------------------------------
+        # Connect DMD hardware.
+        # -----------------------------------------------------------------
         logging.info("Creating Dmd6500 object...")
         self.dmd = Dmd6500(str(self.dll_path))
         logging.info("Dmd6500 object created.")
@@ -157,21 +163,67 @@ class DmdDlp6500(LabradServer):
 
         self.connected = True
 
-        # try:
-        #     fw = self.dmd.firmware_version()
-        #     logging.info(f"DMD firmware version: {fw}")
-        # except Exception as exc:
-        #     logging.warning(f"Could not read DMD firmware version: {exc}")
-        
-        self._show_pass_all(zero_block=False)
-        # self._show_block_all()
-        # time.sleep(3)
-        
-        logging.info(
-            "DMD connected. Skipping plane upload during initServer "
-            "to avoid LabRAD startup timeout."
-        )
+        # -----------------------------------------------------------------
+        # Load final chain calibration metadata.
+        #
+        # This does NOT apply a DMD mask for NVs.
+        # It only loads:
+        #   zero_dmd_xy
+        #   M_cam_to_dmd
+        #   loaded_dmd_points
+        # into memory.
+        # -----------------------------------------------------------------
+        calib_loaded = False
+        try:
+            calib_loaded = self._load_calibration_file(self.init_calib_path)
+        except Exception as exc:
+            logging.warning(f"Could not load initial DMD calibration: {exc}")
 
+        if calib_loaded:
+            logging.info("Initial DMD final-chain calibration loaded.")
+
+            if self.zero_dmd_xy is None:
+                logging.warning(
+                    "Loaded calibration has no zero_dmd_xy. "
+                    "pass_zero_block will not block the zero order."
+                )
+
+            if self.M_cam_to_dmd is None:
+                logging.warning(
+                    "Loaded calibration has no M_cam_to_dmd."
+                )
+
+            if self.loaded_dmd_points is None:
+                logging.warning(
+                    "Loaded calibration has no dmd_points / pattern_dmd_points. "
+                    "Index-based DMD control will not work."
+                )
+            else:
+                logging.info(
+                    f"Loaded {len(self.loaded_dmd_points)} DMD points for index control."
+                )
+        else:
+            logging.warning(
+                "No initial DMD calibration loaded. "
+                "Use dmd.load_calibration(...) before index-based control."
+            )
+
+        # -----------------------------------------------------------------
+        # Keep startup physically simple:
+        # show true pass-all, no zero block yet.
+        #
+        # Later, call:
+        #     dmd.initialize_pass_state()
+        #
+        # That will upload pass/block planes and apply pass_zero_block
+        # using zero_dmd_xy from the final chain file.
+        # -----------------------------------------------------------------
+        self._show_pass_all(zero_block=True)
+
+        logging.info(
+            "DMD connected. Final-chain calibration loaded if available. "
+            "Physical DMD left in true pass-all state."
+        )
         logging.info("DMD init complete.")
 
     def stopServer(self):
@@ -362,27 +414,63 @@ class DmdDlp6500(LabradServer):
     # -----------------------------------------------------------------
     # Basic settings
     # -----------------------------------------------------------------
-
+    
     @setting(0, returns="s")
     def get_state(self, c):
+        """
+        Return DMD server state.
+
+        This is intentionally lightweight:
+            - shows whether final chain calibration is loaded
+            - shows whether zero-order blocking is available
+            - shows whether NV-index DMD control is available
+        """
+        num_loaded_dmd_points = (
+            0 if self.loaded_dmd_points is None else len(self.loaded_dmd_points)
+        )
+
+        num_loaded_camera_points = (
+            0 if self.loaded_camera_points is None else len(self.loaded_camera_points)
+        )
+
+        resolved_init_calib_path = str(self._resolve_path(self.init_calib_path))
+
         state = {
             "name": self.name,
             "pc_name": self.pc_name,
             "connected": bool(self.connected),
+
             "DMD_WIDTH": DMD_WIDTH,
             "DMD_HEIGHT": DMD_HEIGHT,
             "PASS_VALUE": int(self.PASS_VALUE),
             "BLOCK_VALUE": int(self.BLOCK_VALUE),
             "convention": "ON/white=PASS, OFF/black=BLOCK",
-            "zero_dmd_xy": None if self.zero_dmd_xy is None else self.zero_dmd_xy.tolist(),
-            "zero_cam_xy": None if self.zero_cam_xy is None else self.zero_cam_xy.tolist(),
-            "zero_radius_px": int(self.zero_radius_px),
-            "has_affine": self.M_cam_to_dmd is not None,
-            "num_loaded_dmd_points": (
-                0 if self.loaded_dmd_points is None else len(self.loaded_dmd_points)
-            ),
+
+            # Startup settings from config.
             "init_state": self.init_state,
             "init_calib_path": self.init_calib_path,
+            "resolved_init_calib_path": resolved_init_calib_path,
+            "zero_radius_px": int(self.zero_radius_px),
+
+            # Loaded calibration status.
+            "has_affine": self.M_cam_to_dmd is not None,
+            "has_zero_dmd_xy": self.zero_dmd_xy is not None,
+            "has_zero_cam_xy": self.zero_cam_xy is not None,
+            "has_loaded_dmd_points": self.loaded_dmd_points is not None,
+
+            "zero_dmd_xy": (
+                None if self.zero_dmd_xy is None else self.zero_dmd_xy.tolist()
+            ),
+            "zero_cam_xy": (
+                None if self.zero_cam_xy is None else self.zero_cam_xy.tolist()
+            ),
+
+            "num_loaded_dmd_points": num_loaded_dmd_points,
+            "num_loaded_camera_points": num_loaded_camera_points,
+
+            # Practical readiness flags.
+            "can_zero_block": self.zero_dmd_xy is not None,
+            "can_index_control": self.loaded_dmd_points is not None,
         }
 
         return json.dumps(state)
@@ -398,8 +486,9 @@ class DmdDlp6500(LabradServer):
         ON-pass convention:
             white / 255 = pass
         """
-        self._require_dmd()
-        self._show_pass_all(zero_block=False)
+        # self._require_dmd()
+        # self._show_pass_all(zero_block=True)
+        pass
         
     @setting(2, zero_block="b")
     def pass_all(self, c, zero_block=True):
@@ -435,53 +524,111 @@ class DmdDlp6500(LabradServer):
     def upload_basic_planes(self, c):
         self._require_dmd()
         self._upload_basic_planes()
-
+    
     @setting(6, returns="s")
     def initialize_pass_state(self, c):
         """
-        Upload basic planes and show the requested initial state.
+        Upload basic DMD planes and apply requested startup state.
 
-        For ON-pass mode:
-            pass  = white / 255
-            block = black / 0
+        Minimal behavior:
+            1. Require DMD hardware.
+            2. Reload final chain calibration file.
+            3. Upload pass/block planes.
+            4. Apply init_state:
+                - pass
+                - pass_zero_block
+                - block
 
-        This is called after the LabRAD server has already started.
+        For normal operation, config should set:
+            dmd_DLP6500_init_state = "pass_zero_block"
+            dmd_DLP6500_init_calib_path =
+                "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1277.npz"
         """
         self._require_dmd()
 
         logging.info("initialize_pass_state called.")
+        logging.info(f"Using init_state: {self.init_state}")
+        logging.info(f"Using init_calib_path: {self.init_calib_path}")
 
-        logging.info("Uploading PASS plane...")
-        pass_mask = self._blank_mask(self.PASS_VALUE)
-        self.dmd.send_binary_plane(self.PASS_PLANE, pass_mask)
-        logging.info("PASS plane uploaded.")
+        # -----------------------------------------------------------------
+        # 1. Reload final chain calibration.
+        #
+        # This lets you regenerate the chain file and call initialize_pass_state()
+        # again without restarting the server.
+        # -----------------------------------------------------------------
+        calib_loaded = False
+        try:
+            calib_loaded = self._load_calibration_file(self.init_calib_path)
+        except Exception as exc:
+            logging.warning(f"Could not load DMD calibration: {exc}")
 
-        logging.info("Uploading BLOCK plane...")
-        block_mask = self._blank_mask(self.BLOCK_VALUE)
-        self.dmd.send_binary_plane(self.BLOCK_PLANE, block_mask)
-        logging.info("BLOCK plane uploaded.")
+        # -----------------------------------------------------------------
+        # 2. Upload basic pass/block planes.
+        # -----------------------------------------------------------------
+        logging.info("Uploading basic PASS/BLOCK planes...")
+        self._upload_basic_planes()
+        logging.info("Basic PASS/BLOCK planes uploaded.")
 
-        if self.init_state == "pass_zero_block":
-            logging.info("Loading calibration for zero-order block...")
-            self._load_calibration_file(self.init_calib_path)
+        # -----------------------------------------------------------------
+        # 3. Apply requested startup state.
+        # -----------------------------------------------------------------
+        shown_state = None
 
         if self.init_state == "pass":
-            logging.info("Showing pass all.")
+            logging.info("Showing true pass-all.")
             self._show_pass_all(zero_block=False)
+            shown_state = "pass"
 
         elif self.init_state == "pass_zero_block":
-            logging.info("Showing pass all with zero-order block.")
-            self._show_pass_all(zero_block=True)
+            if self.zero_dmd_xy is None:
+                logging.warning(
+                    "init_state is pass_zero_block, but zero_dmd_xy is not loaded. "
+                    "Showing true pass-all instead."
+                )
+                self._show_pass_all(zero_block=False)
+                shown_state = "pass_no_zero_loaded"
+            else:
+                logging.info("Showing pass-all with zero-order blocked.")
+                self._show_pass_all(zero_block=True)
+                shown_state = "pass_zero_block"
 
         elif self.init_state == "block":
-            logging.info("Showing block all.")
+            logging.info("Showing block-all.")
             self._show_block_all()
+            shown_state = "block"
 
         else:
-            logging.warning(f"Unknown init_state={self.init_state}; showing block all.")
-            self._show_block_all()
+            logging.warning(
+                f"Unknown init_state={self.init_state}. Showing true pass-all."
+            )
+            self._show_pass_all(zero_block=False)
+            shown_state = "pass_unknown_init_state"
 
-        return "DMD planes uploaded and initial state shown."
+        # -----------------------------------------------------------------
+        # 4. Return useful status.
+        # -----------------------------------------------------------------
+        out = {
+            "calib_loaded": bool(calib_loaded),
+            "init_state": self.init_state,
+            "shown_state": shown_state,
+            "init_calib_path": self.init_calib_path,
+            "resolved_init_calib_path": str(self._resolve_path(self.init_calib_path)),
+
+            "has_affine": self.M_cam_to_dmd is not None,
+            "has_zero_dmd_xy": self.zero_dmd_xy is not None,
+            "has_loaded_dmd_points": self.loaded_dmd_points is not None,
+
+            "zero_dmd_xy": (
+                None if self.zero_dmd_xy is None else self.zero_dmd_xy.tolist()
+            ),
+            "zero_radius_px": int(self.zero_radius_px),
+
+            "num_loaded_dmd_points": (
+                0 if self.loaded_dmd_points is None else len(self.loaded_dmd_points)
+            ),
+        }
+
+        return json.dumps(out)
     # -----------------------------------------------------------------
     # Zero-order control
     # -----------------------------------------------------------------
@@ -746,6 +893,108 @@ class DmdDlp6500(LabradServer):
 
         self._send_and_show(plane, mask)
 
+
+    @setting(50, axis="s", pos="v[]", width="i", plane="i")
+    def show_blocking_stripe(self, c, axis, pos, width=40, plane=220):
+        """
+        ON-pass calibration stripe.
+
+        Current convention:
+            white / 255 = pass
+            black / 0   = block
+
+        This creates a white pass-all background and adds one black
+        blocking stripe.
+        """
+        self._require_dmd()
+
+        axis = axis.lower()
+        pos = int(round(pos))
+        width = int(width)
+
+        mask = self._blank_mask(self.PASS_VALUE)
+
+        if axis == "x":
+            x0 = max(0, pos - width // 2)
+            x1 = min(DMD_WIDTH, pos + width // 2)
+            mask[:, x0:x1] = self.BLOCK_VALUE
+
+        elif axis == "y":
+            y0 = max(0, pos - width // 2)
+            y1 = min(DMD_HEIGHT, pos + width // 2)
+            mask[y0:y1, :] = self.BLOCK_VALUE
+
+        else:
+            raise ValueError("axis must be 'x' or 'y'")
+
+        mask = self._apply_zero_block(mask)
+        self._send_and_show(plane, mask)
+
+
+    @setting(51, x="v[]", y="v[]", radius_px="i", plane="i")
+    def show_blocking_disk(self, c, x, y, radius_px=25, plane=230):
+        """
+        ON-pass single blocking disk.
+
+        White background = pass.
+        Black disk = block.
+        """
+        self._require_dmd()
+
+        mask = self._blank_mask(self.PASS_VALUE)
+
+        coords = np.array([[float(x), float(y)]], dtype=np.float32)
+        mask = self._apply_disks(
+            mask=mask,
+            coords=coords,
+            radius_px=radius_px,
+            value=self.BLOCK_VALUE,
+        )
+
+        mask = self._apply_zero_block(mask)
+        self._send_and_show(plane, mask)
+
+
+    @setting(52, x="v[]", y="v[]", radius_px="i", plane="i")
+    def show_pass_disk(self, c, x, y, radius_px=25, plane=231):
+        """
+        ON-pass selected pass disk.
+
+        Black background = block.
+        White disk = pass.
+        """
+        self._require_dmd()
+
+        mask = self._blank_mask(self.BLOCK_VALUE)
+
+        coords = np.array([[float(x), float(y)]], dtype=np.float32)
+        mask = self._apply_disks(
+            mask=mask,
+            coords=coords,
+            radius_px=radius_px,
+            value=self.PASS_VALUE,
+        )
+
+        mask = self._apply_zero_block(mask)
+        self._send_and_show(plane, mask)
+
+
+    @setting(53, x="v[]", y="v[]", radius_px="i", returns="s")
+    def update_zero_block_xy(self, c, x, y, radius_px=30):
+        """
+        Convenience setting for storing zero-order DMD coordinate.
+        """
+        self.zero_dmd_xy = np.array([float(x), float(y)], dtype=np.float32)
+        self.zero_radius_px = int(radius_px)
+
+        self._show_pass_all(zero_block=True)
+
+        return json.dumps(
+            {
+                "zero_dmd_xy": self.zero_dmd_xy.tolist(),
+                "zero_radius_px": self.zero_radius_px,
+            }
+        )
 
 __server__ = DmdDlp6500()
 

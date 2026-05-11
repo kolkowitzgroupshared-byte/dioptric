@@ -43,14 +43,16 @@ class ThorSLM(SLM):
         timeout=3,
         max_retries=3,
         retry_delay_s=1.0,
+        write_delay_s=2.0,
         verbose=True,
     ):
         self.serialNumber = serialNumber
         self.screen = screen
         self.width = int(width)
         self.height = int(height)
+        self.write_delay_s = float(write_delay_s)
         self.verbose = verbose
-
+        
         self.device_hdl = None
         self.window_hdl = None
         self._closed = False
@@ -232,11 +234,17 @@ class ThorSLM(SLM):
         """
         Low-level hardware interface used by slmsuite.
 
-        Do not put input() or close logic here.
-        This function should only write the phase.
+        The sleep after CghDisplayShowWindow is needed because the Thorlabs/Windows
+        display update can be asynchronous; without a short delay, the next code path
+        may continue before the SLM panel has fully latched the new frame.
         """
         phase_u8 = np.asarray(phase).astype(np.uint8)
+
         self._show_uint8(phase_u8)
+
+        if self.write_delay_s > 0:
+            time.sleep(self.write_delay_s)
+
         return 0
 
     def close(self):

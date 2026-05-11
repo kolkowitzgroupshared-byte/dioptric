@@ -2214,8 +2214,10 @@ def map_new_pattern_camera_points_to_dmd(
 
 if __name__ == "__main__":
     from slmsuite.hardware.cameras.thorlabs import ThorCam
+    from utils import kplotlib as kpl
+    kpl.init_kplotlib()
 
-    lib_path = r"C:\Users\jkdol\OneDrive\Documents\Github\dioptric\dmdsuite\Windows_x86_64\DLL_x64\x64\Release\DLP6500_DLL.dll"
+    lib_path = r"dmdsuite\Windows_x86_64\DLL_x64\x64\Release\DLP6500_DLL.dll"
 
     # Planes
     PASS_PLANE = 200          # black/pass

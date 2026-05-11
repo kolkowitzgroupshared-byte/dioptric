@@ -30,6 +30,7 @@ from majorroutines.widefield import (
     charge_state_histograms_images,
     correlation_test,
     crosstalk_check,
+    dmd_crosstalk_matrix,
     image_sample,
     optimize_amp_duration_charge_state_histograms,
     optimize_charge_state_histograms,
@@ -252,6 +253,64 @@ def do_charge_state_conditional_init(nv_list):
     return charge_state_conditional_init.main(nv_list, num_reps, num_runs)
 
 
+def unique_keep_order(vals):
+    out = []
+    for val in vals:
+        val = int(val)
+        if val not in out:
+            out.append(val)
+    return out
+
+
+def do_dmd_crosstalk_matrix(nv_list_all):
+    """
+    DMD optical crosstalk test.
+
+    Always includes global NV 0 in measured nv_sub so base_routine has
+    a representative NV / first coordinate.
+    """
+
+    # DMD source NVs: choose center NVs for good first test
+    source_inds = dmd_crosstalk_matrix.get_center_dmd_indices(20)
+
+    # Measured NVs: always include global 0 first, plus all source NVs
+    measured_inds = unique_keep_order([0] + source_inds)
+
+    nv_sub = dmd_crosstalk_matrix.subset_nv_list(nv_list_all, measured_inds)
+
+    # Make global NV 0 the representative for positioning
+    for nv in nv_sub:
+        nv.representative = False
+
+    nv_sub[0].representative = True
+    nv_sub[0].expected_counts = 1500.0
+
+    print("Measured global indices:")
+    print(measured_inds)
+
+    print("DMD source global indices:")
+    print(source_inds)
+
+    print("Representative NV:")
+    print(nv_sub[0].name)
+
+    raw_data = dmd_crosstalk_matrix.main(
+        nv_sub,
+        num_reps=100,
+        num_runs=1,
+        source_global_inds=source_inds,
+        measured_global_inds=measured_inds,
+        dmd_radius_px=15,
+        dmd_mode="pass_single",
+        do_polarize=True,
+        targeted_polarization=False,
+        take_background=False,   # important for now
+        save_images=True,
+        dmd_settle_s=0.10,
+        dmd_plane=230,
+    )
+    return raw_data
+
 def do_optimize_green(nv_sig):
     ret_vals = targeting.optimize(nv_sig, coords_key=green_laser_aod)
     opti_coords = ret_vals[0]
@@ -317,7 +376,7 @@ def do_optimize_loop(nv_list, coords_key):
             opti_coords = do_optimize_red(nv, repr_nv_sig)
         opti_coords_list.append(opti_coords)
         
-        do_compensate_for_drift(repr_nv_sig)
+        # do_compensate_for_drift(repr_nv_sig)
 
 
     # Report back
@@ -971,34 +1030,6 @@ def build_xy8_dip_taus(
     taus = sorted(set(int(t) for t in taus))
     return taus
 
-# def do_xy(nv_list, xy_seq="xy8"):
-#     num_reps = 2
-#     uwave_ind_list = [0, 1]
-#     num_runs = 400
-
-#     taus = build_xy8_dip_taus(
-#         revival_2tau_us=36.0,
-#         centers=(1, 3),          # 9us and 27us
-#         include_global=True,
-#         global_step_ns=400,      # keep global light
-#         coarse_step_ns=200,
-#         coarse_margin_us=3.0,    # narrower than 6us -> fewer points
-#         fine_window_us=1.0,
-#         fine_step_ns=20,         # increase density: 20->12->8->4
-#         use_ultra=False,
-#         ultra_window_us=0.25,
-#         ultra_step_ns=20,
-#         min_tau_ns=200,
-#         max_tau_ns=33000
-#     )
-
-#     print("num_steps:", len(taus), "ns range:", taus[0], "to", taus[-1])
-
-#     for _ in range(3):
-#         xy.main(nv_list, len(taus), num_reps, num_runs, taus, uwave_ind_list, xy_seq)
-
-
-import numpy as np
 
 def _quantize_ns(x_ns, q_ns=4):
     x = np.asarray(x_ns, dtype=float)
@@ -1401,8 +1432,8 @@ def do_opx_constant_ac():
     # opx.constant_ac(
     #     [4],  # Digital channels
     #     [3, 4, 7],  # Analog channels
-    #     [0.11, 0.11, 0.30],  # Analog voltages
-    #     [99, 99, 0],  # Analog frequencies
+    #     [0.11, 0.11, 0.20],  # Analog voltages
+    #     [102, 102, 0],  # Analog frequencies
     # )
     # Red + green + Yellow
     # opx.constant_ac(
@@ -1690,18 +1721,11 @@ if __name__ == "__main__":
     sample_name = "qnami"
     # magnet_angle = 90
     date_str = "2026_02_20"
-    sample_coords = [-0.75, 1.8]
-    z_coord = -2.4
-    # z_coord = -3.0
+    sample_coords = [-0.7, -0.4]
+    # z_coord = 0.6
+    z_coord = 2.5
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
-        # file_path="slmsuite/nv_blob_detection/nv_blob_219nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_36nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_4966nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_3986nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_3554nvs_reordered.npz",
-        # file_path="slmsuite/nv_blob_detection/nv_blob_3325nvs_reordered.npz",   
-        # file_path="slmsuite/nv_blob_detection/nv_blob_1487nvs_reordered.npz",   
         # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_reordered.npz",   
         # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz",   
         # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
@@ -1736,24 +1760,24 @@ if __name__ == "__main__":
     print(f"Reference NV:{pixel_coords_list[0]}")
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
-    pixel_coords_list =[
-        [209.693, 202.035], 
-        [355.855, 55.308], 
-        [220.425, 359.764], 
-        [25.893, 55.843],
-        ]
-    green_coords_list = [
-        [101.132, 100.716],
-        [72.218, 124.96],
-        [101.986, 72.343],
-        [131.603, 130.079],
-    ]
-    red_coords_list = [
-        [66.259, 65.255],
-        [41.505, 82.791],
-        [68.562, 42.354],
-        [89.161, 91.279],
-        ]
+    # pixel_coords_list =[
+    #     [209.693, 202.035], 
+    #     [343.989, 57.989], 
+    #     [196.016, 359.035], 
+    #     [25.014, 50.068],
+    #     ]
+    # green_coords_list = [
+    #     [97.886, 99.969],
+    #     [71.967, 124.546],
+    #     [102.219, 72.117],
+    #     [129.311, 129.235],
+    # ]
+    # red_coords_list = [
+    #     [66.259, 65.255],
+    #     [41.505, 82.791],
+    #     [68.562, 42.354],
+    #     [89.161, 91.279],
+    #     ]
 
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
@@ -1849,7 +1873,7 @@ if __name__ == "__main__":
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
-    # nv_sig.expected_counts = 1100.0
+    nv_sig.expected_counts = 1500.0
     # nv_sig.expected_counts = 1700
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:150]
@@ -1882,7 +1906,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.RED_IMAGIN,
         # )
         
-        # do_compensate_for_drift(nv_sig)
+        do_compensate_for_drift(nv_sig)
         
         # do_red_calibration_image(
         #     nv_sig,
@@ -1929,7 +1953,7 @@ if __name__ == "__main__":
         #         print(f"Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         #         do_scanning_image_sample(nv_sig)
 
-        do_opx_constant_ac()
+        # do_opx_constant_ac()
         # do_opx_square_wave()
         # do_green_red_triplet_time_mux()
         
@@ -1948,6 +1972,7 @@ if __name__ == "__main__":
  
         # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
+        do_dmd_crosstalk_matrix(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
         # do_optimize_pol_amp(nv_list)
