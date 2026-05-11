@@ -198,6 +198,7 @@ def main(
     num_steps,
     exc_ns,  # laser
     detect_ns,  # read out
+    laser_buffer,
     seq_file,
     num_bins,
     filter_pos,
@@ -257,6 +258,7 @@ def main(
                 int(recovery_delay_ns),
                 int(exc_ns),
                 int(detect_ns),
+                int(laser_buffer),
                 laser_vkey,
                 laser_power,
             ]
@@ -346,87 +348,6 @@ def main(
     print(
         f"\n\nExperiment finished! Total elapsed time: {time.time() - start_time:.2f} s"
     )
-
-    for run_ind in range(num_runs):
-        if tb.safe_stop():
-            break
-
-        for step_ind, recovery_delay_ns in enumerate(recovery_delay_ns_list):
-            if tb.safe_stop():
-                break
-
-            seq_args = [
-                int(recovery_delay_ns),
-                int(exc_ns),
-                int(detect_ns),
-                laser_vkey,
-                laser_power,
-            ]
-            seq_args_string = tb.encode_seq_args(seq_args)
-            ret_vals = pulsegen_server.stream_load(seq_file, seq_args_string)
-
-            if run_ind == 0 and step_ind == 0:
-                print(f"  Sequence period: {ret_vals[0]} ns")
-
-            counter_server.start_tag_stream()
-            try:
-                pulsegen_server.stream_start(int(num_reps))
-
-                channel_mapping = counter_server.get_channel_mapping()
-                gate_open_channel = channel_mapping[1]
-                gate_close_channel = channel_mapping[2]
-
-                current_tags = []
-                current_channels = []
-
-                gate_counter = 0
-                num_processed_gates = 0
-                target_num_gates = 2 * int(num_reps)
-
-                readout1_tags = []
-                readout2_tags = []
-
-                while num_processed_gates < target_num_gates:
-                    if tb.safe_stop():
-                        break
-
-                    new_tags, new_channels = counter_server.read_tag_stream()
-                    new_tags = np.array(new_tags, dtype=np.int64)
-
-                    g0_tags, g1_tags, num_new_gates, gate_counter = (
-                        process_raw_buffer_two_gates(
-                            new_tags=new_tags,
-                            new_channels=new_channels,
-                            current_tags=current_tags,
-                            current_channels=current_channels,
-                            gate_open_channel=gate_open_channel,
-                            gate_close_channel=gate_close_channel,
-                            gate_counter=gate_counter,
-                        )
-                    )
-
-                    readout1_tags.extend(g0_tags)
-                    readout2_tags.extend(g1_tags)
-                    num_processed_gates += num_new_gates
-
-                step_hist_1, bin_centers_ns = _hist_from_tags(
-                    readout1_tags, detect_ns, num_bins
-                )
-                step_hist_2, _ = _hist_from_tags(readout2_tags, detect_ns, num_bins)
-
-                hist_readout_1[step_ind] += step_hist_1
-                hist_readout_2[step_ind] += step_hist_2
-
-                int_counts_1[run_ind, step_ind] = np.sum(step_hist_1)
-                int_counts_2[run_ind, step_ind] = np.sum(step_hist_2)
-
-            finally:
-                try:
-                    counter_server.stop_tag_stream()
-                except Exception:
-                    pass
-
-        print(f"Elapsed time: {time.time() - start_time:.2f} s")
 
     # --- Data Processing (Kept identical so your fits still save correctly) ---
     mean_counts_1, ste_counts_1, mean_kcps_1, ste_kcps_1 = _compute_step_stats(
@@ -559,6 +480,7 @@ def main(
         "num_runs": int(num_runs),
         "exc_ns": int(exc_ns),
         "detect_ns": int(detect_ns),
+        "laser_buffer": int(laser_buffer),
         "num_bins": int(num_bins),
         "laser_vkey": str(laser_vkey),
         "laser_power": laser_power,

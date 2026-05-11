@@ -135,7 +135,7 @@ def do_th_lifetime_measurement(caf_sig):
         caf_sig,
         apd_indices=[0],
         readout_times=time_args,
-        filter_pos=[2, 2],  # [2, 1],  # Slider 1 and 3  0, 2
+        filter_pos=[1, 3],  # [2, 1],  # Slider 1 and 3  0, 2
         num_reps=100000,
         num_runs=1,
         num_bins=2000,
@@ -156,14 +156,16 @@ def do_lifetime_caf_single_shot(th_sig):
     lifetime_caf_single_shot.main(
         nv_sig=th_sig,
         apd_indices=[0],
-        readout_times=[0, 100, 5000],  # delay, excitation, detection
-        filter_pos=[2, 2],
+        readout_times=[54, 100, 20000],  # delay, excitation, detection
+        filter_pos=[1, 3],
         num_reps=200000,
-        num_runs=1,
+        num_runs=100,
         num_bins=100,
         sequence_file="lifetime_caf_single_on.py",
         # lifetime_caf_single_pulse or lifetime_caf_single_on
-        laser_power=None,
+        # pulse = 52.5, 100, 15
+        # on = 54, 100, 20000
+        laser_power=2,
     )
     return
 
@@ -172,16 +174,17 @@ def do_lifetime_caf_recovery(th_sig):
     lifetime_caf_recovery.main(
         sample_sig=th_sig,
         num_reps=200000,
-        num_runs=1,
+        num_runs=50,
         min_recovery_delay_ns=0,
         max_recovery_delay_ns=5000,
         num_steps=10,
         exc_ns=100,  # laser
-        detect_ns=20,  # read out
+        detect_ns=15,  # read out
+        laser_buffer=54,
         seq_file="lifetime_caf_recovery.py",
-        num_bins=200,
-        filter_pos=[2, 2],
-        laser_power=None,
+        num_bins=100,
+        filter_pos=[1, 3],
+        laser_power=0.003,
         laser_vkey="SPIN_READOUT",
         do_save=True,
         fit_lifetime_start_ns=None,
@@ -593,8 +596,8 @@ if __name__ == "__main__":
         # ^leave the comma at the end or it will complain
         # do_stationary_count(th_sig, disable_opt=True)
         # do_lifetime_measurement(th_sig)
-        do_lifetime_caf_single_shot(th_sig)
-        # do_lifetime_caf_recovery(th_sig)
+        # do_lifetime_caf_single_shot(th_sig)
+        do_lifetime_caf_recovery(th_sig)
         # do_th_lifetime_measurement(th_sig)
         # do_awg_test()
         # do_resonance(th_sig)

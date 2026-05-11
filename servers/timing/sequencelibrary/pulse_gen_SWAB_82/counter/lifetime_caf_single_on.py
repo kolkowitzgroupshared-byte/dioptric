@@ -51,13 +51,7 @@ def get_seq(pulse_streamer, config, args):
     front_buffer = np.int64(laser_delay)
 
     period = np.int64(
-        front_buffer
-        + exc_ns
-        + detect_ns
-        + recovery_delay_ns
-        + exc_ns
-        + detect_ns
-        + meas_buffer
+        front_buffer + exc_ns + detect_ns + recovery_delay_ns + meas_buffer
     )
 
     seq = Sequence()
@@ -74,6 +68,7 @@ def get_seq(pulse_streamer, config, args):
     apd_train = [
         (int(front_buffer), LOW),
         # pulse 1
+        (int(recovery_delay_ns), LOW),
         (int(exc_ns), LOW),
         # # readout 1
         (int(detect_ns), HIGH),
@@ -84,8 +79,9 @@ def get_seq(pulse_streamer, config, args):
 
     # Laser ON only for excitation pulses
     laser_train = [
-        (int(front_buffer), LOW),
+        (int(front_buffer), HIGH),
         # pulse 1
+        (int(recovery_delay_ns), HIGH),
         (int(exc_ns), HIGH),
         # # readout 1
         (int(detect_ns), HIGH),
@@ -102,8 +98,8 @@ if __name__ == "__main__":
 
     cfg = common.get_config_dict()
 
-    # args = [recovery_delay_ns, exc_ns, detect_ns, laser_vkey, laser_power]
-    args = [1000, 1000, 1000, "SPIN_READOUT", None]
+    # args = [readout_delay_ns, exc_ns, detect_ns, laser_vkey, laser_power]
+    args = [54, 100, 15000, "SPIN_READOUT", None]
 
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])

@@ -27,6 +27,7 @@ import socket
 import numpy as np
 import TimeTagger
 from labrad.server import LabradServer, setting
+from TimeTagger import Histogram  # added
 from twisted.internet.defer import ensureDeferred
 
 from servers.inputs.interfaces.tagger import Tagger, tags_to_counts
@@ -195,8 +196,48 @@ class TaggerSwab20(Tagger, LabradServer):
     @setting(5)
     def reset(self, c):
         self.stop_tag_stream_internal()
+        self.stop_histogram(c)  # added
+
+    # added block
+    @setting(
+        10,
+        start_channel="i",
+        click_channel="i",
+        binwidth_ps="i",
+        n_bins="i",
+        returns="",
+    )
+    def start_histogram(self, c, start_channel, click_channel, binwidth_ps, n_bins):
+        """Arms the Swabian hardware to natively compile a TCSPC histogram."""
+        # Clean up any old histogram lurking in memory
+        if hasattr(self, "hist") and self.hist is not None:
+            self.hist.clear()
+
+        # Swabian API requires: Histogram(tagger, click_channel, start_channel, binwidth, n_bins)
+        self.hist = Histogram(
+            self.tagger, click_channel, start_channel, binwidth_ps, n_bins
+        )
+        self.tagger.sync()
+
+    @setting(11, returns="*i")
+    def read_histogram(self, c):
+        """Fetches the compiled bin array from the hardware."""
+        if not hasattr(self, "hist") or self.hist is None:
+            raise Exception("Histogram was not started.")
+
+        # getData() returns the array of photon counts per bin
+        data = self.hist.getData()
+        return np.asarray(data, dtype=np.int32).tolist()
+
+    @setting(12, returns="")
+    def stop_histogram(self, c):
+        """Stops and clears the histogram from the hardware."""
+        if hasattr(self, "hist") and self.hist is not None:
+            self.hist.clear()
+            self.hist = None
 
 
+# end added block
 __server__ = TaggerSwab20()
 
 if __name__ == "__main__":
