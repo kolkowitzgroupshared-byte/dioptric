@@ -156,15 +156,15 @@ def do_lifetime_caf_single_shot(th_sig):
     lifetime_caf_single_shot.main(
         nv_sig=th_sig,
         apd_indices=[0],
-        readout_times=[54, 100, 20000],  # delay, excitation, detection
-        filter_pos=[1, 3],
+        readout_times=[0, 200, 20000],  # delay, excitation, detection
+        filter_pos=[2, 2],
         num_reps=200000,
-        num_runs=100,
-        num_bins=100,
+        num_runs=1,
+        num_bins=325,
         sequence_file="lifetime_caf_single_on.py",
         # lifetime_caf_single_pulse or lifetime_caf_single_on
-        # pulse = 52.5, 100, 15
-        # on = 54, 100, 20000
+        # pulse = 0, 200, 325
+        # on = 0, 200, 20000
         laser_power=2,
     )
     return
@@ -174,16 +174,15 @@ def do_lifetime_caf_recovery(th_sig):
     lifetime_caf_recovery.main(
         sample_sig=th_sig,
         num_reps=200000,
-        num_runs=50,
+        num_runs=1,
         min_recovery_delay_ns=0,
         max_recovery_delay_ns=5000,
         num_steps=10,
-        exc_ns=100,  # laser
-        detect_ns=15,  # read out
-        laser_buffer=54,
+        exc_ns=1000,  # laser
+        detect_ns=500,  # read out
         seq_file="lifetime_caf_recovery.py",
         num_bins=100,
-        filter_pos=[1, 3],
+        filter_pos=[2, 2],
         laser_power=0.003,
         laser_vkey="SPIN_READOUT",
         do_save=True,

@@ -32,6 +32,15 @@ def process_raw_buffer_two_gates(
         0
     ].tolist()
 
+    # --- THE FIX: Throw away orphaned close edges ---
+    while (
+        len(gate_close_inds) > 0
+        and len(gate_open_inds) > 0
+        and gate_close_inds[0] < gate_open_inds[0]
+    ):
+        gate_close_inds.pop(0)
+    # ------------------------------------------------
+
     num_closed_samples = min(len(gate_open_inds), len(gate_close_inds))
 
     gate0_tags = []
@@ -62,13 +71,14 @@ def process_raw_buffer_two_gates(
     return gate0_tags, gate1_tags, num_closed_samples, gate_counter
 
 
-def _hist_from_tags(tags_ps, detect_ns, num_bins):
-    detect_ps = 1000 * int(detect_ns)
-    hist, _ = np.histogram(tags_ps, bins=int(num_bins), range=(0, detect_ps))
+def _hist_from_tags(tags_ps, window_ns, num_bins):
+    window_ps = 1000 * int(window_ns)
+    # Bin from 0 to the total time the gate is open
+    hist, _ = np.histogram(tags_ps, bins=int(num_bins), range=(0, window_ps))
 
-    bin_size_ns = float(detect_ns) / float(num_bins)
+    bin_size_ns = float(window_ns) / float(num_bins)
     bin_centers_ns = (
-        np.linspace(0, float(detect_ns), int(num_bins), endpoint=False)
+        np.linspace(0, float(window_ns), int(num_bins), endpoint=False)
         + 0.5 * bin_size_ns
     )
     return hist, bin_centers_ns
@@ -198,7 +208,6 @@ def main(
     num_steps,
     exc_ns,  # laser
     detect_ns,  # read out
-    laser_buffer,
     seq_file,
     num_bins,
     filter_pos,
@@ -258,7 +267,6 @@ def main(
                 int(recovery_delay_ns),
                 int(exc_ns),
                 int(detect_ns),
-                int(laser_buffer),
                 laser_vkey,
                 laser_power,
             ]
@@ -287,10 +295,19 @@ def main(
                 readout1_tags = []
                 readout2_tags = []
 
+                timeout_start = time.time()
+
                 while num_processed_gates < target_num_gates:
                     if tb.safe_stop():
                         break
 
+                    # --- THE FAILSAFE: Prevent infinite loops ---
+                    if time.time() - timeout_start > 5.0:  # 5 second limit
+                        print(
+                            f"\nWarning: Hardware timeout! Expected {target_num_gates} gates, but tagger only saw {num_processed_gates}."
+                        )
+                        break
+                    # --------------------------------------------
                     new_tags, new_channels = counter_server.read_tag_stream()
                     new_tags = np.array(new_tags, dtype=np.int64)
 
@@ -310,10 +327,15 @@ def main(
                     readout2_tags.extend(g1_tags)
                     num_processed_gates += num_new_gates
 
+                # The total time the gate is open is exc_ns + detect_ns
+                total_window_ns = exc_ns + detect_ns
+
                 step_hist_1, bin_centers_ns = _hist_from_tags(
-                    readout1_tags, detect_ns, num_bins
+                    readout1_tags, total_window_ns, num_bins
                 )
-                step_hist_2, _ = _hist_from_tags(readout2_tags, detect_ns, num_bins)
+                step_hist_2, _ = _hist_from_tags(
+                    readout2_tags, total_window_ns, num_bins
+                )
 
                 hist_readout_1[step_ind] += step_hist_1
                 hist_readout_2[step_ind] += step_hist_2
@@ -480,7 +502,6 @@ def main(
         "num_runs": int(num_runs),
         "exc_ns": int(exc_ns),
         "detect_ns": int(detect_ns),
-        "laser_buffer": int(laser_buffer),
         "num_bins": int(num_bins),
         "laser_vkey": str(laser_vkey),
         "laser_power": laser_power,

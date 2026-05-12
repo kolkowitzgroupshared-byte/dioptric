@@ -72,7 +72,7 @@ def get_seq(pulse_streamer, config, args):
     # gate 0 -> readout 1
     # gate 1 -> readout 2
     apd_train = [
-        (int(front_buffer), HIGH),
+        (int(front_buffer), LOW),
         # pulse 1
         (int(exc_ns), HIGH),
         # readout 1
