@@ -174,71 +174,53 @@ def evaluate_uniformity(vectors=None, size=25):
     plt.show()
 
 
-# Test pattern
 def circles():
     cam.set_exposure(0.1)
-    center = (750, 530)  # Center of the circle
-    radii = np.linspace(10, 60, num=4)  # Adjust the number of circles as needed
+
+    center = (750, 530)
+
+    # Use larger radii and more spacing
+    radii = np.linspace(50, 200, num=5)
+
     circle_points = []
     for radius in radii:
-        num_points = int(2 * np.pi * radius / 60)
+        # more points per ring
+        num_points = max(12, int(2 * np.pi * radius / 30))
 
-        # Generate points within the circle using polar coordinates
-        theta = np.linspace(0, 2 * np.pi, num_points)  # Angle values
-        x_circle = center[0] + radius * np.cos(theta)  # X coordinates
-        y_circle = center[1] + radius * np.sin(theta)  # Y coordinates
+        theta = np.linspace(0, 2 * np.pi, num_points, endpoint=False)
 
-        # Convert to grid format for the current circle
+        x_circle = center[0] + radius * np.cos(theta)
+        y_circle = center[1] + radius * np.sin(theta)
+
         circle = np.vstack((x_circle, y_circle))
-
         circle_points.append(circle)
 
-    # Combine the points of all circles
     circles = np.concatenate(circle_points, axis=1)
+
     hologram = SpotHologram(
-        shape=(2048, 2048), spot_vectors=circles, basis="ij", cameraslm=fs
+        shape=(2048, 2048),
+        spot_vectors=circles,
+        basis="ij",
+        cameraslm=fs,
     )
 
-    # # Precondition computationally.
     hologram.optimize(
         "WGS-Kim",
         maxiter=20,
         feedback="computational_spot",
         stat_groups=["computational_spot"],
     )
+
     phase = hologram.extract_phase()
-    # Define the path to save the phase data1
-    file_path = r"slmsuite\circles"
-    now = datetime.now()
-    date_time_str = now.strftime("%Y%m%d_%H%M%S")
-    filename = f"slm_phase_circles_{date_time_str}.npy"
-    # file_path = dm.get_file_path(__file__, filename)
-    # Save the phase data
-    save(phase, file_path, filename)
     slm.write(phase, settle=True)
-
-    # cam_plot()
-    # evaluate_uniformity(vectors=circle)
-
-    # Hone the result with experimental feedback.
-    # hologram.optimize(
-    #     "WGS-Kim",
-    #     maxiter=20,
-    #     feedback="experimental_spot",
-    #     stat_groups=["computational_spot", "experimental_spot"],
-    #     fixed_phase=False,
-    # )
-    # phase = hologram.extract_phase()
-    # slm.write(phase, settle=True)
-    # cam_plot()
-    # evaluate_uniformity(vectors=circle)
-
 
 # region "nv phase calulation"
 def calibration_triangle():
     # Define parameters for the equilateral triangle
     center = (710, 540)  # Center of the triangle
-    side_length = 200  # Length of each side of the triangle
+    # side_length = 200  # 
+    # side_length = 140  # Length of each side of the triangle
+    side_length = 80  # Length of each side of the triangle
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
     theta = np.linspace(0, 2 * np.pi, 4)[:-1]  # Exclude the last point to avoid overlap
@@ -271,27 +253,38 @@ def calibration_triangle():
     # save(phase, file_path, filename)
     # cam_plot()
     
-def nuvu2thorcam_calibration(coords):
-    """
-    Calibrates and transforms coordinates from the Nuvu camera's coordinate system
-    to the Thorlabs camera's coordinate system using an affine transformation.
-    """
-    cal_coords_thorcam = np.array(
-        [[883.205,   640. ], [536.795,  640. ], [710., 340.]], dtype="float32"
-    )
+# def nuvu2thorcam_calibration(coords):
+#     """
+#     Calibrates and transforms coordinates from the Nuvu camera's coordinate system
+#     to the Thorlabs camera's coordinate system using an affine transformation.
+#     """
+#     cal_coords_thorcam = np.array(
+#         [[883.205,   640. ], [536.795,  640. ], [710., 340.]], dtype="float32"
+#     )
 
-    cal_coords_nuvu = np.array(
-        [[338.04, 361.354], [311.711, 11.032], [18.043, 209.58]], dtype="float32"
-    )
-    # Compute the affine transformation matrix
-    M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
-    # Append a column of ones to the input coordinates to facilitate affine transformation
-    ones_column = np.ones((coords.shape[0], 1))
-    coords_homogeneous = np.hstack((coords, ones_column))
-    thorcam_coords = np.dot(coords_homogeneous, M.T)
+#     cal_coords_nuvu = np.array(
+#         [[338.04, 361.354], [311.711, 11.032], [18.043, 209.58]], dtype="float32"
+#     )
+#     # Compute the affine transformation matrix
+#     M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
+#     # Append a column of ones to the input coordinates to facilitate affine transformation
+#     ones_column = np.ones((coords.shape[0], 1))
+#     coords_homogeneous = np.hstack((coords, ones_column))
+#     thorcam_coords = np.dot(coords_homogeneous, M.T)
 
-    return thorcam_coords
+#     return thorcam_coords
 
+def apply_affine(M, coords):
+    coords = np.asarray(coords, dtype=np.float32)
+    ones = np.ones((coords.shape[0], 1), dtype=np.float32)
+    coords_h = np.hstack([coords, ones])
+    return coords_h @ M.T
+
+
+def nuvu2thorcam_slm(coords, calib_path="slmsuite/calibration/nuvu_to_thorcam_slm.npz"):
+    data = np.load(calib_path, allow_pickle=True)
+    M = np.asarray(data["M_nuvu_to_thorcam_slm"], dtype=np.float32)
+    return apply_affine(M, coords)
 
 def load_nv_coords( 
     # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_reordered.npz",   
@@ -307,7 +300,8 @@ def load_nv_coords(
 
 nuvu_pixel_coords, spot_weights = load_nv_coords()
 # nuvu_pixel_coords = np.array([[215.025, 203.863], [308.628, 103.893], [238.142, 328.739], [63.706, 100.683]])
-thorcam_coords_xy = nuvu2thorcam_calibration(nuvu_pixel_coords).T
+# thorcam_coords_xy = nuvu2thorcam_calibration(nuvu_pixel_coords).T
+thorcam_coords_xy = nuvu2thorcam_slm(nuvu_pixel_coords).T
 
 def compute_and_write_nvs_phase():
     hologram = SpotHologram(
@@ -354,40 +348,26 @@ def save(data, path, filename):
     if not os.path.exists(path):
         os.makedirs(path)
     np.save(os.path.join(path, filename), data)
-
-def calibration_triangle_kxy():
-    r = 0.005
-    theta = np.array([0, 2*np.pi/3, 4*np.pi/3]) + np.pi/6
-    triangle_kxy = np.vstack((r*np.cos(theta), r*np.sin(theta)))
-
-    hologram = SpotHologram(
-        shape=(4096, 4096),
-        spot_vectors=triangle_kxy,
-        basis="kxy",
-        cameraslm=fs,
-    )
-
-    print("converted spots =", hologram.spot_vectors)
-
-    hologram.optimize(
-        "WGS-Kim",
-        maxiter=20,
-        feedback="computational_spot",
-        stat_groups=["computational_spot"],
-    )
-
-    phase = hologram.extract_phase()
-    slm.write(phase, settle=True)
     
 class DummyCamera:
     """
     Minimal Camera-like object for slmsuite CameraSLM/FourierSLM.
-    Must have: name, shape, get_image().
+
+    Must have:
+        name
+        shape
+        get_image()
+        close()
+
+    shape is in numpy/image convention: (height, width).
+    For ThorCam 26438, use the real camera frame size:
+        (2160, 2880)
     """
-    def __init__(self, shape, name="dummy_cam"):
-        # shape is (H, W) in numpy convention
+
+    def __init__(self, shape=(2160, 2880), name="26438"):
         self.shape = tuple(shape)
         self.name = str(name)
+        self.closed = False
 
     def get_image(self, *args, **kwargs):
         raise RuntimeError(
@@ -395,12 +375,19 @@ class DummyCamera:
             "You called get_image(), which is not allowed in camera-free runtime."
         )
 
+    def close(self):
+        """
+        Dummy close function so cleanup code can safely call cam.close().
+        """
+        self.closed = True
+        print(f"DummyCamera {self.name} closed.")
+
 try:
     slm = ThorSLM()
     # slm = Meadowlark()
-    # thorcam_shape = (2160, 2880) 
-    # cam = DummyCamera(shape=thorcam_shape, name="26438")
-    cam = ThorCam(serial="26438", verbose=True)
+    thorcam_shape = (2160, 2880) 
+    cam = DummyCamera(shape=thorcam_shape, name="26438")
+    # cam = ThorCam(serial="26438", verbose=True)
     fs = FourierSLM(cam, slm)
     
     # cam = tb.get_server_thorcam()
@@ -418,9 +405,14 @@ try:
     # circles()
     # smiley()
     # cam_plot()
+    
+    input("Pattern displayed and held. Press Enter to close...")
 finally:
     print("Closing")
-    slm.close_window()
-    slm.close_device()
-    # cam.close()
+
+    if slm is not None:
+        slm.close()
+
+    if cam is not None:
+        cam.close()
 # endregions

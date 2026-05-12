@@ -22,149 +22,285 @@ from slmsuite.hardware.Thorlabs_EXULUS_PythonSDK.Thorlabs_EXULUS_Python_SDK.EXUL
 # DEFAULT_SDK_PATH = "C:/Users/Saroj Chand/Documents/dioptric/Thorlabs_EXULUS_PythonSDK"
 DEFAULT_SDK_PATH = "C:/Users/matth/GitHub/dioptric/slmsuite/hardware/Thorlabs_EXULUS_PythonSDK/Thorlabs_EXULUS_Python_SDK"
 
-
 class ThorSLM(SLM):
     """
-    Template for implementing a new SLM subclass. Replace :class:`Template`
-    with the desired subclass name. :class:`~slmsuite.hardware.slms.slm.SLM` is the
-    superclass that sets the requirements for :class:`Template`.
+    Robust Thorlabs EXULUS SLM wrapper for slmsuite.
+
+    Important:
+        - __init__ raises errors instead of returning -1.
+        - close() is safe to call multiple times.
+        - _write_hw() only writes the phase; it does not ask for input.
+        - Device/window cleanup happens if initialization partially fails.
     """
 
-    def __init__(self, serialNumber="00429430"):
+    def __init__(
+        self,
+        serialNumber="00429430",
+        screen=2,
+        width=1920,
+        height=1080,
+        baudrate=38400,
+        timeout=3,
+        max_retries=3,
+        retry_delay_s=1.0,
+        write_delay_s=2.0,
+        verbose=True,
+    ):
+        self.serialNumber = serialNumber
+        self.screen = screen
+        self.width = int(width)
+        self.height = int(height)
+        self.write_delay_s = float(write_delay_s)
+        self.verbose = verbose
+        
+        self.device_hdl = None
+        self.window_hdl = None
+        self._closed = False
+
+        try:
+            # --------------------------------------------------
+            # Connect EXULUS device with retries
+            # --------------------------------------------------
+            last_error = None
+
+            for attempt in range(1, max_retries + 1):
+                if self.verbose:
+                    print(
+                        f"Connecting to Thorlabs SLM {serialNumber} "
+                        f"(attempt {attempt}/{max_retries})...",
+                        flush=True,
+                    )
+
+                hdl = EXULUSOpen(serialNumber, baudrate, timeout)
+
+                if hdl >= 0:
+                    self.device_hdl = hdl
+                    break
+
+                last_error = hdl
+
+                if self.verbose:
+                    print(
+                        f"EXULUSOpen failed with code {hdl}. "
+                        f"Retrying in {retry_delay_s} s...",
+                        flush=True,
+                    )
+
+                time.sleep(retry_delay_s)
+
+            if self.device_hdl is None or self.device_hdl < 0:
+                raise RuntimeError(
+                    f"Failed to connect to Thorlabs SLM serial={serialNumber}. "
+                    f"Last error code={last_error}"
+                )
+
+            if self.verbose:
+                print(f"Connected to Thorlabs SLM {serialNumber}", flush=True)
+
+            # --------------------------------------------------
+            # Verify open state
+            # --------------------------------------------------
+            result = EXULUSIsOpen(serialNumber)
+            if result < 0:
+                raise RuntimeError(
+                    f"EXULUSIsOpen failed for serial={serialNumber}, code={result}"
+                )
+
+            if self.verbose:
+                print("EXULUS is open.", flush=True)
+
+            # --------------------------------------------------
+            # Communication check
+            # --------------------------------------------------
+            code = [0]
+            code_list = {
+                6: "Acknowledge",
+                9: "Not Acknowledge",
+                187: "SPI_Busy",
+            }
+
+            result = EXULUSCheckCommunication(self.device_hdl, code)
+            if result < 0:
+                raise RuntimeError(
+                    f"EXULUSCheckCommunication failed with code={result}"
+                )
+
+            if self.verbose:
+                print(
+                    "Communication:",
+                    code_list.get(code[0], f"Unknown code {code[0]}"),
+                    flush=True,
+                )
+
+            if code[0] == 187:
+                # SPI busy can happen right after reconnect.
+                # Wait and check once more.
+                time.sleep(1.0)
+                code = [0]
+                result = EXULUSCheckCommunication(self.device_hdl, code)
+
+                if result < 0 or code[0] == 187:
+                    raise RuntimeError(
+                        f"SLM communication still busy after retry. "
+                        f"result={result}, code={code[0]}"
+                    )
+
+            # --------------------------------------------------
+            # Initialize slmsuite superclass
+            # --------------------------------------------------
+            super().__init__(
+                self.width,
+                self.height,
+                bitdepth=8,
+                dx_um=8,
+                dy_um=8,
+            )
+
+            # --------------------------------------------------
+            # Create CGH display window
+            # --------------------------------------------------
+            if self.verbose:
+                print("Creating CGH display window...", flush=True)
+
+            self.window_hdl = CghDisplayCreateWindow(
+                self.screen,
+                self.width,
+                self.height,
+                "SLM window",
+            )
+
+            if self.window_hdl < 0:
+                raise RuntimeError(
+                    f"CghDisplayCreateWindow failed with code={self.window_hdl}"
+                )
+
+            result = CghDisplaySetWindowInfo(
+                self.window_hdl,
+                self.width,
+                self.height,
+                1,
+            )
+
+            if result < 0:
+                raise RuntimeError(
+                    f"CghDisplaySetWindowInfo failed with code={result}"
+                )
+
+            # Show blank/zero phase initially.
+            blank = np.zeros((self.height, self.width), dtype=np.uint8)
+            self._show_uint8(blank)
+
+            if self.verbose:
+                print("SLM window created and blank phase shown.", flush=True)
+
+        except Exception:
+            # Very important: cleanup partial initialization.
+            self.close()
+            raise
+
+    def _show_uint8(self, phase_u8):
         """
-        Initializes an instance of a Thorabs SLM.
-
-        Arguments
-        ---------
-        verbose : bool
-            Whether to print extra information.
-        sdk_path : str
-            Path of the Blink SDK folder. Stored in :attr:`sdk_path`.
-        lut_path : str OR None
-            Passed to :meth:`load_lut`.
-        kwargs
-            See :meth:`.SLM.__init__` for permissible options.
+        Low-level direct display call.
+        phase_u8 must be shape (height, width), dtype uint8.
         """
-        self.device_hdl = EXULUSOpen(serialNumber, 38400, 3)
+        if self.window_hdl is None or self.window_hdl < 0:
+            raise RuntimeError("SLM window is not open.")
 
-        # if self.device_hdl < 0:
-        #     raise RuntimeError(
-        #         f"Failed to connect to Thorlabs SLM with serial {serialNumber}"
-        #     )
+        arr = np.asarray(phase_u8)
 
-        if self.device_hdl < 0:
-            print("Connect ", serialNumber, "fail")
-            return -1
-        else:
-            print("Connect ", serialNumber, "successfully")
+        if arr.shape != (self.height, self.width):
+            raise ValueError(
+                f"Expected phase shape {(self.height, self.width)}, got {arr.shape}"
+            )
 
-        result = EXULUSIsOpen(serialNumber)
-        if result < 0:
-            print("Open failed ")
-        else:
-            print("EXULUS is open ")
+        if arr.dtype != np.uint8:
+            arr = arr.astype(np.uint8)
 
-        print("-----------------Get EXULUS device information----------------")
+        arr = np.ascontiguousarray(arr)
 
-        code = [0]
-        codeList = {6: "Acknowledge", 9: "Not Acknowledge", 187: "SPI_Busy"}
-        result = EXULUSCheckCommunication(self.device_hdl, code)
-        if result < 0:
-            print("Get device parameters failed ")
-        else:
-            print("Device parameters: ", codeList.get(code[0]))
-
-        # Check for the SLM parameters and save them
-        width = 1920
-        height = 1080
-        # Instantiate the superclass
-        super().__init__(
-            width,
-            height,
-            bitdepth=8,
-            dx_um=8,
-            dy_um=8,
+        ptr = ctypes.cast(
+            arr.ctypes.data,
+            ctypes.POINTER(ctypes.c_ubyte),
         )
 
-        # Create SLM window
-        self.window_hdl = CghDisplayCreateWindow(2, 1920, 1080, "SLM window")
-        if self.window_hdl < 0:
-            print("Create window failed")
-            return -1
-        else:
-            print("SLM Window is Create and Current screen is 2")
+        result = CghDisplayShowWindow(self.window_hdl, ptr)
 
-        result = CghDisplaySetWindowInfo(self.window_hdl, 1920, 1080, 1)
         if result < 0:
-            print("Set Window Info failed")
-        else:
-            print("Set Window Info successfully")
+            raise RuntimeError(f"CghDisplayShowWindow failed with code={result}")
 
-        # Show the window
-        buffer_phase = None
-        result = CghDisplayShowWindow(self.window_hdl, buffer_phase)
-        if result < 0:
-            print("Show failed")
-        else:
-            print("Show successfully")
-
-        self.serialNumber = serialNumber
+        return result
 
     def _write_hw(self, phase):
-        """Low-level hardware interface to write ``phase`` data onto the SLM."""
-        matrix = phase.astype(c_ubyte)
-        flattened_matrix = matrix.flatten()
-        c = ctypes.cast(flattened_matrix.ctypes.data, ctypes.POINTER(ctypes.c_ubyte))
+        """
+        Low-level hardware interface used by slmsuite.
 
-        # Display the phase
-        result = CghDisplayShowWindow(self.window_hdl, c)
+        The sleep after CghDisplayShowWindow is needed because the Thorlabs/Windows
+        display update can be asynchronous; without a short delay, the next code path
+        may continue before the SLM panel has fully latched the new frame.
+        """
+        phase_u8 = np.asarray(phase).astype(np.uint8)
 
-        # if result < 0:
-        #     print("Show failed")
-        # else:
-        #     print("Show successfully")
-        time.sleep(3.0)
+        self._show_uint8(phase_u8)
 
-        # Ask before closing the SLM display
-        user_input = input("Press Enter to close SLM display... ")
-        if user_input:
-            print("Window closing aborted by user")
-            return -1
+        if self.write_delay_s > 0:
+            time.sleep(self.write_delay_s)
 
-        # CghDisplayCloseWindow(hdl)
-        # return 0
+        return 0
 
     def close(self):
-        self.close_window()
-        self.close_device()
+        """
+        Close SLM window and device.
 
-    def close_device(self):
-        """Close SLM connection."""
-        if self.device_hdl:
-            EXULUSClose(self.device_hdl)
+        Safe to call multiple times.
+        """
+        if getattr(self, "_closed", False):
+            return
 
-    def close_window(self):
-        """Close SLM connection."""
-        if self.window_hdl:
-            CghDisplayCloseWindow(self.window_hdl)
+        # Close window first.
+        try:
+            if getattr(self, "window_hdl", None) is not None and self.window_hdl >= 0:
+                if self.verbose:
+                    print("Closing SLM display window...", flush=True)
+                CghDisplayCloseWindow(self.window_hdl)
+        except Exception as exc:
+            print(f"Warning: failed to close SLM window: {exc}", flush=True)
+        finally:
+            self.window_hdl = None
+
+        # Then close EXULUS device.
+        try:
+            if getattr(self, "device_hdl", None) is not None and self.device_hdl >= 0:
+                if self.verbose:
+                    print("Closing EXULUS device...", flush=True)
+                EXULUSClose(self.device_hdl)
+        except Exception as exc:
+            print(f"Warning: failed to close EXULUS device: {exc}", flush=True)
+        finally:
+            self.device_hdl = None
+
+        self._closed = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
 
     @staticmethod
     def info(verbose=True):
         """
-        Discovers all SLMs detected by an SDK.
-        Useful for a user to identify the correct serial numbers / etc.
-
-        Parameters
-        ----------
-        verbose : bool
-            Whether to print the discovered information.
-
-        Returns
-        --------
-        list of str
-            List of serial numbers or identifiers.
+        List detected EXULUS devices.
         """
-        raise NotImplementedError()
-        serial_list = get_serial_list()  # TODO: Fill in proper function.
-        return serial_list
-        # TODO: Insert code here to write raw phase data to the SLM.
+        devs = EXULUSListDevices()
+
+        if verbose:
+            print("Detected EXULUS devices:")
+            print(devs)
+
+        return devs

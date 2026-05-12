@@ -37,14 +37,14 @@ red_laser_aod = "laser_COBO_638_aod"
 # calibration_coords_red = [[41.956, 88.653],[69.523, 40.383],[90.96, 93.205]]
 
 calibration_coords_pixel = [
-    [355.855, 55.308],
-    [220.425, 359.764],
-    [25.893, 55.843],
+    [343.989, 57.989], 
+    [196.016, 359.035], 
+    [25.014, 50.068],
 ]
 calibration_coords_green = [
-    [72.218, 124.96],
-    [101.986, 72.343],
-    [131.603, 130.079],
+    [71.967, 124.546],
+    [102.219, 72.117],
+    [129.311, 129.235],
 ]
 calibration_coords_red = [
     [41.498, 82.808],
@@ -78,6 +78,8 @@ pixel_to_sample_affine_transformation_matrix = [
     [0.06108861, -0.00533755, -12.74624750],
     [0.00748424, 0.06162394, -16.62683414],
 ]
+
+
 # endregion
 # region Base config
 # Add on to the default config
@@ -130,6 +132,40 @@ config |= {
             "cluster_name": "kolkowitz_nv_lab",
         },
         "power_supply_RNS_ngc103_visa": "TCPIP::192.168.000.130::INSTR",
+        # DMD / DLP6500
+        "dmd_DLP6500_dll": str(
+            home
+            / "GitHub/dioptric/dmdsuite/Windows_x86_64/DLL_x64/x64/Release/DLP6500_DLL.dll"
+        ),
+        "dmd_DLP6500_device_id": 0,
+        "dmd_DLP6500_init_state": "pass_zero_block",
+        "dmd_DLP6500_zero_radius_px": 30,
+        # Important: load final NV-chain file, not just triangle_affine_onpass.npz
+        "dmd_DLP6500_init_calib_path": (
+            "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1277.npz"
+        ),
+    },
+    
+    ###
+    "SpatialCalibrations": {
+        "active_nv_coords_path": (
+            "slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz"
+        ),
+        "slm_fourier_calib_path": (
+            "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00015.h5"
+        ),
+        "nuvu_to_thorcam_slm_calib_path": (
+            "slmsuite/calibration/nuvu_to_thorcam_slm.npz"
+        ),
+        "dmd_zero_order_calib_path": (
+            "dmdsuite/calibration/zero_order_onpass.npz"
+        ),
+        "dmd_triangle_calib_path": (
+            "dmdsuite/calibration/triangle_affine_onpass.npz"
+        ),
+        "nuvu_to_thorcam_dmd_calib_path": (
+            "dmdsuite/calibration/nuvu_to_thorcam_dmd.npz"
+        ),
     },
     ###
     "Microwaves": {
@@ -175,8 +211,8 @@ config |= {
         "resolution": (512, 512),
         "spot_radius": 3.0,  # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
-        # "em_gain": 5000,
-        "em_gain": 10,
+        "em_gain": 5000,
+        # "em_gain": 10,
         "temp": -60,
         "timeout": 60e3,  # ms
         # "timeout": -1,  # No timeout
@@ -328,8 +364,10 @@ config |= {
         "pulse_gen": "QM_opx",
         "camera": "camera_NUVU_hnu512gamma",
         "thorslm": "slm_THOR_exulus_hd2",
+        "dmd": "dmd_DLP6500",
         "pulse_streamer": "pulse_gen_SWAB_82",
         "counter": "tagger_SWAB_20",
+        
     },
     ###
     "Wiring": {
@@ -953,8 +991,8 @@ opx_config = {
     ### Analog
     "waveforms": {
         # Green AOD
-        # "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
-        "green_aod_cw-opti": {"type": "constant", "sample": 0.11},
+        "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
+        # "green_aod_cw-opti": {"type": "constant", "sample": 0.11},
         "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.13},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},

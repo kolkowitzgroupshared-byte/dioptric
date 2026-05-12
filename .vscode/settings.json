@@ -1,15 +1,17 @@
 {
-  // --- your existing env bits ---
+  // Environment file
   "python.envFile": "${workspaceFolder}/.vscode/.env",
-  "python-envs.defaultEnvManager": "ms-python.python:conda",
-  "python-envs.defaultPackageManager": "ms-python.python:conda",
 
-  // --- Python / Pylance ---
+  // Python / Pylance
   "python.analysis.typeCheckingMode": "off",
-  "python.defaultInterpreterPath": "C:\\Users\\Saroj Chand\\miniconda3\\envs\\dioptric\\python.exe",
-  "python.terminal.activateEnvironment": true,   // VS Code will 'conda activate' for you
 
-  // --- Make every new terminal start in (dioptric) on PowerShell ---
+  // Generic per-user conda environment path
+  "python.defaultInterpreterPath": "${env:USERPROFILE}\\miniconda3\\envs\\dioptric\\python.exe",
+
+  // Let VS Code activate selected Python env
+  "python.terminal.activateEnvironment": true,
+
+  // PowerShell terminal with generic conda path
   "terminal.integrated.profiles.windows": {
     "Conda (dioptric, PowerShell)": {
       "source": "PowerShell",
@@ -17,18 +19,13 @@
       "args": [
         "-NoExit",
         "-Command",
-        "(& 'C:\\Users\\Saroj Chand\\miniconda3\\condabin\\conda.bat' 'shell.powershell' 'hook') | Out-String | Invoke-Expression; conda activate dioptric"
+        "(& \"$env:USERPROFILE\\miniconda3\\condabin\\conda.bat\" \"shell.powershell\" \"hook\") | Out-String | Invoke-Expression; conda activate dioptric"
       ]
     }
   },
-  "terminal.integrated.defaultProfile.windows": "Conda (dioptric, PowerShell)"
 
-  // Optional nice-to-haves (uncomment if you want)
-  // "editor.formatOnSave": true,
-  // "editor.codeActionsOnSave": {
-  //   "source.organizeImports": "explicit",
-  //   "source.fixAll": "explicit"
-  // }
+  "terminal.integrated.defaultProfile.windows": "Conda (dioptric, PowerShell)",
+  "python-envs.defaultEnvManager": "ms-python.python:conda",
+  "python-envs.defaultPackageManager": "ms-python.python:conda"
 }
-
 

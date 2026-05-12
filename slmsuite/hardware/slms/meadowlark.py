@@ -12,7 +12,7 @@ import ctypes
 import os
 import time
 import warnings
-
+import numpy as np
 from .slm import SLM
 
 DEFAULT_SDK_PATH = "C:\\Program Files\\Meadowlark Optics\\Blink 1920 HDMI\\"
@@ -234,20 +234,47 @@ class Meadowlark(SLM):
         """
         self.slm_lib.Delete_SDK()
 
+    # def _write_hw(self, display):
+    #     """
+    #     See :meth:`.SLM._write_hw`.
+    #     """
+    #     self.slm_lib.Write_image(
+    #         display.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte)),
+    #         ctypes.c_uint(self.bitdepth == 8),  # Is 8-bit
+    #     )
+    #     # time.sleep(2.0)
+    #     # Ask before closing the SLM display
+    #     time.sleep(3.0)
+
+    #     # Ask before closing the SLM display
+    #     user_input = input("Press Enter to close SLM display... ")
+    #     if user_input:
+    #         print("Window closing aborted by user")
+    #         return -1
+
     def _write_hw(self, display):
-        """
-        See :meth:`.SLM._write_hw`.
-        """
-        self.slm_lib.Write_image(
-            display.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte)),
-            ctypes.c_uint(self.bitdepth == 8),  # Is 8-bit
-        )
-        time.sleep(2.0)
-        # Ask before closing the SLM display
-        user_input = input("Press Enter to close SLM display... ")
-        if user_input:
-            print("Window closing aborted by user")
-            return -1
+
+        # Safe conversion for the Blink write path.
+        if display.dtype != np.uint8:
+            disp = np.asarray(display, dtype=np.uint16)
+
+            if self.bitdepth > 8:
+                shift = max(self.bitdepth - 8, 0)
+                disp = (disp >> shift).astype(np.uint8)
+            else:
+                disp = np.clip(disp, 0, 255).astype(np.uint8)
+        else:
+            disp = display
+
+        self._last_frame_buffer = np.ascontiguousarray(disp).ravel()
+
+        ptr = self._last_frame_buffer.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte))
+
+        rc = self.slm_lib.Write_image(ptr, ctypes.c_uint(1))  # 1 => 8-bit path
+        if rc != 0:
+            raise RuntimeError(f"Write_image failed with rc={rc}")
+
+        return 0
 
     ### Additional Meadowlark-specific functionality
 

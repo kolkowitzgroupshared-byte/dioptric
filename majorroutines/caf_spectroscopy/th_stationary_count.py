@@ -18,8 +18,15 @@ from utils.constants import CoordsKey, CountFormat, VirtualLaserKey
 def main(
     nv_sig,
     run_time,
+<<<<<<< HEAD:majorroutines/spectroscopy/th_stationary_count.py
+    disable_opt=None,
+    nv_minus_init=False,
+    nv_zero_init=False,
+    background_subtraction=False,
+=======
     pulse_time,
     disable_opt=None,
+>>>>>>> 07a69a9a58f82385e3f87d81f0794e3f598c6bfe:majorroutines/caf_spectroscopy/th_stationary_count.py
 ):
     # -------------------- Initial setup --------------------
     if disable_opt is not None:
@@ -40,6 +47,17 @@ def main(
 
     # -------------------- Laser selection / power --------------------
     # Imaging laser (VirtualLaserKey.IMAGING)
+<<<<<<< HEAD:majorroutines/spectroscopy/th_stationary_count.py
+    readout_laser = vld_img["physical_name"]
+    tool_belt.set_filter(nv_sig, VirtualLaserKey.IMAGING)
+    readout_power = tool_belt.set_laser_power(nv_sig, VirtualLaserKey.IMAGING)
+
+    # get argument and seq files
+    delay = 0
+    seq_args = [delay, readout, readout_laser, readout_power]
+    seq_args_string = tool_belt.encode_seq_args(seq_args)
+    seq_name = "simple_readout.py"
+=======
     # readout_laser = vld_img["physical_name"]
     # readout_laser = "imaging"
     # tool_belt.set_filter(nv_sig, VirtualLaserKey.IMAGING)
@@ -50,6 +68,7 @@ def main(
     seq_args_string = tool_belt.encode_seq_args(seq_args)
     print(seq_args_string, seq_args_string[0])
     seq_name = "simple_readout_test.py"
+>>>>>>> 07a69a9a58f82385e3f87d81f0794e3f598c6bfe:majorroutines/caf_spectroscopy/th_stationary_count.py
 
     # Program pulse generator
     period = pulsegen_server.stream_load(seq_name, seq_args_string)[0]  # ns
@@ -66,7 +85,16 @@ def main(
     ax.set_xlim(-0.05 * run_time_s, 1.05 * run_time_s)
     ax.set_xlabel("Time (s)")
 
+<<<<<<< HEAD:majorroutines/spectroscopy/th_stationary_count.py
+    cfg = common.get_config_dict()
+    count_fmt: CountFormat = cfg["count_format"]  # CountFormat.KCPS or CountFormat.RAW
+    # count_fmt = CountFormat.RAW
     ax.set_ylabel("Raw counts")
+    # ax.set_ylabel("Kcps" if count_fmt == CountFormat.KCPS is not None else "Counts")
+    # ax.set_ylabel("Count rateS (kcps)")
+=======
+    ax.set_ylabel("Raw counts")
+>>>>>>> 07a69a9a58f82385e3f87d81f0794e3f598c6bfe:majorroutines/caf_spectroscopy/th_stationary_count.py
     try:
         plt.get_current_fig_manager().window.showMaximized()
     except Exception:
@@ -74,9 +102,19 @@ def main(
 
     # -------------------- Acquisition --------------------
     counter_server.start_tag_stream()
+<<<<<<< HEAD:majorroutines/spectroscopy/th_stationary_count.py
+    # stream_start(-1): run until stopped
+    pulsegen_server.stream_start(-1)
+    tool_belt.init_safe_stop()
+
+    leftover_sample = None
+    snr = lambda nv, bg: (nv - bg) / np.sqrt(max(nv, 1))  # avoid /0
+
+=======
     pulsegen_server.stream_start(-1)  #  run until stopped
     tool_belt.init_safe_stop()
 
+>>>>>>> 07a69a9a58f82385e3f87d81f0794e3f598c6bfe:majorroutines/caf_spectroscopy/th_stationary_count.py
     def _ensure_1d_counts(arr_like):
         """Flattens list/np arrays of counts to 1D ints."""
         if arr_like is None:
@@ -89,14 +127,39 @@ def main(
         # If modulo-gates (N,2) during charge init, we'll diff later
         return arr
 
+<<<<<<< HEAD:majorroutines/spectroscopy/th_stationary_count.py
+=======
     i = 0
     # print(np.random.randint(1, 11))
+>>>>>>> 07a69a9a58f82385e3f87d81f0794e3f598c6bfe:majorroutines/caf_spectroscopy/th_stationary_count.py
     while True:
         if tool_belt.safe_stop():
             break
 
         # Read new samples
         new = counter_server.read_counter_simple()  # N
+<<<<<<< HEAD:majorroutines/spectroscopy/th_stationary_count.py
+        new = _ensure_1d_counts(new)
+
+        # Background subtraction interleave handling
+        if background_subtraction and new.size > 0:
+            if leftover_sample is not None:
+                new = np.insert(new, 0, leftover_sample)
+                leftover_sample = None
+            if new.size % 2 == 1:
+                leftover_sample = int(new[-1])
+                new = new[:-1]
+            if new.size > 0:
+                # pair (NV, BG) -> SNR
+                paired = [
+                    snr(int(new[2 * i]), int(new[2 * i + 1]))
+                    for i in range(new.size // 2)
+                ]
+                new = np.array(paired, dtype=float)
+
+        n_new = new.size
+        if n_new == 0:
+=======
         if i < 10:
             print(new)
             i += 1
@@ -107,12 +170,16 @@ def main(
         if n_new == 0:
             if i < 10:
                 print("n_new == 0")
+>>>>>>> 07a69a9a58f82385e3f87d81f0794e3f598c6bfe:majorroutines/caf_spectroscopy/th_stationary_count.py
             continue
 
         # Write into circular-ish buffer area: if overflow, drop earliest
         num_written = int(np.count_nonzero(~np.isnan(samples)))
+<<<<<<< HEAD:majorroutines/spectroscopy/th_stationary_count.py
+=======
         if i < 10:
             print(num_written)
+>>>>>>> 07a69a9a58f82385e3f87d81f0794e3f598c6bfe:majorroutines/caf_spectroscopy/th_stationary_count.py
         overflow = (num_written + n_new) - total_num_samples
         if overflow > 0:
             # shift left and append
@@ -126,13 +193,22 @@ def main(
             write_pos += n_new
 
         # # Update plot in kcps
+<<<<<<< HEAD:majorroutines/spectroscopy/th_stationary_count.py
+        # samples_kcps = samples / (1e3 * readout_sec)
+        # kpl.plot_line_update(ax, x=x_vals, y=samples_kcps, relim_x=False)
+=======
+>>>>>>> 07a69a9a58f82385e3f87d81f0794e3f598c6bfe:majorroutines/caf_spectroscopy/th_stationary_count.py
         kpl.plot_line_update(ax, x=x_vals, y=samples, relim_x=False)
 
     # -------------------- Cleanup + stats --------------------
     tool_belt.reset_cfm()
+<<<<<<< HEAD:majorroutines/spectroscopy/th_stationary_count.py
+
+=======
     print(len(samples))
     print(samples)
     print(new)
+>>>>>>> 07a69a9a58f82385e3f87d81f0794e3f598c6bfe:majorroutines/caf_spectroscopy/th_stationary_count.py
     if write_pos > 0:
         avg = float(np.nanmean(samples[:write_pos])) / (1e3 * readout_sec)
         std = float(np.nanstd(samples[:write_pos])) / (1e3 * readout_sec)
