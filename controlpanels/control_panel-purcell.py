@@ -25,6 +25,7 @@ from majorroutines.widefield import (
     bootstrapped_pulse_error_tomography,
     calibrate_iq_delay,
     charge_monitor,
+    charge_correlation,
     charge_state_conditional_init,
     charge_state_histograms,
     charge_state_histograms_images,
@@ -132,7 +133,6 @@ def do_charge_state_histograms(nv_list):
     return charge_state_histograms.main(
         nv_list, num_reps, num_runs, do_plot_histograms=False
     )
-
 
 def do_optimize_pol_duration(nv_list):
     num_steps = 24
@@ -271,7 +271,7 @@ def do_dmd_crosstalk_matrix(nv_list_all):
     """
 
     # DMD source NVs: choose center NVs for good first test
-    source_inds = dmd_crosstalk_matrix.get_center_dmd_indices(20)
+    source_inds = dmd_crosstalk_matrix.get_center_dmd_indices(200)
 
     # Measured NVs: always include global 0 first, plus all source NVs
     measured_inds = unique_keep_order([0] + source_inds)
@@ -300,7 +300,7 @@ def do_dmd_crosstalk_matrix(nv_list_all):
         num_runs=1,
         source_global_inds=source_inds,
         measured_global_inds=measured_inds,
-        dmd_radius_px=15,
+        dmd_radius_px=18,
         dmd_mode="pass_single",
         do_polarize=True,
         targeted_polarization=False,
@@ -309,6 +309,52 @@ def do_dmd_crosstalk_matrix(nv_list_all):
         dmd_settle_s=0.10,
         dmd_plane=230,
     )
+    
+    # for radius in [10, 12, 15, 20, 25, 30]:
+    #     raw_data = dmd_crosstalk_matrix.main(
+    #         nv_sub,
+    #         num_reps=50,
+    #         num_runs=2,
+    #         source_global_inds=source_inds,
+    #         measured_global_inds=measured_inds,
+    #         dmd_radius_px=radius,
+    #         dmd_mode="pass_single",
+    #         do_polarize=True,
+    #         targeted_polarization=False,
+    #         take_background=True,
+    #         save_images=False,
+    #         dmd_settle_s=0.2,
+    #         dmd_plane=230,
+    #     )
+    return raw_data
+
+
+
+def do_charge_correlation(nv_list):
+    """
+    Run charge-correlation measurement only on selected good NVs.
+    """
+    good_inds = [0, 190, 154, 173, 150, 102, 209, 175, 222, 254, 265, 178, 76, 288, 71, 62, 86, 226, 309, 46, 359, 345, 241, 81, 214, 292, 189, 402, 53, 350, 299, 387, 448, 191, 357, 436, 136, 174, 106, 49, 26, 370, 90, 47, 164, 403, 3, 276, 183, 568, 569, 543, 476, 107, 373, 409, 271, 554, 2, 505, 587, 5, 612, 48, 261, 9, 638, 654, 472, 176, 333, 65, 303, 19, 253, 573, 596, 124, 668]
+    nv_sub = [nv_list[int(ind)] for ind in good_inds]
+
+    # Make sure the first NV is representative for positioning.
+    for nv in nv_sub:
+        nv.representative = False
+
+    nv_sub[0].representative = True
+    nv_sub[0].expected_counts = 1500.0
+
+    raw_data = charge_correlation.main(
+        nv_list=nv_sub,
+        num_reps=400,
+        num_runs=200,
+        do_drive=True,
+        targeted_drive=False,
+        dynamic_thresh=True,
+        pixel_size_um=0.27,
+        save_images=False,
+    )
+
     return raw_data
 
 def do_optimize_green(nv_sig):
@@ -1972,7 +2018,8 @@ if __name__ == "__main__":
  
         # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
-        do_dmd_crosstalk_matrix(nv_list)
+        # do_dmd_crosstalk_matrix(nv_list)
+        # do_charge_correlation(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
         # do_optimize_pol_amp(nv_list)

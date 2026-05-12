@@ -218,37 +218,159 @@ def _mean_image(raw_data, exp_ind=0):
     axes = tuple(range(arr.ndim - 2))
     return np.mean(arr, axis=axes).astype(np.float32)
 
-
-def _normalize_by_matching_diagonal(matrix, measured_global_inds, source_global_inds):
+def _normalize_crosstalk_matrix(
+    matrix,
+    measured_global_inds,
+    source_global_inds,
+    mode="source_diag",
+    diag_floor=1e-6,
+):
     """
-    Normalize each source column by the measured row corresponding to the same
-    global NV index.
+    Normalize DMD crosstalk matrix using different conventions.
 
-    This works even when matrix is rectangular or rows/columns are not in the
-    same order.
+    matrix[row, col] = response at measured NV row when source NV col is passed.
+
+    Modes
+    -----
+    source_diag:
+        N[j,i] = C[j,i] / C[i,i]
+        Best for: leakage fraction relative to intended source.
+
+    global_mean_diag:
+        N[j,i] = C[j,i] / mean(C[i,i])
+        Best for: avoiding huge ratios from weak diagonal sources.
+
+    symmetric_diag:
+        N[j,i] = C[j,i] / sqrt(C[i,i] * C[j,j])
+        Best for: pairwise symmetric comparison, only meaningful when
+        measured/source sets overlap.
+
+    column_sum:
+        N[j,i] = C[j,i] / sum_j C[j,i]
+        Best for: fraction of total transmitted light going to each measured NV.
     """
     mat = np.asarray(matrix, dtype=np.float32)
     measured_global_inds = [int(x) for x in measured_global_inds]
     source_global_inds = [int(x) for x in source_global_inds]
 
     row_lookup = {gind: row for row, gind in enumerate(measured_global_inds)}
+    source_lookup = {gind: col for col, gind in enumerate(source_global_inds)}
 
     norm = np.full_like(mat, np.nan, dtype=np.float32)
     diag_values = np.full(len(source_global_inds), np.nan, dtype=np.float32)
 
+    # Get intended diagonal response for each source column.
     for col, source_gind in enumerate(source_global_inds):
         row = row_lookup.get(source_gind, None)
-        if row is None:
-            continue
+        if row is not None:
+            diag_values[col] = mat[row, col]
 
-        denom = mat[row, col]
-        diag_values[col] = denom
+    finite_diag = diag_values[np.isfinite(diag_values)]
+    finite_diag = finite_diag[np.abs(finite_diag) > diag_floor]
 
-        if np.isfinite(denom) and abs(denom) > 1e-9:
-            norm[:, col] = mat[:, col] / denom
+    if len(finite_diag) > 0:
+        mean_diag = float(np.nanmean(finite_diag))
+    else:
+        mean_diag = np.nan
 
-    return norm, diag_values
+    if mode == "source_diag":
+        for col, source_gind in enumerate(source_global_inds):
+            denom = diag_values[col]
+            if np.isfinite(denom) and abs(denom) > diag_floor:
+                norm[:, col] = mat[:, col] / denom
 
+    elif mode == "global_mean_diag":
+        if np.isfinite(mean_diag) and abs(mean_diag) > diag_floor:
+            norm = mat / mean_diag
+
+    elif mode == "symmetric_diag":
+        for col, source_gind in enumerate(source_global_inds):
+            source_diag = diag_values[col]
+
+            if not np.isfinite(source_diag) or abs(source_diag) <= diag_floor:
+                continue
+
+            for row, measured_gind in enumerate(measured_global_inds):
+                measured_col = source_lookup.get(measured_gind, None)
+
+                if measured_col is None:
+                    continue
+
+                measured_diag = diag_values[measured_col]
+
+                if not np.isfinite(measured_diag) or abs(measured_diag) <= diag_floor:
+                    continue
+
+                denom = np.sqrt(abs(source_diag * measured_diag))
+
+                if denom > diag_floor:
+                    norm[row, col] = mat[row, col] / denom
+
+    elif mode == "column_sum":
+        col_sum = np.nansum(mat, axis=0)
+
+        for col in range(mat.shape[1]):
+            denom = col_sum[col]
+            if np.isfinite(denom) and abs(denom) > diag_floor:
+                norm[:, col] = mat[:, col] / denom
+
+    else:
+        raise ValueError(f"Unknown normalization mode: {mode}")
+
+    return norm.astype(np.float32), diag_values.astype(np.float32)
+
+def _compute_all_normalizations(
+    matrix,
+    measured_global_inds,
+    source_global_inds,
+):
+    """
+    Compute several useful DMD crosstalk normalizations.
+
+    source_diag is the main one:
+        C[j,i] / C[i,i]
+
+    global_mean_diag is useful when weak diagonals make source_diag blow up.
+
+    symmetric_diag is useful for pairwise comparison when measured/source sets match.
+
+    column_sum tells what fraction of total transmitted signal goes to each row.
+    """
+    norm_source_diag, diag_values = _normalize_crosstalk_matrix(
+        matrix,
+        measured_global_inds,
+        source_global_inds,
+        mode="source_diag",
+    )
+
+    norm_global_mean_diag, _ = _normalize_crosstalk_matrix(
+        matrix,
+        measured_global_inds,
+        source_global_inds,
+        mode="global_mean_diag",
+    )
+
+    norm_symmetric_diag, _ = _normalize_crosstalk_matrix(
+        matrix,
+        measured_global_inds,
+        source_global_inds,
+        mode="symmetric_diag",
+    )
+
+    norm_column_sum, _ = _normalize_crosstalk_matrix(
+        matrix,
+        measured_global_inds,
+        source_global_inds,
+        mode="column_sum",
+    )
+
+    return {
+        "normalized_crosstalk": norm_source_diag,
+        "normalized_crosstalk_global_mean_diag": norm_global_mean_diag,
+        "normalized_crosstalk_symmetric_diag": norm_symmetric_diag,
+        "normalized_crosstalk_column_sum": norm_column_sum,
+        "diag_values": diag_values,
+    }
 
 def _compute_crosstalk_products(
     counts_matrix,
@@ -257,11 +379,13 @@ def _compute_crosstalk_products(
     background_counts=None,
 ):
     """
-    Compute background-subtracted matrix, normalized matrix, diagonal values,
+    Compute background-subtracted matrix, normalized matrices, diagonal values,
     and worst off-target fraction.
 
-    This is called before plotting, so these arrays are always available for saving
-    even if plotting fails.
+    The main normalized matrix is still:
+        normalized_crosstalk = C[j,i] / C[i,i]
+
+    Additional normalizations are returned for diagnostics.
     """
     counts_matrix = np.asarray(counts_matrix, dtype=np.float32)
 
@@ -271,11 +395,14 @@ def _compute_crosstalk_products(
     else:
         counts_bg_sub = counts_matrix.copy()
 
-    normalized_crosstalk, diag_values = _normalize_by_matching_diagonal(
+    norms = _compute_all_normalizations(
         counts_bg_sub,
         measured_global_inds,
         source_global_inds,
     )
+
+    normalized_crosstalk = norms["normalized_crosstalk"]
+    diag_values = norms["diag_values"]
 
     max_off_frac = []
     for col, source_gind in enumerate(source_global_inds):
@@ -291,13 +418,21 @@ def _compute_crosstalk_products(
         else:
             max_off_frac.append(np.nanmax(off_vals))
 
-    return (
-        counts_bg_sub.astype(np.float32),
-        normalized_crosstalk.astype(np.float32),
-        np.asarray(diag_values, dtype=np.float32),
-        np.asarray(max_off_frac, dtype=np.float32),
-    )
-
+    return {
+        "counts_bg_sub": counts_bg_sub.astype(np.float32),
+        "normalized_crosstalk": normalized_crosstalk.astype(np.float32),
+        "normalized_crosstalk_global_mean_diag": norms[
+            "normalized_crosstalk_global_mean_diag"
+        ].astype(np.float32),
+        "normalized_crosstalk_symmetric_diag": norms[
+            "normalized_crosstalk_symmetric_diag"
+        ].astype(np.float32),
+        "normalized_crosstalk_column_sum": norms[
+            "normalized_crosstalk_column_sum"
+        ].astype(np.float32),
+        "diag_values": np.asarray(diag_values, dtype=np.float32),
+        "max_off_frac": np.asarray(max_off_frac, dtype=np.float32),
+    }
 
 def _plot_matrix(
     matrix,
@@ -344,10 +479,16 @@ def _plot_matrix(
 
 def process_and_plot(raw_data):
     """
-    Plot raw, background-subtracted, and normalized DMD crosstalk matrices.
+    Plot DMD crosstalk matrices and summary diagnostics.
 
-    This function is robust: it uses precomputed counts_bg_sub and
-    normalized_crosstalk when available, otherwise computes them.
+    Plots:
+        1. Raw counts matrix
+        2. Analysis counts matrix: counts_bg_sub if available, else raw
+        3. Normalized by intended NV: C[j,i] / C[i,i]
+        4. Normalized by mean diagonal: C[j,i] / mean(C[i,i])
+        5. Column-sum normalized matrix
+        6. Diagonal signal per source
+        7. Worst off-target / intended response per source
     """
     counts_matrix = np.asarray(raw_data["counts_matrix"], dtype=np.float32)
 
@@ -358,18 +499,41 @@ def process_and_plot(raw_data):
         "source_global_inds", list(range(counts_matrix.shape[1]))
     )
 
-    # For the first DMD crosstalk characterization, use raw counts.
-    # Background subtraction can be re-enabled later after the DMD effect is large.
+    # Use the same matrix for all derived analysis plots.
+    # if "counts_bg_sub" in raw_data and raw_data["counts_bg_sub"] is not None:
+    #     counts_for_analysis = np.asarray(raw_data["counts_bg_sub"], dtype=np.float32)
+    #     counts_label = "background-subtracted"
+    # else:
+    #     counts_for_analysis = counts_matrix.copy()
+    #     counts_label = "raw"
+    
     counts_for_analysis = counts_matrix.copy()
+    counts_label = "raw"
 
-    normalized_crosstalk, diag_values = _normalize_by_matching_diagonal(
+    norms = _compute_all_normalizations(
         counts_for_analysis,
         measured_global_inds,
         source_global_inds,
     )
 
+    normalized_crosstalk = norms["normalized_crosstalk"]
+    normalized_global_mean = norms["normalized_crosstalk_global_mean_diag"]
+    normalized_symmetric = norms["normalized_crosstalk_symmetric_diag"]
+    normalized_column_sum = norms["normalized_crosstalk_column_sum"]
+    diag_values = norms["diag_values"]
+
+    # Recompute worst off-target ratio from the same analysis matrix.
+    products = _compute_crosstalk_products(
+        counts_for_analysis,
+        measured_global_inds,
+        source_global_inds,
+        background_counts=None,
+    )
+    max_off_frac = products["max_off_frac"]
+
     figs = []
 
+    # 1. Raw counts matrix
     figs.append(
         _plot_matrix(
             counts_matrix,
@@ -382,6 +546,20 @@ def process_and_plot(raw_data):
         )
     )
 
+    # 2. Analysis counts matrix
+    figs.append(
+        _plot_matrix(
+            counts_for_analysis,
+            title=f"DMD crosstalk: {counts_label} counts",
+            xlabel="source global NV index",
+            ylabel="measured global NV index",
+            cbar_label="mean counts",
+            xlabels=source_global_inds,
+            ylabels=measured_global_inds,
+        )
+    )
+
+    # 3. Main crosstalk normalization
     figs.append(
         _plot_matrix(
             normalized_crosstalk,
@@ -396,26 +574,495 @@ def process_and_plot(raw_data):
         )
     )
 
-    if "max_off_frac" in raw_data and raw_data["max_off_frac"] is not None:
-        max_off_frac = np.asarray(raw_data["max_off_frac"], dtype=np.float32)
-    else:
-        _, _, _, max_off_frac = _compute_crosstalk_products(
-            counts_matrix,
-            measured_global_inds,
-            source_global_inds,
-            raw_data.get("background_counts", None),
+    # 4. Mean-diagonal normalization
+    figs.append(
+        _plot_matrix(
+            normalized_global_mean,
+            title="DMD crosstalk: normalized by mean diagonal",
+            xlabel="source global NV index",
+            ylabel="measured global NV index",
+            cbar_label="C[j,i] / mean(C[i,i])",
+            xlabels=source_global_inds,
+            ylabels=measured_global_inds,
+            vmin=0,
+            vmax=1,
         )
+    )
+    # symmetric diagonal normalized 
+    figs.append(
+    _plot_matrix(
+        normalized_symmetric,
+        title= "DMD crosstalk: symmetric diagonal normalized",
+        xlabel="source global NV index",
+        ylabel="measured global NV index",
+        cbar_label="C[j,i] / sqrt(C[i,i] C[j,j])",
+        xlabels=source_global_inds,
+        ylabels=measured_global_inds,
+        vmin=0,
+        vmax=1,
+    )
+)
 
+    # 5. Column-sum normalization
+    figs.append(
+        _plot_matrix(
+            normalized_column_sum,
+            title="DMD crosstalk: column-sum normalized",
+            xlabel="source global NV index",
+            ylabel="measured global NV index",
+            cbar_label="C[j,i] / sum_j C[j,i]",
+            xlabels=source_global_inds,
+            ylabels=measured_global_inds,
+            vmin=0,
+            vmax=1,
+        )
+    )
+    
+
+    # 6. Diagonal signal per source
+    fig, ax = plt.subplots(figsize=(7.0, 4.5))
+    ax.plot(diag_values, "o-")
+    ax.axhline(0, linestyle="--")
+    ax.set_xlabel("source column")
+    ax.set_ylabel("intended response C[i,i]")
+    ax.set_title(f"Diagonal signal per DMD source ({counts_label})")
+    figs.append(fig)
+
+    # 7. Worst off-target fraction per source
     fig, ax = plt.subplots(figsize=(7.0, 4.5))
     ax.plot(max_off_frac, "o-")
+    ax.axhline(0.3, linestyle="--", label="target = 0.3")
+    ax.axhline(1.0, linestyle="--", label="bad = 1.0")
     ax.set_xlabel("source column")
     ax.set_ylabel("max off-target / intended response")
     ax.set_title("Worst optical crosstalk per DMD source")
+    ax.legend(fontsize=8)
     figs.append(fig)
 
     return figs
+   
+def analyze_crosstalk_metrics(
+    raw_data,
+    counts_key="counts_bg_sub",
+    use_source_only=True,
+    diag_threshold=2.0,
+    ratio_threshold=0.3,
+    bad_ratio_threshold=1.0,
+    vmax_norm=0.3,
+    do_plot=True,
+):
+    """
+    Analyze DMD crosstalk matrix with scatter plots, histograms, and outlier detection.
 
+    Parameters
+    ----------
+    raw_data : dict
+        Raw data from dmd_crosstalk_matrix.main.
 
+    counts_key : str
+        Matrix key to analyze.
+        Recommended:
+            "counts_bg_sub" if background subtraction is reliable.
+            "counts_matrix" if using raw counts.
+
+    use_source_only : bool
+        If True, removes the extra reference-NV row.
+        This is important when:
+            measured_inds = [0] + source_inds
+
+    diag_threshold : float
+        Minimum diagonal signal for a source to be considered strong.
+
+    ratio_threshold : float
+        Target/acceptable worst-crosstalk ratio.
+
+    bad_ratio_threshold : float
+        Ratio where off-target signal is comparable to or larger than target signal.
+
+    vmax_norm : float
+        Color scale maximum for normalized matrix plot.
+
+    do_plot : bool
+        If True, generate plots.
+
+    Returns
+    -------
+    metrics : dict
+        Contains matrices, summary numbers, source classifications, and figures.
+    """
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    # ---------------------------------------------------------------------
+    # Choose matrix.
+    # ---------------------------------------------------------------------
+    if counts_key in raw_data:
+        C_full = np.asarray(raw_data[counts_key], dtype=float)
+    elif "counts_bg_sub" in raw_data:
+        C_full = np.asarray(raw_data["counts_bg_sub"], dtype=float)
+        counts_key = "counts_bg_sub"
+    else:
+        C_full = np.asarray(raw_data["counts_matrix"], dtype=float)
+        counts_key = "counts_matrix"
+
+    measured_inds = [int(x) for x in raw_data["measured_global_inds"]]
+    source_inds = [int(x) for x in raw_data["source_global_inds"]]
+
+    # ---------------------------------------------------------------------
+    # Remove reference row if measured_inds = [0] + source_inds.
+    # ---------------------------------------------------------------------
+    if use_source_only:
+        source_rows = [measured_inds.index(src) for src in source_inds]
+        C = C_full[source_rows, :]
+        row_inds = source_inds
+    else:
+        C = C_full
+        row_inds = measured_inds
+
+    num_sources = len(source_inds)
+
+    # ---------------------------------------------------------------------
+    # Normalize each column by intended diagonal response.
+    # ---------------------------------------------------------------------
+    norms = _compute_all_normalizations(
+        C,
+        row_inds,
+        source_inds,
+    )
+
+    Cnorm = norms["normalized_crosstalk"]
+    Cnorm_global = norms["normalized_crosstalk_global_mean_diag"]
+    Cnorm_symmetric = norms["normalized_crosstalk_symmetric_diag"]
+    Cnorm_column_sum = norms["normalized_crosstalk_column_sum"]
+    diag_vals = norms["diag_values"].astype(float)
+
+    # ---------------------------------------------------------------------
+    # Compute worst off-diagonal response for each source.
+    # ---------------------------------------------------------------------
+    worst_ratio = np.full(num_sources, np.nan, dtype=float)
+    worst_off_signal = np.full(num_sources, np.nan, dtype=float)
+    worst_target = [None] * num_sources
+    off_vals = []
+
+    for col, src in enumerate(source_inds):
+        if src not in row_inds:
+            continue
+
+        intended_row = row_inds.index(src)
+        intended = C[intended_row, col]
+
+        col_vals = C[:, col].copy()
+        col_vals[intended_row] = np.nan
+
+        if np.all(np.isnan(col_vals)):
+            continue
+
+        worst_row = int(np.nanargmax(col_vals))
+        max_off = float(col_vals[worst_row])
+
+        worst_off_signal[col] = max_off
+        worst_target[col] = row_inds[worst_row]
+
+        if np.isfinite(intended) and abs(intended) > 1e-12:
+            worst_ratio[col] = max_off / intended
+
+        for r in range(C.shape[0]):
+            if r != intended_row:
+                off_vals.append(C[r, col])
+
+    off_vals = np.asarray(off_vals, dtype=float)
+
+    # ---------------------------------------------------------------------
+    # Classify sources.
+    # ---------------------------------------------------------------------
+    good = (diag_vals > diag_threshold) & (worst_ratio < ratio_threshold)
+    usable = (diag_vals > diag_threshold) & (worst_ratio < 0.5)
+    weak = diag_vals <= diag_threshold
+    bad_xtalk = worst_ratio >= bad_ratio_threshold
+    high_xtalk = (worst_ratio >= ratio_threshold) & (worst_ratio < bad_ratio_threshold)
+
+    good_sources = np.asarray(source_inds)[good]
+    usable_sources = np.asarray(source_inds)[usable]
+    weak_sources = np.asarray(source_inds)[weak]
+    bad_xtalk_sources = np.asarray(source_inds)[bad_xtalk]
+    high_xtalk_sources = np.asarray(source_inds)[high_xtalk]
+
+    # ---------------------------------------------------------------------
+    # Summary numbers.
+    # ---------------------------------------------------------------------
+    mean_diag = np.nanmean(diag_vals)
+    median_diag = np.nanmedian(diag_vals)
+    mean_off = np.nanmean(off_vals)
+    median_off = np.nanmedian(off_vals)
+    max_off = np.nanmax(off_vals)
+
+    mean_worst_ratio = np.nanmean(worst_ratio)
+    median_worst_ratio = np.nanmedian(worst_ratio)
+    max_worst_ratio = np.nanmax(worst_ratio)
+
+    mean_off_over_mean_diag = mean_off / mean_diag
+    max_off_over_mean_diag = max_off / mean_diag
+
+    print("\nDMD crosstalk summary")
+    print("---------------------")
+    print(f"counts_key: {counts_key}")
+    print(f"matrix shape used: {C.shape}")
+    print(f"number of sources: {num_sources}")
+    print(f"mean diagonal signal: {mean_diag:.4f}")
+    print(f"median diagonal signal: {median_diag:.4f}")
+    print(f"mean off-diagonal signal: {mean_off:.4f}")
+    print(f"median off-diagonal signal: {median_off:.4f}")
+    print(f"max off-diagonal signal: {max_off:.4f}")
+    print(f"mean off / mean diag: {mean_off_over_mean_diag:.4f}")
+    print(f"max off / mean diag: {max_off_over_mean_diag:.4f}")
+    print(f"mean worst ratio: {mean_worst_ratio:.4f}")
+    print(f"median worst ratio: {median_worst_ratio:.4f}")
+    print(f"max worst ratio: {max_worst_ratio:.4f}")
+
+    print("\nClassification")
+    print("--------------")
+    print(
+        f"good sources, diag > {diag_threshold}, "
+        f"ratio < {ratio_threshold}: {len(good_sources)}"
+    )
+    print(
+        f"usable sources, diag > {diag_threshold}, "
+        f"ratio < 0.5: {len(usable_sources)}"
+    )
+    print(
+        f"weak diagonal sources, diag <= {diag_threshold}: "
+        f"{len(weak_sources)}"
+    )
+    print(
+        f"high crosstalk sources, {ratio_threshold} <= ratio < "
+        f"{bad_ratio_threshold}: {len(high_xtalk_sources)}"
+    )
+    print(
+        f"bad crosstalk sources, ratio >= {bad_ratio_threshold}: "
+        f"{len(bad_xtalk_sources)}"
+    )
+
+    print("\nBad crosstalk sources:")
+    for col, src in enumerate(source_inds):
+        if worst_ratio[col] >= bad_ratio_threshold:
+            print(
+                f"source {src}: "
+                f"diag={diag_vals[col]:.3f}, "
+                f"worst target={worst_target[col]}, "
+                f"worst off={worst_off_signal[col]:.3f}, "
+                f"ratio={worst_ratio[col]:.3f}"
+            )
+
+    # ---------------------------------------------------------------------
+    # Plots.
+    # ---------------------------------------------------------------------
+    figs = []
+
+    if do_plot:
+        # -------------------------------------------------------------
+        # 1. Normalized matrix.
+        # -------------------------------------------------------------
+        fig, ax = plt.subplots()
+        im = ax.imshow(Cnorm, aspect="auto", vmin=0, vmax=vmax_norm)
+        ax.set_xlabel("DMD source NV")
+        ax.set_ylabel("Measured NV")
+        ax.set_title("Normalized DMD crosstalk matrix")
+        fig.colorbar(im, ax=ax, label="C[j,i] / C[i,i]")
+        figs.append(fig)
+
+        # -------------------------------------------------------------
+        # 2. Diagonal signal vs worst ratio.
+        # -------------------------------------------------------------
+        fig, ax = plt.subplots()
+
+        ax.scatter(
+            diag_vals[good],
+            worst_ratio[good],
+            label="Good",
+            alpha=0.8,
+        )
+
+        ax.scatter(
+            diag_vals[weak],
+            worst_ratio[weak],
+            label="Weak diagonal",
+            alpha=0.8,
+        )
+
+        ax.scatter(
+            diag_vals[high_xtalk],
+            worst_ratio[high_xtalk],
+            label="High crosstalk",
+            alpha=0.8,
+        )
+
+        ax.scatter(
+            diag_vals[bad_xtalk],
+            worst_ratio[bad_xtalk],
+            label="Bad crosstalk",
+            alpha=0.8,
+        )
+
+        ax.axhline(
+            ratio_threshold,
+            linestyle="--",
+            label=f"Target ratio = {ratio_threshold}",
+        )
+
+        ax.axhline(
+            bad_ratio_threshold,
+            linestyle="--",
+            label=f"Bad ratio = {bad_ratio_threshold}",
+        )
+
+        ax.axvline(
+            diag_threshold,
+            linestyle="--",
+            label=f"Weak diag cutoff = {diag_threshold}",
+        )
+
+        ax.set_xlabel("Diagonal signal")
+        ax.set_ylabel("Worst off-diagonal / diagonal")
+        ax.set_title("DMD crosstalk outliers")
+        ax.set_yscale("log")
+        ax.legend(fontsize=8)
+        figs.append(fig)
+
+        # -------------------------------------------------------------
+        # 3. Diagonal signal vs absolute leakage.
+        # -------------------------------------------------------------
+        fig, ax = plt.subplots()
+
+        ax.scatter(
+            diag_vals,
+            worst_off_signal,
+            alpha=0.8,
+            label="Sources",
+        )
+
+        x_max = np.nanmax(diag_vals)
+        xline = np.linspace(0, x_max, 200)
+
+        ax.plot(
+            xline,
+            ratio_threshold * xline,
+            linestyle="--",
+            label=f"{ratio_threshold} × diagonal",
+        )
+
+        ax.plot(
+            xline,
+            bad_ratio_threshold * xline,
+            linestyle="--",
+            label=f"{bad_ratio_threshold} × diagonal",
+        )
+
+        ax.axvline(
+            diag_threshold,
+            linestyle="--",
+            label=f"Weak diag cutoff = {diag_threshold}",
+        )
+
+        ax.set_xlabel("Diagonal signal")
+        ax.set_ylabel("Worst off-diagonal signal")
+        ax.set_title("Absolute leakage vs intended signal")
+        ax.legend(fontsize=8)
+        figs.append(fig)
+
+        # -------------------------------------------------------------
+        # 4. Histogram of worst ratios.
+        # -------------------------------------------------------------
+        fig, ax = plt.subplots()
+
+        finite_ratio = worst_ratio[np.isfinite(worst_ratio)]
+        ax.hist(finite_ratio, bins=30)
+
+        ax.axvline(
+            ratio_threshold,
+            linestyle="--",
+            label=f"Target = {ratio_threshold}",
+        )
+
+        ax.axvline(
+            bad_ratio_threshold,
+            linestyle="--",
+            label=f"Bad = {bad_ratio_threshold}",
+        )
+
+        ax.set_xlabel("Worst off-diagonal / diagonal")
+        ax.set_ylabel("Number of source NVs")
+        ax.set_title("Distribution of worst DMD crosstalk")
+        ax.legend(fontsize=8)
+        figs.append(fig)
+
+        # -------------------------------------------------------------
+        # 5. Worst ratio per source.
+        # -------------------------------------------------------------
+        fig, ax = plt.subplots(figsize=(10, 4))
+
+        ax.plot(
+            worst_ratio,
+            "o-",
+            label="Worst crosstalk ratio",
+        )
+
+        ax.axhline(
+            ratio_threshold,
+            linestyle="--",
+            label=f"Target = {ratio_threshold}",
+        )
+
+        ax.axhline(
+            bad_ratio_threshold,
+            linestyle="--",
+            label=f"Bad = {bad_ratio_threshold}",
+        )
+
+        ax.set_xlabel("Source column")
+        ax.set_ylabel("Worst off-diagonal / diagonal")
+        ax.set_title("Worst optical crosstalk per source")
+        ax.legend(fontsize=8)
+        figs.append(fig)
+
+    metrics = {
+        "counts_key": counts_key,
+        "counts_matrix_used": C,
+        "normalized_crosstalk": Cnorm,
+        "row_global_inds": row_inds,
+        "source_global_inds": source_inds,
+        "diag_vals": diag_vals,
+        "off_vals": off_vals,
+        "worst_ratio": worst_ratio,
+        "worst_off_signal": worst_off_signal,
+        "worst_target": worst_target,
+        "good_mask": good,
+        "usable_mask": usable,
+        "weak_mask": weak,
+        "high_xtalk_mask": high_xtalk,
+        "bad_xtalk_mask": bad_xtalk,
+        "good_sources": good_sources,
+        "usable_sources": usable_sources,
+        "weak_sources": weak_sources,
+        "high_xtalk_sources": high_xtalk_sources,
+        "bad_xtalk_sources": bad_xtalk_sources,
+        "mean_diag": mean_diag,
+        "median_diag": median_diag,
+        "mean_off": mean_off,
+        "median_off": median_off,
+        "max_off": max_off,
+        "mean_off_over_mean_diag": mean_off_over_mean_diag,
+        "max_off_over_mean_diag": max_off_over_mean_diag,
+        "mean_worst_ratio": mean_worst_ratio,
+        "median_worst_ratio": median_worst_ratio,
+        "max_worst_ratio": max_worst_ratio,
+        "figs": figs,
+        "normalized_crosstalk_global_mean_diag": Cnorm_global,
+        "normalized_crosstalk_symmetric_diag": Cnorm_symmetric,
+        "normalized_crosstalk_column_sum": Cnorm_column_sum,
+    }
+
+    return metrics
 # =============================================================================
 # Main experiment
 # =============================================================================
@@ -619,18 +1266,27 @@ def main(
         print(traceback.format_exc())
 
     # Compute derived arrays before plotting/saving so they are always present.
-    (
-        counts_bg_sub,
-        normalized_crosstalk,
-        diag_values,
-        max_off_frac,
-    ) = _compute_crosstalk_products(
+    products = _compute_crosstalk_products(
         counts_matrix,
         measured_global_inds,
         source_global_inds,
         background_counts,
     )
 
+    counts_bg_sub = products["counts_bg_sub"]
+    normalized_crosstalk = products["normalized_crosstalk"]
+    normalized_crosstalk_global_mean_diag = products[
+        "normalized_crosstalk_global_mean_diag"
+    ]
+    normalized_crosstalk_symmetric_diag = products[
+        "normalized_crosstalk_symmetric_diag"
+    ]
+    normalized_crosstalk_column_sum = products[
+        "normalized_crosstalk_column_sum"
+    ]
+    diag_values = products["diag_values"]
+    max_off_frac = products["max_off_frac"]
+    
     timestamp = dm.get_time_stamp()
     repr_nv_sig = ensure_representative_nv(nv_list)
     repr_nv_name = repr_nv_sig.name
@@ -668,15 +1324,25 @@ def main(
         "background_raw_counts": background_raw_counts,
         "img_array-units": "photons",
     }
+    raw_data |= {
+    "counts_bg_sub": counts_bg_sub,
+    "normalized_crosstalk": normalized_crosstalk,
+    "normalized_crosstalk_global_mean_diag": normalized_crosstalk_global_mean_diag,
+    "normalized_crosstalk_symmetric_diag": normalized_crosstalk_symmetric_diag,
+    "normalized_crosstalk_column_sum": normalized_crosstalk_column_sum,
+    "diag_values": diag_values,
+    "max_off_frac": max_off_frac,
+    }
 
-    if save_raw_counts_by_source and len(raw_counts_by_source) > 0:
+    if len(mean_images_by_source) > 0:
         try:
-            raw_data["raw_counts_by_source"] = np.stack(raw_counts_by_source, axis=0)
+            raw_data["mean_images_by_source"] = np.stack(mean_images_by_source, axis=0)
         except Exception:
-            raw_data["raw_counts_by_source"] = np.asarray(raw_counts_by_source, dtype=object)
-
+            print("Skipping mean_images_by_source because shapes are inconsistent.")
+        
+    
     if background_img is not None:
-        raw_data["background_img"] = background_img
+            raw_data["background_img"] = background_img
 
     if len(mean_images_by_source) > 0:
         try:
@@ -702,13 +1368,23 @@ def main(
         "counts_matrix_ste",
         "counts_bg_sub",
         "normalized_crosstalk",
+        "normalized_crosstalk_global_mean_diag",
+        "normalized_crosstalk_symmetric_diag",
+        "normalized_crosstalk_column_sum",
         "diag_values",
         "max_off_frac",
-        "raw_counts_by_source",
-        "background_raw_counts",
+        "background_counts",
+        "background_counts_ste",
         "background_img",
-        "mean_images_by_source",
     ]
+
+    if save_raw_counts_by_source:
+        keys_to_compress += [
+            "raw_counts_by_source",
+            "background_raw_counts",
+            "mean_images_by_source",
+        ]
+
     keys_to_compress = [key for key in keys_to_compress if key in raw_data]
 
     dm.save_raw_data(raw_data, file_path, keys_to_compress)
@@ -726,46 +1402,42 @@ def main(
     return raw_data
 
 
+
 if __name__ == "__main__":
     kpl.init_kplotlib()
 
-    # Reload / analysis example:
-    raw_data = dm.get_raw_data(file_stem="2026_05_10-19_54_17-qnami-nv0_2026_02_20-dmd-crosstalk-10src-r30", load_npz=True)
+    raw_data = dm.get_raw_data(
+        file_stem=(
+            "2026_05_11-02_24_11-qnami-nv0_2026_02_20-dmd-crosstalk-200src-r20"
+        ),
+        load_npz=True,
+        allow_pickle=True,
+    )
+
     process_and_plot(raw_data)
 
-    C = np.asarray(raw_data["counts_bg_sub"], dtype=float)
-    Cnorm = np.asarray(raw_data["normalized_crosstalk"], dtype=float)
+    metrics = analyze_crosstalk_metrics(
+        raw_data,
+        counts_key="counts_bg_sub",
+        use_source_only=True,
+        diag_threshold=2.0,
+        ratio_threshold=0.3,
+        bad_ratio_threshold=1.0,
+        vmax_norm=0.3,
+        do_plot=True,
+    )
 
-    source_inds = raw_data["source_global_inds"]
-    measured_inds = raw_data["measured_global_inds"]
+    print("\nGood source indices:")
+    print(metrics["good_sources"].tolist())
 
-    print("counts_bg_sub:")
-    print(np.round(C, 2))
+    print("\nUsable source indices:")
+    print(metrics["usable_sources"].tolist())
 
-    print("normalized_crosstalk:")
-    print(np.round(Cnorm, 3))
+    print("\nWeak diagonal source indices:")
+    print(metrics["weak_sources"].tolist())
 
-    # Diagonal/off-diagonal metrics
-    diag_vals = []
-    off_vals = []
+    print("\nBad crosstalk source indices:")
+    print(metrics["bad_xtalk_sources"].tolist())
 
-    for col, src in enumerate(source_inds):
-        if src in measured_inds:
-            row = measured_inds.index(src)
-            diag_vals.append(C[row, col])
-
-            for r in range(C.shape[0]):
-                if r != row:
-                    off_vals.append(C[r, col])
-
-    diag_vals = np.asarray(diag_vals)
-    off_vals = np.asarray(off_vals)
-
-    print("Mean diagonal signal:", np.nanmean(diag_vals))
-    print("Mean off-diagonal signal:", np.nanmean(off_vals))
-    print("Max off-diagonal signal:", np.nanmax(off_vals))
-    print("Max off/mean diag:", np.nanmax(off_vals) / np.nanmean(diag_vals))
-
-    print("    )")
     kpl.show(block=True)
     # sys.exit()

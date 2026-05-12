@@ -466,33 +466,6 @@ def calc_contrast(sig_counts, ref_counts):
     return _nan0(avg_contrast), _nan0(avg_contrast_ste)
 
 
-# def average_counts(sig_counts, ref_counts=None):
-#     """Gets average and standard error for counts data structure.
-#     Counts arrays must have the structure [nv_ind, run_ind, steq_ind, rep_ind].
-#     Returns the structure [nv_ind, freq_ind] for avg_counts and avg_counts_ste.
-#     Returns the [nv_ind] for norms.
-#     """
-#     _validate_counts_structure(sig_counts)
-#     _validate_counts_structure(ref_counts)
-
-#     avg_counts = np.mean(sig_counts, axis=run_rep_axes)
-#     num_shots = sig_counts.shape[rep_ax] * sig_counts.shape[run_ax]
-#     avg_counts_std = np.std(sig_counts, axis=run_rep_axes, ddof=1)
-#     avg_counts_ste = avg_counts_std / np.sqrt(num_shots)
-
-#     if ref_counts is None:
-#         norms = None
-#     else:
-#         ms0_ref_counts = ref_counts[:, :, :, 0::2]
-#         ms1_ref_counts = ref_counts[:, :, :, 1::2]
-#         norms = [
-#             np.mean(ms0_ref_counts, axis=(1, 2, 3)),
-#             np.mean(ms1_ref_counts, axis=(1, 2, 3)),
-#         ]
-
-#     return avg_counts, avg_counts_ste, norms
-
-
 def threshold_counts(nv_list, sig_counts, ref_counts=None, dynamic_thresh=False):
     """Only actually thresholds counts for NVs with thresholds specified in their sigs.
     If there's no threshold, then the raw counts are just averaged as normal."""
@@ -585,109 +558,6 @@ def process_multiple_files(file_ids, load_npz=True):
             combined_data["counts"], new_data["counts"], axis=2
         )
     return combined_data
-
-    # class QPTCorrector:
-    #     def __init__(self, pulse_errors):
-    #         self.errors = pulse_errors
-    #         self.paulis = self._get_pauli_basis()
-    #         self.M = self._build_basis_map_matrix()
-
-    #     def _get_pauli_basis(self):
-    #         I = np.eye(2)
-    #         X = np.array([[0, 1], [1, 0]])
-    #         Y = np.array([[0, -1j], [1j, 0]])
-    #         Z = np.array([[1, 0], [0, -1]])
-    #         return [I, X, Y, Z]
-
-    #     def _construct_error_unitary(self, kind):
-    #         err = self.errors
-    #         if kind == "pi_X":
-    #             theta = np.pi + 2 * err.get("phi", 0)
-    #             axis = np.array([1, err.get("ey", 0), err.get("ez", 0)])
-    #         elif kind == "pi_Y":
-    #             theta = np.pi + 2 * err.get("chi", 0)
-    #             axis = np.array([err.get("vx", 0), 1, err.get("vz", 0)])
-    #         elif kind == "pi_2_X":
-    #             theta = np.pi / 2 + 2 * err.get("phi_prime", 0)
-    #             axis = np.array([1, 0, 0])
-    #         elif kind == "pi_2_Y":
-    #             theta = np.pi / 2 + 2 * err.get("chi_prime", 0)
-    #             axis = np.array([0, 1, 0])
-    #         else:
-    #             return np.eye(2)
-
-    #         axis = axis / np.linalg.norm(axis)
-    #         X, Y, Z = self.paulis[1:]
-    #         n_x, n_y, n_z = axis
-    #         H = theta / 2 * (n_x * X + n_y * Y + n_z * Z)
-    #         return expm(-1j * H)
-
-    #     def _transform_basis(self, U):
-    #         """Transform Pauli basis under U: σ' = U† σ U"""
-    #         return [U.conj().T @ P @ U for P in self.paulis]
-
-    #     def _build_basis_map_matrix(self):
-    #         """Construct M: the matrix that maps actual to ideal Pauli basis."""
-    #         U_prep_X = self._construct_error_unitary("pi_2_X")
-    #         U_prep_Y = self._construct_error_unitary("pi_2_Y")
-    #         prep_transforms = (
-    #             self._transform_basis(U_prep_X),
-    #             self._transform_basis(U_prep_Y),
-    #         )
-
-    #         M = np.zeros((4, 4), dtype=complex)
-    #         for i, P in enumerate(self.paulis):
-    #             vec = np.array([np.trace(P @ Q) / 2 for Q in self.paulis])
-    #             M[:, i] = vec
-    #         return M
-
-    #     def correct_chi_matrix(self, chi_raw):
-    #         """Correct χ matrix using basis map M"""
-    #         M = self.M
-    #         M_inv = np.linalg.inv(M)
-    #         chi_corrected = M_inv @ chi_raw @ M_inv.conj().T
-    #         return chi_corrected
-
-    #     def compare_chi_matrices(self, chi_raw, chi_corrected):
-    #         fidelity = np.trace(chi_raw.conj().T @ chi_corrected).real
-    #         diff = chi_raw - chi_corrected
-    #         hs_norm = np.trace(diff @ diff.conj().T).real
-    #         return {"process_fidelity": fidelity, "hilbert_schmidt_norm": hs_norm}
-
-    #     def pauli_label(self):
-    #         return ["I", "X", "Y", "Z"]
-
-    # def get_phase_correction(self, kind):
-    #     """Get phase offset correction in radians to pre-compensate control pulses."""
-    #     if kind == "pi_2_X":
-    #         ez = self.errors.get("ez", 0)
-    #         return np.arctan2(ez, 1.0)  # Correction for axis tilt in Z
-    #     elif kind == "pi_2_Y":
-    #         vx = self.errors.get("vx", 0)
-    #         return np.arctan2(vx, 1.0)
-    #     elif kind == "pi_X":
-    #         ez = self.errors.get("ez", 0)
-    #         return np.arctan2(ez, 1.0)
-    #     elif kind == "pi_Y":
-    #         vx = self.errors.get("vx", 0)
-    #         return np.arctan2(vx, 1.0)
-    #     else:
-    #         return 0.0
-
-    # def get_amplitude_correction_factor(self, kind):
-    #     """Return scaling factor to correct over- or under-rotation."""
-    #     if kind == "pi_2_X":
-    #         delta = self.errors.get("phi_prime", 0)
-    #     elif kind == "pi_2_Y":
-    #         delta = self.errors.get("chi_prime", 0)
-    #     elif kind == "pi_X":
-    #         delta = self.errors.get("phi", 0)
-    #     elif kind == "pi_Y":
-    #         delta = self.errors.get("chi", 0)
-    #     else:
-    #         return 1.0
-
-    #     return 1.0 / (1 + delta)  # First-order correction
 
 
 def combined_filename(file_ids):
@@ -1814,7 +1684,6 @@ def plot_correlations(axes_pack, nv_list, x, counts):
 
 
 # endregion
-
 
 # Add this function to your widefield module
 def draw_circle_on_nv(
