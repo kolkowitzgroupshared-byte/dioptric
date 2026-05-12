@@ -805,7 +805,7 @@ def do_rabi(nv_sig):
         max_tau=500,  # ns (480+min_tau)
         num_steps=40,  # 1 step every ~5-10ns
         uwave_ind=0,
-        uwave_freq_ghz= 2.8316, #2.820, #2.8513,  # Change to target ms=+1 or ms=-1 transition
+        uwave_freq_ghz= 2.8215, #2.820, #2.8513,  # Change to target ms=+1 or ms=-1 transition
         optimize_between_runs=True,  # Set to false to turn off optimize between runs
     )
 
@@ -813,13 +813,13 @@ def do_rabi(nv_sig):
 def do_resonance(nv_sig):
     resonance.main(
         nv_sig,
-        freq_center_ghz=2.8336, #2.869332,#2.82,#2.8316,#2.8333,
+        freq_center_ghz=2.8206,#2.869332, #2.869332,#2.82,#2.8316,#2.8333,
         freq_span_mhz=50.0,
         num_steps=51,
         num_reps=1,#20e4,
         num_runs=20,
         uwave_ind=0,
-        optimize_between_runs=True,
+        optimize_between_runs=False,
     )
 
 
@@ -879,21 +879,21 @@ def do_optimize_transient(nv_sig):
     )
 
 
-def do_tisapph_singlet_scan(nv_sig,wavelength_start_nm=810,wavelength_stop_nm=820):
+def do_tisapph_singlet_scan(nv_sig,wavelength_start_nm=855,wavelength_stop_nm=883):
     resonance_tisapph_singlet_scan.main(
         nv_sig,
         wavelength_start_nm=wavelength_start_nm,
         wavelength_stop_nm=wavelength_stop_nm,
-        num_steps=10, #100step=0.495nm
+        num_steps=20, #100step=0.495nm
         num_reps=20e4,
         num_runs=1, 
         uwave_ind=0,
         uwave_power_dbm=10.0,
         probe_ns=2e3,
-        do_plot=False,
+        do_plot=True,
         shuffle=True,
         settle_s=0.3,#0.3
-        optimize_between_runs=False,
+        optimize_between_runs=True,
     )
 
 def do_tisapph_singlet_scan_loop(
@@ -1350,10 +1350,10 @@ if __name__ == "__main__":
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
     coord_z =4.8925+1.25#5.673 #4.828+1.25 #6.4988 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # coord_z = 3.4318
-    pixel_xy =[0.132,-0.017] # NewNVs 5/11
-    # pixel_xy = [0,0]
-    # pixel_xy = [0.107, 0.013]  #NV1
-    # pixel_xy = [0.046,0.002]  #nv2
+    # pixel_xy =[-0.084,-0.016] # NewNVs 5/12
+    pixel_xy = [-0.049,0.01] # NewNV2
+    # pixel_xy = [-0.049, -0.018]  #NV1
+    # pixel_xy = [0.046,0.01]  #nv2
 
     #region Paramss
     # return
@@ -1375,7 +1375,7 @@ if __name__ == "__main__":
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 77.3 #6.5mW Green Power 5/11
+    nv_sig.expected_counts = 77 #6.5mW Green Power 5/11
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
@@ -1461,13 +1461,13 @@ if __name__ == "__main__":
         # endregion Stationary count
 
         # region Resonance, Pulse Seq., Singlet
-        # do_tisapph_singlet_scan(nv_sig)
+        do_tisapph_singlet_scan(nv_sig)
         # do_tisapph_delay_cal(nv_sig)
         # probe_ns = [2e3, 5e3, 10e3, 20e3, 50e3, 100e3]
         # for probe in probe_ns:
             # do_tisapph_singlet_scan(nv_sig, probe_ns=probe)
         # do_resonance(nv_sig)
-        do_rabi(nv_sig)
+        # do_rabi(nv_sig)
 
   # do_rabi(nv_sig)
         # try:

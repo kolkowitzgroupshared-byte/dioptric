@@ -83,75 +83,6 @@ def _compute_all_metrics(ms0_off, ms0_on, ms1_off, ms1_on):
     }
 
 
-def _scalar_ratio(num, den):
-    """Plain-Python scalar safe ratio, avoids 0-d numpy returns from _safe_ratio
-    that break f-string format specifiers like ':.5e'."""
-    try:
-        num = float(num)
-        den = float(den)
-    except Exception:
-        return float("nan")
-    if not np.isfinite(num) or not np.isfinite(den) or den == 0.0:
-        return float("nan")
-    return num / den
-
-
-def _scalar_metrics(ms0_off, ms0_on, ms1_off, ms1_on):
-    """Per-step metrics as plain floats — for live console printing only."""
-    ms0_response = _scalar_ratio(ms0_on - ms0_off, ms0_off)
-    ms1_response = _scalar_ratio(ms1_on - ms1_off, ms1_off)
-    spin_off = _scalar_ratio(ms0_off - ms1_off, ms0_off)
-    spin_on = _scalar_ratio(ms0_on - ms1_on, ms0_on)
-    return {
-        "ms0_response": ms0_response,
-        "ms1_response": ms1_response,
-        "spin_contrast_off": spin_off,
-        "spin_contrast_on": spin_on,
-    }
-
-
-def _expected_step_time_s(
-    pol_ns,
-    probe_ns,
-    readout_ns,
-    uwave_ns,
-    num_reps,
-    uwave_delay_ns=151,
-    spin_pol_delay_ns=0,
-    readout_delay_ns=0,
-    tisapph_aom_delay_ns=960,
-    meas_buffer_ns=1000,
-    transient_ns=1000,
-):
-    """
-    Pure-Python mirror of resonance_tisapph_singlet_scan.py period formula.
-
-    period = front_buffer + 4 * (pol + 2*transient + uwave + probe + readout + meas)
-
-    Returns expected wall-clock time per step (sequence-only):
-        period_ns * num_reps * 1e-9
-    Excludes Ti:sapph settle, stream_load, LabRAD, and read overhead — those
-    show up as the gap between measured and expected.
-    """
-    front_buffer = max(
-        int(uwave_delay_ns),
-        int(spin_pol_delay_ns),
-        int(readout_delay_ns),
-        int(tisapph_aom_delay_ns),
-    )
-    block_ns = (
-        int(pol_ns)
-        + int(transient_ns)
-        + int(uwave_ns)
-        + int(transient_ns)
-        + int(probe_ns)
-        + int(readout_ns)
-        + int(meas_buffer_ns)
-    )
-    period_ns = front_buffer + 4 * block_ns
-    return float(period_ns) * float(num_reps) * 1e-9
-
-
 def _nanmean_ste(arr):
     arr = np.asarray(arr, dtype=float)
     mean = np.nanmean(arr, axis=0)
@@ -397,41 +328,53 @@ def main(
     print(f"reps     = {num_reps}")
     print(f"runs     = {num_runs}")
 
-    # --- Timing diagnostics setup (mirrors confocal_rabi.py) -----------------
-    # Pull pi-pulse from the virtual sig gen so the expected period matches
-    # what resonance_tisapph_singlet_scan.py actually builds.
-    try:
-        _uwave_ns = int(vsg["pi_pulse"])
-    except Exception:
-        _uwave_ns = 0  # safe fallback; only affects the "expected" estimate
-
-    step_expected_s = _expected_step_time_s(
-        pol_ns=pol_ns,
-        probe_ns=probe_ns,
-        readout_ns=readout_ns,
-        uwave_ns=_uwave_ns,
-        num_reps=num_reps,
-    )
-    # Per-(run, step) wall-time accumulators — populated during the run and
-    # saved into raw_data for offline inspection, just like confocal_rabi.py.
-    step_wall_times = np.full((num_runs, num_steps), np.nan)
-    step_settle_times = np.full((num_runs, num_steps), np.nan)
-    step_pulse_times = np.full((num_runs, num_steps), np.nan)
-    run_wall_times = np.full(num_runs, np.nan)
-
-    print(
-        f"\n[diag] expected per-step (sequence only) = {step_expected_s:.3f} s "
-        f"({step_expected_s * num_steps:.1f} s per run, "
-        f"{step_expected_s * num_steps * num_runs:.1f} s total)"
-    )
-    print(
-        f"[diag] tisapph settle budget  = {settle_s:.3f} s/step "
-        f"({settle_s * num_steps:.1f} s per run, "
-        f"{settle_s * num_steps * num_runs:.1f} s total)"
-    )
-
     tb.init_safe_stop()
     start_time = time.time()
+
+    def _build_raw_data_dict(elapsed_s_local):
+        metrics_local = _compute_all_metrics(
+            ms0_off_counts, ms0_on_counts, ms1_off_counts, ms1_on_counts,
+        )
+        ms0_off_m, ms0_off_s = _nanmean_ste(ms0_off_counts)
+        ms1_off_m, ms1_off_s = _nanmean_ste(ms1_off_counts)
+        ms0_on_m,  ms0_on_s  = _nanmean_ste(ms0_on_counts)
+        ms1_on_m,  ms1_on_s  = _nanmean_ste(ms1_on_counts)
+        resp_ms0_m, resp_ms0_s     = _nanmean_ste(metrics_local["ms0_response"])
+        resp_ms1_m, resp_ms1_s     = _nanmean_ste(metrics_local["ms1_response"])
+        delta_resp_m, delta_resp_s = _nanmean_ste(metrics_local["delta_response"])
+        spin_off_m, spin_off_s     = _nanmean_ste(metrics_local["spin_contrast_off"])
+        spin_on_m,  spin_on_s      = _nanmean_ste(metrics_local["spin_contrast_on"])
+        delta_spin_m, delta_spin_s = _nanmean_ste(metrics_local["delta_spin_contrast"])
+        return {
+            "timestamp": timestamp,
+            "elapsed_s": elapsed_s_local,
+            "nv_sig": nv_sig,
+            "wavelengths_nm": wavelengths_nm.tolist(),
+            "num_reps": int(num_reps),
+            "num_runs": int(num_runs),
+            "uwave_ind": int(uwave_ind),
+            "uwave_freq_ghz": float(uwave_freq_ghz),
+            "uwave_power_dbm": float(uwave_power_dbm),
+            "pol_ns": int(pol_ns),
+            "probe_ns": int(probe_ns),
+            "readout_ns": int(readout_ns),
+            "laser_power": laser_power,
+            "ms0_off_counts": ms0_off_counts.tolist(),
+            "ms0_on_counts":  ms0_on_counts.tolist(),
+            "ms1_off_counts": ms1_off_counts.tolist(),
+            "ms1_on_counts":  ms1_on_counts.tolist(),
+            "ms0_off_mean": ms0_off_m.tolist(), "ms0_off_ste": ms0_off_s.tolist(),
+            "ms1_off_mean": ms1_off_m.tolist(), "ms1_off_ste": ms1_off_s.tolist(),
+            "ms0_on_mean":  ms0_on_m.tolist(),  "ms0_on_ste":  ms0_on_s.tolist(),
+            "ms1_on_mean":  ms1_on_m.tolist(),  "ms1_on_ste":  ms1_on_s.tolist(),
+            "contrast_ms0_mean": resp_ms0_m.tolist(),    "contrast_ms0_ste": resp_ms0_s.tolist(),
+            "contrast_ms1_mean": resp_ms1_m.tolist(),    "contrast_ms1_ste": resp_ms1_s.tolist(),
+            "delta_contrast_mean": delta_resp_m.tolist(), "delta_contrast_ste": delta_resp_s.tolist(),
+            "spin_contrast_off_mean": spin_off_m.tolist(),   "spin_contrast_off_ste": spin_off_s.tolist(),
+            "spin_contrast_on_mean":  spin_on_m.tolist(),    "spin_contrast_on_ste":  spin_on_s.tolist(),
+            "delta_spin_contrast_mean": delta_spin_m.tolist(), "delta_spin_contrast_ste": delta_spin_s.tolist(),
+            "opti_coords_list": opti_coords_list,
+        }
 
     try:
         for run_ind in range(num_runs):
@@ -445,17 +388,7 @@ def main(
 
             # Match the working resonance-style path:
             # load once per run, then reapply MW state each run
-            t_load = time.perf_counter()
-            ret_vals = pulsegen_server.stream_load(seq_file, seq_args_string)
-            t_load = time.perf_counter() - t_load
-            if run_ind == 0:
-                try:
-                    period_ns = int(ret_vals[0]) if hasattr(ret_vals, "__len__") else int(ret_vals)
-                    print(f"  [diag] sequence period = {period_ns} ns "
-                          f"(stream_load took {t_load * 1e3:.0f} ms)")
-                except Exception:
-                    print(f"  [diag] stream_load took {t_load * 1e3:.0f} ms; "
-                          f"period return = {ret_vals!r}")
+            pulsegen_server.stream_load(seq_file, seq_args_string)
             sig_gen.set_amp(float(uwave_power_dbm))
             sig_gen.set_freq(float(uwave_freq_ghz))
             sig_gen.uwave_on()
@@ -465,39 +398,22 @@ def main(
                 np.random.shuffle(sweep_order)
 
             counter_server.start_tag_stream()
-            run_t0 = time.perf_counter()
             try:
                 for step_ind in sweep_order:
                     if tb.safe_stop():
                         break
 
-                    step_t0 = time.perf_counter()
-
                     wl_nm = float(wavelengths_nm[step_ind])
-
-                    # Time the Ti:sapph settle separately — this is usually the
-                    # main per-step overhead in the singlet scan.
-                    t0 = time.perf_counter()
                     tisapph.set_wavelength_nm(wl_nm)
                     time.sleep(settle_s)
-                    t_settle = time.perf_counter() - t0
 
-                    # Pulse + readout block
-                    t0 = time.perf_counter()
                     counter_server.clear_buffer()
                     pulsegen_server.stream_start(int(num_reps))
 
-                    # read_counter_summed returns [gate0_total, ..., gate3_total]
-                    # — num_gates integers regardless of num_reps. Order matches
-                    # the sequence: ms0_off, ms0_on, ms1_off, ms1_on.
+                    # read_counter_summed returns [gate0_total, gate1_total, ...]
+                    # — num_gates integers regardless of num_reps.
+                    # Gate order matches the sequence: ms0_off, ms0_on, ms1_off, ms1_on.
                     new_counts = counter_server.read_counter_summed(int(num_reps))
-                    t_pulse = time.perf_counter() - t0
-
-                    step_wall = time.perf_counter() - step_t0
-                    step_wall_times[run_ind, step_ind] = step_wall
-                    step_settle_times[run_ind, step_ind] = t_settle
-                    step_pulse_times[run_ind, step_ind] = t_pulse
-
                     ms0_off_counts[run_ind, step_ind] = int(new_counts[0])
                     ms0_on_counts[run_ind, step_ind]  = int(new_counts[1])
                     ms1_off_counts[run_ind, step_ind] = int(new_counts[2])
@@ -508,26 +424,21 @@ def main(
                     ms1_off_val = ms1_off_counts[run_ind, step_ind]
                     ms1_on_val = ms1_on_counts[run_ind, step_ind]
 
-                    # Use scalar metrics — _compute_all_metrics returns 0-d
-                    # numpy arrays for scalar inputs which crashes ':.5e' on
-                    # some numpy versions and is slow either way.
-                    metrics_val = _scalar_metrics(
-                        ms0_off_val, ms0_on_val, ms1_off_val, ms1_on_val
+                    metrics_val = _compute_all_metrics(
+                        ms0_off_val,
+                        ms0_on_val,
+                        ms1_off_val,
+                        ms1_on_val,
                     )
 
-                    overhead_ms = (step_wall - step_expected_s) * 1e3
                     print(
                         f"  wl={wl_nm:.3f} nm | "
                         f"ms0_off={int(ms0_off_val)}, ms0_on={int(ms0_on_val)}, "
-                        f"ms1_off={int(ms1_off_val)}, ms1_on={int(ms1_on_val)} | "
-                        f"spin_off={metrics_val['spin_contrast_off']:.4e}, "
-                        f"spin_on={metrics_val['spin_contrast_on']:.4e}, "
-                        f"resp0={metrics_val['ms0_response']:.4e}, "
-                        f"resp1={metrics_val['ms1_response']:.4e} | "
-                        f"wall={step_wall:.2f}s exp={step_expected_s:.2f}s "
-                        f"settle={t_settle * 1e3:.0f}ms pulse={t_pulse * 1e3:.0f}ms "
-                        f"ovhd={overhead_ms:+.0f}ms",
-                        flush=True,
+                        f"ms1_off={int(ms1_off_val)}, ms1_on={int(ms1_on_val)}, "
+                        f"spin_off={metrics_val['spin_contrast_off']:.5e}, "
+                        f"spin_on={metrics_val['spin_contrast_on']:.5e}, "
+                        f"resp0={metrics_val['ms0_response']:.5e}, "
+                        f"resp1={metrics_val['ms1_response']:.5e}"
                     )
 
             finally:
@@ -535,23 +446,6 @@ def main(
                     counter_server.stop_tag_stream()
                 except Exception:
                     pass
-
-            run_wall = time.perf_counter() - run_t0
-            run_wall_times[run_ind] = run_wall
-            run_expected_s = step_expected_s * num_steps
-            valid_steps = int(np.sum(np.isfinite(step_wall_times[run_ind])))
-            avg_overhead_ms = (
-                (np.nansum(step_wall_times[run_ind]) - run_expected_s) / valid_steps * 1e3
-                if valid_steps > 0 else float("nan")
-            )
-            avg_settle_ms = float(np.nanmean(step_settle_times[run_ind])) * 1e3
-            avg_pulse_ms = float(np.nanmean(step_pulse_times[run_ind])) * 1e3
-            print(
-                f"  Run {run_ind + 1} done | "
-                f"wall={run_wall:.1f}s  exp={run_expected_s:.1f}s  "
-                f"avg settle={avg_settle_ms:.0f}ms  avg pulse={avg_pulse_ms:.0f}ms  "
-                f"avg overhead/step={avg_overhead_ms:+.0f}ms"
-            )
 
             if do_plot:
                 ms0_off_mean, _ = _nanmean_ste(ms0_off_counts[: run_ind + 1])
@@ -583,6 +477,24 @@ def main(
                     ms1_on_mean,
                 )
 
+            # Per-run incremental save — wrapped so save failures never abort
+            # the routine. Each file is a self-contained snapshot of all data
+            # accumulated through `run_ind`; remaining runs stay as NaN.
+            try:
+                run_save_ts = dm.get_time_stamp()
+                nv_name = getattr(nv_sig, "name", "nv")
+                per_run_subfolder = f"per_run/{timestamp}-{nv_name}"
+                per_run_name = f"{nv_name}-run{run_ind + 1:03d}"
+                per_run_path = dm.get_file_path(
+                    __file__, run_save_ts, per_run_name, subfolder=per_run_subfolder,
+                )
+                elapsed_so_far = time.time() - start_time
+                dm.save_raw_data(_build_raw_data_dict(elapsed_so_far), per_run_path)
+                print(f"  [per-run save] {per_run_path}")
+            except Exception:
+                print("  [per-run save] FAILED — continuing")
+                print(traceback.format_exc())
+
     except Exception:
         print(traceback.format_exc())
         raise
@@ -595,100 +507,7 @@ def main(
         tb.reset_cfm()
 
     elapsed_s = time.time() - start_time
-
-    # --- Full-experiment timing summary (mirrors confocal_rabi.py) ---
-    total_wall_s = float(np.nansum(run_wall_times))
-    total_settle_s = float(np.nansum(step_settle_times))
-    total_pulse_s = float(np.nansum(step_pulse_times))
-    total_expected_s = step_expected_s * num_steps * num_runs
-    total_overhead_s = total_wall_s - total_expected_s
-    n_completed_steps = int(np.sum(np.isfinite(step_wall_times)))
-    per_step_overhead_ms = (
-        total_overhead_s / n_completed_steps * 1e3 if n_completed_steps > 0 else float("nan")
-    )
-    efficiency_pct = (
-        total_expected_s / total_wall_s * 100 if total_wall_s > 0 else 0.0
-    )
-    print("\n" + "=" * 72)
-    print("TIMING SUMMARY")
-    print(f"  Total wall time      : {total_wall_s:.1f} s  ({total_wall_s / 60:.2f} min)")
-    print(f"  Total expected (HW)  : {total_expected_s:.1f} s  ({total_expected_s / 60:.2f} min)")
-    print(f"  Total ti:sapph settle: {total_settle_s:.1f} s  ({total_settle_s / 60:.2f} min)")
-    print(f"  Total pulse + read   : {total_pulse_s:.1f} s  ({total_pulse_s / 60:.2f} min)")
-    print(f"  Total overhead       : {total_overhead_s:.1f} s  ({total_overhead_s / 60:.2f} min)")
-    print(f"  Avg overhead / step  : {per_step_overhead_ms:.0f} ms"
-          f"  (settle + LabRAD + read latency)")
-    print(f"  HW efficiency        : {efficiency_pct:.1f}%  (ideal = 100%)")
-    print("=" * 72 + "\n")
-
-    metrics_all = _compute_all_metrics(
-        ms0_off_counts,
-        ms0_on_counts,
-        ms1_off_counts,
-        ms1_on_counts,
-    )
-
-    ms0_off_mean, ms0_off_ste = _nanmean_ste(ms0_off_counts)
-    ms1_off_mean, ms1_off_ste = _nanmean_ste(ms1_off_counts)
-    ms0_on_mean, ms0_on_ste = _nanmean_ste(ms0_on_counts)
-    ms1_on_mean, ms1_on_ste = _nanmean_ste(ms1_on_counts)
-
-    resp_ms0_mean, resp_ms0_ste = _nanmean_ste(metrics_all["ms0_response"])
-    resp_ms1_mean, resp_ms1_ste = _nanmean_ste(metrics_all["ms1_response"])
-    delta_resp_mean, delta_resp_ste = _nanmean_ste(metrics_all["delta_response"])
-
-    spin_off_mean, spin_off_ste = _nanmean_ste(metrics_all["spin_contrast_off"])
-    spin_on_mean, spin_on_ste = _nanmean_ste(metrics_all["spin_contrast_on"])
-    delta_spin_mean, delta_spin_ste = _nanmean_ste(metrics_all["delta_spin_contrast"])
-
-    raw_data = {
-        "timestamp": timestamp,
-        "elapsed_s": elapsed_s,
-        "nv_sig": nv_sig,
-        "wavelengths_nm": wavelengths_nm.tolist(),
-        "num_reps": int(num_reps),
-        "num_runs": int(num_runs),
-        "uwave_ind": int(uwave_ind),
-        "uwave_freq_ghz": float(uwave_freq_ghz),
-        "uwave_power_dbm": float(uwave_power_dbm),
-        "pol_ns": int(pol_ns),
-        "probe_ns": int(probe_ns),
-        "readout_ns": int(readout_ns),
-        "laser_power": laser_power,
-        "ms0_off_counts": ms0_off_counts.tolist(),
-        "ms0_on_counts": ms0_on_counts.tolist(),
-        "ms1_off_counts": ms1_off_counts.tolist(),
-        "ms1_on_counts": ms1_on_counts.tolist(),
-        "ms0_off_mean": ms0_off_mean.tolist(),
-        "ms0_off_ste": ms0_off_ste.tolist(),
-        "ms1_off_mean": ms1_off_mean.tolist(),
-        "ms1_off_ste": ms1_off_ste.tolist(),
-        "ms0_on_mean": ms0_on_mean.tolist(),
-        "ms0_on_ste": ms0_on_ste.tolist(),
-        "ms1_on_mean": ms1_on_mean.tolist(),
-        "ms1_on_ste": ms1_on_ste.tolist(),
-        # Ti:sapph response metrics (kept compatible with old naming)
-        "contrast_ms0_mean": resp_ms0_mean.tolist(),
-        "contrast_ms0_ste": resp_ms0_ste.tolist(),
-        "contrast_ms1_mean": resp_ms1_mean.tolist(),
-        "contrast_ms1_ste": resp_ms1_ste.tolist(),
-        "delta_contrast_mean": delta_resp_mean.tolist(),
-        "delta_contrast_ste": delta_resp_ste.tolist(),
-        # New direct spin-contrast metrics
-        "spin_contrast_off_mean": spin_off_mean.tolist(),
-        "spin_contrast_off_ste": spin_off_ste.tolist(),
-        "spin_contrast_on_mean": spin_on_mean.tolist(),
-        "spin_contrast_on_ste": spin_on_ste.tolist(),
-        "delta_spin_contrast_mean": delta_spin_mean.tolist(),
-        "delta_spin_contrast_ste": delta_spin_ste.tolist(),
-        "opti_coords_list": opti_coords_list,
-        # Timing diagnostics (mirrors confocal_rabi.py)
-        "step_wall_times_s": step_wall_times.tolist(),
-        "step_settle_times_s": step_settle_times.tolist(),
-        "step_pulse_times_s": step_pulse_times.tolist(),
-        "step_expected_time_s": float(step_expected_s),
-        "run_wall_times_s": run_wall_times.tolist(),
-    }
+    raw_data = _build_raw_data_dict(elapsed_s)
 
     ts = dm.get_time_stamp()
     file_path = dm.get_file_path(__file__, ts, getattr(nv_sig, "name", "nv"))

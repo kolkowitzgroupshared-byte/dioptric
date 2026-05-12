@@ -34,7 +34,7 @@ def main(
     uwave_ind,
     uwave_power_dbm=None,
     laser_power=None,
-    optimize_between_runs=True,
+    optimize_between_runs=False,
     do_plot=True,
     shuffle=True,
     norm_mode=NormMode.SINGLE_VALUED,
