@@ -33,10 +33,9 @@ import majorroutines.confocal.confocal_image_sample as image_sample
 # import majorroutines.confocal.optimize_magnet_angle as optimize_magnet_angle
 # import majorroutines.confocal.pulsed_resonance as pulsed_resonance
 import majorroutines.confocal.confocal_rabi as rabi
-import majorroutines.confocal.confocal_test_simple_spin_contrast as test_simple_spin_contrast
-import majorroutines.confocal.confocal_tisapph_delay_cal as confocal_tisapph_delay_cal
+# import majorroutines.confocal.confocal_test_simple_spin_contrast as test_simple_spin_contrastimport majorroutines.confocal.confocal_tisapph_delay_cal as confocal_tisapph_delay_cal
 # import majorroutines.confocal.confocal_resonance as resonance
-
+import majorroutines.confocal.confocal_tisapph_readout_delay as tisapph_readout_delay
 # import majorroutines.confocal.ramsey as ramsey
 import majorroutines.confocal.confocal_resonance as resonance
 import majorroutines.confocal.confocal_optimize_green_readout as optimize_green_readout_time
@@ -879,17 +878,17 @@ def do_optimize_transient(nv_sig):
     )
 
 
-def do_tisapph_singlet_scan(nv_sig,wavelength_start_nm=855,wavelength_stop_nm=883):
+def do_tisapph_singlet_scan(nv_sig,wavelength_start_nm=850,wavelength_stop_nm=865):
     resonance_tisapph_singlet_scan.main(
         nv_sig,
         wavelength_start_nm=wavelength_start_nm,
         wavelength_stop_nm=wavelength_stop_nm,
-        num_steps=20, #100step=0.495nm
+        num_steps=15, #100step=0.495nm
         num_reps=20e4,
-        num_runs=1, 
+        num_runs=5, 
         uwave_ind=0,
         uwave_power_dbm=10.0,
-        probe_ns=2e3,
+        probe_ns=500e3,
         do_plot=True,
         shuffle=True,
         settle_s=0.3,#0.3
@@ -967,14 +966,29 @@ def do_optimize_green_power(nv_sig):
         randomize_power_order=True,
         do_plot=True,
     )
-def do_tisapph_delay_cal(nv_sig):
-    confocal_tisapph_delay_cal.main(
+def do_tisapph_readout_delay(nv_sig):
+    """Sweep the dark gap between Ti:sapph turn-OFF and the readout window
+    opening, with no microwaves. Two gates per rep:
+
+        gate 0 = reference: green readout only (TiSapph OFF)
+        gate 1 = signal:    TiSapph ON for tisapph_ns, then dark gap of
+                            delay_ns, then readout
+
+    Use this to characterize how long after the Ti:sapph turns off the NV
+    is still emitting extra fluorescence — i.e. the decay time of the
+    Ti:sapph-induced response. Expect counts to start high at delay=0 and
+    settle to the green-only baseline at long delays.
+    """
+    tisapph_readout_delay.main(
         nv_sig,
-        delay_min_ns=0,
-        delay_max_ns=1000,
-        num_steps=21,       # 50 ns steps
+        tisapph_ns=2e3,        # fixed TiSapph pulse duration (ns)
+        min_delay_ns=800,
+        max_delay_ns=1200,       # zoom into the sub-µs decay first
+        num_steps=10,
         num_reps=int(20e4),
-        num_runs=1,
+        num_runs=10,
+        log_spaced=False,         # try True for ns -> µs range
+        optimize_between_runs=True,
     )
 
 def do_optimize_spin_readout(
@@ -1351,7 +1365,7 @@ if __name__ == "__main__":
     coord_z =4.8925+1.25#5.673 #4.828+1.25 #6.4988 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # coord_z = 3.4318
     # pixel_xy =[-0.084,-0.016] # NewNVs 5/12
-    pixel_xy = [-0.049,0.01] # NewNV2
+    pixel_xy = [-0.047,0.008] # NewNV2
     # pixel_xy = [-0.049, -0.018]  #NV1
     # pixel_xy = [0.046,0.01]  #nv2
 
@@ -1375,7 +1389,7 @@ if __name__ == "__main__":
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 77 #6.5mW Green Power 5/11
+    nv_sig.expected_counts = 90 #6.5mW Green Power 5/11
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
@@ -1461,7 +1475,7 @@ if __name__ == "__main__":
         # endregion Stationary count
 
         # region Resonance, Pulse Seq., Singlet
-        do_tisapph_singlet_scan(nv_sig)
+        # do_tisapph_singlet_scan(nv_sig)
         # do_tisapph_delay_cal(nv_sig)
         # probe_ns = [2e3, 5e3, 10e3, 20e3, 50e3, 100e3]
         # for probe in probe_ns:
@@ -1499,7 +1513,8 @@ if __name__ == "__main__":
         
         #TiSapph Scans
         # do_tisapph_singlet_scan_loop(nv_sig, wavelength_start_nm=800, wavelength_stop_nm=820, step_nm=5)
-        # do_tisapph_singlet_scan(nv_sig)
+        do_tisapph_singlet_scan(nv_sig)
+        # do_tisapph_readout_delay(nv_sig)
         # do_test_simple_spin_contrast(nv_sig)
 
         # probe_ns = [2e3, 5e3, 10e3, 20e3, 50e3, 100e3]

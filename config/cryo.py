@@ -132,7 +132,7 @@ config |= {
             },
             tisapph_laser: {
                 # "delay": 0,
-                "delay": 960, #960ns, Characterized by Saroj and Caitlin on 04/17/2025
+                "delay": 1000, #1000ns, Characterize by Yael on the NV setup
                 "mod_mode": ModMode.DIGITAL,
                 "positioner": CoordsKey.PIXEL,
             },
