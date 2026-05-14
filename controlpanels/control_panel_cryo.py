@@ -877,26 +877,27 @@ def do_optimize_transient(nv_sig):
         optimize_between_runs=False,
     )
 
+#region TiSapph Singlet
 
-def do_tisapph_singlet_scan(nv_sig,wavelength_start_nm=850,wavelength_stop_nm=865):
+def do_tisapph_singlet_scan(nv_sig,wavelength_start_nm=852,wavelength_stop_nm=882):
     resonance_tisapph_singlet_scan.main(
         nv_sig,
         wavelength_start_nm=wavelength_start_nm,
         wavelength_stop_nm=wavelength_stop_nm,
-        num_steps=15, #100step=0.495nm
-        num_reps=20e4,
-        num_runs=5, 
+        num_steps=5,#60, #100step=0.495nm
+        num_reps=3,#20e4,
+        num_runs=3,#10, 
         uwave_ind=0,
         uwave_power_dbm=10.0,
-        probe_ns=500e3,
+        probe_ns=1e6,
         do_plot=True,
-        shuffle=True,
+        shuffle=False,
         settle_s=0.3,#0.3
-        optimize_between_runs=True,
+        optimize_between_runs=False,
     )
 
 def do_tisapph_singlet_scan_loop(
-        nv_sig, wavelength_start_nm=800, wavelength_stop_nm=820, step_nm=5):
+        nv_sig, wavelength_start_nm=852, wavelength_stop_nm=882, step_nm=5):
     tool_belt.init_safe_stop()
     seg_start = wavelength_start_nm
     seg_idx=1
@@ -905,11 +906,9 @@ def do_tisapph_singlet_scan_loop(
             break
         seg_stop=min(seg_start+step_nm,wavelength_stop_nm)
         print(f"TiSapph singlet scan segment {seg_idx}: {seg_start}-{seg_stop} nm")
-        do_tisapph_singlet_scan(
-            nv_sig,
-            wavelength_start_nm=seg_start,
-            wavelength_stop_nm=seg_stop,
-        )
+        Delta=seg_stop-seg_start
+        for i in range(seg_idx):
+            do_tisapph_singlet_scan(nv_sig, wavelength_start_nm=seg_start,wavelength_stop_nm=seg_stop)
         seg_start=seg_stop
         seg_idx+=1
 
@@ -1365,8 +1364,8 @@ if __name__ == "__main__":
     coord_z =4.8925+1.25#5.673 #4.828+1.25 #6.4988 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # coord_z = 3.4318
     # pixel_xy =[-0.084,-0.016] # NewNVs 5/12
-    pixel_xy = [-0.047,0.008] # NewNV2
-    # pixel_xy = [-0.049, -0.018]  #NV1
+    pixel_xy = [-0.042,0.002] # NewNV2
+    # pixel_xy = [-0.012, 0.082]  #NV1
     # pixel_xy = [0.046,0.01]  #nv2
 
     #region Paramss
@@ -1476,6 +1475,7 @@ if __name__ == "__main__":
 
         # region Resonance, Pulse Seq., Singlet
         # do_tisapph_singlet_scan(nv_sig)
+        do_tisapph_singlet_scan_loop(nv_sig)
         # do_tisapph_delay_cal(nv_sig)
         # probe_ns = [2e3, 5e3, 10e3, 20e3, 50e3, 100e3]
         # for probe in probe_ns:
@@ -1513,7 +1513,7 @@ if __name__ == "__main__":
         
         #TiSapph Scans
         # do_tisapph_singlet_scan_loop(nv_sig, wavelength_start_nm=800, wavelength_stop_nm=820, step_nm=5)
-        do_tisapph_singlet_scan(nv_sig)
+        # do_tisapph_singlet_scan(nv_sig)
         # do_tisapph_readout_delay(nv_sig)
         # do_test_simple_spin_contrast(nv_sig)
 
