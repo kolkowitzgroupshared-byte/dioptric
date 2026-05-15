@@ -799,7 +799,7 @@ def do_rabi(nv_sig):
     rabi.main(
         nv_sig=nv_sig,
         num_reps=int(20e4),
-        num_runs=10, #testing
+        num_runs=20, #testing
         min_tau=20,  # ns
         max_tau=500,  # ns (480+min_tau)
         num_steps=40,  # 1 step every ~5-10ns
@@ -812,13 +812,13 @@ def do_rabi(nv_sig):
 def do_resonance(nv_sig):
     resonance.main(
         nv_sig,
-        freq_center_ghz=2.8206,#2.869332, #2.869332,#2.82,#2.8316,#2.8333,
-        freq_span_mhz=50.0,
+        freq_center_ghz=2.869332,#2.8206,#2.869332, #2.869332,#2.82,#2.8316,#2.8333,
+        freq_span_mhz=150.0,
         num_steps=51,
         num_reps=1,#20e4,
         num_runs=20,
         uwave_ind=0,
-        optimize_between_runs=False,
+        optimize_between_runs=True,
     )
 
 
@@ -897,7 +897,7 @@ def do_tisapph_singlet_scan(nv_sig,wavelength_start_nm=852,wavelength_stop_nm=88
     )
 
 def do_tisapph_singlet_scan_loop(
-        nv_sig, wavelength_start_nm=852, wavelength_stop_nm=882, step_nm=5):
+        nv_sig, wavelength_start_nm=852, wavelength_stop_nm=882, step_nm=10):
     tool_belt.init_safe_stop()
     seg_start = wavelength_start_nm
     seg_idx=1
@@ -1361,9 +1361,9 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z = 4.5291+1.25 #4.8925+1.25  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z = 6.0151 #4.5291+1.25 #4.8925+1.25  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # coord_z = 3.4318
-    pixel_xy =[-0.041,0.006] # NewNVs 5/12
+    pixel_xy =[-0.032,-0.004] # NewNVs 5/12
     # pixel_xy = [-0.11, 0.052] # NewNV2
     # pixel_xy = [-0.012, 0.082]  #NV1
     # pixel_xy = [0.046,0.01]  #nv2
@@ -1388,7 +1388,7 @@ if __name__ == "__main__":
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 90 #6.5mW Green Power 5/11
+    nv_sig.expected_counts = 85 #6.5mW Green Power 5/11
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
@@ -1444,19 +1444,24 @@ if __name__ == "__main__":
     
         # do_z_scan_3d(nv_sig) # (xy gavo, z piezo)
         # do_image_sample_zoom(nv_sig)
-        do_image_sample(nv_sig)
+        # do_image_sample(nv_sig)
         # do_image_sample(nv_sig, nv_minus_initialization=True)
         # do_image_sample_zoom(nv_sig, nv_minus_initialization=True)
         # end region Image sample
         #
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=4.5, voltage_end=6.5, step_size=0.005) #must be between 1-9V
+        # do_optimize_z_PI(nv_sig, voltage_start=5.8, voltage_end=6.2, step_size=0.002) #must be between 1-9V
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
 
+        ## test: timing drift compensation
+        # t0 = time.time()
+        # targeting.compensate_for_drift(nv_sig, no_crash=True)
+        # print(f"compensate_for_drift took {time.time()-t0:.2f} s")
+
         # do_compensate_for_drift(nv_sig)
-        # do_optimize_galvo(nv_sig) # optimize xy for drift
+     #    do_optimize_galvo(nv_sig) # optimize xy for drift
         # do_optimize_z(nv_sig) # optimize z for drift
         # do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
 
@@ -1512,8 +1517,8 @@ if __name__ == "__main__":
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
         
         #TiSapph Scans
-        # do_tisapph_singlet_scan_loop(nv_sig, wavelength_start_nm=800, wavelength_stop_nm=820, step_nm=5)
-        # do_tisapph_singlet_scan(nv_sig)
+        # do_tisapph_singlet_scan_loop(nv_sig, wavelength_start_nm=852, wavelength_stop_nm=882, step_nm=10)
+        do_tisapph_singlet_scan(nv_sig)
         # do_tisapph_readout_delay(nv_sig)
         # do_test_simple_spin_contrast(nv_sig)
 

@@ -459,7 +459,7 @@ if __name__ == "__main__":
     from utils import common
 
     cfg = common.get_config_dict()
-    args = [2000, 10000, 610, 0, "SPIN_POL", "SPIN_READOUT"]
+    args = [2000, 1e6, 610, 0, "SPIN_POL", "SPIN_READOUT"]
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])
     seq.plot()
