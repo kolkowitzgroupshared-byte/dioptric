@@ -25,7 +25,8 @@
       "Bash(findstr /I \"SingletChar singletchar singlet_char\")",
       "Bash(findstr /I \"singlet\")",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\cmrei\\\\Documents\\\\New folder\\\\dioptric\" -Recurse -Filter \"control_panel_cryo.py\")",
-      "Bash(Select-Object FullName)"
+      "Bash(Select-Object FullName)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\cmrei\\\\Documents\\\\New folder\\\\dioptric\" -Recurse -Filter \"*control_panel_cryo*\")"
     ]
   }
 }

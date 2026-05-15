@@ -16,6 +16,7 @@ Created on Oct 7th, 2025
 # region Imports and constants
 
 import copy
+import os
 import sys
 import time
 
@@ -59,6 +60,7 @@ from majorroutines.calibration import approach_surface, diagnose_z_direction
 from majorroutines.confocal.confocal_2D_scan import confocal_scan_2D_xz
 from majorroutines.confocal.z_scan_1d import main as scan_1D
 from utils import common, kplotlib as kpl
+from utils import data_manager as dm
 from utils import positioning as pos
 from utils.constants import Axes, CoordsKey, NVSig, VirtualLaserKey
 
@@ -414,8 +416,73 @@ def do_optimize_xy_loop(
 #     return opti_coords
 
 
+def _get_drift_journal_path():
+    """Return the fixed path to the single growing drift journal."""
+    ts = dm.get_time_stamp()
+    ref_path = dm.get_file_path(__file__, ts, "drift_journal")
+    journal_path = ref_path.parent.parent / "drift_journal.tsv"
+    journal_path.parent.mkdir(parents=True, exist_ok=True)
+    return journal_path
+
+
+def _format_drift(drift):
+    """Format a 1D drift vector as comma-separated floats."""
+    return ",".join(f"{float(v):.6f}" for v in np.asarray(drift).ravel())
+
+
 def do_compensate_for_drift(nv_sig):
+    sample_xy = nv_sig.coords[CoordsKey.SAMPLE]
+    coord_z = nv_sig.coords[CoordsKey.Z]
+    pixel_xy = nv_sig.coords[CoordsKey.PIXEL]
+
+    drift_before_raw = pos.get_drift()
+    drift_before_sample = pos.get_drift(coords_key=CoordsKey.SAMPLE)
+    drift_before_pixel = pos.get_drift(coords_key=CoordsKey.PIXEL)
+
     targeting.compensate_for_drift(nv_sig, no_crash=True)
+
+    drift_after_raw = pos.get_drift()
+    drift_after_sample = pos.get_drift(coords_key=CoordsKey.SAMPLE)
+    drift_after_pixel = pos.get_drift(coords_key=CoordsKey.PIXEL)
+
+    timestamp = dm.get_time_stamp()
+    nv_name = getattr(nv_sig, "name", "nv")
+
+    print(f"[compensate_for_drift] {timestamp} nv={nv_name}")
+    print(f"  sample_xy={sample_xy}  coord_z={coord_z}  pixel_xy={pixel_xy}")
+    print(f"  drift_raw    before={drift_before_raw}    after={drift_after_raw}")
+    print(f"  drift_sample before={drift_before_sample} after={drift_after_sample}")
+    print(f"  drift_pixel  before={drift_before_pixel}  after={drift_after_pixel}")
+
+    journal_path = _get_drift_journal_path()
+    write_header = not journal_path.exists()
+    with open(journal_path, "a", encoding="utf-8", buffering=1) as fh:
+        if write_header:
+            fh.write(
+                "# Drift compensation journal (append-only)\n"
+                "# columns: timestamp\tnv_name\tsample_xy\tcoord_z\tpixel_xy"
+                "\tdrift_raw_before\tdrift_raw_after"
+                "\tdrift_sample_before\tdrift_sample_after"
+                "\tdrift_pixel_before\tdrift_pixel_after\n"
+            )
+        row = "\t".join([
+            timestamp,
+            str(nv_name),
+            _format_drift(sample_xy),
+            f"{float(coord_z):.6f}",
+            _format_drift(pixel_xy),
+            _format_drift(drift_before_raw),
+            _format_drift(drift_after_raw),
+            _format_drift(drift_before_sample),
+            _format_drift(drift_after_sample),
+            _format_drift(drift_before_pixel),
+            _format_drift(drift_after_pixel),
+        ])
+        fh.write(row + "\n")
+        fh.flush()
+        os.fsync(fh.fileno())
+
+    print(f"  appended to {journal_path}")
 
 
 # def do_optimize(nv_sig):
