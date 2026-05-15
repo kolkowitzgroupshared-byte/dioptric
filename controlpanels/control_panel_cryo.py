@@ -449,13 +449,22 @@ def do_compensate_for_drift(nv_sig):
 #     )
 
 
-def do_stationary_count(nv_sig, disable_opt=None):
+def do_stationary_count(nv_sig, disable_opt=None, save_data=True, save_file_path=None):
     """
     A 1D scan which holds the galvo and piezo at a fixed position while collecting photon counts.
 
     Movement can be done during this scan using cryo_position_control.py file and running in
     a dedicated terminal.
 
+    Parameters
+    ----------
+    save_data : bool, default True
+        If True, every sample (counts + elapsed time) is streamed to a text file as it
+        arrives. The file is flushed every batch so data survives ring-buffer overwrites
+        on the live plot and routine cancellations (Ctrl+C, process kill).
+    save_file_path : pathlib.Path | None
+        Optional override for the save location. Default uses the standard nvdata path
+        from utils.data_manager.get_file_path().
     """
     run_time = 3 * 60 * 10**9  # ns
 
@@ -463,6 +472,8 @@ def do_stationary_count(nv_sig, disable_opt=None):
         nv_sig,
         run_time,
         disable_opt=disable_opt,
+        save_data=save_data,
+        save_file_path=save_file_path,
         # nv_minus_initialization=nv_minus_initialization,
         # nv_zero_initialization=nv_zero_initialization,
     )
