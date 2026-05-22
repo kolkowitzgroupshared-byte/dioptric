@@ -444,7 +444,6 @@ def main(
     ax2.set_ylabel("Ratio (Readout 2 / Readout 1)")
 
     plt.tight_layout()
-    plt.show()
 
     proc_data = {
         "recovery_delay_ns_list": recovery_delay_ns_list.tolist(),
@@ -518,10 +517,9 @@ def main(
         )
         dm.save_raw_data(raw_data, file_path)
         dm.save_raw_data(proc_data, file_path + "_proc")
-        # if fig is not None:
-        #     dm.save_figure(fig, file_path)
-        print(f"Saved data to {file_path}")
+        fig.savefig(f"{file_path}.png", dpi=300, bbox_inches="tight")
 
+        print(f"Saved data and plot to {file_path}")
     if proc_data["recovery_fit"] is not None:
         print(
             f"Recovered metastable time = "
@@ -530,6 +528,7 @@ def main(
         )
 
     tb.reset_cfm()
+    plt.show()
     return raw_data, proc_data
 
 
