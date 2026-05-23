@@ -69,7 +69,7 @@ def _show_nonblocking(fig, show=True):
 # =============================================================================
 
 
-def safe_get_image(cam, exposure=0.0001, tries=20, delay_s=0.05):
+def safe_get_image(cam, exposure=0.0001, tries=200, delay_s=0.05):
     """Set exposure and keep trying until a real image is returned."""
     cam.set_exposure(exposure)
     time.sleep(0.15)
@@ -82,6 +82,37 @@ def safe_get_image(cam, exposure=0.0001, tries=20, delay_s=0.05):
 
     raise RuntimeError("Camera returned None after multiple attempts.")
 
+# def safe_get_image(cam, exposure=None, max_attempts=20, retry_sleep_s=0.2):
+#     """
+#     Robust camera image acquisition.
+
+#     Returns image if successful.
+#     Raises RuntimeError only after many failed attempts.
+#     """
+#     last_exc = None
+#     cam.set_exposure(exposure)
+#     time.sleep(0.2)
+#     for attempt in range(max_attempts):
+#         try:
+#             if exposure is not None:
+#                 img = cam.get_image()
+#             else:
+#                 img = cam.get_image()
+
+#             if img is not None:
+#                 return img
+
+#             print(f"Camera returned None on attempt {attempt + 1}/{max_attempts}")
+
+#         except Exception as exc:
+#             last_exc = exc
+#             print(f"Camera get_image failed on attempt {attempt + 1}/{max_attempts}: {exc}")
+
+#         time.sleep(retry_sleep_s)
+
+#     raise RuntimeError(
+#         f"Camera returned None after {max_attempts} attempts. Last exception: {last_exc}"
+#     )
 
 def integrate_spot_intensities(img, spot_pts, roi=8):
     """Integrate local camera intensity around each spot center."""
@@ -657,7 +688,7 @@ def calibrate_zero_order_onpass(
     cam,
     exposure=0.0001,
     roi=12,
-    stripe_width=50,
+    stripe_width=20,
     zero_radius_px=30,
     save_scan_images=True,
 ):
@@ -683,7 +714,7 @@ def calibrate_zero_order_onpass(
         cam=cam,
         cam_pts=cam_pts,
         axis="x",
-        positions=np.arange(970, 1120, 4),
+        positions=np.arange(850, 1020, 4),
         stripe_width=stripe_width,
         plane=220,
         exposure=exposure,
@@ -696,7 +727,7 @@ def calibrate_zero_order_onpass(
         cam=cam,
         cam_pts=cam_pts,
         axis="y",
-        positions=np.arange(360, 500, 4),
+        positions=np.arange(450, 600, 4),
         stripe_width=stripe_width,
         plane=221,
         exposure=exposure,
@@ -767,7 +798,7 @@ def calibrate_triangle_onpass(
         cam=cam,
         cam_pts=tri_cam_pts,
         axis="x",
-        positions=np.arange(500, 1400, 15),
+        positions=np.arange(500, 1200, 10),
         stripe_width=stripe_width,
         plane=222,
         exposure=exposure,
@@ -790,7 +821,7 @@ def calibrate_triangle_onpass(
         cam=cam,
         cam_pts=tri_cam_pts,
         axis="y",
-        positions=np.arange(80, 1000, 15),
+        positions=np.arange(250,950, 10),
         stripe_width=stripe_width,
         plane=223,
         exposure=exposure,
@@ -925,7 +956,7 @@ def main(
     load_npz_path=None,
     camera_serial="26438",
     exposure_zero=0.0001,
-    exposure_triangle=0.001,
+    exposure_triangle=0.0001,
     save_scan_images=True,
     reuse_zero_order=True,
     force_zero_order=False,

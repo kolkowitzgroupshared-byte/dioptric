@@ -8,6 +8,7 @@ Created on Spring, 2024
 """
 
 import os
+import sys
 import warnings
 from datetime import datetime
 
@@ -218,9 +219,8 @@ def circles():
 def calibration_triangle():
     # Define parameters for the equilateral triangle
     center = (710, 540)  # Center of the triangle
-    # side_length = 200  # 
-    # side_length = 140  # Length of each side of the triangle
-    side_length = 80  # Length of each side of the triangle
+    # side_length = 160  # Length of each side of the triangle
+    side_length = 140  # Length of each side of the triangle
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
     theta = np.linspace(0, 2 * np.pi, 4)[:-1]  # Exclude the last point to avoid overlap
@@ -302,7 +302,7 @@ nuvu_pixel_coords, spot_weights = load_nv_coords()
 # nuvu_pixel_coords = np.array([[215.025, 203.863], [308.628, 103.893], [238.142, 328.739], [63.706, 100.683]])
 # thorcam_coords_xy = nuvu2thorcam_calibration(nuvu_pixel_coords).T
 thorcam_coords_xy = nuvu2thorcam_slm(nuvu_pixel_coords).T
-
+# sys.exit()
 def compute_and_write_nvs_phase():
     hologram = SpotHologram(
         shape=(4096, 2048),
@@ -399,8 +399,8 @@ try:
     # wavefront_calibration()
     # load_wavefront_calibration()
     
-    compute_and_write_nvs_phase()
-    # calibration_triangle()
+    # compute_and_write_nvs_phase()
+    calibration_triangle()
     
     # circles()
     # smiley()

@@ -1408,7 +1408,7 @@ if __name__ == "__main__":
 
     raw_data = dm.get_raw_data(
         file_stem=(
-            "2026_05_11-02_24_11-qnami-nv0_2026_02_20-dmd-crosstalk-200src-r20"
+            "2026_05_12-22_37_52-qnami-nv0_2026_02_20-dmd-crosstalk-1000src-r18"
         ),
         load_npz=True,
         allow_pickle=True,

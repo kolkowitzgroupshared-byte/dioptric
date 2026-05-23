@@ -68,9 +68,9 @@ DMD_HEIGHT = 1080
 # triangle_affine_onpass.npz was generated.
 BRIDGE_TRIANGLE_THORCAM_SLM = np.array(
     [
-        [779.2820323, 580.0],
-        [640.7179677, 580.0],
-        [710.0000000, 460.0],
+        [831.24355653, 610.0],
+        [588.75644347, 610.0],
+        [710.0,       400.0],
     ],
     dtype=np.float32,
 )

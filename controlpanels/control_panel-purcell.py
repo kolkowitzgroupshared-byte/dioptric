@@ -99,8 +99,8 @@ def do_red_calibration_image(nv_sig, coords_list, force_laser_key=None, num_reps
 
 
 def do_scanning_image_full_roi(nv_sig):
-    total_range = 63
-    scan_range = 9
+    total_range = 60
+    scan_range = 12
     num_steps = 15
     image_sample.scanning_full_roi(nv_sig, total_range, scan_range, num_steps)
 
@@ -271,7 +271,7 @@ def do_dmd_crosstalk_matrix(nv_list_all):
     """
 
     # DMD source NVs: choose center NVs for good first test
-    source_inds = dmd_crosstalk_matrix.get_center_dmd_indices(200)
+    source_inds = dmd_crosstalk_matrix.get_center_dmd_indices(1000)
 
     # Measured NVs: always include global 0 first, plus all source NVs
     measured_inds = unique_keep_order([0] + source_inds)
@@ -283,7 +283,7 @@ def do_dmd_crosstalk_matrix(nv_list_all):
         nv.representative = False
 
     nv_sub[0].representative = True
-    nv_sub[0].expected_counts = 1500.0
+    nv_sub[0].expected_counts = 1600.0
 
     print("Measured global indices:")
     print(measured_inds)
@@ -1410,7 +1410,7 @@ def do_opx_constant_ac():
     opx.constant_ac(
         [],  # Digital channels
         [7],  # Analog channels
-        [0.15],  # Analog voltages
+        [0.35],  # Analog voltages
         [0],  # Analog frequencies
     )
     # opx.constant_ac([4])  # Just laser
@@ -1475,17 +1475,17 @@ def do_opx_constant_ac():
     # )
 
     # Green + yellow
-    # opx.constant_ac(
-    #     [4],  # Digital channels
-    #     [3, 4, 7],  # Analog channels
-    #     [0.11, 0.11, 0.20],  # Analog voltages
-    #     [102, 102, 0],  # Analog frequencies
-    # )
-    # Red + green + Yellow
+    opx.constant_ac(
+        [4],  # Digital channels
+        [3, 4, 7],  # Analog channels
+        [0.11, 0.11, 0.20],  # Analog voltages
+        [102, 102, 0],  # Analog frequencies
+    )
+    # # Red + green + Yellow
     # opx.constant_ac(
     #     [4, 1],  # Digital channels1
     #     [3, 4, 2, 6, 7],  # Analog channels
-    #     [0.08, 0.08, 0.08, 0.08, 0.35],  # Analog voltages
+    #     [0.10, 0.10, 0.10, 0.10, 0.35],  # Analog voltages
     #     [102, 102, 67, 67, 0],  # Analog frequencies
     # )
     input("Press enter to stop...")
@@ -1495,8 +1495,8 @@ def do_green_red_triplet_time_mux():
     cxn = common.labrad_connect()
     opx = cxn.QM_opx
 
-    green_center = np.array([104.0, 104.0], dtype=float)
-    red_center   = np.array([69.0,  69.0], dtype=float)
+    green_center = np.array([102.0, 102.0], dtype=float)
+    red_center   = np.array([67.0,  67.0], dtype=float)
 
     green_d = 25.0   # MHz
     red_d   = 20.0   # MHz
@@ -1515,14 +1515,14 @@ def do_green_red_triplet_time_mux():
         [red_center[0] + red_d, red_center[1] + red_d],  # top-right
     ]
     # Start low; raise carefully if needed
-    green_amp = 0.03
-    red_amp = 0.04
+    green_amp = 0.06
+    red_amp = 0.06
     yellow_amp = None
     dwell_us = 200
 
     seq_args = [
-        green_square,
-        red_square,
+        green_coords_list,
+        red_coords_list,
         green_amp,
         red_amp,
         yellow_amp,
@@ -1767,9 +1767,9 @@ if __name__ == "__main__":
     sample_name = "qnami"
     # magnet_angle = 90
     date_str = "2026_02_20"
-    sample_coords = [-0.7, -0.4]
-    # z_coord = 0.6
-    z_coord = 2.5
+    sample_coords = [0.0, 0.0]
+    z_coord = 0.0
+    # z_coord = 3.5
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_reordered.npz",   
@@ -1806,29 +1806,29 @@ if __name__ == "__main__":
     print(f"Reference NV:{pixel_coords_list[0]}")
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
-    # pixel_coords_list =[
-    #     [209.693, 202.035], 
-    #     [343.989, 57.989], 
-    #     [196.016, 359.035], 
-    #     [25.014, 50.068],
-    #     ]
-    # green_coords_list = [
-    #     [97.886, 99.969],
-    #     [71.967, 124.546],
-    #     [102.219, 72.117],
-    #     [129.311, 129.235],
-    # ]
-    # red_coords_list = [
-    #     [66.259, 65.255],
-    #     [41.505, 82.791],
-    #     [68.562, 42.354],
-    #     [89.161, 91.279],
-    #     ]
+    pixel_coords_list =[
+        [199.693, 201.937], 
+        [342.93, 44.107], 
+        [204.188, 358.94], 
+        [10.992, 53.88],
+        ]
+    green_coords_list = [
+        [99.745, 99.794],
+        [70.712, 125.372],
+        [102.332, 71.682],
+        [130.634, 130.331],
+    ]
+    red_coords_list = [
+        [65.59, 65.255],
+        [42.505, 86.21],
+        [67.262, 42.154],
+        [90.161, 89.279],
+        ]
 
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
     # fmt: off
-    ### Johnso 205NVs
+    ### Johnson 205NVs
     # pol_duration_list = [296, 296, 944, 944, 1288, 1288, 440, 440, 972, 972, 652, 652, 836, 836, 868, 868, 756, 756, 1904, 1904, 836, 836, 220, 220, 440, 440, 1616, 1616, 448, 448, 868, 868, 740, 740, 708, 708, 796, 796, 472, 472, 948, 948, 876, 876, 596, 596, 660, 660, 1040, 1040, 852, 852, 1424, 1424, 720, 720, 860, 860, 252, 252, 732, 732, 808, 808, 644, 644, 836, 836, 724, 724, 228, 228, 960, 960, 1812, 1812, 856, 856, 804, 804, 648, 648, 612, 612, 848, 848, 552, 552, 972, 972, 876, 876, 1028, 1028, 556, 556, 912, 912, 1732, 1732, 340, 340, 792, 792, 724, 724, 756, 756, 1272, 1272, 908, 908, 884, 884, 980, 980, 868, 868, 668, 668, 1236, 1236, 892, 892, 460, 460, 344, 344, 844, 844, 952, 952, 720, 720, 836, 836, 872, 872, 1004, 1004, 896, 896, 740, 740, 452, 452, 944, 944, 788, 788, 212, 212, 776, 776, 968, 968, 308, 308, 720, 720, 1376, 1376, 396, 396, 756, 756, 832, 832, 864, 864, 924, 924, 904, 904, 792, 792, 608, 608, 624, 624, 788, 788, 412, 412, 660, 660, 444, 444, 764, 764, 912, 912, 560, 560, 984, 984, 788, 788, 900, 900, 820, 820, 780, 780, 840, 840, 576, 576, 1560, 1560, 836, 836, 524, 524, 900, 900, 580, 580, 220, 220, 816, 816, 1224, 1224, 1048, 1048, 1108, 1108, 976, 976, 564, 564, 824, 824, 864, 864, 992, 992, 896, 896, 1320, 1320, 868, 868, 860, 860, 752, 752, 768, 768, 808, 808, 724, 724, 844, 844, 744, 744, 1236, 1236, 808, 808, 836, 836, 772, 772, 696, 696, 1344, 1344, 936, 936, 1124, 1124, 688, 688, 836, 836, 676, 676, 1408, 1408, 404, 404, 1072, 1072, 1304, 1304, 752, 752, 748, 748, 232, 232, 784, 784, 732, 732, 764, 764, 836, 836, 908, 908, 1436, 1436, 676, 676, 748, 748, 696, 696, 1064, 1064, 1652, 1652, 904, 904, 1308, 1308, 804, 804, 1532, 1532, 1528, 1528, 1336, 1336, 1008, 1008, 864, 864, 1896, 1896, 872, 872, 1276, 1276, 224, 224, 812, 812, 832, 832, 1136, 1136, 752, 752, 1284, 1284, 1296, 1296, 1096, 1096, 1672, 1672, 892, 892, 664, 664, 836, 836, 868, 868, 860, 860, 948, 948, 948, 948, 736, 736, 856, 856, 796, 796, 1028, 1028, 1588, 1588, 796, 796, 736, 736, 864, 864, 764, 764, 832, 832, 1916, 1916, 712, 712, 208, 208, 836, 836, 756, 756, 836, 836, 1024, 1024, 936, 936, 836, 836, 688, 688]
     # scc_duration_list = [96, 72, 108, 84, 72, 72, 168, 60, 60, 132, 96, 60, 76, 112, 64, 88, 80, 72, 72, 112, 68, 96, 80, 84, 76, 92, 100, 76, 76, 128, 124, 68, 68, 96, 80, 76, 104, 92, 84, 152, 84, 108, 200, 136, 76, 80, 80, 112, 92, 68, 68, 76, 68, 68, 76, 60, 116, 64, 76, 68, 72, 68, 96, 80, 80, 96, 68, 76, 60, 72, 80, 96, 76, 72, 76, 96, 84, 136, 116, 76, 140, 68, 68, 116, 84, 68, 100, 96, 196, 84, 72, 104, 96, 120, 96, 68, 100, 96, 100, 72, 92, 72, 96, 136, 172, 136, 144, 152, 176, 92, 96, 68, 88, 76, 64, 144, 92, 88, 72, 108, 72, 112, 96, 108, 96, 184, 88, 116, 80, 76, 144, 136, 96, 80, 120, 100, 76, 96, 168, 188, 112, 112, 72, 76, 100, 116, 92, 164, 96, 196, 100, 76, 88, 100, 96, 144, 96, 84, 116, 84, 76, 108, 88, 96, 96, 96, 96, 96, 172, 116, 128, 100, 84, 84, 100, 96, 76, 96, 96, 96, 104, 88, 152, 108, 100, 104, 96, 124, 96, 124, 96, 116, 96, 132, 172, 128, 180, 96, 96, 124, 140, 96, 96, 120, 120]
     # median = np.median(scc_duration_list)
@@ -1919,7 +1919,7 @@ if __name__ == "__main__":
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
-    nv_sig.expected_counts = 1500.0
+    nv_sig.expected_counts = 3782
     # nv_sig.expected_counts = 1700
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:150]
@@ -1952,7 +1952,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.RED_IMAGIN,
         # )
         
-        do_compensate_for_drift(nv_sig)
+        # do_compensate_for_drift(nv_sig)
         
         # do_red_calibration_image(
         #     nv_sig,
@@ -1967,16 +1967,18 @@ if __name__ == "__main__":
         #     do_scanning_image_sample_zoom(nv)
 
         # do_scanning_image_sample(nv_sig)
-        # do_scanning_image_sample_zoom(nv_sig)
+        do_scanning_image_sample_zoom(nv_sig)
         # do_scanning_image_full_roi(nv_sig)
 
         # scan_equilateral_triangle(nv_sig, center_coord=sample_coords, radius=0.6)
         # do_image_nv_list(nv_list)
         # do_image_single_nv(nv_sig)
-        # z_range = np.linspace(0, 3.0, 31)
+        # z_range = np.linspace(2.0, 4.0, 15)
         # for z in z_range:
         #     nv_sig.coords[CoordsKey.Z] = z
-        #     do_scanning_image_sample(nv_sig)
+        #     # do_scanning_image_sample(nv_sig)
+        #     do_widefield_image_sample(nv_sig, 50)
+        
         # x_range = np.linspace(-2.0, 6.0, 6)
         # y_range = np.linspace(-2.0, 6.0, 6)
         # # --- Step 1: Start at (0, 0) ---
@@ -1984,6 +1986,7 @@ if __name__ == "__main__":
         # z = estimate_z(*sample_coord)
         # nv_sig.coords[Coo/*rdsKey.SAMPLE] = sample_coord
         # nv_sig.coords[CoordsKey.Z] = z
+        
         # print(f"[START] Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         # do_scanning_image_sample(nv_sig)
 
@@ -2001,10 +2004,11 @@ if __name__ == "__main__":
 
         # do_opx_constant_ac()
         # do_opx_square_wave()
+        
         # do_green_red_triplet_time_mux()
         
         # do_optimize_pixel(nv_sig)
-        # do_optimize_green(nv_sig)
+        do_optimize_green(nv_sig)
         # repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
         # do_optimize_red(nv_sig, repr_nv_sig)
         # do_optimize_z(nv_sig)
@@ -2018,7 +2022,7 @@ if __name__ == "__main__":
  
         # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
-        # do_dmd_crosstalk_matrix(nv_list)
+        # do_dmd_crosstalk_matrix(nv_list) 
         # do_charge_correlation(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 

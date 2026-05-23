@@ -27,8 +27,9 @@ from __future__ import annotations
 from pathlib import Path
 import json
 
-import cv2
+import itertools
 import numpy as np
+import cv2
 import matplotlib.pyplot as plt
 
 from utils import common, kplotlib as kpl
@@ -362,13 +363,6 @@ def main():
 #     kpl.show(block=True)
 
 
-
-import itertools
-import numpy as np
-import cv2
-import matplotlib.pyplot as plt
-
-
 def apply_affine(M, pts):
     pts = np.asarray(pts, dtype=np.float32)
     if pts.ndim == 1:
@@ -381,9 +375,9 @@ def apply_affine(M, pts):
 # Old SLM-side ThorCam triangle, in the printed order
 tri_slm_cam = np.array(
     [
-        [779.2820323, 580.0],
-        [640.7179677, 580.0],
-        [710.0,       460.0],
+        [831.24355653, 610.0],
+        [588.75644347, 610.0],
+        [710.0,       400.0],
     ],
     dtype=np.float32,
 )

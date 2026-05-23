@@ -12,21 +12,18 @@ def apply_affine(M, pts):
 
 save_path = "slmsuite/calibration/nuvu_to_thorcam_slm.npz"
 
+
 cal_coords_thorcam_slm = np.array(
     [
-        [831.24355653, 610.0],
-        [588.75644347, 610.0],
-        [710.0,        400.0],
+        [848.56406461, 620.0],
+        [571.43593539, 620.0],
+        [710.0,        380.0],
     ],
     dtype=np.float32,
 )
 
 nuvu_raw = np.array(
-    [
-        [86.242, 26.624],
-        [78.651, 326.387],
-        [324.776, 185.115],
-    ],
+[[82.702, 11.133], [91.929, 356.923], [336.619, 188.467], ],
     dtype=np.float32,
 )
 
@@ -34,7 +31,7 @@ NUVU_TRIANGLE_ORDER = [0, 1, 2]
 cal_coords_nuvu = nuvu_raw[NUVU_TRIANGLE_ORDER]
 
 zero_thorcam_slm = np.array([705.05789009, 519.93369574], dtype=np.float32)
-zero_nuvu = np.array([186.193, 186.546], dtype=np.float32)
+zero_nuvu = np.array([190.694, 191.013], dtype=np.float32)
 
 M_nuvu_to_thorcam_slm = cv2.getAffineTransform(
     cal_coords_nuvu.astype(np.float32),
@@ -73,64 +70,3 @@ np.savez_compressed(
 )
 
 print("Saved:", save_path)
-
-
-
-
-# import itertools
-# import cv2
-# import numpy as np
-
-# def apply_affine(M, pts):
-#     pts = np.asarray(pts, dtype=np.float32)
-#     if pts.ndim == 1:
-#         pts = pts[None, :]
-#     ones = np.ones((len(pts), 1), dtype=np.float32)
-#     return np.hstack([pts, ones]) @ M.T
-
-# cal_coords_thorcam_slm = np.array(
-#     [
-#         [831.24355653, 610.0],
-#         [588.75644347, 610.0],
-#         [710.0,        400.0],
-#     ],
-#     dtype=np.float32,
-# )
-
-# # Raw Nuvu detected spot centroids, in whatever order detection gave you.
-# nuvu_raw = np.array(
-#     [
-#  [86.242, 26.624], [78.651, 326.387], [324.776, 185.115], 
-#     ],
-#     dtype=np.float32,
-# )
-
-# # Fourier calibration zero-order / b point from your printout:
-# zero_thorcam_slm = np.array([705.05789009, 519.93369574], dtype=np.float32)
-
-# # Measure this from Nuvu image if visible:
-# zero_nuvu = np.array([186.193, 186.546], dtype=np.float32)
-
-# best = None
-
-# for perm in itertools.permutations(range(3)):
-#     nuvu_ordered = nuvu_raw[list(perm)]
-
-#     M = cv2.getAffineTransform(
-#         nuvu_ordered.astype(np.float32),
-#         cal_coords_thorcam_slm.astype(np.float32),
-#     )
-
-#     pred_zero = apply_affine(M, zero_nuvu)[0]
-#     err = np.linalg.norm(pred_zero - zero_thorcam_slm)
-
-#     print(f"perm={perm}, zero error={err:.2f} px, pred_zero={pred_zero}")
-
-#     if best is None or err < best[1]:
-#         best = (perm, err, M)
-
-# print("\nBEST:")
-# print("NUVU_TRIANGLE_ORDER =", list(best[0]))
-# print("zero error [px] =", best[1])
-# print("M_nuvu_to_thorcam_slm:")
-# print(best[2])

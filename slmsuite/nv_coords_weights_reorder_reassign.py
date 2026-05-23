@@ -765,10 +765,10 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_03_25-17_02_10-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_05_21-20_51_21-combined_image_array", load_npz=True
     )
-    img_array = np.array(data["ref_img_array"])
-    # img_array = data["img_array"]
+    # img_array = np.array(data["ref_img_array"])
+    img_array = data["img_array"]
     nv_coordinates, spot_weights = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_6837nvs.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_6904nvs.npz"
@@ -778,7 +778,9 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_1487nvs_reordered.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz"
-        file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz"
+        # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz"
+        # file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz"
+        file_path="slmsuite/nv_blob_detection/nv_blob_1275nvs_reordered.npz"
     )
     
     # fitted_data = dm.get_raw_data(file_stem="2026_03_23-16_39_03-optimal_values_2026_03_22-21_49_52-qnami-nv0_2026_02_20")
@@ -996,7 +998,7 @@ if __name__ == "__main__":
     #         img_array,
     #         filtered_reordered_coords,
     #         filtered_reordered_spot_weights,
-    #         window_size=6,
+    #         window_size=1,
     #         min_amplitude=0.0,
     #         replace_weights_with="none",   # or "amplitude" or "gaussian_weight"
     #         normalize=False,              # keep amplitude in image units
@@ -1032,11 +1034,11 @@ if __name__ == "__main__":
     )
     readout_fidelity_list = data["readout_fidelity_list"]
     prep_fidelity_list = data["prep_fidelity_list"]
-    include_indices = [
-        i for i, val in enumerate(readout_fidelity_list)
-        if (val is None) or (isinstance(val, (int, float)) and not math.isnan(val) and val >= 0.7)
-    ]
-    
+    # include_indices = [
+    #     i for i, val in enumerate(readout_fidelity_list)
+    #     if (val is None) or (isinstance(val, (int, float)) and not math.isnan(val) and val >= 0.7)
+    # ]
+    include_indices = list(range(len(filtered_reordered_coords)))
     # include_indices = [
     #     i
     #     for i, (v1, v2) in enumerate(zip(readout_fidelity_list, prep_fidelity_list))
@@ -1148,7 +1150,7 @@ if __name__ == "__main__":
     # save_results(
     #     filtered_reordered_coords,
     #     filtered_reordered_spot_weights,
-    #     filename="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz",
+    #     filename="slmsuite/nv_blob_detection/nv_blob_1275nvs_reordered.npz",
     # )
 
     # # Plot the original image with circles around each NV
