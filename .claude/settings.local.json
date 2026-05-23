@@ -17,7 +17,16 @@
       "Bash(python -c \"import ast; ast.parse\\(open\\('majorroutines/confocal/confocal_apd_gate_overlap_scan.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
       "Bash(python -c \"import ast; [ast.parse\\(open\\(p\\).read\\(\\)\\) for p in ['majorroutines/confocal/confocal_apd_gate_overlap_scan.py', 'controlpanels/control_panel_cryo.py']]; print\\('OK'\\)\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\('controlpanels/control_panel_cryo.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(dir C:\\\\Users\\\\cmrei\\\\Documents\\\\New folder\\\\dioptric *)",
+      "Bash(dir C:\\\\Users\\\\cmrei\\\\Documents\\\\New folder\\\\dioptric\\\\controlpanels *)",
+      "Bash(dir C:\\\\Users\\\\cmrei\\\\Documents\\\\New folder\\\\dioptric\\\\majorroutines *)",
+      "Bash(dir /B /S /AD \"C:\\\\Users\\\\cmrei\\\\Documents\\\\New folder\\\\dioptric\")",
+      "Bash(findstr /I \"SingletChar singletchar singlet_char\")",
+      "Bash(findstr /I \"singlet\")",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\cmrei\\\\Documents\\\\New folder\\\\dioptric\" -Recurse -Filter \"control_panel_cryo.py\")",
+      "Bash(Select-Object FullName)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\cmrei\\\\Documents\\\\New folder\\\\dioptric\" -Recurse -Filter \"*control_panel_cryo*\")"
     ]
   }
 }

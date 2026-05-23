@@ -106,9 +106,9 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
                 "uwave_power": 10, #dbm
-                "frequency": 2.8316,#2.5316,#2.8214, #GHz
-                "rabi_period":217.7, #192.7, #ns
-                "pi_pulse": 108.9, #96.4, #ns
+                "frequency": 2.8215,#2.5316,#2.8214, #GHz
+                "rabi_period":182.6, #192.7, #ns
+                "pi_pulse": 91.3, #96.4, #ns
                 "pi_on_2_pulse": 54, #Half of pi pulse, for use in Ramsey and SE
             },
             # sig gen 1 is iq molulated
@@ -132,7 +132,7 @@ config |= {
             },
             tisapph_laser: {
                 # "delay": 0,
-                "delay": 960, #960ns, Characterized by Saroj and Caitlin on 04/17/2025
+                "delay": 1000, #1000ns, Characterize by Yael on the NV setup
                 "mod_mode": ModMode.DIGITAL,
                 "positioner": CoordsKey.PIXEL,
             },

@@ -16,6 +16,7 @@ Created on Oct 7th, 2025
 # region Imports and constants
 
 import copy
+import os
 import sys
 import time
 
@@ -33,10 +34,9 @@ import majorroutines.confocal.confocal_image_sample as image_sample
 # import majorroutines.confocal.optimize_magnet_angle as optimize_magnet_angle
 # import majorroutines.confocal.pulsed_resonance as pulsed_resonance
 import majorroutines.confocal.confocal_rabi as rabi
-import majorroutines.confocal.confocal_test_simple_spin_contrast as test_simple_spin_contrast
-import majorroutines.confocal.confocal_tisapph_delay_cal as confocal_tisapph_delay_cal
+# import majorroutines.confocal.confocal_test_simple_spin_contrast as test_simple_spin_contrastimport majorroutines.confocal.confocal_tisapph_delay_cal as confocal_tisapph_delay_cal
 # import majorroutines.confocal.confocal_resonance as resonance
-
+import majorroutines.confocal.confocal_tisapph_readout_delay as tisapph_readout_delay
 # import majorroutines.confocal.ramsey as ramsey
 import majorroutines.confocal.confocal_resonance as resonance
 import majorroutines.confocal.confocal_optimize_green_readout as optimize_green_readout_time
@@ -60,6 +60,7 @@ from majorroutines.calibration import approach_surface, diagnose_z_direction
 from majorroutines.confocal.confocal_2D_scan import confocal_scan_2D_xz
 from majorroutines.confocal.z_scan_1d import main as scan_1D
 from utils import common, kplotlib as kpl
+from utils import data_manager as dm
 from utils import positioning as pos
 from utils.constants import Axes, CoordsKey, NVSig, VirtualLaserKey
 
@@ -88,8 +89,8 @@ def do_image_sample(nv_sig):
 
 
 def do_image_sample_zoom(nv_sig):
-    scan_range = 0.08  #0.05 cryo iimage conversion: 37um/V; step size: x,y,z=30,30,40V
-    num_steps = 35
+    scan_range = 0.1#0.08  #0.05 cryo iimage conversion: 37um/V; step size: x,y,z=30,30,40V
+    num_steps = 40#35
 
     image_sample.confocal_scan(
         nv_sig,
@@ -415,8 +416,73 @@ def do_optimize_xy_loop(
 #     return opti_coords
 
 
+def _get_drift_journal_path():
+    """Return the fixed path to the single growing drift journal."""
+    ts = dm.get_time_stamp()
+    ref_path = dm.get_file_path(__file__, ts, "drift_journal")
+    journal_path = ref_path.parent.parent / "drift_journal.tsv"
+    journal_path.parent.mkdir(parents=True, exist_ok=True)
+    return journal_path
+
+
+def _format_drift(drift):
+    """Format a 1D drift vector as comma-separated floats."""
+    return ",".join(f"{float(v):.6f}" for v in np.asarray(drift).ravel())
+
+
 def do_compensate_for_drift(nv_sig):
+    sample_xy = nv_sig.coords[CoordsKey.SAMPLE]
+    coord_z = nv_sig.coords[CoordsKey.Z]
+    pixel_xy = nv_sig.coords[CoordsKey.PIXEL]
+
+    drift_before_raw = pos.get_drift()
+    drift_before_sample = pos.get_drift(coords_key=CoordsKey.SAMPLE)
+    drift_before_pixel = pos.get_drift(coords_key=CoordsKey.PIXEL)
+
     targeting.compensate_for_drift(nv_sig, no_crash=True)
+
+    drift_after_raw = pos.get_drift()
+    drift_after_sample = pos.get_drift(coords_key=CoordsKey.SAMPLE)
+    drift_after_pixel = pos.get_drift(coords_key=CoordsKey.PIXEL)
+
+    timestamp = dm.get_time_stamp()
+    nv_name = getattr(nv_sig, "name", "nv")
+
+    print(f"[compensate_for_drift] {timestamp} nv={nv_name}")
+    print(f"  sample_xy={sample_xy}  coord_z={coord_z}  pixel_xy={pixel_xy}")
+    print(f"  drift_raw    before={drift_before_raw}    after={drift_after_raw}")
+    print(f"  drift_sample before={drift_before_sample} after={drift_after_sample}")
+    print(f"  drift_pixel  before={drift_before_pixel}  after={drift_after_pixel}")
+
+    journal_path = _get_drift_journal_path()
+    write_header = not journal_path.exists()
+    with open(journal_path, "a", encoding="utf-8", buffering=1) as fh:
+        if write_header:
+            fh.write(
+                "# Drift compensation journal (append-only)\n"
+                "# columns: timestamp\tnv_name\tsample_xy\tcoord_z\tpixel_xy"
+                "\tdrift_raw_before\tdrift_raw_after"
+                "\tdrift_sample_before\tdrift_sample_after"
+                "\tdrift_pixel_before\tdrift_pixel_after\n"
+            )
+        row = "\t".join([
+            timestamp,
+            str(nv_name),
+            _format_drift(sample_xy),
+            f"{float(coord_z):.6f}",
+            _format_drift(pixel_xy),
+            _format_drift(drift_before_raw),
+            _format_drift(drift_after_raw),
+            _format_drift(drift_before_sample),
+            _format_drift(drift_after_sample),
+            _format_drift(drift_before_pixel),
+            _format_drift(drift_after_pixel),
+        ])
+        fh.write(row + "\n")
+        fh.flush()
+        os.fsync(fh.fileno())
+
+    print(f"  appended to {journal_path}")
 
 
 # def do_optimize(nv_sig):
@@ -450,13 +516,22 @@ def do_compensate_for_drift(nv_sig):
 #     )
 
 
-def do_stationary_count(nv_sig, disable_opt=None):
+def do_stationary_count(nv_sig, disable_opt=None, save_data=True, save_file_path=None):
     """
     A 1D scan which holds the galvo and piezo at a fixed position while collecting photon counts.
 
     Movement can be done during this scan using cryo_position_control.py file and running in
     a dedicated terminal.
 
+    Parameters
+    ----------
+    save_data : bool, default True
+        If True, every sample (counts + elapsed time) is streamed to a text file as it
+        arrives. The file is flushed every batch so data survives ring-buffer overwrites
+        on the live plot and routine cancellations (Ctrl+C, process kill).
+    save_file_path : pathlib.Path | None
+        Optional override for the save location. Default uses the standard nvdata path
+        from utils.data_manager.get_file_path().
     """
     run_time = 3 * 60 * 10**9  # ns
 
@@ -464,6 +539,8 @@ def do_stationary_count(nv_sig, disable_opt=None):
         nv_sig,
         run_time,
         disable_opt=disable_opt,
+        save_data=save_data,
+        save_file_path=save_file_path,
         # nv_minus_initialization=nv_minus_initialization,
         # nv_zero_initialization=nv_zero_initialization,
     )
@@ -800,12 +877,12 @@ def do_rabi(nv_sig):
     rabi.main(
         nv_sig=nv_sig,
         num_reps=int(20e4),
-        num_runs=10, #testing
+        num_runs=20, #testing
         min_tau=20,  # ns
         max_tau=500,  # ns (480+min_tau)
         num_steps=40,  # 1 step every ~5-10ns
         uwave_ind=0,
-        uwave_freq_ghz= 2.8316, #2.820, #2.8513,  # Change to target ms=+1 or ms=-1 transition
+        uwave_freq_ghz= 2.8215, #2.820, #2.8513,  # Change to target ms=+1 or ms=-1 transition
         optimize_between_runs=True,  # Set to false to turn off optimize between runs
     )
 
@@ -813,8 +890,8 @@ def do_rabi(nv_sig):
 def do_resonance(nv_sig):
     resonance.main(
         nv_sig,
-        freq_center_ghz=2.8336, #2.869332,#2.82,#2.8316,#2.8333,
-        freq_span_mhz=50.0,
+        freq_center_ghz=2.869332,#2.8206,#2.869332, #2.869332,#2.82,#2.8316,#2.8333,
+        freq_span_mhz=150.0,
         num_steps=51,
         num_reps=1,#20e4,
         num_runs=20,
@@ -878,26 +955,27 @@ def do_optimize_transient(nv_sig):
         optimize_between_runs=False,
     )
 
+#region TiSapph Singlet
 
-def do_tisapph_singlet_scan(nv_sig,wavelength_start_nm=810,wavelength_stop_nm=820):
+def do_tisapph_singlet_scan(nv_sig,wavelength_start_nm=852,wavelength_stop_nm=882):
     resonance_tisapph_singlet_scan.main(
         nv_sig,
         wavelength_start_nm=wavelength_start_nm,
         wavelength_stop_nm=wavelength_stop_nm,
-        num_steps=10, #100step=0.495nm
+        num_steps=60, #100step=0.495nm
         num_reps=20e4,
-        num_runs=1, 
+        num_runs=10, 
         uwave_ind=0,
         uwave_power_dbm=10.0,
-        probe_ns=2e3,
-        do_plot=False,
+        probe_ns=1e6,
+        do_plot=True,
         shuffle=True,
         settle_s=0.3,#0.3
-        optimize_between_runs=False,
+        optimize_between_runs=True,
     )
 
 def do_tisapph_singlet_scan_loop(
-        nv_sig, wavelength_start_nm=800, wavelength_stop_nm=820, step_nm=5):
+        nv_sig, wavelength_start_nm=852, wavelength_stop_nm=882, step_nm=10):
     tool_belt.init_safe_stop()
     seg_start = wavelength_start_nm
     seg_idx=1
@@ -906,11 +984,9 @@ def do_tisapph_singlet_scan_loop(
             break
         seg_stop=min(seg_start+step_nm,wavelength_stop_nm)
         print(f"TiSapph singlet scan segment {seg_idx}: {seg_start}-{seg_stop} nm")
-        do_tisapph_singlet_scan(
-            nv_sig,
-            wavelength_start_nm=seg_start,
-            wavelength_stop_nm=seg_stop,
-        )
+        Delta=seg_stop-seg_start
+        for i in range(seg_idx):
+            do_tisapph_singlet_scan(nv_sig, wavelength_start_nm=seg_start,wavelength_stop_nm=seg_stop)
         seg_start=seg_stop
         seg_idx+=1
 
@@ -967,14 +1043,29 @@ def do_optimize_green_power(nv_sig):
         randomize_power_order=True,
         do_plot=True,
     )
-def do_tisapph_delay_cal(nv_sig):
-    confocal_tisapph_delay_cal.main(
+def do_tisapph_readout_delay(nv_sig):
+    """Sweep the dark gap between Ti:sapph turn-OFF and the readout window
+    opening, with no microwaves. Two gates per rep:
+
+        gate 0 = reference: green readout only (TiSapph OFF)
+        gate 1 = signal:    TiSapph ON for tisapph_ns, then dark gap of
+                            delay_ns, then readout
+
+    Use this to characterize how long after the Ti:sapph turns off the NV
+    is still emitting extra fluorescence — i.e. the decay time of the
+    Ti:sapph-induced response. Expect counts to start high at delay=0 and
+    settle to the green-only baseline at long delays.
+    """
+    tisapph_readout_delay.main(
         nv_sig,
-        delay_min_ns=0,
-        delay_max_ns=1000,
-        num_steps=21,       # 50 ns steps
+        tisapph_ns=2e3,        # fixed TiSapph pulse duration (ns)
+        min_delay_ns=800,
+        max_delay_ns=1200,       # zoom into the sub-µs decay first
+        num_steps=10,
         num_reps=int(20e4),
-        num_runs=1,
+        num_runs=10,
+        log_spaced=False,         # try True for ns -> µs range
+        optimize_between_runs=True,
     )
 
 def do_optimize_spin_readout(
@@ -1348,12 +1439,12 @@ if __name__ == "__main__":
     # current step rate: 30.0V XY
     # current step rate: 40.0V Z (atto)
     sample_xy = [0, 0]  # piezo XY voltage input (1.0=1V) (coordinates)
-    coord_z =4.8925+1.25#5.673 #4.828+1.25 #6.4988 #5.5471  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
+    coord_z = 6.0151 #4.5291+1.25 #4.8925+1.25  # atto=rel (set to 0 between measurements) PI=absolute, start at 4.00V for lovelace, minimum step size = 0.005
     # coord_z = 3.4318
-    pixel_xy =[0.132,-0.017] # NewNVs 5/11
-    # pixel_xy = [0,0]
-    # pixel_xy = [0.107, 0.013]  #NV1
-    # pixel_xy = [0.046,0.002]  #nv2
+    pixel_xy =[-0.032,-0.004] # NewNVs 5/12
+    # pixel_xy = [-0.11, 0.052] # NewNV2
+    # pixel_xy = [-0.012, 0.082]  #NV1
+    # pixel_xy = [0.046,0.01]  #nv2
 
     #region Paramss
     # return
@@ -1375,7 +1466,7 @@ if __name__ == "__main__":
         },
     )
     # nv_sig.expected_counts = None
-    nv_sig.expected_counts = 77.3 #6.5mW Green Power 5/11
+    nv_sig.expected_counts = 85 #6.5mW Green Power 5/11
 
     # cxn = labrad.connect()
     # s = cxn.pos_z_PI_pifocss
@@ -1437,13 +1528,18 @@ if __name__ == "__main__":
         # end region Image sample
         #
         # region Optimize
-        # do_optimize_z_PI(nv_sig, voltage_start=4.75, voltage_end=5.25, step_size=0.002) #must be between 1-9V
+        # do_optimize_z_PI(nv_sig, voltage_start=5.8, voltage_end=6.2, step_size=0.002) #must be between 1-9V
         # do_optimize_z_atto(nv_sig) # z position optimize atto
         # do_optimize_xy(nv_sig, num_steps=8, scan_range=0.008) #xy galvo optimize but it works :)
         # do_optimize_xy_loop(nv_sig, num_iterations=3, num_steps=16, scan_range=0.008)
 
+        ## test: timing drift compensation
+        # t0 = time.time()
+        # targeting.compensate_for_drift(nv_sig, no_crash=True)
+        # print(f"compensate_for_drift took {time.time()-t0:.2f} s")
+
         # do_compensate_for_drift(nv_sig)
-        # do_optimize_galvo(nv_sig) # optimize xy for drift
+     #    do_optimize_galvo(nv_sig) # optimize xy for drift
         # do_optimize_z(nv_sig) # optimize z for drift
         # do_green_optimize_loop(nv_sig, num_iterations=3)  # Optimize before resonance scans to ensure we're on target
 
@@ -1462,12 +1558,13 @@ if __name__ == "__main__":
 
         # region Resonance, Pulse Seq., Singlet
         # do_tisapph_singlet_scan(nv_sig)
+        # do_tisapph_singlet_scan_loop(nv_sig)
         # do_tisapph_delay_cal(nv_sig)
         # probe_ns = [2e3, 5e3, 10e3, 20e3, 50e3, 100e3]
         # for probe in probe_ns:
             # do_tisapph_singlet_scan(nv_sig, probe_ns=probe)
         # do_resonance(nv_sig)
-        do_rabi(nv_sig)
+        # do_rabi(nv_sig)
 
   # do_rabi(nv_sig)
         # try:
@@ -1498,8 +1595,9 @@ if __name__ == "__main__":
         # do_pulsed_resonance_state(nv_sig, States.HIGH)
         
         #TiSapph Scans
-        # do_tisapph_singlet_scan_loop(nv_sig, wavelength_start_nm=800, wavelength_stop_nm=820, step_nm=5)
-        # do_tisapph_singlet_scan(nv_sig)
+        # do_tisapph_singlet_scan_loop(nv_sig, wavelength_start_nm=852, wavelength_stop_nm=882, step_nm=10)
+        do_tisapph_singlet_scan(nv_sig)
+        # do_tisapph_readout_delay(nv_sig)
         # do_test_simple_spin_contrast(nv_sig)
 
         # probe_ns = [2e3, 5e3, 10e3, 20e3, 50e3, 100e3]

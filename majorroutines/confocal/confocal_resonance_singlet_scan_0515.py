@@ -2,8 +2,6 @@
 """
 Ti:sapph wavelength sweep for singlet / triplet-sensitive readout.
 
-Author: Yael Sternfeld
-
 Assumes the sequence file returns 4 APD-gated experiments per repetition:
     gate 0 = ms0, Ti:sapph OFF
     gate 1 = ms0, Ti:sapph ON
@@ -254,7 +252,6 @@ def main(
     pol_ns=None,
     laser_power=None,
     optimize_between_runs=True,
-    track_every_n_steps=None,   # NEW: if set, re-track every N steps within a run
     do_plot=True,
     shuffle=True,
     settle_s=0.25,
@@ -334,6 +331,51 @@ def main(
     tb.init_safe_stop()
     start_time = time.time()
 
+    def _build_raw_data_dict(elapsed_s_local):
+        metrics_local = _compute_all_metrics(
+            ms0_off_counts, ms0_on_counts, ms1_off_counts, ms1_on_counts,
+        )
+        ms0_off_m, ms0_off_s = _nanmean_ste(ms0_off_counts)
+        ms1_off_m, ms1_off_s = _nanmean_ste(ms1_off_counts)
+        ms0_on_m,  ms0_on_s  = _nanmean_ste(ms0_on_counts)
+        ms1_on_m,  ms1_on_s  = _nanmean_ste(ms1_on_counts)
+        resp_ms0_m, resp_ms0_s     = _nanmean_ste(metrics_local["ms0_response"])
+        resp_ms1_m, resp_ms1_s     = _nanmean_ste(metrics_local["ms1_response"])
+        delta_resp_m, delta_resp_s = _nanmean_ste(metrics_local["delta_response"])
+        spin_off_m, spin_off_s     = _nanmean_ste(metrics_local["spin_contrast_off"])
+        spin_on_m,  spin_on_s      = _nanmean_ste(metrics_local["spin_contrast_on"])
+        delta_spin_m, delta_spin_s = _nanmean_ste(metrics_local["delta_spin_contrast"])
+        return {
+            "timestamp": timestamp,
+            "elapsed_s": elapsed_s_local,
+            "nv_sig": nv_sig,
+            "wavelengths_nm": wavelengths_nm.tolist(),
+            "num_reps": int(num_reps),
+            "num_runs": int(num_runs),
+            "uwave_ind": int(uwave_ind),
+            "uwave_freq_ghz": float(uwave_freq_ghz),
+            "uwave_power_dbm": float(uwave_power_dbm),
+            "pol_ns": int(pol_ns),
+            "probe_ns": int(probe_ns),
+            "readout_ns": int(readout_ns),
+            "laser_power": laser_power,
+            "ms0_off_counts": ms0_off_counts.tolist(),
+            "ms0_on_counts":  ms0_on_counts.tolist(),
+            "ms1_off_counts": ms1_off_counts.tolist(),
+            "ms1_on_counts":  ms1_on_counts.tolist(),
+            "ms0_off_mean": ms0_off_m.tolist(), "ms0_off_ste": ms0_off_s.tolist(),
+            "ms1_off_mean": ms1_off_m.tolist(), "ms1_off_ste": ms1_off_s.tolist(),
+            "ms0_on_mean":  ms0_on_m.tolist(),  "ms0_on_ste":  ms0_on_s.tolist(),
+            "ms1_on_mean":  ms1_on_m.tolist(),  "ms1_on_ste":  ms1_on_s.tolist(),
+            "contrast_ms0_mean": resp_ms0_m.tolist(),    "contrast_ms0_ste": resp_ms0_s.tolist(),
+            "contrast_ms1_mean": resp_ms1_m.tolist(),    "contrast_ms1_ste": resp_ms1_s.tolist(),
+            "delta_contrast_mean": delta_resp_m.tolist(), "delta_contrast_ste": delta_resp_s.tolist(),
+            "spin_contrast_off_mean": spin_off_m.tolist(),   "spin_contrast_off_ste": spin_off_s.tolist(),
+            "spin_contrast_on_mean":  spin_on_m.tolist(),    "spin_contrast_on_ste":  spin_on_s.tolist(),
+            "delta_spin_contrast_mean": delta_spin_m.tolist(), "delta_spin_contrast_ste": delta_spin_s.tolist(),
+            "opti_coords_list": opti_coords_list,
+        }
+
     try:
         for run_ind in range(num_runs):
             print(f"\nRun {run_ind + 1}/{num_runs}")
@@ -357,41 +399,9 @@ def main(
 
             counter_server.start_tag_stream()
             try:
-                steps_since_track = 0
                 for step_ind in sweep_order:
                     if tb.safe_stop():
                         break
-
-                    # ---- periodic mid-run drift compensation ----
-                    # Stop tag stream and MW, run optimizer, then re-arm everything.
-                    if (
-                        track_every_n_steps is not None
-                        and track_every_n_steps > 0
-                        and steps_since_track >= track_every_n_steps
-                    ):
-                        print(
-                            f"  [track] re-optimizing after {steps_since_track} steps "
-                            f"(run {run_ind+1}, t={time.time()-start_time:.0f} s)"
-                        )
-                        try:
-                            counter_server.stop_tag_stream()
-                        except Exception:
-                            pass
-                        try:
-                            sig_gen.uwave_off()
-                        except Exception:
-                            pass
-
-                        targeting.compensate_for_drift(nv_sig, no_crash=True)
-
-                        # Re-arm the sequence and MW exactly as at run start
-                        pulsegen_server.stream_load(seq_file, seq_args_string)
-                        sig_gen.set_amp(float(uwave_power_dbm))
-                        sig_gen.set_freq(float(uwave_freq_ghz))
-                        sig_gen.uwave_on()
-                        counter_server.start_tag_stream()
-
-                        steps_since_track = 0
 
                     wl_nm = float(wavelengths_nm[step_ind])
                     tisapph.set_wavelength_nm(wl_nm)
@@ -431,8 +441,6 @@ def main(
                         f"resp1={metrics_val['ms1_response']:.5e}"
                     )
 
-                    steps_since_track += 1
-
             finally:
                 try:
                     counter_server.stop_tag_stream()
@@ -469,6 +477,24 @@ def main(
                     ms1_on_mean,
                 )
 
+            # Per-run incremental save — wrapped so save failures never abort
+            # the routine. Each file is a self-contained snapshot of all data
+            # accumulated through `run_ind`; remaining runs stay as NaN.
+            try:
+                run_save_ts = dm.get_time_stamp()
+                nv_name = getattr(nv_sig, "name", "nv")
+                per_run_subfolder = f"per_run/{timestamp}-{nv_name}"
+                per_run_name = f"{nv_name}-run{run_ind + 1:03d}"
+                per_run_path = dm.get_file_path(
+                    __file__, run_save_ts, per_run_name, subfolder=per_run_subfolder,
+                )
+                elapsed_so_far = time.time() - start_time
+                dm.save_raw_data(_build_raw_data_dict(elapsed_so_far), per_run_path)
+                print(f"  [per-run save] {per_run_path}")
+            except Exception:
+                print("  [per-run save] FAILED — continuing")
+                print(traceback.format_exc())
+
     except Exception:
         print(traceback.format_exc())
         raise
@@ -481,69 +507,7 @@ def main(
         tb.reset_cfm()
 
     elapsed_s = time.time() - start_time
-
-    metrics_all = _compute_all_metrics(
-        ms0_off_counts,
-        ms0_on_counts,
-        ms1_off_counts,
-        ms1_on_counts,
-    )
-
-    ms0_off_mean, ms0_off_ste = _nanmean_ste(ms0_off_counts)
-    ms1_off_mean, ms1_off_ste = _nanmean_ste(ms1_off_counts)
-    ms0_on_mean, ms0_on_ste = _nanmean_ste(ms0_on_counts)
-    ms1_on_mean, ms1_on_ste = _nanmean_ste(ms1_on_counts)
-
-    resp_ms0_mean, resp_ms0_ste = _nanmean_ste(metrics_all["ms0_response"])
-    resp_ms1_mean, resp_ms1_ste = _nanmean_ste(metrics_all["ms1_response"])
-    delta_resp_mean, delta_resp_ste = _nanmean_ste(metrics_all["delta_response"])
-
-    spin_off_mean, spin_off_ste = _nanmean_ste(metrics_all["spin_contrast_off"])
-    spin_on_mean, spin_on_ste = _nanmean_ste(metrics_all["spin_contrast_on"])
-    delta_spin_mean, delta_spin_ste = _nanmean_ste(metrics_all["delta_spin_contrast"])
-
-    raw_data = {
-        "timestamp": timestamp,
-        "elapsed_s": elapsed_s,
-        "nv_sig": nv_sig,
-        "wavelengths_nm": wavelengths_nm.tolist(),
-        "num_reps": int(num_reps),
-        "num_runs": int(num_runs),
-        "uwave_ind": int(uwave_ind),
-        "uwave_freq_ghz": float(uwave_freq_ghz),
-        "uwave_power_dbm": float(uwave_power_dbm),
-        "pol_ns": int(pol_ns),
-        "probe_ns": int(probe_ns),
-        "readout_ns": int(readout_ns),
-        "laser_power": laser_power,
-        "ms0_off_counts": ms0_off_counts.tolist(),
-        "ms0_on_counts": ms0_on_counts.tolist(),
-        "ms1_off_counts": ms1_off_counts.tolist(),
-        "ms1_on_counts": ms1_on_counts.tolist(),
-        "ms0_off_mean": ms0_off_mean.tolist(),
-        "ms0_off_ste": ms0_off_ste.tolist(),
-        "ms1_off_mean": ms1_off_mean.tolist(),
-        "ms1_off_ste": ms1_off_ste.tolist(),
-        "ms0_on_mean": ms0_on_mean.tolist(),
-        "ms0_on_ste": ms0_on_ste.tolist(),
-        "ms1_on_mean": ms1_on_mean.tolist(),
-        "ms1_on_ste": ms1_on_ste.tolist(),
-        # Ti:sapph response metrics (kept compatible with old naming)
-        "contrast_ms0_mean": resp_ms0_mean.tolist(),
-        "contrast_ms0_ste": resp_ms0_ste.tolist(),
-        "contrast_ms1_mean": resp_ms1_mean.tolist(),
-        "contrast_ms1_ste": resp_ms1_ste.tolist(),
-        "delta_contrast_mean": delta_resp_mean.tolist(),
-        "delta_contrast_ste": delta_resp_ste.tolist(),
-        # New direct spin-contrast metrics
-        "spin_contrast_off_mean": spin_off_mean.tolist(),
-        "spin_contrast_off_ste": spin_off_ste.tolist(),
-        "spin_contrast_on_mean": spin_on_mean.tolist(),
-        "spin_contrast_on_ste": spin_on_ste.tolist(),
-        "delta_spin_contrast_mean": delta_spin_mean.tolist(),
-        "delta_spin_contrast_ste": delta_spin_ste.tolist(),
-        "opti_coords_list": opti_coords_list,
-    }
+    raw_data = _build_raw_data_dict(elapsed_s)
 
     ts = dm.get_time_stamp()
     file_path = dm.get_file_path(__file__, ts, getattr(nv_sig, "name", "nv"))
