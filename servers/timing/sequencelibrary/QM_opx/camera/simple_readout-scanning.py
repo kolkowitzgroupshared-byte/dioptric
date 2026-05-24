@@ -58,7 +58,7 @@ def get_seq(readout_duration_ns, readout_laser, coords_1, coords_2, num_reps):
                 qua.play("continue", x_element)
                 qua.play("continue", y_element)
                 qua.align()
-                qua.wait(2 * aod_access_time)
+                qua.wait(aod_access_time)
                 qua.align()
                 qua.play("on", laser_element, duration=readout_duration)
             qua.align()

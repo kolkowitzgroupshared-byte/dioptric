@@ -765,7 +765,7 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_05_21-20_51_21-combined_image_array", load_npz=True
+        file_stem="2026_05_23-22_55_40-combined_image_array", load_npz=True
     )
     # img_array = np.array(data["ref_img_array"])
     img_array = data["img_array"]
@@ -780,7 +780,8 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz"
-        file_path="slmsuite/nv_blob_detection/nv_blob_1275nvs_reordered.npz"
+        # file_path="slmsuite/nv_blob_detection/nv_blob_1275nvs_reordered.npz",
+        file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered_after_sample_rotation.npz"
     )
     
     # fitted_data = dm.get_raw_data(file_stem="2026_03_23-16_39_03-optimal_values_2026_03_22-21_49_52-qnami-nv0_2026_02_20")
@@ -993,17 +994,17 @@ if __name__ == "__main__":
     filtered_reordered_spot_weights = filtered_reordered_spot_weights_0
     
     # refine coords after fitting; keep original weights
-    # filtered_reordered_coords, filtered_reordered_spot_weights, fitted_amplitudes, fitted_gauss_w = (
-    #     refine_coords_after_fitting(
-    #         img_array,
-    #         filtered_reordered_coords,
-    #         filtered_reordered_spot_weights,
-    #         window_size=1,
-    #         min_amplitude=0.0,
-    #         replace_weights_with="none",   # or "amplitude" or "gaussian_weight"
-    #         normalize=False,              # keep amplitude in image units
-    #     )
-    # )
+    filtered_reordered_coords, filtered_reordered_spot_weights, fitted_amplitudes, fitted_gauss_w = (
+        refine_coords_after_fitting(
+            img_array,
+            filtered_reordered_coords,
+            filtered_reordered_spot_weights,
+            window_size=1,
+            min_amplitude=0.0,
+            replace_weights_with="none",   # or "amplitude" or "gaussian_weight"
+            normalize=False,              # keep amplitude in image units
+        )
+    )
     
     # print("Kept after fitting:", len(filtered_reordered_coords))
     

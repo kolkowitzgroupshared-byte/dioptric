@@ -37,19 +37,19 @@ red_laser_aod = "laser_COBO_638_aod"
 # calibration_coords_red = [[41.956, 88.653],[69.523, 40.383],[90.96, 93.205]]
 
 calibration_coords_pixel = [
-    [343.989, 57.989], 
-    [196.016, 359.035], 
-    [25.014, 50.068],
+    [343.236, 43.996], 
+    [204.122, 358.893], 
+    [27.067, 40.093],
 ]
 calibration_coords_green = [
-    [71.967, 124.546],
-    [102.219, 72.117],
-    [129.311, 129.235],
+    [70.749, 125.429],
+    [102.32, 71.753],
+    [127.173, 132.441],
 ]
 calibration_coords_red = [
-    [41.498, 82.808],
-    [68.574, 42.356],
-    [89.185, 91.264],
+    [42.505, 85.81],
+    [67.262, 42.154],
+    [88.161, 91.279],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -211,8 +211,8 @@ config |= {
         "resolution": (512, 512),
         "spot_radius": 3.0,  # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
-        # "em_gain": 5000,
-        "em_gain": 10,
+        "em_gain": 5000,
+        # "em_gain": 10,
         "temp": -60,
         "timeout": 60e3,  # ms
         # "timeout": -1,  # No timeout
@@ -991,8 +991,8 @@ opx_config = {
     ### Analog
     "waveforms": {
         # Green AOD
-        # "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
-        "green_aod_cw-opti": {"type": "constant", "sample": 0.06},
+        "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
+        # "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
         "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
@@ -1002,7 +1002,7 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.45},
+        "yellow_imaging": {"type": "constant", "sample": 0.35},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.344}, #1460NVs
         "yellow_charge_readout": {"type": "constant", "sample": 0.3614},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.4014},

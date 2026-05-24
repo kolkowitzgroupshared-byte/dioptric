@@ -1,20 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-AOD axis calculation relative to the rotated square pillar/NV array.
+Concise AOD axis calculation relative to rotated square NV/pillar array.
 
-This script:
-    1. Loads current after-rotation NV/pillar pixel coordinates.
-    2. Fits green and red AOD affine maps into current camera pixel space.
-    3. Checks affine fit residuals for green/red calibration.
-    4. Estimates the pillar-array axes using a square-lattice constraint.
-    5. Compares green/red AOD axes to the pillar axes.
-    6. Suggests pillar-aligned 3-point calibration targets.
+Outputs:
+    - Green/red affine residuals
+    - Pillar-axis estimate with square-lattice constraint
+    - Green/red/pillar angular mismatch
+    - Suggested pillar-aligned 3-point calibration targets
+    - One summary plot
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.lines as mlines
-
 from utils import kplotlib as kpl
 
 kpl.init_kplotlib()
@@ -24,42 +21,43 @@ kpl.init_kplotlib()
 # INPUTS
 # =============================================================================
 
+REF_PIXEL = np.array([199.6929931640625, 201.93699645996094], dtype=float)
+
 calibration_coords_pixel = np.array(
     [
-        [199.693, 201.937],
-        [342.930, 44.107],
-        [204.188, 358.940],
-        [10.992, 53.880],
+        [199.693, 201.937], 
+        [342.93, 44.107], 
+        [204.188, 358.94], 
+        [26.876, 39.953],
     ],
     dtype=float,
 )
 
 calibration_coords_green = np.array(
     [
-        [99.745, 99.794],
-        [70.712, 125.372],
-        [102.332, 71.682],
-        [130.634, 130.331],
+        [99.688, 99.907],
+        [70.713, 125.418],
+        [102.296, 71.721],
+        [127.177, 132.538],
     ],
     dtype=float,
 )
 
 calibration_coords_red = np.array(
     [
-        [65.590, 65.255],
-        [42.505, 86.210],
+        [65.59, 65.255],
+        [42.505, 85.81],
         [67.262, 42.154],
-        [90.161, 89.279],
+        [88.161, 91.279],
     ],
     dtype=float,
 )
 
-# This should point to the chosen file produced by Script 1.
 npz_path = "slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered_after_sample_rotation.npz"
 
-ROTATE_PILLAR_BY_90 = False
 TARGET_STEP_IN_LATTICE_SPACINGS = 15
-SHOW_PLOTS = True
+ROTATE_PILLAR_BY_90 = False
+SHOW_PLOT = True
 
 
 # =============================================================================
@@ -70,78 +68,11 @@ def fit_affine(src, dst):
     src = np.asarray(src, dtype=float)
     dst = np.asarray(dst, dtype=float)
 
-    if src.shape != dst.shape:
-        raise ValueError(f"src and dst must have same shape, got {src.shape} and {dst.shape}")
-
     X = np.column_stack([src, np.ones(len(src))])
     M, *_ = np.linalg.lstsq(X, dst, rcond=None)
     M = M.T
 
-    A = M[:, :2]
-    t = M[:, 2]
-    return A, t
-
-
-def normalize(v):
-    v = np.asarray(v, dtype=float)
-    n = np.linalg.norm(v)
-    if n == 0:
-        return v
-    return v / n
-
-
-def normalize_cols(B):
-    B = np.asarray(B, dtype=float)
-    return B / np.linalg.norm(B, axis=0, keepdims=True)
-
-
-def angle_deg(v):
-    v = np.asarray(v, dtype=float)
-    return np.degrees(np.arctan2(v[1], v[0]))
-
-
-def wrap_axis_angle_deg(angle):
-    """
-    Wrap angle to [-90, 90] because an axis is equivalent modulo 180 degrees.
-    """
-    return ((float(angle) + 90.0) % 180.0) - 90.0
-
-
-def axis_delta_deg(a, b):
-    """
-    Difference a - b between two axis angles, modulo 180.
-    """
-    return ((float(a) - float(b) + 90.0) % 180.0) - 90.0
-
-
-def rotate_basis_90(basis):
-    R = np.array(
-        [
-            [0, -1],
-            [1, 0],
-        ],
-        dtype=float,
-    )
-    return R @ basis
-
-
-def axis_report(name, basis):
-    e1 = basis[:, 0]
-    e2 = basis[:, 1]
-
-    print(f"\n=== {name} ===")
-    print("axis 1 vector:", e1)
-    print("axis 2 vector:", e2)
-    print("axis 1 angle raw deg:", angle_deg(e1))
-    print("axis 1 angle wrapped deg:", wrap_axis_angle_deg(angle_deg(e1)))
-    print("axis 2 angle raw deg:", angle_deg(e2))
-    print("axis 2 angle wrapped deg:", wrap_axis_angle_deg(angle_deg(e2)))
-    print("axis 1 length:", np.linalg.norm(e1))
-    print("axis 2 length:", np.linalg.norm(e2))
-
-    cosang = np.dot(e1, e2) / (np.linalg.norm(e1) * np.linalg.norm(e2))
-    cosang = np.clip(cosang, -1.0, 1.0)
-    print("inter-axis angle deg:", np.degrees(np.arccos(cosang)))
+    return M[:, :2], M[:, 2]
 
 
 def src_to_camera(src_pts, A, t):
@@ -151,54 +82,86 @@ def src_to_camera(src_pts, A, t):
 
 def camera_to_src(pixel_pts, A, t):
     pixel_pts = np.asarray(pixel_pts, dtype=float)
-    Ainv = np.linalg.inv(A)
-    return (pixel_pts - t) @ Ainv.T
+    return (pixel_pts - t) @ np.linalg.inv(A).T
+
+
+def normalize(v):
+    v = np.asarray(v, dtype=float)
+    n = np.linalg.norm(v)
+    return v if n == 0 else v / n
+
+
+def normalize_cols(B):
+    return B / np.linalg.norm(B, axis=0, keepdims=True)
+
+
+def angle_deg(v):
+    return float(np.degrees(np.arctan2(v[1], v[0])))
+
+
+def wrap_axis_angle_deg(angle):
+    return ((float(angle) + 90.0) % 180.0) - 90.0
+
+
+def axis_delta_deg(a, b):
+    return ((float(a) - float(b) + 90.0) % 180.0) - 90.0
+
+
+def rotate_basis_90(basis):
+    return np.array([[0, -1], [1, 0]], dtype=float) @ basis
+
+
+def choose_anchor_near_ref(points, ref_pixel):
+    pts = np.asarray(points, dtype=float)
+    idx = int(np.argmin(np.sum((pts - ref_pixel) ** 2, axis=1)))
+    anchor = pts[idx]
+    err = np.linalg.norm(anchor - ref_pixel)
+
+    print("\n=== Reference anchor ===")
+    print("requested REF_PIXEL:", ref_pixel)
+    print("nearest saved NV index:", idx)
+    print("nearest saved NV coord:", anchor)
+    print(f"distance from REF_PIXEL: {err:.4f} px")
+
+    return anchor, idx
 
 
 def report_affine_fit(name, src_pts, dst_pts, A, t):
-    src_pts = np.asarray(src_pts, dtype=float)
-    dst_pts = np.asarray(dst_pts, dtype=float)
-
     pred = src_to_camera(src_pts, A, t)
     residuals = dst_pts - pred
     err = np.linalg.norm(residuals, axis=1)
 
-    rms = float(np.sqrt(np.mean(err**2)))
-    max_err = float(np.max(err))
+    print(f"\n=== {name} affine fit ===")
+    print("RMS error [px]:", np.sqrt(np.mean(err**2)))
+    print("max error [px]:", np.max(err))
+    print("per-point error [px]:", err)
 
-    print(f"\n=== {name} affine fit residuals ===")
-    print("source coords:")
-    print(src_pts)
-    print("predicted pixel coords:")
-    print(pred)
-    print("actual pixel coords:")
-    print(dst_pts)
-    print("residuals [px]:")
-    print(residuals)
-    print("per-point error [px]:")
-    print(err)
-    print(f"RMS error [px]: {rms:.3f}")
-    print(f"max error [px]: {max_err:.3f}")
+    return pred, residuals, err
 
-    if rms > 5:
-        print("WARNING: affine RMS error is large. Check point order or bad picked points.")
 
-    return {
-        "pred": pred,
-        "residuals": residuals,
-        "err": err,
-        "rms": rms,
-        "max": max_err,
-    }
+def axis_report(name, basis):
+    e1 = basis[:, 0]
+    e2 = basis[:, 1]
+
+    print(f"\n=== {name} ===")
+    print("axis 1 angle raw:", angle_deg(e1))
+    print("axis 1 angle wrapped:", wrap_axis_angle_deg(angle_deg(e1)))
+    print("axis 2 angle raw:", angle_deg(e2))
+    print("axis 2 angle wrapped:", wrap_axis_angle_deg(angle_deg(e2)))
+    print("axis 1 length:", np.linalg.norm(e1))
+    print("axis 2 length:", np.linalg.norm(e2))
+
+    cosang = np.dot(e1, e2) / (np.linalg.norm(e1) * np.linalg.norm(e2))
+    cosang = np.clip(cosang, -1.0, 1.0)
+    print("inter-axis angle:", np.degrees(np.arccos(cosang)))
 
 
 # =============================================================================
-# PILLAR-LATTICE ESTIMATION
+# SQUARE-LATTICE ESTIMATION
 # =============================================================================
 
-def estimate_square_lattice_basis(points, n_neighbors=4):
+def estimate_square_lattice_basis_initial(points, n_neighbors=4):
     pts = np.asarray(points, dtype=float)
-    center = pts.mean(axis=0)
 
     diff = pts[:, None, :] - pts[None, :, :]
     dist2 = np.sum(diff**2, axis=2)
@@ -213,10 +176,9 @@ def estimate_square_lattice_basis(points, n_neighbors=4):
         for j in nn_idx[i]:
             v = pts[j] - pts[i]
             d = np.linalg.norm(v)
-            if d == 0:
-                continue
-            vecs.append(v)
-            weights.append(1.0 / d)
+            if d > 0:
+                vecs.append(v)
+                weights.append(1.0 / d)
 
     vecs = np.asarray(vecs, dtype=float)
     weights = np.asarray(weights, dtype=float)
@@ -225,35 +187,23 @@ def estimate_square_lattice_basis(points, n_neighbors=4):
     psi4 = np.sum(weights * np.exp(1j * 4 * phi)) / np.sum(weights)
     theta = np.angle(psi4) / 4.0
 
-    e1 = np.array([np.cos(theta), np.sin(theta)], dtype=float)
-    e2 = np.array([-np.sin(theta), np.cos(theta)], dtype=float)
-    basis = np.column_stack([e1, e2])
+    e1 = np.array([np.cos(theta), np.sin(theta)])
+    e2 = np.array([-np.sin(theta), np.cos(theta)])
 
-    return center, basis, theta
+    return np.column_stack([e1, e2])
 
 
 def estimate_lattice_pitch(points):
     pts = np.asarray(points, dtype=float)
-
     diff = pts[:, None, :] - pts[None, :, :]
     dist = np.sqrt(np.sum(diff**2, axis=2))
     np.fill_diagonal(dist, np.inf)
-
-    nn1 = np.min(dist, axis=1)
-    pitch = np.median(nn1)
-    return float(pitch)
-
-
-def choose_center_anchor(points):
-    pts = np.asarray(points, dtype=float)
-    ctr = pts.mean(axis=0)
-    idx = int(np.argmin(np.sum((pts - ctr) ** 2, axis=1)))
-    return pts[idx], idx
+    return float(np.median(np.min(dist, axis=1)))
 
 
 def fit_square_lattice_similarity(grid_ij, pixel_pts):
     """
-    Fit:
+    Fit square model:
         pixel = origin + i*u + j*v
 
     with:
@@ -263,84 +213,65 @@ def fit_square_lattice_similarity(grid_ij, pixel_pts):
     G = np.asarray(grid_ij, dtype=float)
     P = np.asarray(pixel_pts, dtype=float)
 
-    if len(G) < 3:
-        raise ValueError("Need at least 3 points to fit square lattice.")
-
     A_rows = []
     y_vals = []
 
     for (i, j), (x, y) in zip(G, P):
         A_rows.append([1.0, 0.0, i, -j])
         y_vals.append(x)
-
         A_rows.append([0.0, 1.0, j, i])
         y_vals.append(y)
 
-    A_rows = np.asarray(A_rows, dtype=float)
-    y_vals = np.asarray(y_vals, dtype=float)
-
-    params, *_ = np.linalg.lstsq(A_rows, y_vals, rcond=None)
+    params, *_ = np.linalg.lstsq(np.asarray(A_rows), np.asarray(y_vals), rcond=None)
     ox, oy, a, b = params
 
-    origin = np.array([ox, oy], dtype=float)
-    basis = np.array(
-        [
-            [a, -b],
-            [b, a],
-        ],
-        dtype=float,
-    )
-
+    origin = np.array([ox, oy])
+    basis_px = np.array([[a, -b], [b, a]])
     pitch = float(np.sqrt(a**2 + b**2))
-    pred = G @ basis.T + origin
+
+    pred = G @ basis_px.T + origin
     residuals = P - pred
 
-    return basis, origin, pitch, residuals
+    return basis_px, origin, pitch, residuals
 
 
-def deduplicate_grid_assignments(grid_ij, pixel_pts, basis, origin):
+def deduplicate_grid_assignments(grid_ij, pixel_pts, basis_px, origin):
     G = np.asarray(grid_ij, dtype=int)
     P = np.asarray(pixel_pts, dtype=float)
 
-    pred = G @ basis.T + origin
+    pred = G @ basis_px.T + origin
     err = np.linalg.norm(P - pred, axis=1)
 
     best = {}
-
     for ind, g in enumerate(G):
         key = tuple(g.tolist())
         if key not in best or err[ind] < best[key][1]:
             best[key] = (ind, err[ind])
 
-    keep_inds = sorted([val[0] for val in best.values()])
-    return np.asarray(keep_inds, dtype=int)
+    return np.asarray(sorted(v[0] for v in best.values()), dtype=int)
 
 
 def estimate_square_lattice_basis_constrained(
     points,
-    n_neighbors=4,
+    ref_pixel,
     max_iter=10,
     residual_clip_frac=0.35,
     min_residual_clip_px=4.0,
-    verbose=True,
 ):
     pts = np.asarray(points, dtype=float)
-    num_pts = len(pts)
+    n = len(pts)
 
-    _, basis0, _ = estimate_square_lattice_basis(pts, n_neighbors=n_neighbors)
+    basis0 = estimate_square_lattice_basis_initial(pts)
     pitch0 = estimate_lattice_pitch(pts)
-    anchor_pix, anchor_idx = choose_center_anchor(pts)
+    anchor_pix, anchor_idx = choose_anchor_near_ref(pts, ref_pixel)
 
-    coeff0 = (pts - anchor_pix) @ basis0 / pitch0
-    grid_ij = np.rint(coeff0).astype(int)
+    grid_ij = np.rint((pts - anchor_pix) @ basis0 / pitch0).astype(int)
+    active = np.ones(n, dtype=bool)
 
-    active = np.ones(num_pts, dtype=bool)
-
-    basis = basis0 * pitch0
+    basis_px = basis0 * pitch0
     origin = anchor_pix.copy()
-    pitch = float(pitch0)
 
-    best_state = None
+    best = None
 
     for it in range(max_iter):
         active_inds = np.where(active)[0]
@@ -348,98 +279,58 @@ def estimate_square_lattice_basis_constrained(
         keep_local = deduplicate_grid_assignments(
             grid_ij[active_inds],
             pts[active_inds],
-            basis,
+            basis_px,
             origin,
         )
-
         fit_inds = active_inds[keep_local]
 
-        if len(fit_inds) < 3:
-            raise RuntimeError("Too few inlier lattice points for square fit.")
-
-        basis, origin, pitch, _ = fit_square_lattice_similarity(
+        basis_px, origin, pitch, _ = fit_square_lattice_similarity(
             grid_ij[fit_inds],
             pts[fit_inds],
         )
 
-        e1 = basis[:, 0] / np.linalg.norm(basis[:, 0])
-        e2 = basis[:, 1] / np.linalg.norm(basis[:, 1])
-        basis_unit = np.column_stack([e1, e2])
+        basis_unit = normalize_cols(basis_px)
 
-        coeff = (pts - origin) @ basis_unit / pitch
-        new_grid_ij = np.rint(coeff).astype(int)
+        grid_new = np.rint((pts - origin) @ basis_unit / pitch).astype(int)
+        pred = grid_new @ basis_px.T + origin
 
-        pred_all = new_grid_ij @ basis.T + origin
-        residuals = pts - pred_all
+        residuals = pts - pred
         resid_norm = np.linalg.norm(residuals, axis=1)
 
         clip_px = max(residual_clip_frac * pitch, min_residual_clip_px)
-        new_active = resid_norm < clip_px
+        active_new = resid_norm < clip_px
 
-        rms = float(np.sqrt(np.nanmean(resid_norm[new_active] ** 2))) if np.sum(new_active) > 0 else np.inf
+        rms = float(np.sqrt(np.mean(resid_norm[active_new] ** 2)))
 
-        if verbose:
-            print(
-                f"square fit iter {it}: "
-                f"pitch={pitch:.3f} px, "
-                f"inliers={np.sum(new_active)}/{num_pts}, "
-                f"rms={rms:.3f} px, "
-                f"clip={clip_px:.3f} px"
-            )
+        print(
+            f"square fit iter {it}: "
+            f"pitch={pitch:.3f} px, "
+            f"inliers={np.sum(active_new)}/{n}, "
+            f"rms={rms:.3f} px"
+        )
 
-        if best_state is None or rms < best_state["rms_residual_px"]:
-            best_state = {
-                "basis": basis.copy(),
-                "origin": origin.copy(),
-                "pitch": float(pitch),
+        if best is None or rms < best["rms_residual_px"]:
+            best = {
+                "basis_px": basis_px.copy(),
                 "basis_unit": basis_unit.copy(),
-                "grid_ij": new_grid_ij.copy(),
-                "active": new_active.copy(),
+                "origin": origin.copy(),
+                "pitch_px": pitch,
+                "grid_ij": grid_new.copy(),
+                "active_mask": active_new.copy(),
                 "residuals": residuals.copy(),
                 "resid_norm": resid_norm.copy(),
-                "rms_residual_px": float(rms),
+                "rms_residual_px": rms,
+                "anchor_pix": anchor_pix,
+                "anchor_idx": anchor_idx,
             }
 
-        if np.array_equal(new_grid_ij, grid_ij) and np.array_equal(new_active, active):
+        if np.array_equal(grid_new, grid_ij) and np.array_equal(active_new, active):
             break
 
-        grid_ij = new_grid_ij
-        active = new_active
+        grid_ij = grid_new
+        active = active_new
 
-    if best_state is None:
-        raise RuntimeError("Square-lattice fit failed.")
-
-    basis = best_state["basis"]
-    origin = best_state["origin"]
-    pitch = best_state["pitch"]
-    basis_unit = best_state["basis_unit"]
-    grid_ij = best_state["grid_ij"]
-    active = best_state["active"]
-
-    residuals = best_state["residuals"]
-    resid_norm = best_state["resid_norm"]
-    rms = best_state["rms_residual_px"]
-
-    center = pts[active].mean(axis=0) if np.sum(active) > 0 else pts.mean(axis=0)
-    theta = np.arctan2(basis_unit[1, 0], basis_unit[0, 0])
-
-    info = {
-        "origin": origin,
-        "pitch_px": pitch,
-        "basis_px": basis,
-        "basis_unit": basis_unit,
-        "grid_ij": grid_ij,
-        "active_mask": active,
-        "residuals": residuals,
-        "resid_norm": resid_norm,
-        "rms_residual_px": rms,
-        "anchor_idx": anchor_idx,
-        "anchor_pix": anchor_pix,
-        "initial_pitch_px": pitch0,
-        "initial_basis": basis0,
-    }
-
-    return center, basis_unit, theta, info
+    return best["basis_unit"], best
 
 
 def orient_square_basis_to_reference(basis, ref_vec):
@@ -458,172 +349,6 @@ def orient_square_basis_to_reference(basis, ref_vec):
     return variants[int(np.argmax(scores))]
 
 
-# =============================================================================
-# PLOTTING
-# =============================================================================
-
-def draw_basis(ax, origin, basis, label_prefix, axis_len=180, text_offset=10, color="k"):
-    e1 = normalize(basis[:, 0]) * axis_len
-    e2 = normalize(basis[:, 1]) * axis_len
-
-    ax.arrow(
-        origin[0], origin[1], e1[0], e1[1],
-        length_includes_head=True,
-        head_width=8,
-        head_length=12,
-        linewidth=2.5,
-        color=color,
-    )
-
-    ax.arrow(
-        origin[0], origin[1], e2[0], e2[1],
-        length_includes_head=True,
-        head_width=8,
-        head_length=12,
-        linewidth=2.5,
-        color=color,
-    )
-
-    ax.text(origin[0] + e1[0] + text_offset, origin[1] + e1[1] + text_offset,
-            f"{label_prefix} 1", fontsize=12, color=color)
-
-    ax.text(origin[0] + e2[0] + text_offset, origin[1] + e2[1] + text_offset,
-            f"{label_prefix} 2", fontsize=12, color=color)
-
-
-def draw_single_square(ax, origin, basis, side=160, color="k"):
-    u = normalize(basis[:, 0]) * side
-    v = normalize(basis[:, 1]) * side
-
-    p0 = origin
-    p1 = origin + u
-    p2 = origin + u + v
-    p3 = origin + v
-
-    sq = np.vstack([p0, p1, p2, p3, p0])
-    ax.plot(sq[:, 0], sq[:, 1], linewidth=2.5, color=color)
-
-
-def plot_square_lattice_fit(nv_pixel, pillar_info):
-    pts = np.asarray(nv_pixel, dtype=float)
-    active = pillar_info["active_mask"]
-    grid_ij = pillar_info["grid_ij"]
-    basis_px = pillar_info["basis_px"]
-    origin = pillar_info["origin"]
-
-    pred = grid_ij @ basis_px.T + origin
-
-    fig, ax = plt.subplots(figsize=(8, 6))
-
-    ax.scatter(pts[~active, 0], pts[~active, 1], s=12, alpha=0.5, color="red", label="Rejected/outlier")
-    ax.scatter(pts[active, 0], pts[active, 1], s=8, alpha=0.35, color="gray", label="NV/pillar positions")
-    ax.scatter(pred[active, 0], pred[active, 1], s=10, alpha=0.6, color="royalblue", label="Square-lattice fit")
-
-    active_inds = np.where(active)[0]
-    stride = max(1, len(active_inds) // 150)
-    for ind in active_inds[::stride]:
-        ax.plot(
-            [pred[ind, 0], pts[ind, 0]],
-            [pred[ind, 1], pts[ind, 1]],
-            color="orange",
-            linewidth=0.7,
-            alpha=0.6,
-        )
-
-    ax.set_title(
-        f"Square-constrained pillar lattice fit\n"
-        f"pitch={pillar_info['pitch_px']:.2f} px, "
-        f"RMS residual={pillar_info['rms_residual_px']:.2f} px"
-    )
-    ax.set_xlabel("Pixel X")
-    ax.set_ylabel("Pixel Y")
-    ax.axis("equal")
-    ax.invert_yaxis()
-    ax.legend(loc="upper right")
-    plt.tight_layout()
-
-    return fig
-
-
-def plot_axes(nv_pixel, calibration_coords_pixel, common_origin, green_basis, red_basis, pillar_basis):
-    fig, ax = plt.subplots(figsize=(8, 6))
-
-    ax.scatter(nv_pixel[:, 0], nv_pixel[:, 1], s=8, alpha=0.35, color="gray", label="NVs")
-    ax.scatter(calibration_coords_pixel[:, 0], calibration_coords_pixel[:, 1], s=90, marker="s", color="black", label="Calibration points")
-
-    draw_basis(ax, common_origin, green_basis, "green", axis_len=200, color="limegreen")
-    draw_basis(ax, common_origin, red_basis, "red", axis_len=200, color="crimson")
-    draw_basis(ax, common_origin, pillar_basis, "pillar", axis_len=200, color="royalblue")
-
-    ax.scatter([common_origin[0]], [common_origin[1]], s=120, marker="x", color="black", label="Common origin")
-
-    ax.set_title("Green, red, and square-constrained pillar axes on camera")
-    ax.set_xlabel("Pixel X")
-    ax.set_ylabel("Pixel Y")
-    ax.axis("equal")
-    ax.invert_yaxis()
-    ax.legend(loc="upper right", frameon=True, fontsize=9)
-    plt.tight_layout()
-
-    return fig
-
-
-def plot_square_frames(nv_pixel, calibration_coords_pixel, common_origin, green_basis, red_basis, pillar_basis):
-    fig, ax = plt.subplots(figsize=(8, 6))
-
-    ax.scatter(nv_pixel[:, 0], nv_pixel[:, 1], s=8, alpha=0.35, color="gray")
-    ax.scatter(calibration_coords_pixel[:, 0], calibration_coords_pixel[:, 1], s=90, marker="s", color="black")
-
-    draw_single_square(ax, common_origin, green_basis, side=180, color="limegreen")
-    draw_single_square(ax, common_origin, red_basis, side=180, color="crimson")
-    draw_single_square(ax, common_origin, pillar_basis, side=180, color="royalblue")
-
-    draw_basis(ax, common_origin, green_basis, "g", axis_len=120, color="limegreen")
-    draw_basis(ax, common_origin, red_basis, "r", axis_len=120, color="crimson")
-    draw_basis(ax, common_origin, pillar_basis, "p", axis_len=120, color="royalblue")
-
-    ax.set_title("Green, red, and pillar frames")
-    ax.set_xlabel("Pixel X")
-    ax.set_ylabel("Pixel Y")
-    ax.axis("equal")
-    ax.invert_yaxis()
-    plt.tight_layout()
-
-    return fig
-
-
-def plot_target_pixels(nv_pixel, calibration_coords_pixel, common_origin, green_basis, red_basis, pillar_basis, target_pixels_3, anchor_pix):
-    fig, ax = plt.subplots(figsize=(8, 6))
-
-    ax.scatter(nv_pixel[:, 0], nv_pixel[:, 1], s=8, alpha=0.35, color="gray")
-    ax.scatter(calibration_coords_pixel[:, 0], calibration_coords_pixel[:, 1], s=90, marker="s", color="black", label="Current calib pixels")
-
-    draw_basis(ax, common_origin, green_basis, "green", axis_len=180, color="limegreen")
-    draw_basis(ax, common_origin, red_basis, "red", axis_len=180, color="crimson")
-    draw_basis(ax, common_origin, pillar_basis, "pillar", axis_len=180, color="royalblue")
-
-    ax.scatter(target_pixels_3[:, 0], target_pixels_3[:, 1], s=140, marker="+", linewidths=2.5, color="gold", label="3 target pixels")
-
-    for k, p in enumerate(target_pixels_3):
-        ax.text(p[0] + 6, p[1] + 6, f"T{k}", color="gold", fontsize=11)
-
-    ax.scatter([anchor_pix[0]], [anchor_pix[1]], s=120, marker="x", color="cyan", label="Anchor pillar")
-
-    ax.set_title("Pillar-aligned target pixels for AOD calibration")
-    ax.set_xlabel("Pixel X")
-    ax.set_ylabel("Pixel Y")
-    ax.axis("equal")
-    ax.invert_yaxis()
-    ax.legend(loc="upper right", frameon=True)
-    plt.tight_layout()
-
-    return fig
-
-
-# =============================================================================
-# ALIGNMENT
-# =============================================================================
-
 def best_rigid_rotation_deg(from_basis, to_basis):
     F = normalize_cols(from_basis)
     T = normalize_cols(to_basis)
@@ -635,44 +360,70 @@ def best_rigid_rotation_deg(from_basis, to_basis):
         U[:, -1] *= -1
         R = U @ Vt
 
-    theta_deg = np.degrees(np.arctan2(R[1, 0], R[0, 0]))
-    return float(theta_deg), R
+    return float(np.degrees(np.arctan2(R[1, 0], R[0, 0])))
 
 
-def print_alignment_guidance(green_basis, red_basis, pillar_basis):
-    green_rot_deg, _ = best_rigid_rotation_deg(green_basis, pillar_basis)
-    red_rot_deg, _ = best_rigid_rotation_deg(red_basis, pillar_basis)
-
-    print("\n=== Best rigid rotations into pillar basis ===")
-    print(f"green -> pillar: {green_rot_deg:+.3f} deg")
-    print(f"red   -> pillar: {red_rot_deg:+.3f} deg")
-
-    print("\nInterpretation:")
-    print("These are best-fit image-coordinate rotations that align each AOD basis to the pillar basis.")
-    print("Mechanical sign may be opposite depending on stage convention.")
-    print("Use magnitude first, then verify with calibration points.")
-
-    if abs(green_rot_deg - red_rot_deg) > 2.0:
-        print("\nWARNING:")
-        print("Green and red require noticeably different rotations.")
-        print("A common mechanical rotation will not perfectly align both.")
-
-    return green_rot_deg, red_rot_deg
-
-
-def make_triplet_targets(anchor_pix, pillar_basis, pitch_px, step=15):
+def make_triplet_targets(anchor_pix, pillar_basis, pitch_px, step):
     u = normalize(pillar_basis[:, 0]) * pitch_px * step
     v = normalize(pillar_basis[:, 1]) * pitch_px * step
 
-    target_pixels = np.vstack(
-        [
-            anchor_pix,
-            anchor_pix + u,
-            anchor_pix + v,
-        ]
+    return np.vstack([anchor_pix, anchor_pix + u, anchor_pix + v])
+
+
+# =============================================================================
+# PLOTTING
+# =============================================================================
+
+def draw_basis(ax, origin, basis, label, color, axis_len=130):
+    e1 = normalize(basis[:, 0]) * axis_len
+    e2 = normalize(basis[:, 1]) * axis_len
+
+    ax.arrow(origin[0], origin[1], e1[0], e1[1],
+             length_includes_head=True, head_width=6, head_length=10,
+             linewidth=2.2, color=color)
+
+    ax.arrow(origin[0], origin[1], e2[0], e2[1],
+             length_includes_head=True, head_width=6, head_length=10,
+             linewidth=2.2, color=color)
+
+    ax.text(origin[0] + e1[0] + 4, origin[1] + e1[1] + 4, f"{label} 1", color=color)
+    ax.text(origin[0] + e2[0] + 4, origin[1] + e2[1] + 4, f"{label} 2", color=color)
+
+
+def plot_summary(nv_pixel, common_origin, calib_pixels, green_basis, red_basis, pillar_basis, target_pixels):
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    ax.scatter(nv_pixel[:, 0], nv_pixel[:, 1], s=8, alpha=0.35, color="gray", label="NVs")
+    ax.scatter(calib_pixels[:, 0], calib_pixels[:, 1], s=80, marker="s", color="black", label="AOD calib pixels")
+
+    ax.scatter([common_origin[0]], [common_origin[1]], s=120, marker="x", color="red", label="Reference NV")
+
+    draw_basis(ax, common_origin, green_basis, "green", "limegreen")
+    draw_basis(ax, common_origin, red_basis, "red", "crimson")
+    draw_basis(ax, common_origin, pillar_basis, "pillar", "royalblue")
+
+    ax.scatter(
+        target_pixels[:, 0],
+        target_pixels[:, 1],
+        s=140,
+        marker="+",
+        linewidths=2.5,
+        color="gold",
+        label="Suggested targets",
     )
 
-    return target_pixels, u, v
+    for i, p in enumerate(target_pixels):
+        ax.text(p[0] + 5, p[1] + 5, f"T{i}", color="gold")
+
+    ax.set_title("AOD axes relative to pillar lattice")
+    ax.set_xlabel("Pixel X")
+    ax.set_ylabel("Pixel Y")
+    ax.axis("equal")
+    ax.invert_yaxis()
+    ax.legend(loc="upper right", fontsize=8)
+    plt.tight_layout()
+
+    return fig
 
 
 # =============================================================================
@@ -686,27 +437,20 @@ def main():
     print(f"Loaded {len(nv_pixel)} NVs")
     print("NPZ path:", npz_path)
 
+    common_origin, ref_idx = choose_anchor_near_ref(nv_pixel, REF_PIXEL)
+
     A_green, t_green = fit_affine(calibration_coords_green, calibration_coords_pixel)
     A_red, t_red = fit_affine(calibration_coords_red, calibration_coords_pixel)
 
     green_basis = A_green.copy()
     red_basis = A_red.copy()
 
-    axis_report("GREEN basis on camera", green_basis)
-    axis_report("RED basis on camera", red_basis)
+    report_affine_fit("GREEN", calibration_coords_green, calibration_coords_pixel, A_green, t_green)
+    report_affine_fit("RED", calibration_coords_red, calibration_coords_pixel, A_red, t_red)
 
-    green_fit = report_affine_fit("GREEN", calibration_coords_green, calibration_coords_pixel, A_green, t_green)
-    red_fit = report_affine_fit("RED", calibration_coords_red, calibration_coords_pixel, A_red, t_red)
-
-    pillar_center, pillar_basis, pillar_theta, pillar_info = (
-        estimate_square_lattice_basis_constrained(
-            nv_pixel,
-            n_neighbors=4,
-            max_iter=10,
-            residual_clip_frac=0.35,
-            min_residual_clip_px=4.0,
-            verbose=True,
-        )
+    pillar_basis, pillar_info = estimate_square_lattice_basis_constrained(
+        nv_pixel,
+        ref_pixel=REF_PIXEL,
     )
 
     pillar_basis = orient_square_basis_to_reference(pillar_basis, red_basis[:, 0])
@@ -714,60 +458,44 @@ def main():
     if ROTATE_PILLAR_BY_90:
         pillar_basis = rotate_basis_90(pillar_basis)
 
-    axis_report("PILLAR basis on camera square-constrained", pillar_basis)
+    axis_report("GREEN basis", green_basis)
+    axis_report("RED basis", red_basis)
+    axis_report("PILLAR basis", pillar_basis)
 
-    print("\n=== Square-constrained pillar lattice ===")
-    print("pitch_px:", pillar_info["pitch_px"])
-    print("rms residual px:", pillar_info["rms_residual_px"])
-    print("num inliers:", np.sum(pillar_info["active_mask"]), "/", len(nv_pixel))
-
-    if pillar_info["rms_residual_px"] > 5:
-        print("\nWARNING:")
-        print("Square-lattice RMS residual is larger than expected.")
-        print("Check coordinate file, outliers, wrong rotation sign, or distortion.")
-
-    green_ang1 = angle_deg(green_basis[:, 0])
-    red_ang1 = angle_deg(red_basis[:, 0])
-    pillar_ang1 = angle_deg(pillar_basis[:, 0])
-
-    print("\n=== Misalignment summary using axis 1 ===")
-    print("green axis 1 raw angle:", green_ang1)
-    print("red axis 1 raw angle:", red_ang1)
-    print("pillar axis 1 raw angle:", pillar_ang1)
+    green_ang = angle_deg(green_basis[:, 0])
+    red_ang = angle_deg(red_basis[:, 0])
+    pillar_ang = angle_deg(pillar_basis[:, 0])
 
     print("\n=== Wrapped angle summary ===")
-    print("green wrapped:", wrap_axis_angle_deg(green_ang1))
-    print("red wrapped:", wrap_axis_angle_deg(red_ang1))
-    print("pillar wrapped:", wrap_axis_angle_deg(pillar_ang1))
-    print("green - pillar wrapped:", axis_delta_deg(green_ang1, pillar_ang1))
-    print("red   - pillar wrapped:", axis_delta_deg(red_ang1, pillar_ang1))
-    print("green - red wrapped:", axis_delta_deg(green_ang1, red_ang1))
+    print("green wrapped:", wrap_axis_angle_deg(green_ang))
+    print("red wrapped:", wrap_axis_angle_deg(red_ang))
+    print("pillar wrapped:", wrap_axis_angle_deg(pillar_ang))
+    print("green - pillar:", axis_delta_deg(green_ang, pillar_ang))
+    print("red   - pillar:", axis_delta_deg(red_ang, pillar_ang))
+    print("green - red:", axis_delta_deg(green_ang, red_ang))
 
-    green_rot_deg, red_rot_deg = print_alignment_guidance(
-        green_basis,
-        red_basis,
-        pillar_basis,
-    )
+    print("\n=== Best rigid rotations into pillar basis ===")
+    print("green -> pillar:", best_rigid_rotation_deg(green_basis, pillar_basis))
+    print("red   -> pillar:", best_rigid_rotation_deg(red_basis, pillar_basis))
 
     pitch_px = pillar_info["pitch_px"]
-    anchor_pix, anchor_idx = choose_center_anchor(nv_pixel)
-
-    print(f"\nEstimated pillar pitch from constrained fit [px]: {pitch_px:.3f}")
-    print(f"Chosen anchor index: {anchor_idx}")
-    print(f"Chosen anchor pixel: {anchor_pix}")
-
-    target_pixels_3, u_step, v_step = make_triplet_targets(
-        anchor_pix=anchor_pix,
-        pillar_basis=pillar_basis,
-        pitch_px=pitch_px,
-        step=TARGET_STEP_IN_LATTICE_SPACINGS,
+    target_pixels = make_triplet_targets(
+        common_origin,
+        pillar_basis,
+        pitch_px,
+        TARGET_STEP_IN_LATTICE_SPACINGS,
     )
 
-    print("\n=== Suggested 3-point target pixels ===")
-    print(target_pixels_3)
+    green_target_coords = camera_to_src(target_pixels, A_green, t_green)
+    red_target_coords = camera_to_src(target_pixels, A_red, t_red)
 
-    green_target_coords = camera_to_src(target_pixels_3, A_green, t_green)
-    red_target_coords = camera_to_src(target_pixels_3, A_red, t_red)
+    print("\n=== Square-lattice quality ===")
+    print("pitch_px:", pitch_px)
+    print("rms residual px:", pillar_info["rms_residual_px"])
+    print("inliers:", np.sum(pillar_info["active_mask"]), "/", len(nv_pixel))
+
+    print("\n=== Suggested target pixels ===")
+    print(target_pixels)
 
     print("\n=== GREEN source coords for target pixels ===")
     print(green_target_coords)
@@ -775,39 +503,25 @@ def main():
     print("\n=== RED source coords for target pixels ===")
     print(red_target_coords)
 
-    if SHOW_PLOTS:
-        common_origin = nv_pixel.mean(axis=0)
-
-        plot_square_lattice_fit(nv_pixel, pillar_info)
-        plot_axes(nv_pixel, calibration_coords_pixel, common_origin, green_basis, red_basis, pillar_basis)
-        plot_square_frames(nv_pixel, calibration_coords_pixel, common_origin, green_basis, red_basis, pillar_basis)
-        plot_target_pixels(
+    if SHOW_PLOT:
+        plot_summary(
             nv_pixel,
-            calibration_coords_pixel,
             common_origin,
+            calibration_coords_pixel,
             green_basis,
             red_basis,
             pillar_basis,
-            target_pixels_3,
-            anchor_pix,
+            target_pixels,
         )
-
         plt.show(block=True)
 
     return {
-        "A_green": A_green,
-        "t_green": t_green,
-        "A_red": A_red,
-        "t_red": t_red,
+        "common_origin": common_origin,
         "green_basis": green_basis,
         "red_basis": red_basis,
         "pillar_basis": pillar_basis,
         "pillar_info": pillar_info,
-        "green_fit": green_fit,
-        "red_fit": red_fit,
-        "green_rot_deg": green_rot_deg,
-        "red_rot_deg": red_rot_deg,
-        "target_pixels_3": target_pixels_3,
+        "target_pixels": target_pixels,
         "green_target_coords": green_target_coords,
         "red_target_coords": red_target_coords,
     }

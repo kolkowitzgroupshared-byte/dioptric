@@ -1445,27 +1445,28 @@ def do_opx_constant_ac():
     #     [4],  # Digital channels
     #     [3, 4],  # Analog channels
     #     [0.15, 0.15],  # Analog voltages
-    #     [102.0, 102.0],  # Analog frequencies
+    #     [132.0, 70.0],  # Analog frequencies
     # )
     # Green + red
-    # opx.constant_ac(
-    #     [4, 1],  # Digital channels
-    #     [3, 4, 2, 6],  # Analog channels
-    #     [0.11, 0.11, 0.11, 0.11],  # Analog voltages;
-    #     [82.511, 117.235, 66.068, 65.278],
-    # )
-    # green_coords_list =[
-    # [101.086, 100.729],
-    # [82.511, 117.235],
-    # [99.165, 77.99],
-    # [126.369, 121.736],
+    opx.constant_ac(
+        [4, 1],  # Digital channels
+        [3, 4, 2, 6],  # Analog channels
+        [0.08, 0.08, 0.08, 0.08],  # Analog voltages;
+        [127.177, 132.538, 88.161, 91.279],
+    )
+    # green_coords_list = [
+    #     [99.688, 99.907],
+    #     [70.713, 125.418],
+    #     [102.296, 71.721],
+    #     [127.177, 132.538],
+
     # ]
     # red_coords_list = [
-    # [66.068, 65.278],
-    # [49.953, 77.617],
-    # [65.656, 46.698],
-    # [85.0, 83.83],
-    # ]
+    #     [65.59, 65.255],
+    #     [42.505, 85.81],
+    #     [67.262, 42.154],
+    #     [88.161, 91.279],
+    #     ]
     # red
     # opx.constant_ac(
     #     [1],  # Digital channels
@@ -1475,12 +1476,12 @@ def do_opx_constant_ac():
     # )
 
     # Green + yellow
-    opx.constant_ac(
-        [4],  # Digital channels
-        [3, 4, 7],  # Analog channels
-        [0.11, 0.11, 0.20],  # Analog voltages
-        [102, 102, 0],  # Analog frequencies
-    )
+    # opx.constant_ac(
+    #     [4],  # Digital channels
+    #     [3, 4, 7],  # Analog channels
+    #     [0.11, 0.11, 0.20],  # Analog voltages
+    #     [133.634, 130.331, 0],  # Analog frequencies
+    # )
     # # Red + green + Yellow
     # opx.constant_ac(
     #     [4, 1],  # Digital channels1
@@ -1768,17 +1769,15 @@ if __name__ == "__main__":
     # magnet_angle = 90
     date_str = "2026_02_20"
     sample_coords = [0.0, 0.0]
-    z_coord = 0.0
-    # z_coord = 3.5
+    z_coord = -0.5
+    # z_coord = -3.0
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_reordered.npz",   
         # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz",   
         # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
-        file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz",   
+        file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered_after_sample_rotation.npz",   
     ).tolist()
-    # pixel_coords_list = [[209.573, 201.991],
-    #     [355.977,  55.633],]
     green_coords_list = [
         [
             round(coord, 3)
@@ -1806,24 +1805,24 @@ if __name__ == "__main__":
     print(f"Reference NV:{pixel_coords_list[0]}")
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
-    pixel_coords_list =[
-        [199.693, 201.937], 
-        [342.93, 44.107], 
-        [204.188, 358.94], 
-        [10.992, 53.88],
-        ]
-    green_coords_list = [
-        [99.745, 99.794],
-        [70.712, 125.372],
-        [102.332, 71.682],
-        [130.634, 130.331],
-    ]
-    red_coords_list = [
-        [65.59, 65.255],
-        [42.505, 86.21],
-        [67.262, 42.154],
-        [90.161, 89.279],
-        ]
+    # pixel_coords_list =[
+    #     [199.693, 201.937], 
+    #     [343.236, 43.996], 
+    #     [204.122, 358.893], 
+    #     [27.067, 40.093],
+    # ]
+    # green_coords_list = [
+    #     [99.693, 99.877],
+    #     [70.749, 125.429],
+    #     [102.32, 71.753],
+    #     [127.173, 132.441],
+    # ]
+    # red_coords_list = [
+    #     [65.59, 65.255],
+    #     [42.505, 85.81],
+    #     [67.262, 42.154],
+    #     [88.161, 91.279],
+    # ]
 
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
@@ -1885,6 +1884,7 @@ if __name__ == "__main__":
 
     # print("charge_pol_amps range:", min(charge_pol_amps), max(charge_pol_amps))
     # print("scc_amp_list range:", min(scc_amp_list), max(scc_amp_list))
+    # print("charge_pol_amps range:", charge_pol_amps)
     # sys.exit()
     # nv_list[i] will have the ith coordinates from the above lists
     nv_list: list[NVSig] = []
@@ -1907,8 +1907,8 @@ if __name__ == "__main__":
                 VirtualLaserKey.CHARGE_POL: pol_duration_list[ind],
             },
             pulse_amps={
-                # VirtualLaserKey.SCC: scc_amp_list[ind],
-                # VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
+                VirtualLaserKey.SCC: scc_amp_list[ind],
+                VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
             },
         )
         nv_list.append(nv_sig)
@@ -1919,8 +1919,8 @@ if __name__ == "__main__":
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
-    nv_sig.expected_counts = 3782
-    # nv_sig.expected_counts = 1700
+    # nv_sig.expected_counts = 3782
+    nv_sig.expected_counts = 1800
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:150]
     print(f"length of NVs list:{len(nv_list)}")
@@ -1967,7 +1967,7 @@ if __name__ == "__main__":
         #     do_scanning_image_sample_zoom(nv)
 
         # do_scanning_image_sample(nv_sig)
-        do_scanning_image_sample_zoom(nv_sig)
+        # do_scanning_image_sample_zoom(nv_sig)
         # do_scanning_image_full_roi(nv_sig)
 
         # scan_equilateral_triangle(nv_sig, center_coord=sample_coords, radius=0.6)
@@ -2008,7 +2008,7 @@ if __name__ == "__main__":
         # do_green_red_triplet_time_mux()
         
         # do_optimize_pixel(nv_sig)
-        do_optimize_green(nv_sig)
+        # do_optimize_green(nv_sig)
         # repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
         # do_optimize_red(nv_sig, repr_nv_sig)
         # do_optimize_z(nv_sig)
@@ -2020,7 +2020,7 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        # do_charge_state_histograms(nv_list)
+        do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_dmd_crosstalk_matrix(nv_list) 
         # do_charge_correlation(nv_list)

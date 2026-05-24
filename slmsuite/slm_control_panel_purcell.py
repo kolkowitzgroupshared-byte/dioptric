@@ -219,8 +219,8 @@ def circles():
 def calibration_triangle():
     # Define parameters for the equilateral triangle
     center = (710, 540)  # Center of the triangle
-    # side_length = 160  # Length of each side of the triangle
-    side_length = 140  # Length of each side of the triangle
+    side_length = 160  # Length of each side of the triangle
+    # side_length = 140  # Length of each side of the triangle
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
     theta = np.linspace(0, 2 * np.pi, 4)[:-1]  # Exclude the last point to avoid overlap
@@ -290,7 +290,8 @@ def load_nv_coords(
     # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_reordered.npz",   
     # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz",   
     # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
-    file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz",   
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz",   
+    file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered_after_sample_rotation.npz",   
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
@@ -399,8 +400,8 @@ try:
     # wavefront_calibration()
     # load_wavefront_calibration()
     
-    # compute_and_write_nvs_phase()
-    calibration_triangle()
+    compute_and_write_nvs_phase()
+    # calibration_triangle()
     
     # circles()
     # smiley()
