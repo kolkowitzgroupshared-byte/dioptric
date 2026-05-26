@@ -176,12 +176,12 @@ def evaluate_uniformity(vectors=None, size=25):
 
 
 def circles():
-    cam.set_exposure(0.1)
+    # cam.set_exposure(0.1)
 
-    center = (750, 530)
+    center = (705, 520)
 
     # Use larger radii and more spacing
-    radii = np.linspace(50, 200, num=5)
+    radii = np.linspace(50, 140, num=6)
 
     circle_points = []
     for radius in radii:
@@ -219,8 +219,8 @@ def circles():
 def calibration_triangle():
     # Define parameters for the equilateral triangle
     center = (710, 540)  # Center of the triangle
-    side_length = 160  # Length of each side of the triangle
-    # side_length = 140  # Length of each side of the triangle
+    # side_length = 100  # Length of each side of the triangle
+    side_length = 150  # Length of each side of the triangle
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
     theta = np.linspace(0, 2 * np.pi, 4)[:-1]  # Exclude the last point to avoid overlap
@@ -253,35 +253,65 @@ def calibration_triangle():
     # save(phase, file_path, filename)
     # cam_plot()
     
-# def nuvu2thorcam_calibration(coords):
-#     """
-#     Calibrates and transforms coordinates from the Nuvu camera's coordinate system
-#     to the Thorlabs camera's coordinate system using an affine transformation.
-#     """
-#     cal_coords_thorcam = np.array(
-#         [[883.205,   640. ], [536.795,  640. ], [710., 340.]], dtype="float32"
-#     )
+def nuvu2thorcam_calibration(coords):
+    """
+    Calibrates and transforms coordinates from the Nuvu camera's coordinate system
+    to the Thorlabs camera's coordinate system using an affine transformation.
+    """
+    # cal_coords_thorcam = np.array(
+    #     [[883.205,   640. ], [536.795,  640. ], [710., 340.]], dtype="float32"
+    # )
 
-#     cal_coords_nuvu = np.array(
-#         [[338.04, 361.354], [311.711, 11.032], [18.043, 209.58]], dtype="float32"
-#     )
-#     # Compute the affine transformation matrix
-#     M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
-#     # Append a column of ones to the input coordinates to facilitate affine transformation
-#     ones_column = np.ones((coords.shape[0], 1))
-#     coords_homogeneous = np.hstack((coords, ones_column))
-#     thorcam_coords = np.dot(coords_homogeneous, M.T)
+    # cal_coords_nuvu = np.array(
+    #     [[338.04, 361.354], [311.711, 11.032], [18.043, 209.58]], dtype="float32"
+    # )
+    
+    cal_coords_thorcam = np.array(
+        [                
+            [848.56406461, 620.0],
+            [571.43593539, 620.0],
+            [710.0,        380.0],
+        ], dtype="float32"
+    )
 
-#     return thorcam_coords
+    cal_coords_nuvu = np.array(
+        [
+            [84.57, 7.014],
+            [92.258, 353.467],
+            [337.832, 184.63],
+        ], dtype="float32"
+    )
+    # Compute the affine transformation matrix
+    M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
+    # Append a column of ones to the input coordinates to facilitate affine transformation
+    ones_column = np.ones((coords.shape[0], 1))
+    coords_homogeneous = np.hstack((coords, ones_column))
+    thorcam_coords = np.dot(coords_homogeneous, M.T)
+
+    return thorcam_coords
 
 def apply_affine(M, coords):
     coords = np.asarray(coords, dtype=np.float32)
+
+    single_point = False
+    if coords.ndim == 1:
+        coords = coords[None, :]
+        single_point = True
+
     ones = np.ones((coords.shape[0], 1), dtype=np.float32)
     coords_h = np.hstack([coords, ones])
-    return coords_h @ M.T
+    out = coords_h @ M.T
+
+    if single_point:
+        return out[0]
+
+    return out
 
 
-def nuvu2thorcam_slm(coords, calib_path="slmsuite/calibration/nuvu_to_thorcam_slm.npz"):
+def nuvu2thorcam_slm(
+    coords,
+    calib_path="slmsuite/calibration/nuvu_to_thorcam_slm.npz",
+):
     data = np.load(calib_path, allow_pickle=True)
     M = np.asarray(data["M_nuvu_to_thorcam_slm"], dtype=np.float32)
     return apply_affine(M, coords)
@@ -291,7 +321,7 @@ def load_nv_coords(
     # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz",   
     # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
     # file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz",   
-    file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered_after_sample_rotation.npz",   
+    file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered.npz",   
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
@@ -299,11 +329,28 @@ def load_nv_coords(
     print(f"len of nv coords: {len(nv_coordinates)}")
     return nv_coordinates, spot_weights
 
-nuvu_pixel_coords, spot_weights = load_nv_coords()
-# nuvu_pixel_coords = np.array([[215.025, 203.863], [308.628, 103.893], [238.142, 328.739], [63.706, 100.683]])
+# nuvu_pixel_coords, spot_weights = load_nv_coords()
+# # nuvu_pixel_coords = np.array([[215.025, 203.863], [308.628, 103.893], [238.142, 328.739], [63.706, 100.683]])
 # thorcam_coords_xy = nuvu2thorcam_calibration(nuvu_pixel_coords).T
-thorcam_coords_xy = nuvu2thorcam_slm(nuvu_pixel_coords).T
+# thorcam_coords_xy = nuvu2thorcam_calibration(nuvu_pixel_coords).T
+
+nuvu_pixel_coords, spot_weights = load_nv_coords()
+
+thorcam_coords = nuvu2thorcam_slm(nuvu_pixel_coords)   # shape: (N, 2)
+thorcam_coords_xy = thorcam_coords.T                   # shape: (2, N)
+# test_inds = [0, 10, 100, 500, 1000]
+# thorcam_coords_xy = thorcam_coords[test_inds].T
+print("thorcam_coords shape:", thorcam_coords.shape)
+print("thorcam_coords_xy shape:", thorcam_coords_xy.shape)
+print("first ThorCam coord:", thorcam_coords[0])
+
+zero_nuvu = np.array([186.796, 186.907], dtype=np.float32)
+zero_thor = nuvu2thorcam_slm(zero_nuvu)
+
+print("zero_nuvu:", zero_nuvu)
+print("mapped zero_thorcam_slm:", zero_thor)
 # sys.exit()
+
 def compute_and_write_nvs_phase():
     hologram = SpotHologram(
         shape=(4096, 2048),
@@ -315,7 +362,7 @@ def compute_and_write_nvs_phase():
     # Precondition computationally
     hologram.optimize(
         "WGS-Kim",
-        maxiter=40,
+        maxiter=20,
         feedback="computational_spot",
         stat_groups=["computational_spot"],
     )

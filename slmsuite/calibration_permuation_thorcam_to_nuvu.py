@@ -1,73 +1,269 @@
+# -*- coding: utf-8 -*-
 import os
 import cv2
 import numpy as np
+
+
+# =============================================================================
+# Helpers
+# =============================================================================
 
 def apply_affine(M, pts):
     pts = np.asarray(pts, dtype=np.float32)
     if pts.ndim == 1:
         pts = pts[None, :]
     ones = np.ones((len(pts), 1), dtype=np.float32)
-    return np.hstack([pts, ones]) @ M.T
+    return np.hstack([pts, ones]) @ np.asarray(M, dtype=np.float32).T
 
+
+def fit_affine_least_squares(src, dst):
+    """
+    Fit affine transform src -> dst using all points.
+
+    Returns 2x3 matrix M such that:
+        dst = M @ [src_x, src_y, 1]
+    """
+    src = np.asarray(src, dtype=np.float32).reshape(-1, 2)
+    dst = np.asarray(dst, dtype=np.float32).reshape(-1, 2)
+
+    if len(src) < 3:
+        raise ValueError("Need at least 3 points for affine fit.")
+
+    X = np.column_stack([src, np.ones(len(src), dtype=np.float32)])
+    B, *_ = np.linalg.lstsq(X, dst, rcond=None)
+
+    return B.T.astype(np.float32)
+
+
+def affine_residual_report(name, M, src, dst):
+    pred = apply_affine(M, src)
+    residuals = np.asarray(dst, dtype=np.float32) - pred
+    err = np.linalg.norm(residuals, axis=1)
+
+    print(f"\n=== {name} residual report ===")
+    print("mean error [px]:", float(np.mean(err)))
+    print("RMS error  [px]:", float(np.sqrt(np.mean(err**2))))
+    print("max error  [px]:", float(np.max(err)))
+
+    for i, (s, d, p, r, e) in enumerate(zip(src, dst, pred, residuals, err)):
+        print(
+            f"{i:02d}: src={s}, dst={d}, pred={p}, "
+            f"res={r}, |res|={e:.4f}"
+        )
+
+    return pred, residuals, err
+
+
+# =============================================================================
+# Data
+# =============================================================================
 
 save_path = "slmsuite/calibration/nuvu_to_thorcam_slm.npz"
 
+sets = []
 
-cal_coords_thorcam_slm = np.array(
-    [
-        [848.56406461, 620.0],
-        [571.43593539, 620.0],
-        [710.0,        380.0],
-    ],
-    dtype=np.float32,
-)
+sets.append({
+    "name": "set1",
+    "thorcam": np.array([
+        [839.90381057, 615.0],
+        [580.09618943, 615.0],
+        [710.0,        390.0],
+    ], dtype=np.float32),
+    "nuvu": np.array([
+[81.317, 29.563], [97.071, 340.781], [322.347, 180.279], 
+    ], dtype=np.float32),
+})
 
-nuvu_raw = np.array(
-[[82.355, 11.393], [91.011, 357.211], [336.384, 188.434]],
 
-    dtype=np.float32,
-)
+# sets.append({
+#     "name": "set1",
+#     "thorcam": np.array([
+#         [848.56406461, 620.0],
+#         [571.43593539, 620.0],
+#         [710.0,        380.0],
+#     ], dtype=np.float32),
+#     "nuvu": np.array([
+#         [84.57, 7.014],
+#         [92.258, 353.467],
+#         [337.832, 184.63],
+#     ], dtype=np.float32),
+# })
 
-NUVU_TRIANGLE_ORDER = [0, 1, 2]
-cal_coords_nuvu = nuvu_raw[NUVU_TRIANGLE_ORDER]
+# sets.append({
+#     "name": "set2",
+#     "thorcam": np.array([
+#         [831.24355653, 610.0],
+#         [588.75644347, 610.0],
+#         [710.0,        400.0],
+#     ], dtype=np.float32),
+#     "nuvu": np.array([
+#         [95.767, 28.179],
+#         [102.592, 331.285],
+#         [316.852, 183.808],
+#     ], dtype=np.float32),
+# })
+
+# sets.append({
+#     "name": "set3",
+#     "thorcam": np.array([
+#         [813.92304845, 600.0],
+#         [606.07695155, 600.0],
+#         [710.0,        420.0],
+#     ], dtype=np.float32),
+#     "nuvu": np.array([
+#         [105.971, 49.68],
+#         [112.133, 309.714],
+#         [296.146, 183.337],
+#     ], dtype=np.float32),
+# })
+
+# sets.append({
+#     "name": "set4",
+#     "thorcam": np.array([
+#         [796.60254038, 590.0],
+#         [623.39745962, 590.0],
+#         [710.0,        440.0],
+#     ], dtype=np.float32),
+#     "nuvu": np.array([
+#         [116.737, 71.334],
+#         [122.193, 288.122],
+#         [275.363, 182.454],
+#     ], dtype=np.float32),
+# })
+
+# sets.append({
+#     "name": "set5",
+#     "thorcam": np.array([
+#         [761.96155, 570.0],
+#         [658.03845, 570.0],
+#         [710.0,     480.0],
+#     ], dtype=np.float32),
+#     "nuvu": np.array([
+#         [138.143, 114.477],
+#         [141.560, 245.128],
+#         [233.972, 181.738],
+#     ], dtype=np.float32),
+# })
+
+
+# =============================================================================
+# Combine all points
+# =============================================================================
+
+cal_coords_thorcam_slm = np.vstack([s["thorcam"] for s in sets]).astype(np.float32)
+cal_coords_nuvu = np.vstack([s["nuvu"] for s in sets]).astype(np.float32)
+
+set_labels = []
+point_labels = []
+for s in sets:
+    for k in range(len(s["nuvu"])):
+        set_labels.append(s["name"])
+        point_labels.append(k)
+
+set_labels = np.array(set_labels)
+point_labels = np.array(point_labels)
+
+
+# =============================================================================
+# Zero-order check point
+# =============================================================================
 
 zero_thorcam_slm = np.array([705.05789009, 519.93369574], dtype=np.float32)
-zero_nuvu = np.array([190.694, 191.013], dtype=np.float32)
+zero_nuvu = np.array([[187.544, 188.093]], dtype=np.float32)
 
-M_nuvu_to_thorcam_slm = cv2.getAffineTransform(
-    cal_coords_nuvu.astype(np.float32),
-    cal_coords_thorcam_slm.astype(np.float32),
+
+
+# =============================================================================
+# Fit Nuvu -> ThorCam_SLM
+# =============================================================================
+
+M_nuvu_to_thorcam_slm = fit_affine_least_squares(
+    cal_coords_nuvu,
+    cal_coords_thorcam_slm,
 )
 
-pred_triangle = apply_affine(M_nuvu_to_thorcam_slm, cal_coords_nuvu)
-triangle_residuals = cal_coords_thorcam_slm - pred_triangle
+M_thorcam_slm_to_nuvu = cv2.invertAffineTransform(
+    M_nuvu_to_thorcam_slm.astype(np.float32)
+)
 
-pred_zero = apply_affine(M_nuvu_to_thorcam_slm, zero_nuvu)[0]
-zero_error_px = np.linalg.norm(pred_zero - zero_thorcam_slm)
-
-print("M_nuvu_to_thorcam_slm:")
+print("\nM_nuvu_to_thorcam_slm:")
 print(M_nuvu_to_thorcam_slm)
 
-print("triangle residuals [px]:")
-print(triangle_residuals)
+print("\nM_thorcam_slm_to_nuvu:")
+print(M_thorcam_slm_to_nuvu)
 
-print("predicted zero:", pred_zero)
-print("actual zero:   ", zero_thorcam_slm)
-print("zero error [px]:", zero_error_px)
+pred_thorcam, residuals_thorcam, err_thorcam = affine_residual_report(
+    "Nuvu -> ThorCam_SLM",
+    M_nuvu_to_thorcam_slm,
+    cal_coords_nuvu,
+    cal_coords_thorcam_slm,
+)
+
+pred_nuvu, residuals_nuvu, err_nuvu = affine_residual_report(
+    "ThorCam_SLM -> Nuvu",
+    M_thorcam_slm_to_nuvu,
+    cal_coords_thorcam_slm,
+    cal_coords_nuvu,
+)
+
+
+# =============================================================================
+# Zero-order validation
+# =============================================================================
+
+pred_zero_thorcam_slm = apply_affine(M_nuvu_to_thorcam_slm, zero_nuvu)[0]
+zero_error_thorcam_px = float(np.linalg.norm(pred_zero_thorcam_slm - zero_thorcam_slm))
+
+pred_zero_nuvu = apply_affine(M_thorcam_slm_to_nuvu, zero_thorcam_slm)[0]
+zero_error_nuvu_px = float(np.linalg.norm(pred_zero_nuvu - zero_nuvu))
+
+print("\n=== Zero-order check ===")
+print("zero_nuvu:", zero_nuvu)
+print("pred_zero_thorcam_slm:", pred_zero_thorcam_slm)
+print("actual zero_thorcam_slm:", zero_thorcam_slm)
+print("zero error ThorCam px:", zero_error_thorcam_px)
+
+print("\nzero_thorcam_slm:", zero_thorcam_slm)
+print("pred_zero_nuvu:", pred_zero_nuvu)
+print("actual zero_nuvu:", zero_nuvu)
+print("zero error Nuvu px:", zero_error_nuvu_px)
+
+
+# =============================================================================
+# Save
+# =============================================================================
 
 os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
 np.savez_compressed(
     save_path,
+
+    # Main transforms
     M_nuvu_to_thorcam_slm=M_nuvu_to_thorcam_slm.astype(np.float32),
+    M_thorcam_slm_to_nuvu=M_thorcam_slm_to_nuvu.astype(np.float32),
+
+    # Calibration data
     cal_coords_nuvu=cal_coords_nuvu.astype(np.float32),
     cal_coords_thorcam_slm=cal_coords_thorcam_slm.astype(np.float32),
+    pred_coords_thorcam_slm=pred_thorcam.astype(np.float32),
+    residuals_thorcam_slm=residuals_thorcam.astype(np.float32),
+    err_thorcam_slm=err_thorcam.astype(np.float32),
+    pred_coords_nuvu=pred_nuvu.astype(np.float32),
+    residuals_nuvu=residuals_nuvu.astype(np.float32),
+    err_nuvu=err_nuvu.astype(np.float32),
+
+    # Zero-order check
     zero_nuvu=zero_nuvu.astype(np.float32),
     zero_thorcam_slm=zero_thorcam_slm.astype(np.float32),
-    pred_zero_thorcam_slm=pred_zero.astype(np.float32),
-    zero_error_px=np.array(zero_error_px, dtype=np.float32),
-    nuvu_triangle_order=np.array(NUVU_TRIANGLE_ORDER, dtype=np.int32),
-    convention="NUVU_TO_THORCAM_SLM",
+    pred_zero_thorcam_slm=pred_zero_thorcam_slm.astype(np.float32),
+    pred_zero_nuvu=pred_zero_nuvu.astype(np.float32),
+    zero_error_thorcam_px=np.array(zero_error_thorcam_px, dtype=np.float32),
+    zero_error_nuvu_px=np.array(zero_error_nuvu_px, dtype=np.float32),
+
+    # Labels/provenance
+    set_labels=set_labels,
+    point_labels=point_labels.astype(np.int32),
+    convention="NUVU_TO_THORCAM_SLM_GLOBAL_AFFINE_ALL_SETS",
 )
 
-print("Saved:", save_path)
+print("\nSaved:", save_path)

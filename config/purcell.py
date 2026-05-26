@@ -97,8 +97,8 @@ config |= {
     # Common durations are in ns
     "CommonDurations": {
         "default_pulse_duration": 1000,
-        "aod_access_time": 2.6e3,  # access time in specs is 10us
-        # "aod_access_time":8e3,  # access time in specs is 10us
+        # "aod_access_time": 2.6e3,  # access time in specs is 10us
+        "aod_access_time":8e3,  # access time in specs is 10us
         "widefield_operation_buffer": 1e3,
         "uwave_buffer": 0,
         "iq_buffer": 0,
@@ -211,8 +211,8 @@ config |= {
         "resolution": (512, 512),
         "spot_radius": 3.0,  # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
-        "em_gain": 5000,
-        # "em_gain": 10,
+        # "em_gain": 5000,
+        "em_gain": 10,
         "temp": -60,
         "timeout": 60e3,  # ms
         # "timeout": -1,  # No timeout
@@ -992,7 +992,7 @@ opx_config = {
     "waveforms": {
         # Green AOD
         "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
-        # "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
+        # "green_aod_cw-opti": {"type": "constant", "sample": 0.11},
         "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
@@ -1002,7 +1002,7 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.35},
+        "yellow_imaging": {"type": "constant", "sample": 0.45},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.344}, #1460NVs
         "yellow_charge_readout": {"type": "constant", "sample": 0.3614},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.4014},
