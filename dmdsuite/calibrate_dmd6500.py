@@ -798,7 +798,7 @@ def calibrate_triangle_onpass(
         cam=cam,
         cam_pts=tri_cam_pts,
         axis="x",
-        positions=np.arange(500, 1200, 10),
+        positions=np.arange(300, 1500, 20),
         stripe_width=stripe_width,
         plane=222,
         exposure=exposure,
@@ -821,11 +821,11 @@ def calibrate_triangle_onpass(
         cam=cam,
         cam_pts=tri_cam_pts,
         axis="y",
-        positions=np.arange(250,950, 10),
+        positions=np.arange(00, 1200, 20),
         stripe_width=stripe_width,
         plane=223,
         exposure=exposure,
-        roi=roi,
+        roi=roi,    
         save_scan_images=save_scan_images,
     )
 

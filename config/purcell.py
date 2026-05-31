@@ -37,19 +37,19 @@ red_laser_aod = "laser_COBO_638_aod"
 # calibration_coords_red = [[41.956, 88.653],[69.523, 40.383],[90.96, 93.205]]
 
 calibration_coords_pixel = [
-    [343.236, 43.996], 
-    [204.122, 358.893], 
-    [27.067, 40.093],
+        [354.153, 112.896], 
+        [215.06, 366.90], 
+        [20.088, 51.051],
 ]
 calibration_coords_green = [
-    [70.749, 125.429],
-    [102.32, 71.753],
-    [127.173, 132.441],
+        [70.404, 112.915],
+        [100.384, 70.084],
+        [128.633, 130.529],
 ]
 calibration_coords_red = [
-    [42.505, 85.81],
-    [67.262, 42.154],
-    [88.161, 91.279],
+        [40.6, 73.167],
+        [67.114, 40.545],
+        [88.574, 92.268],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -88,7 +88,7 @@ config |= {
     "apd_indices": [0],  # APD indices for the tagger
     "count_format": CountFormat.RAW,
     "collection_mode": CollectionMode.CAMERA,
-    "collection_mode_counter": CollectionMode.COUNTER,  # TODO: remove this line when set up in new computer
+    "collection_mode_counter": CollectionMode.COUNTER,
     # "charge_state_estimation_mode": ChargeStateEstimationMode.MLE,
     "charge_state_estimation_mode": ChargeStateEstimationMode.THRESHOLDING,
     "windows_repo_path": home / "GitHub/dioptric",
@@ -211,8 +211,8 @@ config |= {
         "resolution": (512, 512),
         "spot_radius": 3.0,  # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
-        # "em_gain": 5000,
-        "em_gain": 10,
+        "em_gain": 5000,
+        # "em_gain": 10,
         "temp": -60,
         "timeout": 60e3,  # ms
         # "timeout": -1,  # No timeout
@@ -1002,7 +1002,7 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.45},
+        "yellow_imaging": {"type": "constant", "sample": 0.35},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.344}, #1460NVs
         "yellow_charge_readout": {"type": "constant", "sample": 0.3614},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.4014},

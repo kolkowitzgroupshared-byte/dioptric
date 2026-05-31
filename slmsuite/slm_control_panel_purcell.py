@@ -94,7 +94,7 @@ def blaze(vector_deg=(0.2, 0.2)):
 def fourier_calibration():
     cam.set_exposure(0.0001)  # Increase exposure because power will be split many ways
     fs.fourier_calibrate(
-        array_shape=[15, 15],  # Size of the calibration grid (Nx, Ny) [knm]
+        array_shape=[11, 11],  # Size of the calibration grid (Nx, Ny) [knm]
         array_pitch=[100, 100],  # Pitch of the calibration grid (x, y) [knm]
         plot=True,
     )
@@ -181,7 +181,7 @@ def circles():
     center = (705, 520)
 
     # Use larger radii and more spacing
-    radii = np.linspace(50, 140, num=6)
+    radii = np.linspace(20, 120, num=6)
 
     circle_points = []
     for radius in radii:
@@ -218,17 +218,18 @@ def circles():
 # region "nv phase calulation"
 def calibration_triangle():
     # Define parameters for the equilateral triangle
-    center = (710, 540)  # Center of the triangle
-    # side_length = 100  # Length of each side of the triangle
+    center = (705, 520)  # Center of the triangle
+    # side_length = 80  # Length of each side of the triangle
     side_length = 150  # Length of each side of the triangle
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
     theta = np.linspace(0, 2 * np.pi, 4)[:-1]  # Exclude the last point to avoid overlap
     x_triangle = center[0] + side_length * np.cos(theta + np.pi / 6)  # X coordinates
     y_triangle = center[1] + side_length * np.sin(theta + np.pi / 6)  # Y coordinates
-
+    # sys.exit()
     # Combine the coordinates into a grid format
     triangle_points = np.vstack((x_triangle, y_triangle))
+
     print("thorcam coords:", triangle_points)
     hologram = SpotHologram(
         shape=(2048, 2048), spot_vectors=triangle_points, basis="ij", cameraslm=fs
@@ -434,8 +435,8 @@ try:
     slm = ThorSLM()
     # slm = Meadowlark()
     thorcam_shape = (2160, 2880) 
-    cam = DummyCamera(shape=thorcam_shape, name="26438")
-    # cam = ThorCam(serial="26438", verbose=True)
+    # cam = DummyCamera(shape=thorcam_shape, name="26438")
+    cam = ThorCam(serial="26438", verbose=True)
     fs = FourierSLM(cam, slm)
     
     # cam = tb.get_server_thorcam()
@@ -447,8 +448,8 @@ try:
     # wavefront_calibration()
     # load_wavefront_calibration()
     
-    compute_and_write_nvs_phase()
-    # calibration_triangle()
+    # compute_and_write_nvs_phase()
+    calibration_triangle()
     
     # circles()
     # smiley()

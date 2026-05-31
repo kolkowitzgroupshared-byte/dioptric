@@ -613,7 +613,7 @@ if __name__ == "__main__":
 
     # full ROI -- multiple images save in the same file
     # process_scan_file(file_stem="2026_03_13-00_01_52-qnami-nv0_2026_02_20")
-    process_scan_file(file_stem="2026_05_26-07_18_16-qnami-nv0_2026_02_20")
+    process_scan_file(file_stem="2026_05_27-18_34_00-qnami-nv0_2026_02_20")
     
     kpl.show(block=True)
 
