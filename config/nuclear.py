@@ -268,6 +268,7 @@ config |= {
         "slider_1": "filter_slider_THOR_ell9k_4",
         "slider_2": "filter_slider_THOR_ell9k_5",
         "slider_3": "filter_slider_THOR_ell9k_6",
+        "power_meter": "power_meter_THOR_pm100d",
     },
     ###
     "Wiring": {

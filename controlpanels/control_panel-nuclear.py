@@ -24,6 +24,7 @@ from majorroutines.caf_spectroscopy import (
     lifetime_caf,
     lifetime_caf_recovery,
     lifetime_caf_single_shot,
+    monitor_power,
     sideillum_resonance,
     single_lifetime,
     singlet_search,
@@ -99,6 +100,11 @@ def do_resonance(nv_sig):
 
 def do_awg_test():
     laser_char.main()
+    return
+
+
+def do_power_monitor():
+    monitor_power.main()
     return
 
 
@@ -591,12 +597,12 @@ if __name__ == "__main__":
     th_sig.expected_counts = None  # raw counts, none when unknown
 
     try:
-        # do_pulse_streamer_constant(digital_channels=(0,))
+        do_pulse_streamer_constant(digital_channels=(1,))
+        # do_power_monitor()
         # ^leave the comma at the end or it will complain
         # do_stationary_count(th_sig, disable_opt=True)
         # do_lifetime_measurement(th_sig)
         # do_lifetime_caf_single_shot(th_sig)
-        do_lifetime_caf_recovery(th_sig)
         # do_th_lifetime_measurement(th_sig)
         # do_awg_test()
         # do_resonance(th_sig)
