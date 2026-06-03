@@ -266,24 +266,50 @@ def do_dmd_crosstalk_matrix(nv_list_all):
     """
     DMD optical crosstalk test.
 
-    Always includes global NV 0 in measured nv_sub so base_routine has
-    a representative NV / first coordinate.
+    Simple safe version:
+        - gets center DMD indices
+        - removes indices outside current nv_list_all
+        - includes NV 0 as representative
     """
 
-    # DMD source NVs: choose center NVs for good first test
-    source_inds = dmd_crosstalk_matrix.get_center_dmd_indices(1000)
+    num_sources = 150
 
-    # Measured NVs: always include global 0 first, plus all source NVs
+    print("len(nv_list_all):", len(nv_list_all))
+
+    # Get more than needed because some may be outside current nv_list_all.
+    source_inds_raw = dmd_crosstalk_matrix.get_center_dmd_indices(300)
+
+    source_inds = [
+        int(ind)
+        for ind in source_inds_raw
+        if int(ind) < len(nv_list_all)
+    ]
+
+    source_inds = source_inds[:num_sources]
+
+    print(f"valid source inds found: {len(source_inds)}")
+
+    if len(source_inds) == 0:
+        raise RuntimeError("No valid DMD source indices found.")
+
+    # Include global NV 0 only for representative/positioning.
     measured_inds = unique_keep_order([0] + source_inds)
+
+    # Extra safety check.
+    measured_inds = [
+        int(ind)
+        for ind in measured_inds
+        if int(ind) < len(nv_list_all)
+    ]
 
     nv_sub = dmd_crosstalk_matrix.subset_nv_list(nv_list_all, measured_inds)
 
-    # Make global NV 0 the representative for positioning
+    # Make first NV representative.
     for nv in nv_sub:
         nv.representative = False
 
     nv_sub[0].representative = True
-    nv_sub[0].expected_counts = 1600.0
+    nv_sub[0].expected_counts = 1900.0
 
     print("Measured global indices:")
     print(measured_inds)
@@ -300,11 +326,11 @@ def do_dmd_crosstalk_matrix(nv_list_all):
         num_runs=1,
         source_global_inds=source_inds,
         measured_global_inds=measured_inds,
-        dmd_radius_px=18,
+        dmd_radius_px=35,
         dmd_mode="pass_single",
         do_polarize=True,
         targeted_polarization=False,
-        take_background=False,   # important for now
+        take_background=False,
         save_images=True,
         dmd_settle_s=0.10,
         dmd_plane=230,
@@ -1410,7 +1436,7 @@ def do_opx_constant_ac():
     opx.constant_ac(
         [],  # Digital channels
         [7],  # Analog channels
-        [0.05],  # Analog voltages
+        [0.04],  # Analog voltages
         [0],  # Analog frequencies
     )
     # opx.constant_ac([4])  # Just laser
@@ -1814,10 +1840,10 @@ if __name__ == "__main__":
     #     [20.088, 51.051],
     # ]
     # green_coords_list = [
-    #     [100.048, 100.464],
-    #     [70.404, 112.915],
-    #     [100.384, 70.084],
-    #     [128.633, 130.529],
+    #     [100.046, 100.424],
+    #     [70.32, 112.868],
+    #     [100.351, 70.081],
+    #     [128.7, 130.543],
     # ]
     # red_coords_list = [
     #     [65.772, 65.37],
@@ -1924,7 +1950,7 @@ if __name__ == "__main__":
     # nv_sig.expected_counts = 7000
     nv_sig.expected_counts = 1900
     # nv_list = nv_list[::-1]  # flipping the order of NVs
-    # nv_list = nv_list[:150]
+    nv_list = nv_list[:150]
     print(f"length of NVs list:{len(nv_list)}")
     # sys.exit()
     # endregion
@@ -1954,7 +1980,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.RED_IMAGIN,
         # )
         
-        # do_compensate_for_drift(nv_sig)
+        do_compensate_for_drift(nv_sig)
         
         # do_red_calibration_image(
         #     nv_sig,
@@ -2005,7 +2031,7 @@ if __name__ == "__main__":
         #         print(f"Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         #         do_scanning_image_sample(nv_sig)
 
-        do_opx_constant_ac()
+        # do_opx_constant_ac()
         # do_opx_square_wave()
         
         # do_green_red_triplet_time_mux()
@@ -2025,7 +2051,7 @@ if __name__ == "__main__":
  
         # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
-        # do_dmd_crosstalk_matrix(nv_list) 
+        do_dmd_crosstalk_matrix(nv_list) 
         # do_charge_correlation(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 

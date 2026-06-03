@@ -226,6 +226,8 @@ def calibration_triangle():
     theta = np.linspace(0, 2 * np.pi, 4)[:-1]  # Exclude the last point to avoid overlap
     x_triangle = center[0] + side_length * np.cos(theta + np.pi / 6)  # X coordinates
     y_triangle = center[1] + side_length * np.sin(theta + np.pi / 6)  # Y coordinates
+    
+    # x_triangle = [834.90381057, 475.09618943, 705.0]
     # sys.exit()
     # Combine the coordinates into a grid format
     triangle_points = np.vstack((x_triangle, y_triangle))
@@ -435,8 +437,8 @@ try:
     slm = ThorSLM()
     # slm = Meadowlark()
     thorcam_shape = (2160, 2880) 
-    # cam = DummyCamera(shape=thorcam_shape, name="26438")
-    cam = ThorCam(serial="26438", verbose=True)
+    cam = DummyCamera(shape=thorcam_shape, name="26438")
+    # cam = ThorCam(serial="26438", verbose=True)
     fs = FourierSLM(cam, slm)
     
     # cam = tb.get_server_thorcam()
@@ -448,8 +450,8 @@ try:
     # wavefront_calibration()
     # load_wavefront_calibration()
     
-    # compute_and_write_nvs_phase()
-    calibration_triangle()
+    compute_and_write_nvs_phase()
+    # calibration_triangle()
     
     # circles()
     # smiley()

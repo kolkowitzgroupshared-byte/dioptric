@@ -42,9 +42,9 @@ calibration_coords_pixel = [
         [20.088, 51.051],
 ]
 calibration_coords_green = [
-        [70.404, 112.915],
-        [100.384, 70.084],
-        [128.633, 130.529],
+        [70.32, 112.868],
+        [100.351, 70.081],
+        [128.7, 130.543],
 ]
 calibration_coords_red = [
         [40.6, 73.167],
@@ -142,7 +142,8 @@ config |= {
         "dmd_DLP6500_zero_radius_px": 30,
         # Important: load final NV-chain file, not just triangle_affine_onpass.npz
         "dmd_DLP6500_init_calib_path": (
-            "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1277.npz"
+            # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1277.npz"
+            "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1274.npz"
         ),
     },
     

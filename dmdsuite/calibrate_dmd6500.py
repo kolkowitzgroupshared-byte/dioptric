@@ -34,7 +34,12 @@ from slmsuite.hardware.cameras.thorlabs import ThorCam
 from utils import data_manager as dm
 from utils import kplotlib as kpl
 
+from matplotlib.colors import LinearSegmentedColormap
 
+blue_cmap = LinearSegmentedColormap.from_list(
+    "white_to_C0",
+    ["white", "#1f77b4"],
+    )
 # =============================================================================
 # Small helpers
 # =============================================================================
@@ -82,37 +87,6 @@ def safe_get_image(cam, exposure=0.0001, tries=200, delay_s=0.05):
 
     raise RuntimeError("Camera returned None after multiple attempts.")
 
-# def safe_get_image(cam, exposure=None, max_attempts=20, retry_sleep_s=0.2):
-#     """
-#     Robust camera image acquisition.
-
-#     Returns image if successful.
-#     Raises RuntimeError only after many failed attempts.
-#     """
-#     last_exc = None
-#     cam.set_exposure(exposure)
-#     time.sleep(0.2)
-#     for attempt in range(max_attempts):
-#         try:
-#             if exposure is not None:
-#                 img = cam.get_image()
-#             else:
-#                 img = cam.get_image()
-
-#             if img is not None:
-#                 return img
-
-#             print(f"Camera returned None on attempt {attempt + 1}/{max_attempts}")
-
-#         except Exception as exc:
-#             last_exc = exc
-#             print(f"Camera get_image failed on attempt {attempt + 1}/{max_attempts}: {exc}")
-
-#         time.sleep(retry_sleep_s)
-
-#     raise RuntimeError(
-#         f"Camera returned None after {max_attempts} attempts. Last exception: {last_exc}"
-#     )
 
 def integrate_spot_intensities(img, spot_pts, roi=8):
     """Integrate local camera intensity around each spot center."""
@@ -134,12 +108,43 @@ def integrate_spot_intensities(img, spot_pts, roi=8):
     return np.asarray(vals, dtype=np.float32)
 
 
-def brightest_spot_centroid(img, threshold_percentile=99.8):
-    """Find the brightest connected component and return a weighted centroid."""
+def brightest_spot_centroid(
+    img,
+    threshold_percentile=99.8,
+    expected_xy=None,
+    half_width=120,
+):
+    """
+    Find brightest connected component and return weighted centroid.
+
+    If expected_xy is given, only search inside a box around that point.
+    This avoids accidentally picking bright edge artifacts.
+    """
     imgf = np.asarray(img).astype(np.float32)
 
-    thresh = np.percentile(imgf, threshold_percentile)
-    mask = (imgf >= thresh).astype(np.uint8)
+    h, w = imgf.shape
+
+    # ------------------------------------------------------------
+    # Restrict search region if expected_xy is given.
+    # ------------------------------------------------------------
+    if expected_xy is not None:
+        x0, y0 = expected_xy
+        x0 = int(round(x0))
+        y0 = int(round(y0))
+
+        x_min = max(0, x0 - half_width)
+        x_max = min(w, x0 + half_width + 1)
+        y_min = max(0, y0 - half_width)
+        y_max = min(h, y0 + half_width + 1)
+
+        img_search = imgf[y_min:y_max, x_min:x_max]
+    else:
+        x_min = 0
+        y_min = 0
+        img_search = imgf
+
+    thresh = np.percentile(img_search, threshold_percentile)
+    mask = (img_search >= thresh).astype(np.uint8)
 
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask)
 
@@ -148,29 +153,40 @@ def brightest_spot_centroid(img, threshold_percentile=99.8):
 
     for i in range(1, num_labels):
         area = stats[i, cv2.CC_STAT_AREA]
+
         if 3 <= area <= 8000:
-            total = imgf[labels == i].sum()
+            total = img_search[labels == i].sum()
+
             if total > best_sum:
                 best_sum = total
                 best_i = i
 
     if best_i is None:
-        raise RuntimeError("Could not find brightest spot.")
+        raise RuntimeError("Could not find brightest spot in selected region.")
 
     ys, xs = np.where(labels == best_i)
-    weights = imgf[ys, xs] - thresh
+    weights = img_search[ys, xs] - thresh
     weights = np.clip(weights, 0, None)
 
     if weights.sum() <= 0:
-        xy = centroids[best_i].astype(np.float32)
+        xy_local = centroids[best_i].astype(np.float32)
     else:
-        xy = np.array(
+        xy_local = np.array(
             [
                 np.sum(xs * weights) / np.sum(weights),
                 np.sum(ys * weights) / np.sum(weights),
             ],
             dtype=np.float32,
         )
+
+    # Convert crop-local coordinate back to full-image coordinate.
+    xy = np.array(
+        [
+            xy_local[0] + x_min,
+            xy_local[1] + y_min,
+        ],
+        dtype=np.float32,
+    )
 
     return xy
 
@@ -396,7 +412,8 @@ def apply_affine(M, pts):
 def plot_camera_points(img, points=None, labels=None, title="Camera image", show=False):
     img = np.asarray(img)
     fig, ax = plt.subplots(figsize=(8, 6))
-    ax.imshow(img, cmap="gray")
+    # ax.imshow(img, cmap="gray")
+    ax.imshow(img, cmap=blue_cmap)
 
     if points is not None:
         points = np.asarray(points, dtype=np.float32)
@@ -702,9 +719,15 @@ def calibrate_zero_order_onpass(
     time.sleep(0.2)
     img_zero = safe_get_image(cam, exposure=exposure)
 
+    # zero_cam_xy = brightest_spot_centroid(
+    #     img_zero,
+    #     threshold_percentile=99.8,
+    # )
     zero_cam_xy = brightest_spot_centroid(
         img_zero,
         threshold_percentile=99.8,
+        expected_xy=[717.849609375, 532.0283203125],
+        half_width=120,
     )
 
     cam_pts = np.array([zero_cam_xy], dtype=np.float32)
@@ -798,7 +821,7 @@ def calibrate_triangle_onpass(
         cam=cam,
         cam_pts=tri_cam_pts,
         axis="x",
-        positions=np.arange(300, 1500, 20),
+        positions=np.arange(300, 1500, 5),
         stripe_width=stripe_width,
         plane=222,
         exposure=exposure,
@@ -821,7 +844,7 @@ def calibrate_triangle_onpass(
         cam=cam,
         cam_pts=tri_cam_pts,
         axis="y",
-        positions=np.arange(00, 1200, 20),
+        positions=np.arange(80, 1100, 5),
         stripe_width=stripe_width,
         plane=223,
         exposure=exposure,
@@ -1122,9 +1145,21 @@ if __name__ == "__main__":
     # To reprocess the new compressed DMD raw .npz, set this to the .npz path.
     LOAD_NPZ_PATH = None
 
-    main(
-        load_file_id=LOAD_FILE_ID,
-        load_npz_path=LOAD_NPZ_PATH,
-        reuse_zero_order=True,   # use dmdsuite/calibration/zero_order_onpass.npz if present
-        force_zero_order=False,  # set True only when you want to redo 0th-order scan
-    )
+    # main(
+    #     load_file_id=LOAD_FILE_ID,
+    #     load_npz_path=LOAD_NPZ_PATH,
+    #     reuse_zero_order=True,   # use dmdsuite/calibration/zero_order_onpass.npz if present
+    #     force_zero_order=False,  # set True only when you want to redo 0th-order scan
+    # )
+    
+    ## take a qu
+    cam = ThorCam(serial="26438", verbose=True)
+    try:
+        img = safe_get_image(cam, exposure=0.0001)
+        plt.figure(figsize=(8, 5.5))
+        plt.imshow(img, cmap=blue_cmap)
+        plt.colorbar()
+        plt.title("ThorCam Image")
+        plt.show(block=True)
+    finally:
+        cam.close()
