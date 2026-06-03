@@ -771,6 +771,10 @@ def get_server_temp_monitor():
     return common.get_server("temp_monitor")
 
 
+def get_server_laser_461():
+    return common.get_server("laser_461")
+
+
 def get_server_power_supply():
     return common.get_server("power_supply")
 
