@@ -553,7 +553,9 @@ def do_stationary_count(nv_sig, disable_opt=None):
     )
 
 
-def do_pulse_streamer_constant(digital_channels=(2,), analog0=None, analog1=None):
+def do_pulse_streamer_constant(
+    digital_channels=(2,), analog0=None, analog1=None, run_while_active=None
+):
     pulse_streamer = tb.get_server_pulse_streamer()
     # Build args for the LabRAD setting
     digital_channels = [int(ch) for ch in digital_channels]
@@ -571,7 +573,12 @@ def do_pulse_streamer_constant(digital_channels=(2,), analog0=None, analog1=None
     pulse_streamer.constant(digital_channels, analog_channels, analog_voltages)
 
     try:
-        input("Constant state applied. Press Enter to stop...")
+        # input("Constant state applied. Press Enter to stop...")
+        if run_while_active is not None:
+            run_while_active()
+        else:
+            input("Constant state applied. Press Enter to stop...")
+
     finally:
         # Safest cleanup: forces final + sets everything off
         pulse_streamer.reset()
@@ -597,9 +604,11 @@ if __name__ == "__main__":
     th_sig.expected_counts = None  # raw counts, none when unknown
 
     try:
-        do_pulse_streamer_constant(digital_channels=(1,))
-        # do_power_monitor()
+        do_pulse_streamer_constant(
+            digital_channels=(1,),  # run_while_active=do_power_monitor
+        )
         # ^leave the comma at the end or it will complain
+        # do_power_monitor()
         # do_stationary_count(th_sig, disable_opt=True)
         # do_lifetime_measurement(th_sig)
         # do_lifetime_caf_single_shot(th_sig)
