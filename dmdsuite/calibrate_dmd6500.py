@@ -705,7 +705,7 @@ def calibrate_zero_order_onpass(
     cam,
     exposure=0.0001,
     roi=12,
-    stripe_width=20,
+    stripe_width=40,
     zero_radius_px=30,
     save_scan_images=True,
 ):
@@ -821,7 +821,7 @@ def calibrate_triangle_onpass(
         cam=cam,
         cam_pts=tri_cam_pts,
         axis="x",
-        positions=np.arange(300, 1500, 5),
+        positions=np.arange(300, 1500, 4),
         stripe_width=stripe_width,
         plane=222,
         exposure=exposure,
@@ -844,7 +844,7 @@ def calibrate_triangle_onpass(
         cam=cam,
         cam_pts=tri_cam_pts,
         axis="y",
-        positions=np.arange(80, 1100, 5),
+        positions=np.arange(80, 1100, 4),
         stripe_width=stripe_width,
         plane=223,
         exposure=exposure,
@@ -1057,8 +1057,8 @@ def main(
                 dmd=dmd,
                 cam=cam,
                 exposure=exposure_zero,
-                roi=12,
-                stripe_width=50,
+                roi=8,
+                stripe_width=5,
                 zero_radius_px=30,
                 save_scan_images=save_scan_images,
             )
@@ -1090,7 +1090,7 @@ def main(
             zero_cam_xy=data["zero_cam_xy"],
             exposure=exposure_triangle,
             roi=8,
-            stripe_width=40,
+            stripe_width=5,
             save_scan_images=save_scan_images,
         )
         data.update(triangle_data)
@@ -1145,21 +1145,21 @@ if __name__ == "__main__":
     # To reprocess the new compressed DMD raw .npz, set this to the .npz path.
     LOAD_NPZ_PATH = None
 
-    # main(
-    #     load_file_id=LOAD_FILE_ID,
-    #     load_npz_path=LOAD_NPZ_PATH,
-    #     reuse_zero_order=True,   # use dmdsuite/calibration/zero_order_onpass.npz if present
-    #     force_zero_order=False,  # set True only when you want to redo 0th-order scan
-    # )
+    main(
+        load_file_id=LOAD_FILE_ID,
+        load_npz_path=LOAD_NPZ_PATH,
+        reuse_zero_order=False,   # use dmdsuite/calibration/zero_order_onpass.npz if present
+        force_zero_order=True,  # set True only when you want to redo 0th-order scan
+    )
     
     ## take a qu
-    cam = ThorCam(serial="26438", verbose=True)
-    try:
-        img = safe_get_image(cam, exposure=0.0001)
-        plt.figure(figsize=(8, 5.5))
-        plt.imshow(img, cmap=blue_cmap)
-        plt.colorbar()
-        plt.title("ThorCam Image")
-        plt.show(block=True)
-    finally:
-        cam.close()
+    # cam = ThorCam(serial="26438", verbose=True)
+    # try:
+    #     img = safe_get_image(cam, exposure=0.0001)
+    #     plt.figure(figsize=(8, 5.5))
+    #     plt.imshow(img, cmap=blue_cmap)
+    #     plt.colorbar()
+    #     plt.title("ThorCam Image")
+    #     plt.show(block=True)
+    # finally:
+    #     cam.close()

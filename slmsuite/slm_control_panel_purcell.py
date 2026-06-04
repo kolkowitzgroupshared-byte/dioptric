@@ -450,8 +450,8 @@ try:
     # wavefront_calibration()
     # load_wavefront_calibration()
     
-    compute_and_write_nvs_phase()
-    # calibration_triangle()
+    # compute_and_write_nvs_phase()
+    calibration_triangle()
     
     # circles()
     # smiley()

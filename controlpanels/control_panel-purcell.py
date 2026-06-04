@@ -326,7 +326,7 @@ def do_dmd_crosstalk_matrix(nv_list_all):
         num_runs=1,
         source_global_inds=source_inds,
         measured_global_inds=measured_inds,
-        dmd_radius_px=35,
+        dmd_radius_px=20,
         dmd_mode="pass_single",
         do_polarize=True,
         targeted_polarization=False,
@@ -1436,7 +1436,7 @@ def do_opx_constant_ac():
     opx.constant_ac(
         [],  # Digital channels
         [7],  # Analog channels
-        [0.04],  # Analog voltages
+        [0.115],  # Analog voltages
         [0],  # Analog frequencies
     )
     # opx.constant_ac([4])  # Just laser
@@ -1796,7 +1796,7 @@ if __name__ == "__main__":
     date_str = "2026_02_20"
     sample_coords = [-1.2, -0.5]
     z_coord = -1.2
-    # z_coord = -3.6
+    z_coord = -3.5
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_
@@ -1980,7 +1980,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.RED_IMAGIN,
         # )
         
-        do_compensate_for_drift(nv_sig)
+        # do_compensate_for_drift(nv_sig)
         
         # do_red_calibration_image(
         #     nv_sig,
@@ -1988,7 +1988,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)     
+        do_widefield_image_sample(nv_sig, 50)     
         
         # do_widefield_image_sample(nv_sig, 200)
 
@@ -2002,7 +2002,7 @@ if __name__ == "__main__":
         # scan_equilateral_triangle(nv_sig, center_coord=sample_coords, radius=0.6)
         # do_image_nv_list(nv_list)
         # do_image_single_nv(nv_sig)
-        # z_range = np.linspace(-3.0, -1.0, 21)
+        # z_range = np.linspace(-4.0, -3.0, 11)
         # for z in z_range:
         #     nv_sig.coords[CoordsKey.Z] = z
         #     # do_scanning_image_sample(nv_sig)
@@ -2031,7 +2031,7 @@ if __name__ == "__main__":
         #         print(f"Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         #         do_scanning_image_sample(nv_sig)
 
-        # do_opx_constant_ac()
+        do_opx_constant_ac()
         # do_opx_square_wave()
         
         # do_green_red_triplet_time_mux()
@@ -2051,7 +2051,7 @@ if __name__ == "__main__":
  
         # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
-        do_dmd_crosstalk_matrix(nv_list) 
+        # do_dmd_crosstalk_matrix(nv_list) 
         # do_charge_correlation(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
