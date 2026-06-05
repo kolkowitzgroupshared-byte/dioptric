@@ -6,8 +6,8 @@ import numpy as np
 
 def update_nv_blob_coords_by_first_nv_shift(
     file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered.npz",
-    old_first=(196.902, 199.942),
-    new_first=(196.928, 198.985),
+    old_first=(196.928, 198.985),
+    new_first=(192.041, 203.97),
     overwrite=True,
 ):
     file_path = Path(file_path)

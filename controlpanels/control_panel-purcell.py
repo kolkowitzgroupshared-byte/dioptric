@@ -1436,7 +1436,7 @@ def do_opx_constant_ac():
     opx.constant_ac(
         [],  # Digital channels
         [7],  # Analog channels
-        [0.115],  # Analog voltages
+        [0.15],  # Analog voltages
         [0],  # Analog frequencies
     )
     # opx.constant_ac([4])  # Just laser
@@ -1467,12 +1467,12 @@ def do_opx_constant_ac():
     # )
     # opx.constant_ac([1])  # Just laser
     # Green
-    # opx.constant_ac(
-    #     [4],  # Digital channels
-    #     [3, 4],  # Analog channels
-    #     [0.15, 0.15],  # Analog voltages
-    #     [132.0, 70.0],  # Analog frequencies
-    # )
+    opx.constant_ac(
+        [4],  # Digital channels
+        [3, 4],  # Analog channels
+        [0.08, 0.08],  # Analog voltages
+        [101.0, 101.0],  # Analog frequencies
+    )
     # Green + red
     # opx.constant_ac(
     #     [4, 1],  # Digital channels
@@ -1513,7 +1513,7 @@ def do_opx_constant_ac():
     #     [4, 1],  # Digital channels1
     #     [3, 4, 2, 6, 7],  # Analog channels
     #     [0.10, 0.10, 0.10, 0.10, 0.15],  # Analog voltages
-    #     [102, 102, 67, 67, 0],  # Analog frequencies
+    #     [101, 101, 67, 67, 0],  # Analog frequencies
     # )
     input("Press enter to stop...")
     # sig_gen.uwave_off()
@@ -1794,9 +1794,9 @@ if __name__ == "__main__":
     sample_name = "qnami"
     # magnet_angle = 90
     date_str = "2026_02_20"
-    sample_coords = [-1.2, -0.5]
+    sample_coords = [-1.45, -0.2]
     z_coord = -1.2
-    z_coord = -3.5
+    # z_coord = -3.5
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_
@@ -1833,24 +1833,24 @@ if __name__ == "__main__":
     print(f"Reference NV:{pixel_coords_list[0]}")
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
-    # pixel_coords_list =[
-    #     [196.928, 198.985], 
-    #     [354.153, 112.896], 
-    #     [215.06, 366.90], 
-    #     [20.088, 51.051],
-    # ]
-    # green_coords_list = [
-    #     [100.046, 100.424],
-    #     [70.32, 112.868],
-    #     [100.351, 70.081],
-    #     [128.7, 130.543],
-    # ]
-    # red_coords_list = [
-    #     [65.772, 65.37],
-    #     [40.6, 73.167],
-    #     [67.114, 40.545],
-    #     [88.574, 92.268],
-    # ]
+    pixel_coords_list =[
+        [192.041, 203.97], 
+        [354.153, 112.896], 
+        [215.06, 366.90], 
+        [20.088, 51.051],
+    ]
+    green_coords_list = [
+        [99.578, 99.299],
+        [70.32, 112.868],
+        [100.351, 70.081],
+        [128.7, 130.543],
+    ]
+    red_coords_list = [
+        [65.772, 65.37],
+        [40.6, 73.167],
+        [67.114, 40.545],
+        [88.574, 92.268],
+    ]
 
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
@@ -1948,7 +1948,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts = 7000
-    nv_sig.expected_counts = 1900
+    # nv_sig.expected_counts = 1900
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     nv_list = nv_list[:150]
     print(f"length of NVs list:{len(nv_list)}")
@@ -1980,7 +1980,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.RED_IMAGIN,
         # )
         
-        # do_compensate_for_drift(nv_sig)
+        do_compensate_for_drift(nv_sig)
         
         # do_red_calibration_image(
         #     nv_sig,
@@ -1988,7 +1988,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_widefield_image_sample(nv_sig, 50)     
+        # do_widefield_image_sample(nv_sig, 50)     
         
         # do_widefield_image_sample(nv_sig, 200)
 
@@ -2031,13 +2031,13 @@ if __name__ == "__main__":
         #         print(f"Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         #         do_scanning_image_sample(nv_sig)
 
-        do_opx_constant_ac()
+        # do_opx_constant_ac()
         # do_opx_square_wave()
         
         # do_green_red_triplet_time_mux()
         
         # do_optimize_pixel(nv_sig)
-        # do_optimize_green(nv_sig)
+        do_optimize_green(nv_sig)
         # repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
         # do_optimize_red(nv_sig, repr_nv_sig)
         # do_optimize_z(nv_sig)
