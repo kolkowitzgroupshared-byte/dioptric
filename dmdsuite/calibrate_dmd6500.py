@@ -74,16 +74,16 @@ def _show_nonblocking(fig, show=True):
 # =============================================================================
 
 
-def safe_get_image(cam, exposure=0.0001, tries=200, delay_s=0.05):
+def safe_get_image(cam, exposure=0.0001, tries=200, delay_s=0.005):
     """Set exposure and keep trying until a real image is returned."""
     cam.set_exposure(exposure)
-    time.sleep(0.15)
+    # time.sleep(0.15)
 
     for _ in range(tries):
         img = cam.get_image()
         if img is not None:
             return img
-        time.sleep(delay_s)
+        # time.sleep(delay_s)
 
     raise RuntimeError("Camera returned None after multiple attempts.")
 
@@ -329,7 +329,7 @@ def scan_dmd_axis_for_spots_onpass(
 
     # Reference pass image.
     dmd.pass_all(True)
-    time.sleep(0.2)
+    # time.sleep(0.2)
     img_pass = safe_get_image(cam, exposure=exposure)
     pass_vals = integrate_spot_intensities(img_pass, cam_pts, roi=roi)
     pass_safe = np.maximum(pass_vals, 1.0)
@@ -340,7 +340,7 @@ def scan_dmd_axis_for_spots_onpass(
 
     for p in positions:
         dmd.show_blocking_stripe(axis, float(p), int(stripe_width), int(plane))
-        time.sleep(settle_s)
+        # time.sleep(settle_s)
 
         img = safe_get_image(cam, exposure=exposure)
         vals = integrate_spot_intensities(img, cam_pts, roi=roi)
@@ -716,7 +716,7 @@ def calibrate_zero_order_onpass(
     print("\n=== 0th-order calibration ===")
 
     dmd.pass_all(False)
-    time.sleep(0.2)
+    # time.sleep(0.2)
     img_zero = safe_get_image(cam, exposure=exposure)
 
     # zero_cam_xy = brightest_spot_centroid(
@@ -726,7 +726,7 @@ def calibrate_zero_order_onpass(
     zero_cam_xy = brightest_spot_centroid(
         img_zero,
         threshold_percentile=99.8,
-        expected_xy=[717.849609375, 532.0283203125],
+        expected_xy=[710, 532],
         half_width=120,
     )
 
@@ -737,7 +737,7 @@ def calibrate_zero_order_onpass(
         cam=cam,
         cam_pts=cam_pts,
         axis="x",
-        positions=np.arange(850, 1020, 4),
+        positions=np.arange(960, 1020, 2),
         stripe_width=stripe_width,
         plane=220,
         exposure=exposure,
@@ -750,7 +750,7 @@ def calibrate_zero_order_onpass(
         cam=cam,
         cam_pts=cam_pts,
         axis="y",
-        positions=np.arange(450, 600, 4),
+        positions=np.arange(480, 560, 2),
         stripe_width=stripe_width,
         plane=221,
         exposure=exposure,
@@ -798,7 +798,7 @@ def calibrate_triangle_onpass(
     print("\n=== Triangle calibration ===")
 
     dmd.pass_all(True)
-    time.sleep(0.2)
+    # time.sleep(0.1)
     img_triangle = safe_get_image(cam, exposure=exposure)
 
     tri_cam_pts = detect_top_n_spots(
@@ -968,7 +968,101 @@ def save_server_calibration_npz(
     print(f"Saved compact server affine calibration to: {path}")
     return str(path)
 
+def save_thorcam_snapshot(img, label="thorcam-snapshot", exposure=0.0001):
+    timestamp = dm.get_time_stamp()
 
+    file_path = dm.get_file_path(
+        __file__,
+        timestamp,
+        label,
+    )
+
+    # Save raw image data
+    np.savez_compressed(
+        str(file_path) + ".npz",
+        img=np.asarray(img),
+        exposure=np.array(exposure, dtype=np.float32),
+        timestamp=np.asarray(timestamp),
+    )
+
+    # Save plotted image
+    fig, ax = plt.subplots(figsize=(8, 5.5))
+    ax.imshow(img, cmap=blue_cmap)
+    ax.set_title(label)
+    cbar = fig.colorbar(ax.images[0], ax=ax)
+    cbar.set_label("counts")
+
+    dm.save_figure(fig, file_path)
+
+    print("Saved image data:", str(file_path) + ".npz")
+    print("Saved figure:", file_path)
+
+    return str(file_path) + ".npz", fig
+
+def do_thorcam_snapshot_with_yellow(
+    label="thorcam-image-test-yellow-on",
+    exposure=0.0001,
+    yellow_channel=7,
+    yellow_amp=0.11,
+    wait_before_cleanup=True,
+):
+    from slmsuite.hardware.cameras.thorlabs import ThorCam
+    from utils import common
+
+    cxn = None
+    opx = None
+    cam = None
+
+    try:
+        cxn = common.labrad_connect()
+        opx = cxn.QM_opx
+
+        # Turn on yellow analog output.
+        opx.constant_ac(
+            [],                 # digital channels
+            [yellow_channel],   # analog channels
+            [yellow_amp],       # analog voltages
+            [0],                # analog frequencies
+        )
+
+        cam = ThorCam(serial="26438", verbose=True)
+
+        img = safe_get_image(cam, exposure=exposure)
+
+        raw_path, fig = save_thorcam_snapshot(
+            img,
+            label=label,
+            exposure=exposure,
+        )
+
+        print("Saved ThorCam snapshot:", raw_path)
+
+        plt.show(block=False)
+
+        if wait_before_cleanup:
+            input("Press Enter to turn off yellow and continue...")
+
+        return img, raw_path
+
+    finally:
+        # Always turn off yellow output.
+        try:
+            if opx is not None:
+                opx.constant_ac([], [yellow_channel], [0.0], [0])
+        except Exception as exc:
+            print("Could not turn off OPX yellow channel:", exc)
+
+        try:
+            if cam is not None:
+                cam.close()
+        except Exception:
+            pass
+
+        try:
+            if cxn is not None:
+                cxn.disconnect()
+        except Exception:
+            pass
 # =============================================================================
 # Main acquisition / reload path
 # =============================================================================
@@ -1152,14 +1246,11 @@ if __name__ == "__main__":
         force_zero_order=True,  # set True only when you want to redo 0th-order scan
     )
     
-    ## take a qu
-    # cam = ThorCam(serial="26438", verbose=True)
-    # try:
-    #     img = safe_get_image(cam, exposure=0.0001)
-    #     plt.figure(figsize=(8, 5.5))
-    #     plt.imshow(img, cmap=blue_cmap)
-    #     plt.colorbar()
-    #     plt.title("ThorCam Image")
-    #     plt.show(block=True)
-    # finally:
-    #     cam.close()
+    # take a quick image
+    # do_thorcam_snapshot_with_yellow(
+    # label="thorcam-yellow-test",
+    # exposure=0.0001,
+    # yellow_channel=7,
+    # yellow_amp=0.04,
+    # wait_before_cleanup=True,
+    # )

@@ -204,17 +204,17 @@ def refine_coords_after_fitting(
         if amp <= min_amplitude or popt is None:
             continue
 
-        new_coords.append([fx, fy])
-        fitted_amplitudes.append(amp)
-        fitted_gaussian_weights.append(gwt)
-
+        new_coords.append([round(float(fx), 3), round(float(fy), 3)])
+        fitted_amplitudes.append(round(float(amp), 3))
+        fitted_gaussian_weights.append(round(float(gwt), 3))
+        
         if new_weights is not None:
             if replace_weights_with == "amplitude":
-                new_weights.append(float(amp))
+                new_weights.append(round(float(amp), 3))
             elif replace_weights_with == "gaussian_weight":
-                new_weights.append(float(gwt))
+                new_weights.append(round(float(gwt), 3))
             else:
-                new_weights.append(w)
+                new_weights.append(round(float(w), 3))
 
     return new_coords, new_weights, fitted_amplitudes, fitted_gaussian_weights
 
@@ -765,7 +765,7 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_05_26-07_36_19-combined_image_array", load_npz=True
+        file_stem="2026_06_04-19_01_42-combined_image_array", load_npz=True
     )
     # img_array = np.array(data["ref_img_array"])
     img_array = data["img_array"]
@@ -782,6 +782,7 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz"
         # file_path="slmsuite/nv_blob_detection/nv_blob_1275nvs_reordered.npz",
         file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered.npz"
+        # file_path="slmsuite/nv_blob_detection/nv_blob_1267nvs_reordered.npz"
     )
     
     # fitted_data = dm.get_raw_data(file_stem="2026_03_23-16_39_03-optimal_values_2026_03_22-21_49_52-qnami-nv0_2026_02_20")
@@ -881,7 +882,7 @@ if __name__ == "__main__":
     # filtered_reordered_coords, filtered_reordered_spot_weights = nv_coordinates, spot_weights 
     # # Filter and reorder NV coordinates based on reference NV
     sigma = 2.0
-    # reference_nv = [231.42, 235.968]
+    # reference_nv = [192.125, 203.896]
     # reference_nv_old = [231.42, 235.968]
     # reference_nv = remap_single_coord(reference_nv_old, old_roi, new_roi, rescale=False)
 
@@ -999,7 +1000,7 @@ if __name__ == "__main__":
     #         img_array,
     #         filtered_reordered_coords,
     #         filtered_reordered_spot_weights,
-    #         window_size=0.5,
+    #         window_size=1.0,
     #         min_amplitude=0.0,
     #         replace_weights_with="none",   # or "amplitude" or "gaussian_weight"
     #         normalize=False,              # keep amplitude in image units
@@ -1151,7 +1152,7 @@ if __name__ == "__main__":
     # save_results(
     #     filtered_reordered_coords,
     #     filtered_reordered_spot_weights,
-    #     filename="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered.npz",
+    #     filename="slmsuite/nv_blob_detection/nv_blob_1267nvs_reordered.npz",
     # )
 
     # # Plot the original image with circles around each NV

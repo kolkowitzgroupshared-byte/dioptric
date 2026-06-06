@@ -324,7 +324,8 @@ def load_nv_coords(
     # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz",   
     # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
     # file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz",   
-    file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered.npz",   
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered.npz",   
+    file_path="slmsuite/nv_blob_detection/nv_blob_1267nvs_reordered.npz",   
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
