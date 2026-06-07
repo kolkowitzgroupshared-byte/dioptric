@@ -600,7 +600,7 @@ if __name__ == "__main__":
     #         ha="center",
     #         va="center",
     #     )
-
+ 
     # print(f"Detected NV coordinates (optimized): {len(filtered_nv_coords)}")
 
     # Save the results
@@ -613,7 +613,7 @@ if __name__ == "__main__":
 
     # full ROI -- multiple images save in the same file
     # process_scan_file(file_stem="2026_03_13-00_01_52-qnami-nv0_2026_02_20")
-    process_scan_file(file_stem="2026_06_04-18_58_34-qnami-nv0_2026_02_20")
+    process_scan_file(file_stem="2026_06_06-14_08_30-qnami-nv0_2026_02_20")
     
     kpl.show(block=True)
 

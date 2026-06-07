@@ -1109,6 +1109,6 @@ if __name__ == "__main__":
         label="thorcam-sample-test",
         exposure=0.0001,
         yellow_channel=7,
-        yellow_amp=0.04,
+        yellow_amp=0.06,
         wait_before_cleanup=True,
     )

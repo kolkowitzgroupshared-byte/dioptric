@@ -100,7 +100,7 @@ def do_red_calibration_image(nv_sig, coords_list, force_laser_key=None, num_reps
 
 def do_scanning_image_full_roi(nv_sig):
     total_range = 60
-    scan_range = 15
+    scan_range = 12
     num_steps = 15
     image_sample.scanning_full_roi(nv_sig, total_range, scan_range, num_steps)
 
@@ -1436,7 +1436,7 @@ def do_opx_constant_ac():
     opx.constant_ac(
         [],  # Digital channels
         [7],  # Analog channels
-        [0.04],  # Analog voltages
+        [0.15],  # Analog voltages
         [0],  # Analog frequencies
     )
     # opx.constant_ac([4])  # Just laser
@@ -1796,7 +1796,7 @@ if __name__ == "__main__":
     date_str = "2026_02_20"
     sample_coords = [-1.1, 0.1]
     z_coord = -1.2
-    # z_coord = -3.7
+    # z_coord = -3.8
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_
@@ -1842,7 +1842,7 @@ if __name__ == "__main__":
         [20.088, 51.051],
     ]
     green_coords_list = [
-        [99.566, 98.917],
+        [99.814, 98.85],
         [70.32, 112.868],
         [100.351, 70.081],
         [128.7, 130.543],
@@ -1982,7 +1982,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.RED_IMAGIN,
         # )
         
-        # do_compensate_for_drift(nv_sig)
+        do_compensate_for_drift(nv_sig)
         
         # do_red_calibration_image(
         #     nv_sig,
@@ -1990,7 +1990,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)     
+        do_widefield_image_sample(nv_sig, 50)     
         
         # do_widefield_image_sample(nv_sig, 200)
 
@@ -1999,12 +1999,12 @@ if __name__ == "__main__":
 
         # do_scanning_image_sample(nv_sig)
         # do_scanning_image_sample_zoom(nv_sig)
-        # do_scanning_image_full_roi(nv_sig) 
+        # do_scanning_image_full_roi(nv_sig)
 
         # scan_equilateral_triangle(nv_sig, center_coord=sample_coords, radius=0.6)
         # do_image_nv_list(nv_list)
         # do_image_single_nv(nv_sig)
-        # z_range = np.linspace(-4.0, -3.0, 11)
+        # z_range = np.linspace(-2.5, -3.5, 11)
         # for z in z_range:
         #     nv_sig.coords[CoordsKey.Z] = z
         #     # do_scanning_image_sample(nv_sig)
@@ -2033,7 +2033,7 @@ if __name__ == "__main__":
         #         print(f"Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         #         do_scanning_image_sample(nv_sig)
 
-        do_opx_constant_ac()
+        # do_opx_constant_ac()
         # do_opx_square_wave()
         
         # do_green_red_triplet_time_mux()

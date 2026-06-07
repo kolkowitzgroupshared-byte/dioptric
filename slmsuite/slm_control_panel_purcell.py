@@ -218,7 +218,7 @@ def circles():
 # region "nv phase calulation"
 def calibration_triangle():
     # Define parameters for the equilateral triangle
-    center = (705, 520)  # Center of the triangle
+    center = (720, 520)  # Center of the triangle
     # side_length = 80  # Length of each side of the triangle
     side_length = 150  # Length of each side of the triangle
 
@@ -451,8 +451,8 @@ try:
     # wavefront_calibration()
     # load_wavefront_calibration()
     
-    # compute_and_write_nvs_phase()
-    calibration_triangle()
+    compute_and_write_nvs_phase()
+    # calibration_triangle()
     
     # circles()
     # smiley()
@@ -464,6 +464,7 @@ finally:
 
     if slm is not None:
         slm.close()
+
 
     if cam is not None:
         cam.close()
