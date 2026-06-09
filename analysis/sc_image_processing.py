@@ -52,11 +52,11 @@ if __name__ == "__main__":
     # )
     # file_stem="2026_03_11-22_09_46-qnami-nv0_2026_02_20",
     data = dm.get_raw_data(
-        file_stem="2026_05_30-20_49_55-qnami-nv0_2026_02_20",
+        file_stem="2026_06_08-11_41_53-qnami-nv0_2026_02_20",
         load_npz=True,
     )
 
-    img_ph = np.array(data["diff_img_array"], dtype=float)
+    img_ph = np.array(data["img_array"], dtype=float)
 
     # save_dir = r"C:\Users\matth\Downloads"
     # save_path = os.path.join(save_dir, f"{file_stem}_ref_img_array.svg")

@@ -97,8 +97,8 @@ config |= {
     # Common durations are in ns
     "CommonDurations": {
         "default_pulse_duration": 1000,
-        # "aod_access_time": 2.6e3,  # access time in specs is 10us
-        "aod_access_time":8e3,  # access time in specs is 10us
+        "aod_access_time": 2.6e3,  # access time in specs is 10us
+        # "aod_access_time":8e3,  # access time in specs is 10us
         "widefield_operation_buffer": 1e3,
         "uwave_buffer": 0,
         "iq_buffer": 0,
@@ -222,7 +222,7 @@ config |= {
         "readout_mode": 1,  # 16 for double horizontal readout rate (em mode)
         # "readout_mode": 6,  # Fast conventional
         # "roi": (122, 126, 250, 250),  # offsetX, offsetY, width, height
-        "roi": (60, 87, 375, 375),  # offsetX, offsetY, width, height
+        "roi": (55, 87, 375, 375),  # offsetX, offsetY, width, height
         # "roi": None,  # offsetX, offsetY, width, height
         "scale": 5 / 0.6,  # pixels / micron
     },
@@ -339,7 +339,7 @@ config |= {
                 "control_mode": PosControlMode.SEQUENCE,
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
-                "optimize_range": 1.2,
+                "optimize_range": 1.0,
                 "units": "MHz",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
                 "aod": True,

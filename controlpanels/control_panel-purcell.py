@@ -1503,10 +1503,10 @@ def do_opx_constant_ac():
 
     # # Green + yellow
     # opx.constant_ac(
-    #     [4],  # Digital channels
+    #     [4],  # Digital channels11
     #     [3, 4, 7],  # Analog channels
     #     [0.08, 0.08, 0.35],  # Analog voltages
-    #     [102.0, 102.0, 0],  # Analog frequencies
+    #     [99.0, 99.0, 0],  # Analog frequencies
     # )
     # # Red + green + Yellow
     # opx.constant_ac(
@@ -1794,9 +1794,10 @@ if __name__ == "__main__":
     sample_name = "qnami"
     # magnet_angle = 90
     date_str = "2026_02_20"
-    sample_coords = [-1.1, 0.1]
-    z_coord = -1.2
-    # z_coord = -3.8
+    sample_coords = [-1.15, -0.50]
+    z_coord = -1.7
+    # z_coord = -4.2
+    # z_coord = -4.2
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_
@@ -1836,22 +1837,25 @@ if __name__ == "__main__":
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
     # sys.exit()
     pixel_coords_list =[
-        [190.496, 206.252], 
-        [354.153, 112.896], 
-        [215.06, 366.90], 
-        [20.088, 51.051],
+        [194.989, 194.924], 
+        # [354.153, 112.896], 
+        # [215.06, 366.90], 
+        # [354.03, 347.974], 
+        # [16.144, 27.878],
     ]
     green_coords_list = [
-        [99.814, 98.85],
-        [70.32, 112.868],
-        [100.351, 70.081],
-        [128.7, 130.543],
+        [97.632, 97.264],
+        # [99, 99],
+        # [70.32, 112.868],
+        # [100.351, 70.081],
+        # [72.12, 67.561],
+        # [126.943, 130.232],
     ]
     red_coords_list = [
         [65.772, 65.37],
-        [40.6, 73.167],
-        [67.114, 40.545],
-        [88.574, 92.268],
+        # [40.6, 73.167],
+        # [67.114, 40.545],
+        # [88.574, 92.268],
     ]
 
     num_nvs = len(pixel_coords_list)
@@ -1950,7 +1954,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    # nv_sig.expected_counts = 1900
+    nv_sig.expected_counts = 1900
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     nv_list = nv_list[:150]
     print(f"length of NVs list:{len(nv_list)}")
@@ -2004,7 +2008,7 @@ if __name__ == "__main__":
         # scan_equilateral_triangle(nv_sig, center_coord=sample_coords, radius=0.6)
         # do_image_nv_list(nv_list)
         # do_image_single_nv(nv_sig)
-        # z_range = np.linspace(-2.5, -3.5, 11)
+        # z_range = np.linspace(-4.2, -3.2, 11)
         # for z in z_range:
         #     nv_sig.coords[CoordsKey.Z] = z
         #     # do_scanning_image_sample(nv_sig)

@@ -214,6 +214,14 @@ def circles():
 
     phase = hologram.extract_phase()
     slm.write(phase, settle=True)
+    
+    file_path = r"slmsuite\phase"
+    now = datetime.now()
+    date_time_str = now.strftime("%Y%m%d_%H%M%S")  # Format: YYYYMMDD_HHMMSS
+    filename = f"slm_calibration_circle_{date_time_str}.npy"
+    # Save the phase data
+    save(phase, file_path, filename)
+    # cam_plot()
 
 # region "nv phase calulation"
 def calibration_triangle():
@@ -227,7 +235,7 @@ def calibration_triangle():
     x_triangle = center[0] + side_length * np.cos(theta + np.pi / 6)  # X coordinates
     y_triangle = center[1] + side_length * np.sin(theta + np.pi / 6)  # Y coordinates
     
-    # x_triangle = [834.90381057, 475.09618943, 705.0]
+    # x_triangle = [849.90381057, 560.09618943, 720.0]
     # sys.exit()
     # Combine the coordinates into a grid format
     triangle_points = np.vstack((x_triangle, y_triangle))
@@ -247,13 +255,12 @@ def calibration_triangle():
 
     phase = hologram.extract_phase()
     slm.write(phase, settle=True)
-    # file_path = r"slmsuite\calibration"
-    # num_nvs = len(nuvu_pixel_coords)
-    # now = datetime.now()
-    # date_time_str = now.strftime("%Y%m%d_%H%M%S")  # Format: YYYYMMDD_HHMMSS
-    # filename = f"slm_calibration_{num_nvs}nvs_{date_time_str}.npy"
+    file_path = r"slmsuite\phase"
+    now = datetime.now()
+    date_time_str = now.strftime("%Y%m%d_%H%M%S")  # Format: YYYYMMDD_HHMMSS
+    filename = f"slm_calibration_triangle_{date_time_str}.npy"
     # Save the phase data
-    # save(phase, file_path, filename)
+    save(phase, file_path, filename)
     # cam_plot()
     
 def nuvu2thorcam_calibration(coords):
@@ -325,7 +332,8 @@ def load_nv_coords(
     # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
     # file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz",   
     # file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered.npz",   
-    file_path="slmsuite/nv_blob_detection/nv_blob_1267nvs_reordered.npz",   
+    file_path="slmsuite/nv_blob_detection/nv_blob_1271nvs_reordered.npz",   
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1267nvs_reordered.npz",   
 ):
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
@@ -391,7 +399,12 @@ def write_pre_computed_nvs_phase():
 
 
 def write_pre_computed_circles():
-    phase = np.load("slmsuite\circles\slm_phase_circles_20250606_163346.npy")
+    phase = np.load("slmsuite\phase\slm_calibration_circles_20260607_121625.npy")
+    slm.write(phase, settle=True)
+    # cam_plot()
+    
+def write_pre_computed_triangle():
+    phase = np.load("slmsuite\phase\slm_calibration_triangle_20260607_154242.npy")
     slm.write(phase, settle=True)
     # cam_plot()
 
@@ -452,10 +465,13 @@ try:
     # load_wavefront_calibration()
     
     compute_and_write_nvs_phase()
+    
     # calibration_triangle()
+    # write_pre_computed_triangle()
     
     # circles()
-    # smiley()
+    # write_pre_computed_circles()
+    # smiley()e
     # cam_plot()
     
     input("Pattern displayed and held. Press Enter to close...")

@@ -765,7 +765,7 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_06_06-14_12_26-combined_image_array", load_npz=True
+        file_stem="2026_06_08-18_53_56-combined_image_array", load_npz=True
     )
     # img_array = np.array(data["ref_img_array"])
     img_array = data["img_array"]
@@ -995,17 +995,17 @@ if __name__ == "__main__":
     filtered_reordered_spot_weights = filtered_reordered_spot_weights_0
     
     # refine coords after fitting; keep original weights
-    # filtered_reordered_coords, filtered_reordered_spot_weights, fitted_amplitudes, fitted_gauss_w = (
-    #     refine_coords_after_fitting(
-    #         img_array,
-    #         filtered_reordered_coords,
-    #         filtered_reordered_spot_weights,
-    #         window_size=1.0,
-    #         min_amplitude=0.0,
-    #         replace_weights_with="none",   # or "amplitude" or "gaussian_weight"
-    #         normalize=False,              # keep amplitude in image units
-    #     )
-    # )
+    filtered_reordered_coords, filtered_reordered_spot_weights, fitted_amplitudes, fitted_gauss_w = (
+        refine_coords_after_fitting(
+            img_array,
+            filtered_reordered_coords,
+            filtered_reordered_spot_weights,
+            window_size=1.0,
+            min_amplitude=0.0,
+            replace_weights_with="none",   # or "amplitude" or "gaussian_weight"
+            normalize=False,              # keep amplitude in image units
+        )
+    )
     
     # print("Kept after fitting:", len(filtered_reordered_coords))
     
@@ -1152,7 +1152,7 @@ if __name__ == "__main__":
     # save_results(
     #     filtered_reordered_coords,
     #     filtered_reordered_spot_weights,
-    #     filename="slmsuite/nv_blob_detection/nv_blob_1267nvs_reordered.npz",
+    #     filename="slmsuite/nv_blob_detection/nv_blob_1271nvs_reordered.npz",
     # )
 
     # # Plot the original image with circles around each NV
