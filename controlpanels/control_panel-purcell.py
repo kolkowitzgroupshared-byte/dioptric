@@ -58,6 +58,8 @@ from majorroutines.widefield import (
     spin_pol_check,
     widefield_coherence,
     xy,
+    dmd_turnoff_crosstalk_extinction_matrix,
+
 )
 
 # from slmsuite import optimize_slm_calibration
@@ -262,71 +264,52 @@ def unique_keep_order(vals):
     return out
 
 
-def do_dmd_crosstalk_matrix(nv_list_all):
-    """
-    DMD optical crosstalk test.
-
-    Simple safe version:
-        - gets center DMD indices
-        - removes indices outside current nv_list_all
-        - includes NV 0 as representative
-    """
-
-    num_sources = 150
-
+def do_dmd_crosstalk_matrix(
+    nv_list_all,
+    num_sources=200,
+    dmd_radius_px=8,
+    num_reps=200,
+    num_runs=1,
+    chain_path="dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1271.npz",
+):
     print("len(nv_list_all):", len(nv_list_all))
 
-    # Get more than needed because some may be outside current nv_list_all.
-    source_inds_raw = dmd_crosstalk_matrix.get_center_dmd_indices(300)
-
     source_inds = [
-        int(ind)
-        for ind in source_inds_raw
-        if int(ind) < len(nv_list_all)
-    ]
-
-    source_inds = source_inds[:num_sources]
-
-    print(f"valid source inds found: {len(source_inds)}")
+        int(i)
+        for i in dmd_crosstalk_matrix.get_center_dmd_indices(
+            n=1100,
+            chain_path=chain_path,
+        )
+        if int(i) < len(nv_list_all)
+    ][:num_sources]
 
     if len(source_inds) == 0:
         raise RuntimeError("No valid DMD source indices found.")
 
-    # Include global NV 0 only for representative/positioning.
-    measured_inds = unique_keep_order([0] + source_inds)
-
-    # Extra safety check.
-    measured_inds = [
-        int(ind)
-        for ind in measured_inds
-        if int(ind) < len(nv_list_all)
-    ]
+    measured_inds = dmd_crosstalk_matrix.unique_keep_order([0] + source_inds)
+    measured_inds = [i for i in measured_inds if i < len(nv_list_all)]
 
     nv_sub = dmd_crosstalk_matrix.subset_nv_list(nv_list_all, measured_inds)
 
-    # Make first NV representative.
     for nv in nv_sub:
         nv.representative = False
 
     nv_sub[0].representative = True
-    nv_sub[0].expected_counts = 1900.0
+    nv_sub[0].expected_counts = 1700.0
 
-    print("Measured global indices:")
-    print(measured_inds)
+    print(f"num sources: {len(source_inds)}")
+    print(f"num measured: {len(measured_inds)}")
+    print("radius:", dmd_radius_px)
+    print("representative:", nv_sub[0].name)
+    print("first source inds:", source_inds[:20])
 
-    print("DMD source global indices:")
-    print(source_inds)
-
-    print("Representative NV:")
-    print(nv_sub[0].name)
-
-    raw_data = dmd_crosstalk_matrix.main(
+    return dmd_crosstalk_matrix.main(
         nv_sub,
-        num_reps=100,
-        num_runs=1,
+        num_reps=num_reps,
+        num_runs=num_runs,
         source_global_inds=source_inds,
         measured_global_inds=measured_inds,
-        dmd_radius_px=20,
+        dmd_radius_px=dmd_radius_px,
         dmd_mode="pass_single",
         do_polarize=True,
         targeted_polarization=False,
@@ -336,25 +319,36 @@ def do_dmd_crosstalk_matrix(nv_list_all):
         dmd_plane=230,
     )
     
-    # for radius in [10, 12, 15, 20, 25, 30]:
-    #     raw_data = dmd_crosstalk_matrix.main(
-    #         nv_sub,
-    #         num_reps=50,
-    #         num_runs=2,
-    #         source_global_inds=source_inds,
-    #         measured_global_inds=measured_inds,
-    #         dmd_radius_px=radius,
-    #         dmd_mode="pass_single",
-    #         do_polarize=True,
-    #         targeted_polarization=False,
-    #         take_background=True,
-    #         save_images=False,
-    #         dmd_settle_s=0.2,
-    #         dmd_plane=230,
-    #     )
-    return raw_data
 
+def do_dmd_turnoff_crosstalk_extinction_matrix(
+nv_list_all
+):
+    inds, dmd_points = dmd_turnoff_crosstalk_extinction_matrix.choose_center_dmd_indices_from_chain(
+        nv_list_all,
+        num_sources=200,
+        min_source_pitch_px=None,
+    )
 
+    dmd_turnoff_crosstalk_extinction_matrix.print_dmd_pitch_stats(inds, dmd_points)
+
+    measured_inds = dmd_turnoff_crosstalk_extinction_matrix.unique_keep_order([0] + inds)
+    nv_sub = dmd_turnoff_crosstalk_extinction_matrix.subset_nv_list(nv_list_all, measured_inds)
+
+    dmd_turnoff_crosstalk_extinction_matrix.main(
+        nv_sub,
+        num_reps=200,
+        num_runs=1,
+        source_global_inds=inds,
+        measured_global_inds=measured_inds,
+        dmd_radius_px=6,
+        do_polarize=True,
+        targeted_polarization=False,
+        take_background=True,
+        save_images=True,
+        save_raw_counts_by_source=True,
+        dmd_settle_s=0.10,
+        dmd_plane=230,
+    )
 
 def do_charge_correlation(nv_list):
     """
@@ -1436,7 +1430,7 @@ def do_opx_constant_ac():
     opx.constant_ac(
         [],  # Digital channels
         [7],  # Analog channels
-        [0.15],  # Analog voltages
+        [0.11],  # Analog voltages
         [0],  # Analog frequencies
     )
     # opx.constant_ac([4])  # Just laser
@@ -1478,21 +1472,20 @@ def do_opx_constant_ac():
     #     [4, 1],  # Digital channels
     #     [3, 4, 2, 6],  # Analog channels
     #     [0.08, 0.08, 0.08, 0.08],  # Analog voltages;
-    #     [127.177, 132.538, 88.161, 91.279],
+    #     [126.906, 130.271, 90.8, 94.6],
     # )
     # green_coords_list = [
-    #     [99.688, 99.907],
-    #     [70.713, 125.418],
-    #     [102.296, 71.721],
-    #     [127.177, 132.538],
-
+    #     [97.655, 97.261],
+    #     [73.619, 114.583],
+    #     [98.538, 69.144],
+    #     [126.906, 130.271],
     # ]
     # red_coords_list = [
-    #     [65.59, 65.255],
-    #     [42.505, 85.81],
-    #     [67.262, 42.154],
-    #     [88.161, 91.279],
-    #     ]
+    #     [66.5, 66.9],
+    #     [47.3, 80.8],
+    #     [67.8, 44.4],
+    #     [90.8, 94.6],
+    # ]
     # red
     # opx.constant_ac(
     #     [1],  # Digital channels
@@ -1797,7 +1790,7 @@ if __name__ == "__main__":
     sample_coords = [-1.15, -0.50]
     z_coord = -1.7
     # z_coord = -4.2
-    # z_coord = -4.2
+    
     # Load NV pixel coordinates1
     pixel_coords_list = load_nv_coords(
         # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_
@@ -1806,7 +1799,8 @@ if __name__ == "__main__":
         # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
         # file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered_after_sample_rotation.npz",   
         # file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered.npz",   
-        file_path="slmsuite/nv_blob_detection/nv_blob_1267nvs_reordered.npz",   
+        # file_path="slmsuite/nv_blob_detection/nv_blob_1267nvs_reordered.npz",   
+        file_path="slmsuite/nv_blob_detection/nv_blob_1271nvs_reordered.npz",   
     ).tolist()
     green_coords_list = [
         [
@@ -1836,27 +1830,24 @@ if __name__ == "__main__":
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
     # sys.exit()
-    pixel_coords_list =[
-        [194.989, 194.924], 
-        # [354.153, 112.896], 
-        # [215.06, 366.90], 
-        # [354.03, 347.974], 
-        # [16.144, 27.878],
-    ]
-    green_coords_list = [
-        [97.632, 97.264],
-        # [99, 99],
-        # [70.32, 112.868],
-        # [100.351, 70.081],
-        # [72.12, 67.561],
-        # [126.943, 130.232],
-    ]
-    red_coords_list = [
-        [65.772, 65.37],
-        # [40.6, 73.167],
-        # [67.114, 40.545],
-        # [88.574, 92.268],
-    ]
+    # pixel_coords_list =[
+    #     [194.73, 194.962], 
+    #     [319.989, 88.084], 
+    #     [205.258, 351.983], 
+    #     [16.982, 28.073],
+    # ]
+    # green_coords_list = [
+    #     [97.655, 97.261],
+    #     [73.619, 114.583],
+    #     [98.538, 69.144],
+    #     [126.906, 130.271],
+    # ]
+    # red_coords_list = [
+    #     [66.5, 66.9],
+    #     [47.3, 80.8],
+    #     [67.8, 44.4],
+    #     [90.8, 94.6],
+    # ]
 
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
@@ -1949,14 +1940,13 @@ if __name__ == "__main__":
     # print(nv_sig)
     # Additional properties for the representative NV
     nv_list[0].representative = True
-    # nv_list[1].representative = True
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    nv_sig.expected_counts = 1900
+    # nv_sig.expected_counts = 1900
     # nv_list = nv_list[::-1]  # flipping the order of NVs
-    nv_list = nv_list[:150]
+    # nv_list = nv_list[:200]
     print(f"length of NVs list:{len(nv_list)}")
     # sys.exit()
     # endregion
@@ -2057,7 +2047,14 @@ if __name__ == "__main__":
  
         # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
-        # do_dmd_crosstalk_matrix(nv_list) 
+        do_dmd_crosstalk_matrix(
+            nv_list_all=nv_list,
+            num_sources=1100,
+            dmd_radius_px=6,
+        )
+        
+        # do_dmd_turnoff_crosstalk_extinction_matrix(nv_list)
+        
         # do_charge_correlation(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 

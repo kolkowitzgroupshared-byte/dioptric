@@ -348,6 +348,12 @@ def load_nv_coords(
 
 nuvu_pixel_coords, spot_weights = load_nv_coords()
 
+# Take first 200 NVs
+# nuvu_pixel_coords = nuvu_pixel_coords[:200]
+
+# if spot_weights is not None:
+#     spot_weights = spot_weights[:200]
+    
 thorcam_coords = nuvu2thorcam_slm(nuvu_pixel_coords)   # shape: (N, 2)
 thorcam_coords_xy = thorcam_coords.T                   # shape: (2, N)
 # test_inds = [0, 10, 100, 500, 1000]

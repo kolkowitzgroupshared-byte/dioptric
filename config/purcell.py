@@ -37,19 +37,19 @@ red_laser_aod = "laser_COBO_638_aod"
 # calibration_coords_red = [[41.956, 88.653],[69.523, 40.383],[90.96, 93.205]]
 
 calibration_coords_pixel = [
-        [354.153, 112.896], 
-        [215.06, 366.90], 
-        [20.088, 51.051],
+        [319.989, 88.084], 
+        [205.258, 351.983], 
+        [16.982, 28.073],
 ]
 calibration_coords_green = [
-        [70.32, 112.868],
-        [100.351, 70.081],
-        [128.7, 130.543],
+        [73.619, 114.583],
+        [98.538, 69.144],
+        [126.906, 130.271],
 ]
 calibration_coords_red = [
-        [40.6, 73.167],
-        [67.114, 40.545],
-        [88.574, 92.268],
+        [47.3, 80.8],
+        [67.8, 44.4],
+        [90.8, 94.6],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -139,18 +139,19 @@ config |= {
         ),
         "dmd_DLP6500_device_id": 0,
         "dmd_DLP6500_init_state": "pass_zero_block",
-        "dmd_DLP6500_zero_radius_px": 30,
+        "dmd_DLP6500_zero_radius_px": 20,
         # Important: load final NV-chain file, not just triangle_affine_onpass.npz
         "dmd_DLP6500_init_calib_path": (
             # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1277.npz"
-            "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1274.npz"
+            # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1274.npz"
+            "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1271.npz"
         ),
     },
     
     ###
     "SpatialCalibrations": {
         "active_nv_coords_path": (
-            "slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz"
+            "slmsuite/nv_blob_detection/nv_blob_1271nvs_reordered.npz"
         ),
         "slm_fourier_calib_path": (
             "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00015.h5"
@@ -1003,7 +1004,7 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.35},
+        "yellow_imaging": {"type": "constant", "sample": 0.20},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.344}, #1460NVs
         "yellow_charge_readout": {"type": "constant", "sample": 0.3614},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.4014},

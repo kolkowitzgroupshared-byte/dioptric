@@ -50,7 +50,7 @@ import json
 import sys
 import time
 import traceback
-
+import cv2
 import labrad
 import matplotlib.pyplot as plt
 import numpy as np
@@ -66,8 +66,96 @@ from utils.constants import VirtualLaserKey
 # =============================================================================
 # Utility helpers
 # =============================================================================
+DMD_CHAIN_PATH = "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1271.npz"
 
 
+def load_dmd_chain_points(chain_path=DMD_CHAIN_PATH):
+    path = _resolve_repo_path(chain_path)
+
+    with np.load(path, allow_pickle=False) as npz:
+        dmd_points = np.asarray(npz["dmd_points"], dtype=np.float32)
+
+        if "inside_dmd_indices" in npz.files:
+            inside_dmd_indices = np.asarray(npz["inside_dmd_indices"], dtype=np.int32)
+        else:
+            inside = (
+                (dmd_points[:, 0] >= 0)
+                & (dmd_points[:, 0] < 1920)
+                & (dmd_points[:, 1] >= 0)
+                & (dmd_points[:, 1] < 1080)
+            )
+            inside_dmd_indices = np.where(inside)[0].astype(np.int32)
+
+    return dmd_points, inside_dmd_indices
+
+
+def choose_center_dmd_indices_from_chain(
+    nv_list_all,
+    chain_path=DMD_CHAIN_PATH,
+    num_sources=200,
+    min_source_pitch_px=None,
+):
+    """
+    Choose source NV indices from the saved 1271 DMD chain.
+
+    min_source_pitch_px=None:
+        use dense center NVs.
+
+    min_source_pitch_px=25 or 30:
+        use separated NVs for debugging crosstalk.
+    """
+    dmd_points, inside_dmd_indices = load_dmd_chain_points(chain_path)
+
+    valid_inds = [
+        int(ind)
+        for ind in inside_dmd_indices
+        if int(ind) < len(nv_list_all)
+    ]
+
+    center = np.array([960, 540], dtype=np.float32)
+    dist = np.linalg.norm(dmd_points[valid_inds] - center[None, :], axis=1)
+
+    sorted_inds = [
+        valid_inds[i]
+        for i in np.argsort(dist)
+    ]
+
+    chosen = []
+
+    for ind in sorted_inds:
+        p = dmd_points[ind]
+
+        if min_source_pitch_px is not None and len(chosen) > 0:
+            chosen_pts = dmd_points[chosen]
+            d = np.linalg.norm(chosen_pts - p[None, :], axis=1)
+
+            if np.min(d) < min_source_pitch_px:
+                continue
+
+        chosen.append(int(ind))
+
+        if len(chosen) >= num_sources:
+            break
+
+    return chosen, dmd_points
+
+
+def print_dmd_pitch_stats(source_inds, dmd_points):
+    pts = np.asarray(dmd_points[source_inds], dtype=np.float32)
+
+    d = np.linalg.norm(pts[:, None, :] - pts[None, :, :], axis=2)
+    np.fill_diagonal(d, np.inf)
+
+    nn = np.min(d, axis=1)
+
+    print("\n=== DMD source pitch stats ===")
+    print("num sources:", len(source_inds))
+    print("nearest pitch min:", float(np.min(nn)))
+    print("nearest pitch 5%:", float(np.percentile(nn, 5)))
+    print("nearest pitch median:", float(np.median(nn)))
+    print("nearest pitch max:", float(np.max(nn)))
+
+    return nn
 def _resolve_repo_path(path_like):
     """Resolve a repo-relative path."""
     from pathlib import Path
@@ -103,7 +191,7 @@ def get_center_dmd_indices(n=10, chain_path=None, include_only_inside=True):
         spatial = config.get("SpatialCalibrations", {})
         chain_path = spatial.get(
             "dmd_chain_calib_path",
-            "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1277.npz",
+            DMD_CHAIN_PATH,
         )
 
     path = _resolve_repo_path(chain_path)
@@ -1063,6 +1151,198 @@ def analyze_crosstalk_metrics(
     }
 
     return metrics
+
+
+def save_dmd_crosstalk_image_movie(
+    raw_data,
+    image_key="mean_images_by_source",
+    fps=5,
+    subtract_background=False,
+    normalize="global",
+    output_label=None,
+    cmap=None,
+    output_scale=3,
+    target_width=None,
+    resize_interp=cv2.INTER_CUBIC,
+):
+    """
+    Make a high-resolution mp4 movie from saved NV images.
+
+    Expected image stack:
+        raw_data["mean_images_by_source"] shape = (num_sources, height, width)
+
+    Parameters
+    ----------
+    output_scale : int or float
+        Upscale factor. For example, 3 makes a 512x512 image into 1536x1536.
+
+    target_width : int or None
+        If given, overrides output_scale and rescales movie to this width
+        while preserving aspect ratio.
+
+    cmap : None, str, or matplotlib colormap
+        If None, uses the active kplotlib / matplotlib default colormap.
+    """
+    if image_key not in raw_data:
+        raise KeyError(
+            f"raw_data does not contain '{image_key}'. "
+            "Rerun with save_images=True so mean_images_by_source is saved."
+        )
+
+    frames = np.asarray(raw_data[image_key], dtype=np.float32)
+
+    if frames.ndim != 3:
+        raise ValueError(
+            f"Expected {image_key} shape (num_frames, y, x), got {frames.shape}"
+        )
+
+    num_frames, height, width = frames.shape
+
+    if subtract_background and "background_img" in raw_data:
+        bg = np.asarray(raw_data["background_img"], dtype=np.float32)
+        frames = frames - bg[None, :, :]
+
+    frames = np.nan_to_num(frames, nan=0.0, posinf=0.0, neginf=0.0)
+
+    # Use kplotlib / matplotlib default colormap.
+    if cmap is None:
+        cmap = plt.get_cmap(plt.rcParams.get("image.cmap", "viridis"))
+    elif isinstance(cmap, str):
+        cmap = plt.get_cmap(cmap)
+
+    if normalize == "global":
+        vmin, vmax = np.percentile(frames, [0, 99.99])
+    else:
+        vmin, vmax = None, None
+
+    if output_label is None:
+        radius = raw_data.get("dmd_radius_px", "unknown")
+        num_sources_saved = raw_data.get("num_sources", num_frames)
+        output_label = f"dmd-crosstalk-movie-{num_sources_saved}src-r{radius}-hires"
+
+    timestamp = dm.get_time_stamp()
+    file_path = dm.get_file_path(__file__, timestamp, output_label)
+    mp4_path = str(file_path) + ".mp4"
+
+    # Decide output movie size.
+    if target_width is not None:
+        out_width = int(target_width)
+        out_height = int(round(height * out_width / width))
+    else:
+        out_width = int(round(width * output_scale))
+        out_height = int(round(height * output_scale))
+
+    # Video codecs prefer even dimensions.
+    out_width = 2 * (out_width // 2)
+    out_height = 2 * (out_height // 2)
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = cv2.VideoWriter(
+        mp4_path,
+        fourcc,
+        float(fps),
+        (out_width, out_height),
+        True,
+    )
+
+    if not writer.isOpened():
+        raise RuntimeError(f"Could not open VideoWriter for {mp4_path}")
+
+    source_inds = raw_data.get("source_global_inds", list(range(num_frames)))
+
+    # Text size scaled with output resolution.
+    scale_factor = out_width / width
+    font_scale = max(0.7, 0.8 * scale_factor)
+    thickness = max(2, int(round(2 * scale_factor)))
+    text_x = max(20, int(round(20 * scale_factor)))
+    text_y = max(35, int(round(35 * scale_factor)))
+
+    for ind in range(num_frames):
+        img = frames[ind]
+
+        if normalize == "per_frame":
+            lo, hi = np.percentile(img, [1, 99.8])
+        else:
+            lo, hi = vmin, vmax
+
+        if hi <= lo:
+            hi = lo + 1.0
+
+        img_norm = np.clip((img - lo) / (hi - lo), 0, 1)
+
+        # Apply matplotlib/kplotlib colormap.
+        rgba = cmap(img_norm, bytes=True)
+        rgb = rgba[:, :, :3]
+        frame_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+
+        # Upscale to high resolution.
+        frame_bgr = cv2.resize(
+            frame_bgr,
+            (out_width, out_height),
+            interpolation=resize_interp,
+        )
+
+        frame_bgr = np.ascontiguousarray(frame_bgr)
+
+        source_ind = int(source_inds[ind]) if ind < len(source_inds) else ind
+        text = f"{ind + 1}/{num_frames}   source NV {source_ind}"
+
+        # Draw black outline then white text.
+        cv2.putText(
+            frame_bgr,
+            text,
+            (text_x, text_y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            font_scale,
+            (0, 0, 0),
+            thickness + 2,
+            cv2.LINE_AA,
+        )
+
+        cv2.putText(
+            frame_bgr,
+            text,
+            (text_x, text_y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            font_scale,
+            (255, 255, 255),
+            thickness,
+            cv2.LINE_AA,
+        )
+
+        writer.write(frame_bgr)
+
+    writer.release()
+
+    movie_meta = {
+        "timestamp": timestamp,
+        "experiment": "dmd_crosstalk_image_movie",
+        "movie_path": mp4_path,
+        "source_file_timestamp": raw_data.get("timestamp", None),
+        "image_key": image_key,
+        "num_frames": int(num_frames),
+        "input_height": int(height),
+        "input_width": int(width),
+        "output_height": int(out_height),
+        "output_width": int(out_width),
+        "fps": float(fps),
+        "subtract_background": bool(subtract_background),
+        "normalize": normalize,
+        "output_scale": float(output_scale),
+        "target_width": None if target_width is None else int(target_width),
+        "dmd_radius_px": raw_data.get("dmd_radius_px", None),
+        "num_sources": raw_data.get("num_sources", num_frames),
+        "source_global_inds": raw_data.get("source_global_inds", None),
+        "cmap": str(cmap.name) if hasattr(cmap, "name") else str(cmap),
+    }
+
+    dm.save_raw_data(movie_meta, file_path, keys_to_compress=[])
+
+    print("\nSaved high-resolution DMD crosstalk movie:")
+    print(mp4_path)
+    print("movie size:", out_width, "x", out_height)
+
+    return mp4_path
 # =============================================================================
 # Main experiment
 # =============================================================================
@@ -1403,41 +1683,222 @@ def main(
 
 
 
+# if __name__ == "__main__":
+#     kpl.init_kplotlib()
+
+#     raw_data = dm.get_raw_data(
+#         file_stem=(
+#             "2026_05_12-22_37_52-qnami-nv0_2026_02_20-dmd-crosstalk-1000src-r18"
+#         ),
+#         load_npz=True,
+#         allow_pickle=True,
+#     )
+
+#     process_and_plot(raw_data)
+
+#     metrics = analyze_crosstalk_metrics(
+#         raw_data,
+#         counts_key="counts_bg_sub",
+#         use_source_only=True,
+#         diag_threshold=2.0,
+#         ratio_threshold=0.3,
+#         bad_ratio_threshold=1.0,
+#         vmax_norm=0.3,
+#         do_plot=True,
+#     )
+
+#     print("\nGood source indices:")
+#     print(metrics["good_sources"].tolist())
+
+#     print("\nUsable source indices:")
+#     print(metrics["usable_sources"].tolist())
+
+#     print("\nWeak diagonal source indices:")
+#     print(metrics["weak_sources"].tolist())
+
+#     print("\nBad crosstalk source indices:")
+#     print(metrics["bad_xtalk_sources"].tolist())
+
+#     kpl.show(block=True)
+    
+    
+def estimate_dmd_extinction_all_on_reverse_off(
+    raw_data,
+    use_source_rows=True,
+    dark_counts=None,
+    eps=1e-9,
+    do_plot=True,
+    save=True,
+    label="dmd-extinction-all-on-reverse-off",
+):
+    """
+    Estimate DMD extinction from all-on reverse-off data.
+
+    For all-on reverse-off data:
+        counts_matrix[:, 0]  = all selected spots ON
+        counts_matrix[:, -1] = all selected spots OFF / block_all
+
+    Extinction:
+        leakage_fraction = OFF / ON
+        extinction_ratio = ON / OFF
+        extinction_db = 10 log10(ON / OFF)
+    """
+    C = np.asarray(raw_data["counts_matrix"], dtype=np.float32)
+
+    measured_global_inds = [int(x) for x in raw_data["measured_global_inds"]]
+    source_global_inds = [int(x) for x in raw_data["source_global_inds"]]
+
+    if use_source_rows:
+        rows = [
+            measured_global_inds.index(src)
+            for src in source_global_inds
+            if src in measured_global_inds
+        ]
+        row_global_inds = [
+            measured_global_inds[row]
+            for row in rows
+        ]
+    else:
+        rows = list(range(C.shape[0]))
+        row_global_inds = measured_global_inds
+
+    on_counts = C[rows, 0].astype(np.float32)
+    off_counts = C[rows, -1].astype(np.float32)
+
+    if dark_counts is not None:
+        dark_counts = np.asarray(dark_counts, dtype=np.float32)
+        dark_counts = dark_counts[rows]
+    else:
+        dark_counts = np.zeros_like(on_counts)
+
+    on_sub = on_counts - dark_counts
+    off_sub = off_counts - dark_counts
+
+    on_sub = np.maximum(on_sub, eps)
+    off_sub = np.maximum(off_sub, eps)
+
+    leakage_fraction = off_sub / on_sub
+    extinction_ratio = on_sub / off_sub
+    extinction_db = 10.0 * np.log10(extinction_ratio)
+
+    print("\n=== DMD extinction estimate ===")
+    print("num NV rows:", len(rows))
+    print("median ON counts:", float(np.nanmedian(on_sub)))
+    print("median OFF counts:", float(np.nanmedian(off_sub)))
+    print("median leakage fraction OFF/ON:", float(np.nanmedian(leakage_fraction)))
+    print("90% leakage fraction OFF/ON:", float(np.nanpercentile(leakage_fraction, 90)))
+    print("median extinction ratio ON/OFF:", float(np.nanmedian(extinction_ratio)))
+    print("median extinction dB:", float(np.nanmedian(extinction_db)))
+    print("10% extinction dB:", float(np.nanpercentile(extinction_db, 10)))
+
+    figs = []
+
+    if do_plot:
+        fig, ax = plt.subplots(figsize=(5.5, 5))
+        ax.scatter(on_sub, off_sub, s=25)
+        ax.set_xlabel("ON counts")
+        ax.set_ylabel("OFF counts")
+        ax.set_title("DMD extinction: OFF vs ON")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        figs.append(fig)
+
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.hist(leakage_fraction[np.isfinite(leakage_fraction)], bins=30)
+        ax.set_xlabel("Leakage fraction OFF / ON")
+        ax.set_ylabel("Number of NVs")
+        ax.set_title("DMD leakage fraction")
+        figs.append(fig)
+
+        fig, ax = plt.subplots(figsize=(7, 4))
+        ax.plot(extinction_db, "o-")
+        ax.set_xlabel("NV row")
+        ax.set_ylabel("Extinction [dB]")
+        ax.set_title("DMD extinction per NV")
+        figs.append(fig)
+
+    out = {
+        "experiment": "dmd_extinction_estimate",
+        "source_file_timestamp": raw_data.get("timestamp", None),
+        "row_global_inds": np.asarray(row_global_inds, dtype=np.int32),
+        "on_counts": on_counts,
+        "off_counts": off_counts,
+        "dark_counts": dark_counts,
+        "on_sub": on_sub,
+        "off_sub": off_sub,
+        "leakage_fraction": leakage_fraction,
+        "extinction_ratio": extinction_ratio,
+        "extinction_db": extinction_db,
+        "median_leakage_fraction": float(np.nanmedian(leakage_fraction)),
+        "median_extinction_ratio": float(np.nanmedian(extinction_ratio)),
+        "median_extinction_db": float(np.nanmedian(extinction_db)),
+    }
+
+    if save:
+        timestamp = dm.get_time_stamp()
+        file_path = dm.get_file_path(__file__, timestamp, label)
+
+        dm.save_raw_data(
+            out,
+            file_path,
+            keys_to_compress=[
+                "row_global_inds",
+                "on_counts",
+                "off_counts",
+                "dark_counts",
+                "on_sub",
+                "off_sub",
+                "leakage_fraction",
+                "extinction_ratio",
+                "extinction_db",
+            ],
+        )
+
+        for ind, fig in enumerate(figs):
+            fig_path = dm.get_file_path(
+                __file__,
+                timestamp,
+                f"{label}-{ind}",
+            )
+            dm.save_figure(fig, fig_path)
+
+        print("Saved extinction analysis:")
+        print(file_path)
+
+    out["figs"] = figs
+    return out
+    
 if __name__ == "__main__":
     kpl.init_kplotlib()
 
     raw_data = dm.get_raw_data(
-        file_stem=(
-            "2026_05_12-22_37_52-qnami-nv0_2026_02_20-dmd-crosstalk-1000src-r18"
-        ),
+        file_stem="2026_06_09-20_30_41-qnami-nv0_2026_02_20-dmd-crosstalk-200src-r6",
         load_npz=True,
         allow_pickle=True,
     )
 
-    process_and_plot(raw_data)
-
-    metrics = analyze_crosstalk_metrics(
+    # movie_path = save_dmd_crosstalk_image_movie(
+    #     raw_data,
+    #     fps=2,
+    #     normalize="global",
+    #     subtract_background=False,
+    #     cmap=None,   # uses kplotlib/matplotlib default
+    # )
+    movie_path = save_dmd_crosstalk_image_movie(
         raw_data,
-        counts_key="counts_bg_sub",
-        use_source_only=True,
-        diag_threshold=2.0,
-        ratio_threshold=0.3,
-        bad_ratio_threshold=1.0,
-        vmax_norm=0.3,
-        do_plot=True,
+        image_key="mean_images_by_source",
+        fps=5,
+        subtract_background=False,
+        normalize="global",
+        cmap=None,          # kplotlib default
+        output_scale=4,     # high resolution
     )
-
-    print("\nGood source indices:")
-    print(metrics["good_sources"].tolist())
-
-    print("\nUsable source indices:")
-    print(metrics["usable_sources"].tolist())
-
-    print("\nWeak diagonal source indices:")
-    print(metrics["weak_sources"].tolist())
-
-    print("\nBad crosstalk source indices:")
-    print(metrics["bad_xtalk_sources"].tolist())
-
-    kpl.show(block=True)
+    # ext = estimate_dmd_extinction_all_on_reverse_off(
+    #     raw_data,
+    #     use_source_rows=True,
+    #     dark_counts=None,
+    #     do_plot=True,
+    #     save=True,
+    # )
+    # print(movie_path)
     # sys.exit()

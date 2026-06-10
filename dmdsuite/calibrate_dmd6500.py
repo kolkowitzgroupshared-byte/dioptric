@@ -737,7 +737,7 @@ def calibrate_zero_order_onpass(
         cam=cam,
         cam_pts=cam_pts,
         axis="x",
-        positions=np.arange(960, 1020, 2),
+        positions=np.arange(880, 940, 4),
         stripe_width=stripe_width,
         plane=220,
         exposure=exposure,
@@ -750,7 +750,7 @@ def calibrate_zero_order_onpass(
         cam=cam,
         cam_pts=cam_pts,
         axis="y",
-        positions=np.arange(480, 560, 2),
+        positions=np.arange(500, 560, 4),
         stripe_width=stripe_width,
         plane=221,
         exposure=exposure,
@@ -821,7 +821,7 @@ def calibrate_triangle_onpass(
         cam=cam,
         cam_pts=tri_cam_pts,
         axis="x",
-        positions=np.arange(300, 1500, 4),
+        positions=np.arange(300, 1320, 4),
         stripe_width=stripe_width,
         plane=222,
         exposure=exposure,
@@ -999,11 +999,13 @@ def save_thorcam_snapshot(img, label="thorcam-snapshot", exposure=0.0001):
 
     return str(file_path) + ".npz", fig
 
-def do_thorcam_snapshot_with_yellow(
-    label="thorcam-image-test-yellow-on",
+
+def do_thorcam_hardware_roi_with_yellow(
+    label="thorcam-yellow-image",
     exposure=0.0001,
     yellow_channel=7,
-    yellow_amp=0.11,
+    yellow_amp=0.08,
+    roi_xywh=None,  # None = full image; otherwise (x, y, width, height)
     wait_before_cleanup=True,
 ):
     from slmsuite.hardware.cameras.thorlabs import ThorCam
@@ -1017,40 +1019,95 @@ def do_thorcam_snapshot_with_yellow(
         cxn = common.labrad_connect()
         opx = cxn.QM_opx
 
-        # Turn on yellow analog output.
-        opx.constant_ac(
-            [],                 # digital channels
-            [yellow_channel],   # analog channels
-            [yellow_amp],       # analog voltages
-            [0],                # analog frequencies
-        )
+        opx.constant_ac([], [yellow_channel], [yellow_amp], [0])
+        time.sleep(0.2)
 
         cam = ThorCam(serial="26438", verbose=True)
 
+        # Hardware ROI only if requested.
+        if roi_xywh is not None:
+            x, y, w, h = roi_xywh
+            x, y, w, h = int(x), int(y), int(w), int(h)
+
+            # ThorCam set_woi format: (x_start, width, y_start, height)
+            cam.set_woi((x, w, y, h))
+            image_origin_xy = np.array([x, y], dtype=np.float32)
+            save_roi_xywh = np.array([x, y, w, h], dtype=np.int32)
+            x_label = "ROI x [px]"
+            y_label = "ROI y [px]"
+        else:
+            image_origin_xy = np.array([0, 0], dtype=np.float32)
+            save_roi_xywh = np.array([-1, -1, -1, -1], dtype=np.int32)
+            x_label = "Camera x [px]"
+            y_label = "Camera y [px]"
+
         img = safe_get_image(cam, exposure=exposure)
 
-        raw_path, fig = save_thorcam_snapshot(
-            img,
-            label=label,
-            exposure=exposure,
+        img_f = img.astype(np.float32)
+        bg = np.percentile(img_f, 20)
+        weights = np.clip(img_f - bg, 0, None)
+
+        if weights.sum() > 0:
+            yy, xx = np.mgrid[0:img.shape[0], 0:img.shape[1]]
+            cx = image_origin_xy[0] + np.sum(xx * weights) / weights.sum()
+            cy = image_origin_xy[1] + np.sum(yy * weights) / weights.sum()
+            centroid_xy = np.array([cx, cy], dtype=np.float32)
+        else:
+            centroid_xy = np.array([np.nan, np.nan], dtype=np.float32)
+
+        print("\n=== ThorCam readout ===")
+        print("roi_xywh:", None if roi_xywh is None else tuple(save_roi_xywh))
+        print("image shape:", img.shape)
+        print("sum:", float(np.sum(img)))
+        print("mean:", float(np.mean(img)))
+        print("max:", float(np.max(img)))
+        print("centroid_xy full camera:", centroid_xy)
+
+        timestamp = dm.get_time_stamp()
+        file_path = dm.get_file_path(__file__, timestamp, label)
+
+        np.savez_compressed(
+            str(file_path) + ".npz",
+            img=np.asarray(img),
+            roi_xywh=save_roi_xywh,
+            img_sum=np.asarray(np.sum(img), dtype=np.float32),
+            img_mean=np.asarray(np.mean(img), dtype=np.float32),
+            img_max=np.asarray(np.max(img), dtype=np.float32),
+            centroid_xy=np.asarray(centroid_xy, dtype=np.float32),
+            exposure=np.asarray(exposure, dtype=np.float32),
+            yellow_channel=np.asarray(yellow_channel, dtype=np.int32),
+            yellow_amp=np.asarray(yellow_amp, dtype=np.float32),
         )
 
-        print("Saved ThorCam snapshot:", raw_path)
+        fig, ax = plt.subplots(figsize=(8, 7))
+        vmin, vmax = np.percentile(img, [0, 99.98])
+        ax.imshow(
+            img,
+            cmap=blue_cmap,
+            vmin=vmin,
+            vmax=vmax,
+            interpolation="nearest",
+        )
+        ax.set_title(label)
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+        fig.colorbar(ax.images[0], ax=ax, label="counts")
+        dm.save_figure(fig, file_path)
+        print("Saved image:", str(file_path) + ".npz")
 
         plt.show(block=False)
 
         if wait_before_cleanup:
-            input("Press Enter to turn off yellow and continue...")
+            input("Press Enter to turn off yellow...")
 
-        return img, raw_path
+        return img, centroid_xy, str(file_path) + ".npz"
 
     finally:
-        # Always turn off yellow output.
         try:
             if opx is not None:
                 opx.constant_ac([], [yellow_channel], [0.0], [0])
         except Exception as exc:
-            print("Could not turn off OPX yellow channel:", exc)
+            print("Could not turn off yellow:", exc)
 
         try:
             if cam is not None:
@@ -1067,6 +1124,75 @@ def do_thorcam_snapshot_with_yellow(
 # Main acquisition / reload path
 # =============================================================================
 
+def fit_widths_from_drop_curves(positions, drops, stripe_width):
+    """
+    Estimate spot FWHM from black-stripe drop curves.
+
+    positions: DMD stripe positions
+    drops: shape [num_positions, num_spots]
+    stripe_width: black stripe width in DMD mirrors
+
+    Returns:
+        centers, fwhm_spot, sigma_spot
+    """
+    from scipy.optimize import curve_fit
+    from scipy.special import erf
+
+    positions = np.asarray(positions, dtype=np.float32)
+    drops = np.asarray(drops, dtype=np.float32)
+
+    if drops.ndim == 1:
+        drops = drops[:, None]
+
+    def stripe_gaussian(p, offset, amp, center, sigma):
+        # Gaussian spot convolved with a finite-width blocking stripe.
+        a = (p - center + stripe_width / 2) / (np.sqrt(2) * sigma)
+        b = (p - center - stripe_width / 2) / (np.sqrt(2) * sigma)
+        return offset + amp * 0.5 * (erf(a) - erf(b))
+
+    centers = []
+    sigmas = []
+    fwhms = []
+
+    for i in range(drops.shape[1]):
+        y = drops[:, i]
+
+        offset0 = float(np.min(y))
+        amp0 = float(np.max(y) - np.min(y))
+        center0 = float(positions[np.argmax(y)])
+        sigma0 = 20.0
+
+        try:
+            popt, _ = curve_fit(
+                stripe_gaussian,
+                positions,
+                y,
+                p0=[offset0, amp0, center0, sigma0],
+                bounds=(
+                    [-0.2, 0.0, positions.min(), 0.5],
+                    [1.5, 2.0, positions.max(), 500.0],
+                ),
+                maxfev=10000,
+            )
+
+            offset, amp, center, sigma = popt
+            fwhm = 2.355 * sigma
+
+        except Exception as exc:
+            print(f"Fit failed for spot {i}:", exc)
+            center = np.nan
+            sigma = np.nan
+            fwhm = np.nan
+
+        centers.append(center)
+        sigmas.append(sigma)
+        fwhms.append(fwhm)
+
+    return (
+        np.asarray(centers, dtype=np.float32),
+        np.asarray(fwhms, dtype=np.float32),
+        np.asarray(sigmas, dtype=np.float32),
+    )
 
 def main(
     load_file_id=None,
@@ -1079,6 +1205,9 @@ def main(
     force_zero_order=False,
     zero_calib_path="dmdsuite/calibration/zero_order_onpass.npz",
     server_calib_path="dmdsuite/calibration/triangle_affine_onpass.npz",
+    yellow_channel=7,
+    yellow_amp=0.08,
+    use_yellow=True,
 ):
     """
     If load_file_id is None, run a new calibration.
@@ -1101,8 +1230,14 @@ def main(
 
     cxn = labrad.connect(username="", password="")
     dmd = cxn.dmd_dlp6500
+    opx = cxn.QM_opx
     cam = ThorCam(serial=camera_serial, verbose=True)
 
+    if use_yellow:
+        opx.constant_ac([], [yellow_channel], [yellow_amp], [0])
+        time.sleep(0.2)
+        print(f"Yellow ON: channel={yellow_channel}, amp={yellow_amp}")
+        
     data = {
         "timestamp": timestamp,
         "camera_serial": camera_serial,
@@ -1115,6 +1250,9 @@ def main(
         "server_calib_path": server_calib_path,
         "exposure_zero": float(exposure_zero),
         "exposure_triangle": float(exposure_triangle),
+        "use_yellow": bool(use_yellow),
+        "yellow_channel": int(yellow_channel),
+        "yellow_amp": float(yellow_amp),
     }
 
     try:
@@ -1152,7 +1290,7 @@ def main(
                 cam=cam,
                 exposure=exposure_zero,
                 roi=8,
-                stripe_width=5,
+                stripe_width=20,
                 zero_radius_px=30,
                 save_scan_images=save_scan_images,
             )
@@ -1184,7 +1322,7 @@ def main(
             zero_cam_xy=data["zero_cam_xy"],
             exposure=exposure_triangle,
             roi=8,
-            stripe_width=5,
+            stripe_width=20,
             save_scan_images=save_scan_images,
         )
         data.update(triangle_data)
@@ -1222,7 +1360,22 @@ def main(
         raise
 
     finally:
-        cam.close()
+        try:
+            if use_yellow:
+                opx.constant_ac([], [yellow_channel], [0.0], [0])
+                print("Yellow OFF")
+        except Exception as exc:
+            print("Could not turn off yellow:", exc)
+
+        try:
+            cam.close()
+        except Exception:
+            pass
+
+        try:
+            cxn.disconnect()
+        except Exception:
+            pass
 
     kpl.show()
     return data
@@ -1238,19 +1391,26 @@ if __name__ == "__main__":
 
     # To reprocess the new compressed DMD raw .npz, set this to the .npz path.
     LOAD_NPZ_PATH = None
-
-    main(
-        load_file_id=LOAD_FILE_ID,
-        load_npz_path=LOAD_NPZ_PATH,
-        reuse_zero_order=False,   # use dmdsuite/calibration/zero_order_onpass.npz if present
-        force_zero_order=True,  # set True only when you want to redo 0th-order scan
-    )
-    
+    # main(
+    #     load_file_id=LOAD_FILE_ID,
+    #     load_npz_path=LOAD_NPZ_PATH,
+    #     reuse_zero_order=False,
+    #     force_zero_order=True,
+    #     use_yellow=True,
+    #     yellow_channel=7,
+    #     yellow_amp=0.04,
+    # )
     # take a quick image
-    # do_thorcam_snapshot_with_yellow(
-    # label="thorcam-yellow-test",
-    # exposure=0.0001,
-    # yellow_channel=7,
-    # yellow_amp=0.15,
-    # wait_before_cleanup=True,
+    do_thorcam_hardware_roi_with_yellow(
+    label="full-image-test",
+    exposure=0.0001,
+    yellow_amp=0.08,
+    roi_xywh=None,
+    )
+    # do_thorcam_hardware_roi_with_yellow(
+    #     label="hardware-roi-test",
+    #     exposure=0.0001,
+    #     yellow_channel=7,
+    #     yellow_amp=0.08,
+    #     roi_xywh=(500, 350, 500, 500),
     # )
