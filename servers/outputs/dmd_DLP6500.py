@@ -111,7 +111,7 @@ class DmdDlp6500(LabradServer):
         #   dmd_points / pattern_dmd_points
         self.init_calib_path = device_ids.get(
             f"{self.name}_init_calib_path",
-            "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1271.npz",
+            "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1176.npz",
         )
 
         self.zero_radius_px = int(
@@ -218,7 +218,7 @@ class DmdDlp6500(LabradServer):
         # That will upload pass/block planes and apply pass_zero_block
         # using zero_dmd_xy from the final chain file.
         # -----------------------------------------------------------------
-        self._show_pass_all(zero_block=True)
+        self._show_pass_all(zero_block=False)
 
         logging.info(
             "DMD connected. Final-chain calibration loaded if available. "

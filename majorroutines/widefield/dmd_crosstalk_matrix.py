@@ -1211,7 +1211,7 @@ def save_dmd_crosstalk_image_movie(
         cmap = plt.get_cmap(cmap)
 
     if normalize == "global":
-        vmin, vmax = np.percentile(frames, [0, 99.99])
+        vmin, vmax = np.percentile(frames, [1, 99.97])
     else:
         vmin, vmax = None, None
 
@@ -1261,7 +1261,7 @@ def save_dmd_crosstalk_image_movie(
         img = frames[ind]
 
         if normalize == "per_frame":
-            lo, hi = np.percentile(img, [1, 99.8])
+            lo, hi = np.percentile(img, [1, 99.99])
         else:
             lo, hi = vmin, vmax
 
@@ -1343,6 +1343,302 @@ def save_dmd_crosstalk_image_movie(
     print("movie size:", out_width, "x", out_height)
 
     return mp4_path
+
+def save_dmd_cumulative_on_image_movie(
+    raw_data,
+    image_key="mean_images_by_source",
+    fps=5,
+    subtract_background=True,
+    cumulative_mode="sum",
+    normalize="global",
+    output_label=None,
+    cmap=None,
+    output_scale=4,
+    target_width=None,
+    resize_interp=cv2.INTER_CUBIC,
+):
+    """
+    Make a cumulative ON movie from single-source DMD crosstalk images.
+
+    Frame k shows:
+        source 0 + source 1 + ... + source k ON
+
+    This uses already-saved data:
+        raw_data["mean_images_by_source"]
+
+    Parameters
+    ----------
+    cumulative_mode : str
+        "sum":
+            Physically motivated. Adds the single-NV images.
+            Best if response is linear and images are not saturated.
+
+        "max":
+            Visualization mode. Keeps the brightest value seen so far.
+            Good for showing which NVs have appeared without making
+            the image get too bright.
+
+    subtract_background : bool
+        If True and raw_data["background_img"] exists:
+            first subtract background from each single-NV frame,
+            then build the cumulative image.
+
+        This is recommended for cumulative sum, otherwise the background
+        is added repeatedly.
+
+    normalize : str
+        "global":
+            Use one color scale for the whole movie.
+
+        "per_frame":
+            Rescale every frame independently.
+
+    Output
+    ------
+    Saves an mp4 movie and a small metadata file.
+    """
+    if image_key not in raw_data:
+        raise KeyError(
+            f"raw_data does not contain '{image_key}'. "
+            "Rerun with save_images=True so mean_images_by_source is saved."
+        )
+
+    single_frames = np.asarray(raw_data[image_key], dtype=np.float32)
+
+    if single_frames.ndim != 3:
+        raise ValueError(
+            f"Expected {image_key} shape (num_sources, y, x), "
+            f"got {single_frames.shape}"
+        )
+
+    num_frames, height, width = single_frames.shape
+
+    # ------------------------------------------------------------------
+    # Background subtraction.
+    # Important: for cumulative sum, do not add background N times.
+    # ------------------------------------------------------------------
+    bg = None
+
+    if subtract_background and "background_img" in raw_data:
+        bg = np.asarray(raw_data["background_img"], dtype=np.float32)
+
+        if bg.shape != single_frames.shape[1:]:
+            raise ValueError(
+                f"background_img shape {bg.shape} does not match "
+                f"frame shape {single_frames.shape[1:]}"
+            )
+
+        frames = single_frames - bg[None, :, :]
+    else:
+        frames = single_frames.copy()
+
+    frames = np.nan_to_num(frames, nan=0.0, posinf=0.0, neginf=0.0)
+
+    # Optional: avoid negative background-subtracted pixels accumulating.
+    # This is usually better for visualization.
+    frames = np.maximum(frames, 0.0)
+
+    # ------------------------------------------------------------------
+    # Build cumulative movie frames.
+    # ------------------------------------------------------------------
+    cumulative_frames = np.zeros_like(frames, dtype=np.float32)
+
+    if cumulative_mode == "sum":
+        running = np.zeros((height, width), dtype=np.float32)
+
+        for ind in range(num_frames):
+            running = running + frames[ind]
+            cumulative_frames[ind] = running
+
+    elif cumulative_mode == "max":
+        running = np.zeros((height, width), dtype=np.float32)
+
+        for ind in range(num_frames):
+            running = np.maximum(running, frames[ind])
+            cumulative_frames[ind] = running
+
+    else:
+        raise ValueError("cumulative_mode must be 'sum' or 'max'.")
+
+    # Add background only once if desired.
+    # For scientific visualization of added NV signal, I usually leave it out.
+    # If you want camera-like appearance, uncomment the next block.
+    #
+    # if bg is not None:
+    #     cumulative_frames = cumulative_frames + bg[None, :, :]
+
+    # ------------------------------------------------------------------
+    # Colormap.
+    # ------------------------------------------------------------------
+    if cmap is None:
+        cmap = plt.get_cmap(plt.rcParams.get("image.cmap", "viridis"))
+    elif isinstance(cmap, str):
+        cmap = plt.get_cmap(cmap)
+
+    # ------------------------------------------------------------------
+    # Color normalization.
+    # ------------------------------------------------------------------
+    if normalize == "global":
+        # Use the final cumulative image to set the scale.
+        # This keeps the movie visually consistent as more NVs turn on.
+        vmin, vmax = np.percentile(cumulative_frames[-1], [1, 99.95])
+
+        if vmax <= vmin:
+            vmin, vmax = np.percentile(cumulative_frames, [1, 99.95])
+
+    elif normalize == "per_frame":
+        vmin, vmax = None, None
+
+    else:
+        raise ValueError("normalize must be 'global' or 'per_frame'.")
+
+    # ------------------------------------------------------------------
+    # Output path.
+    # ------------------------------------------------------------------
+    if output_label is None:
+        radius = raw_data.get("dmd_radius_px", "unknown")
+        num_sources_saved = raw_data.get("num_sources", num_frames)
+
+        output_label = (
+            f"dmd-cumulative-on-movie-"
+            f"{num_sources_saved}src-r{radius}-{cumulative_mode}-hires"
+        )
+
+    timestamp = dm.get_time_stamp()
+    file_path = dm.get_file_path(__file__, timestamp, output_label)
+    mp4_path = str(file_path) + ".mp4"
+
+    # ------------------------------------------------------------------
+    # Movie size.
+    # ------------------------------------------------------------------
+    if target_width is not None:
+        out_width = int(target_width)
+        out_height = int(round(height * out_width / width))
+    else:
+        out_width = int(round(width * output_scale))
+        out_height = int(round(height * output_scale))
+
+    # Video codecs prefer even dimensions.
+    out_width = 2 * (out_width // 2)
+    out_height = 2 * (out_height // 2)
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = cv2.VideoWriter(
+        mp4_path,
+        fourcc,
+        float(fps),
+        (out_width, out_height),
+        True,
+    )
+
+    if not writer.isOpened():
+        raise RuntimeError(f"Could not open VideoWriter for {mp4_path}")
+
+    source_inds = raw_data.get("source_global_inds", list(range(num_frames)))
+
+    # Text size scaled with output resolution.
+    scale_factor = out_width / width
+    font_scale = max(0.7, 0.8 * scale_factor)
+    thickness = max(2, int(round(2 * scale_factor)))
+    text_x = max(20, int(round(20 * scale_factor)))
+    text_y = max(35, int(round(35 * scale_factor)))
+
+    # ------------------------------------------------------------------
+    # Write movie.
+    # ------------------------------------------------------------------
+    for ind in range(num_frames):
+        img = cumulative_frames[ind]
+
+        if normalize == "per_frame":
+            lo, hi = np.percentile(img, [1, 99.95])
+        else:
+            lo, hi = vmin, vmax
+
+        if hi <= lo:
+            hi = lo + 1.0
+
+        img_norm = np.clip((img - lo) / (hi - lo), 0, 1)
+
+        rgba = cmap(img_norm, bytes=True)
+        rgb = rgba[:, :, :3]
+        frame_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+
+        frame_bgr = cv2.resize(
+            frame_bgr,
+            (out_width, out_height),
+            interpolation=resize_interp,
+        )
+
+        frame_bgr = np.ascontiguousarray(frame_bgr)
+
+        source_ind = int(source_inds[ind]) if ind < len(source_inds) else ind
+
+        text = (
+            f"{ind + 1}/{num_frames}   "
+            f"added NV {source_ind}   "
+            f"total ON = {ind + 1}"
+        )
+
+        # Black outline.
+        cv2.putText(
+            frame_bgr,
+            text,
+            (text_x, text_y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            font_scale,
+            (0, 0, 0),
+            thickness + 2,
+            cv2.LINE_AA,
+        )
+
+        # White text.
+        cv2.putText(
+            frame_bgr,
+            text,
+            (text_x, text_y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            font_scale,
+            (255, 255, 255),
+            thickness,
+            cv2.LINE_AA,
+        )
+
+        writer.write(frame_bgr)
+
+    writer.release()
+
+    movie_meta = {
+        "timestamp": timestamp,
+        "experiment": "dmd_cumulative_on_image_movie",
+        "movie_path": mp4_path,
+        "source_file_timestamp": raw_data.get("timestamp", None),
+        "image_key": image_key,
+        "num_frames": int(num_frames),
+        "input_height": int(height),
+        "input_width": int(width),
+        "output_height": int(out_height),
+        "output_width": int(out_width),
+        "fps": float(fps),
+        "subtract_background": bool(subtract_background),
+        "cumulative_mode": cumulative_mode,
+        "normalize": normalize,
+        "output_scale": float(output_scale),
+        "target_width": None if target_width is None else int(target_width),
+        "dmd_radius_px": raw_data.get("dmd_radius_px", None),
+        "num_sources": raw_data.get("num_sources", num_frames),
+        "source_global_inds": raw_data.get("source_global_inds", None),
+        "cmap": str(cmap.name) if hasattr(cmap, "name") else str(cmap),
+    }
+
+    dm.save_raw_data(movie_meta, file_path, keys_to_compress=[])
+
+    print("\nSaved cumulative ON DMD movie:")
+    print(mp4_path)
+    print("movie size:", out_width, "x", out_height)
+    print("cumulative_mode:", cumulative_mode)
+
+    return mp4_path
+
 # =============================================================================
 # Main experiment
 # =============================================================================
@@ -1872,7 +2168,7 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
 
     raw_data = dm.get_raw_data(
-        file_stem="2026_06_09-20_30_41-qnami-nv0_2026_02_20-dmd-crosstalk-200src-r6",
+        file_stem="2026_06_11-07_58_03-qnami-nv0_2026_02_20-dmd-crosstalk-1176src-r6",
         load_npz=True,
         allow_pickle=True,
     )
@@ -1884,14 +2180,40 @@ if __name__ == "__main__":
     #     subtract_background=False,
     #     cmap=None,   # uses kplotlib/matplotlib default
     # )
-    movie_path = save_dmd_crosstalk_image_movie(
-        raw_data,
-        image_key="mean_images_by_source",
-        fps=5,
-        subtract_background=False,
-        normalize="global",
-        cmap=None,          # kplotlib default
-        output_scale=4,     # high resolution
+    
+    
+    # movie_path = save_dmd_crosstalk_image_movie(
+    #     raw_data,
+    #     image_key="mean_images_by_source",
+    #     fps=20,
+    #     subtract_background=False,
+    #     normalize="global",
+    #     cmap=None,          # kplotlib default
+    #     output_scale=4,     # high resolution
+    # )
+    
+    
+    # movie_path = save_dmd_cumulative_on_image_movie(
+    # raw_data,
+    # image_key="mean_images_by_source",
+    # fps=20,
+    # subtract_background=True,
+    # cumulative_mode="sum",
+    # normalize="global",
+    # cmap=None,
+    # output_scale=4,
+    # )
+    
+    movie_path = save_dmd_cumulative_on_image_movie(
+    raw_data,
+    image_key="mean_images_by_source",
+    fps=200,
+    subtract_background=True,
+    cumulative_mode="max",
+    normalize="per_frame",
+    cmap=None,
+    output_scale=4,
+    
     )
     # ext = estimate_dmd_extinction_all_on_reverse_off(
     #     raw_data,

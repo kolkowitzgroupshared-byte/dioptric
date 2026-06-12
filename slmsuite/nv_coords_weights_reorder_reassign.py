@@ -11,6 +11,7 @@ from skimage.draw import disk
 # from tabulate import tabulate
 from utils import data_manager as dm
 from utils import kplotlib as kpl
+from utils import common
 
 from matplotlib.path import Path
 
@@ -597,10 +598,6 @@ class ManualPolygonSelector:
             self.points.set_data([], [])
         self.ax.figure.canvas.draw_idle()
 
-
-import numpy as np
-
-
 def filter_and_rescale_coords_for_new_roi(
     nv_coordinates,
     spot_weights=None,
@@ -765,24 +762,29 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_06_09-00_06_51-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_06_10-23_19_31-qnami-nv0_2026_02_20", load_npz=True
     )
-    # img_array = np.array(data["ref_img_array"])
     img_array = data["img_array"]
+    # img_array = np.array(data["ref_img_array"])
+
+    # file_path="slmsuite/nv_blob_detection/nv_blob_6837nvs.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_6904nvs.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_3986nvs_reordered.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_3554nvs_reordered.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_3366nvs_reordered.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1487nvs_reordered.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1275nvs_reordered.npz",
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1267nvs_reordered.npz"
+    config = common.get_config_dict()
+    file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
+    print(file_path)
     nv_coordinates, spot_weights = load_nv_coords(
-        # file_path="slmsuite/nv_blob_detection/nv_blob_6837nvs.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_6904nvs.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_3986nvs_reordered.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_3554nvs_reordered.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_3366nvs_reordered.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_1487nvs_reordered.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_1275nvs_reordered.npz",
-        file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_1267nvs_reordered.npz"
+        file_path = file_path
     )
     
     # fitted_data = dm.get_raw_data(file_stem="2026_03_23-16_39_03-optimal_values_2026_03_22-21_49_52-qnami-nv0_2026_02_20")
@@ -1148,11 +1150,11 @@ if __name__ == "__main__":
     # spot_weights = non_linear_weights(filtered_intensities, alpha=0.9)
     # filtered_reordered_spot_weights = filtered_reordered_spot_weights[:4094]
     # filtered_reordered_coords = filtered_reordered_coords[:4094]
-    # # Save the filtered results
+    # Save the filtered results
     # save_results(
     #     filtered_reordered_coords,
     #     filtered_reordered_spot_weights,
-    #     filename="slmsuite/nv_blob_detection/nv_blob_1271nvs_reordered.npz",
+    #     filename="slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz",
     # )
 
     # # Plot the original image with circles around each NV

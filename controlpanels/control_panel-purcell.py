@@ -183,7 +183,7 @@ def do_optimize_readout_amp(nv_list):
     # num_reps = 150
     # num_runs = 5
     num_reps = 12
-    num_runs = 400
+    num_runs = 200
     min_amp = 0.8
     max_amp = 1.2
     return optimize_charge_state_histograms.optimize_readout_amp(
@@ -270,14 +270,14 @@ def do_dmd_crosstalk_matrix(
     dmd_radius_px=8,
     num_reps=200,
     num_runs=1,
-    chain_path="dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1271.npz",
+    chain_path="dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1176.npz",
 ):
     print("len(nv_list_all):", len(nv_list_all))
 
     source_inds = [
         int(i)
         for i in dmd_crosstalk_matrix.get_center_dmd_indices(
-            n=1100,
+            n=1176,
             chain_path=chain_path,
         )
         if int(i) < len(nv_list_all)
@@ -1430,7 +1430,7 @@ def do_opx_constant_ac():
     opx.constant_ac(
         [],  # Digital channels
         [7],  # Analog channels
-        [0.11],  # Analog voltages
+        [0.15],  # Analog voltages
         [0],  # Analog frequencies
     )
     # opx.constant_ac([4])  # Just laser
@@ -1619,18 +1619,31 @@ def load_nv_coords(
     x_max=450,
     y_min=0,
     y_max=450,
+    edge_tol=1.0,
 ):
-    data = np.load(file_path, allow_pickle=True)
-    nv_coordinates = data["nv_coordinates"]
+    with np.load(file_path, allow_pickle=True) as data:
+        nv_coordinates = np.asarray(data["nv_coordinates"], dtype=np.float32)
 
-    # Create a mask based on the min/max thresholds for x and y
     mask = (
-        (nv_coordinates[:, 0] >= x_min)
-        & (nv_coordinates[:, 0] <= x_max)
-        & (nv_coordinates[:, 1] >= y_min)
-        & (nv_coordinates[:, 1] <= y_max)
+        (nv_coordinates[:, 0] >= x_min - edge_tol)
+        & (nv_coordinates[:, 0] <= x_max + edge_tol)
+        & (nv_coordinates[:, 1] >= y_min - edge_tol)
+        & (nv_coordinates[:, 1] <= y_max + edge_tol)
     )
+
     nv_coordinates_clean = nv_coordinates[mask]
+
+    print("Original NVs:", len(nv_coordinates))
+    print("After x/y filter:", len(nv_coordinates_clean))
+
+    dropped_inds = np.where(~mask)[0]
+    print("Dropped NVs:", len(dropped_inds))
+
+    if len(dropped_inds) > 0:
+        print("Dropped indices:", dropped_inds.tolist())
+        print("Dropped coordinates:")
+        print(nv_coordinates[dropped_inds])
+
     return nv_coordinates_clean
 
 
@@ -1669,114 +1682,6 @@ def scan_equilateral_triangle(nv_sig, center_coord=(0, 0), radius=0.2):
         # print(f"Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         do_scanning_image_sample(nv_sig)
 
-# ----------------------------
-# Empirical calibration data
-# ----------------------------
-GREEN_AMP = np.array([0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.14, 0.16], dtype=float)
-GREEN_PWR = np.array([12, 162, 752, 2170, 4520, 7660, 11500, 15400], dtype=float)
-
-RED_AMP = np.array([0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.14, 0.16], dtype=float)
-RED_PWR = np.array([24, 303, 1430, 4160, 9000, 16200, 25000, 34200], dtype=float)
-
-GREEN_FREQ = np.array([90, 95, 100, 105, 110, 115, 120, 125], dtype=float)
-GREEN_FREQ_PWR = np.array([260, 310, 330, 350, 460, 340, 240, 140], dtype=float)
-
-RED_FREQ = np.array([55, 60, 65, 70, 75, 80, 85, 90], dtype=float)
-RED_FREQ_PWR = np.array([112, 200, 255, 260, 270, 260, 205, 110], dtype=float)
-
-
-def _interp_clipped(x, xp, fp):
-    """
-    1D interpolation with clipping at the calibration range.
-    Works with scalar or array x.
-    """
-    x = np.asarray(x, dtype=float)
-    x_clip = np.clip(x, xp[0], xp[-1])
-    return np.interp(x_clip, xp, fp)
-
-
-def make_aod_amp_scale_fn(
-    amp_pts,
-    pwr_pts,
-    freq_pts,
-    freq_pwr_pts,
-    ref_freq,
-    min_scale=0.5,
-    max_scale=2.0,
-):
-    """
-    Returns a function scale(freq, base_amp), where:
-      - freq is the AOD frequency in MHz
-      - base_amp is the current/global amplitude corresponding to scale=1
-      - output is multiplicative scale factor
-
-    Model:
-        P(a, f) ~ g(a) * h(f)
-    """
-    ref_freq_pwr = _interp_clipped(ref_freq, freq_pts, freq_pwr_pts)
-    rel_eff_pts = freq_pwr_pts / ref_freq_pwr  # h(f), normalized so h(ref_freq)=1
-
-    def scale(freq, base_amp):
-        freq = np.asarray(freq, dtype=float)
-        base_amp = float(base_amp)
-
-        # Power at reference frequency for current/base amplitude
-        target_pwr = _interp_clipped(base_amp, amp_pts, pwr_pts)
-
-        # Relative efficiency at requested frequency
-        rel_eff = _interp_clipped(freq, freq_pts, rel_eff_pts)
-        rel_eff = np.maximum(rel_eff, 1e-9)
-
-        # Power needed from amplitude curve to compensate freq loss
-        needed_pwr = target_pwr / rel_eff
-        needed_pwr = np.clip(needed_pwr, pwr_pts[0], pwr_pts[-1])
-
-        # Invert power->amplitude using the empirical amp sweep
-        needed_amp = _interp_clipped(needed_pwr, pwr_pts, amp_pts)
-
-        scale_factor = needed_amp / base_amp
-        scale_factor = np.clip(scale_factor, min_scale, max_scale)
-
-        if np.ndim(scale_factor) == 0:
-            return float(scale_factor)
-        return scale_factor
-
-    return scale
-
-
-# -------------------------------------------
-# Build compensators
-# Use peak-efficiency frequencies as reference
-# -------------------------------------------
-green_amp_scale_fn = make_aod_amp_scale_fn(
-    GREEN_AMP, GREEN_PWR,
-    GREEN_FREQ, GREEN_FREQ_PWR,
-    ref_freq=110.0,   # green peak
-    min_scale=0.5,
-    max_scale=2.0,
-)
-
-red_amp_scale_fn = make_aod_amp_scale_fn(
-    RED_AMP, RED_PWR,
-    RED_FREQ, RED_FREQ_PWR,
-    ref_freq=75.0,    # red peak
-    min_scale=0.5,
-    max_scale=2.0,
-)
-
-
-def get_freq_from_coords(coords, freq_index=0):
-    """
-    Extract the frequency coordinate used for this calibration.
-    If coords is scalar, returns it directly.
-    If coords is [fx, fy], pick freq_index.
-    """
-    arr = np.asarray(coords, dtype=float).ravel()
-    if len(arr) == 1:
-        return float(arr[0])
-    return float(arr[freq_index])
-
-
 
 ### Run the file
 if __name__ == "__main__":
@@ -1785,23 +1690,17 @@ if __name__ == "__main__":
     red_coords_key = f"coords-{red_laser}"
     pixel_coords_key = "pixel_coords"
     sample_name = "qnami"
-    # magnet_angle = 90
+    magnet_angle = 90
     date_str = "2026_02_20"
-    sample_coords = [-1.15, -0.50]
+    sample_coords = [-1.20, -0.75]
     z_coord = -1.7
-    # z_coord = -4.2
+    # z_coord = -4.0
     
-    # Load NV pixel coordinates1
-    pixel_coords_list = load_nv_coords(
-        # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_
-        # reordered.npz",   
-        # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz",   
-        # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
-        # file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered_after_sample_rotation.npz",   
-        # file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered.npz",   
-        # file_path="slmsuite/nv_blob_detection/nv_blob_1267nvs_reordered.npz",   
-        file_path="slmsuite/nv_blob_detection/nv_blob_1271nvs_reordered.npz",   
-    ).tolist()
+    config = common.get_config_dict()
+    file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
+
+    pixel_coords_list = load_nv_coords(file_path=file_path).tolist()
+
     green_coords_list = [
         [
             round(coord, 3)
@@ -1829,87 +1728,73 @@ if __name__ == "__main__":
     print(f"Reference NV:{pixel_coords_list[0]}")
     print(f"Green Laser Coordinates: {green_coords_list[0]}")
     print(f"Red Laser Coordinates: {red_coords_list[0]}")
+
+    # --------------------------------------------------
+    # Print min/max of pixel, green AOD, and red AOD coords
+    # --------------------------------------------------
+    # green_arr = np.asarray(green_coords_list, dtype=float)
+    # red_arr = np.asarray(red_coords_list, dtype=float)
+
+    # print("green fx range:", green_arr[:, 0].min(), green_arr[:, 0].max())
+    # print("green fy range:", green_arr[:, 1].min(), green_arr[:, 1].max())
+    # print("red fx range:", red_arr[:, 0].min(), red_arr[:, 0].max())
+    # print("red fy range:", red_arr[:, 1].min(), red_arr[:, 1].max())
+
     # sys.exit()
     # pixel_coords_list =[
-    #     [194.73, 194.962], 
-    #     [319.989, 88.084], 
-    #     [205.258, 351.983], 
-    #     [16.982, 28.073],
+    #     [194.039, 189.963], 
+    #     [319.015, 83.106], 
+    #     [192.998, 353.981], 
+    #     [17.631, 41.395],
     # ]
     # green_coords_list = [
-    #     [97.655, 97.261],
-    #     [73.619, 114.583],
-    #     [98.538, 69.144],
-    #     [126.906, 130.271],
+    #     [97.768, 98.204],
+    #     [73.717, 115.483],
+    #     [100.744, 68.909],
+    #     [127.015, 127.768],
     # ]
     # red_coords_list = [
     #     [66.5, 66.9],
-    #     [47.3, 80.8],
-    #     [67.8, 44.4],
-    #     [90.8, 94.6],
+    #     [47.373, 81.539], 
+    #     [69.622, 44.316], 
+    #     [90.892, 92.654]
     # ]
-
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
-    # fmt: off
-    ### Johnson 205NVs
-    # pol_duration_list = [296, 296, 944, 944, 1288, 1288, 440, 440, 972, 972, 652, 652, 836, 836, 868, 868, 756, 756, 1904, 1904, 836, 836, 220, 220, 440, 440, 1616, 1616, 448, 448, 868, 868, 740, 740, 708, 708, 796, 796, 472, 472, 948, 948, 876, 876, 596, 596, 660, 660, 1040, 1040, 852, 852, 1424, 1424, 720, 720, 860, 860, 252, 252, 732, 732, 808, 808, 644, 644, 836, 836, 724, 724, 228, 228, 960, 960, 1812, 1812, 856, 856, 804, 804, 648, 648, 612, 612, 848, 848, 552, 552, 972, 972, 876, 876, 1028, 1028, 556, 556, 912, 912, 1732, 1732, 340, 340, 792, 792, 724, 724, 756, 756, 1272, 1272, 908, 908, 884, 884, 980, 980, 868, 868, 668, 668, 1236, 1236, 892, 892, 460, 460, 344, 344, 844, 844, 952, 952, 720, 720, 836, 836, 872, 872, 1004, 1004, 896, 896, 740, 740, 452, 452, 944, 944, 788, 788, 212, 212, 776, 776, 968, 968, 308, 308, 720, 720, 1376, 1376, 396, 396, 756, 756, 832, 832, 864, 864, 924, 924, 904, 904, 792, 792, 608, 608, 624, 624, 788, 788, 412, 412, 660, 660, 444, 444, 764, 764, 912, 912, 560, 560, 984, 984, 788, 788, 900, 900, 820, 820, 780, 780, 840, 840, 576, 576, 1560, 1560, 836, 836, 524, 524, 900, 900, 580, 580, 220, 220, 816, 816, 1224, 1224, 1048, 1048, 1108, 1108, 976, 976, 564, 564, 824, 824, 864, 864, 992, 992, 896, 896, 1320, 1320, 868, 868, 860, 860, 752, 752, 768, 768, 808, 808, 724, 724, 844, 844, 744, 744, 1236, 1236, 808, 808, 836, 836, 772, 772, 696, 696, 1344, 1344, 936, 936, 1124, 1124, 688, 688, 836, 836, 676, 676, 1408, 1408, 404, 404, 1072, 1072, 1304, 1304, 752, 752, 748, 748, 232, 232, 784, 784, 732, 732, 764, 764, 836, 836, 908, 908, 1436, 1436, 676, 676, 748, 748, 696, 696, 1064, 1064, 1652, 1652, 904, 904, 1308, 1308, 804, 804, 1532, 1532, 1528, 1528, 1336, 1336, 1008, 1008, 864, 864, 1896, 1896, 872, 872, 1276, 1276, 224, 224, 812, 812, 832, 832, 1136, 1136, 752, 752, 1284, 1284, 1296, 1296, 1096, 1096, 1672, 1672, 892, 892, 664, 664, 836, 836, 868, 868, 860, 860, 948, 948, 948, 948, 736, 736, 856, 856, 796, 796, 1028, 1028, 1588, 1588, 796, 796, 736, 736, 864, 864, 764, 764, 832, 832, 1916, 1916, 712, 712, 208, 208, 836, 836, 756, 756, 836, 836, 1024, 1024, 936, 936, 836, 836, 688, 688]
-    # scc_duration_list = [96, 72, 108, 84, 72, 72, 168, 60, 60, 132, 96, 60, 76, 112, 64, 88, 80, 72, 72, 112, 68, 96, 80, 84, 76, 92, 100, 76, 76, 128, 124, 68, 68, 96, 80, 76, 104, 92, 84, 152, 84, 108, 200, 136, 76, 80, 80, 112, 92, 68, 68, 76, 68, 68, 76, 60, 116, 64, 76, 68, 72, 68, 96, 80, 80, 96, 68, 76, 60, 72, 80, 96, 76, 72, 76, 96, 84, 136, 116, 76, 140, 68, 68, 116, 84, 68, 100, 96, 196, 84, 72, 104, 96, 120, 96, 68, 100, 96, 100, 72, 92, 72, 96, 136, 172, 136, 144, 152, 176, 92, 96, 68, 88, 76, 64, 144, 92, 88, 72, 108, 72, 112, 96, 108, 96, 184, 88, 116, 80, 76, 144, 136, 96, 80, 120, 100, 76, 96, 168, 188, 112, 112, 72, 76, 100, 116, 92, 164, 96, 196, 100, 76, 88, 100, 96, 144, 96, 84, 116, 84, 76, 108, 88, 96, 96, 96, 96, 96, 172, 116, 128, 100, 84, 84, 100, 96, 76, 96, 96, 96, 104, 88, 152, 108, 100, 104, 96, 124, 96, 124, 96, 116, 96, 132, 172, 128, 180, 96, 96, 124, 140, 96, 96, 120, 120]
-    # median = np.median(scc_duration_list)
-    # scc_duration_list = [int(median) if (val < 60 or val > 200) else val for val in scc_duration_list]
-    # pol_duration_list = [int((val/4)*4)  for val in scc_duration_list]
-    # pol_duration_list = [((val + 2) // 4) * 4 for val in pol_duration_list]
-    # print(pol_duration_list)
-    # sys.exit()
-    
-    # arranged_scc_amp_list = [None] * num_nvs
-    # arranged_scc_duration_list = [None] * num_nvs
-    # arranged_pol_duration_list = [None] * len(pol_duration_list)
-    # for i, idx in enumerate(include_indices):
-    # arranged_scc_duration_list[idx] = scc_duration_list[i]
-    # arranged_pol_duration_list[idx] = pol_duration_list[i]
-    # arranged_scc_amp_list[idx] = scc_amp_list[i]
-    # # # Assign back to original lists
-    # scc_duration_list = arranged_scc_duration_list
-    # pol_duration_list = arranged_pol_duration_list
-    # scc_amp_list = arranged_scc_amp_list
-
     scc_duration_list = [88] * num_nvs
     pol_duration_list = [1000] * num_nvs
-    
-    # -------------------------------------------
-    # Choose the current/base amplitudes
-    # scale=1.0 means these base values
-    # -------------------------------------------
-    pol_base_amp = 0.11   # current green CHARGE_POL amplitude
-    scc_base_amp = 0.13   # current red SCC amplitude
 
-    # IMPORTANT:
-    # freq_index should match the AOD axis you actually calibrated.
-    # If your calibration corresponds to the first AOD frequency, use 0.
-    # If second axis, use 1.
-    freq_index_green = 0
-    freq_index_red = 0
+    # -------------------------------------------
+    # Choose current/base amplitudes
+    # -------------------------------------------
+    pol_base_amp = 0.08   # green CHARGE_POL base amplitude
+    scc_base_amp = 0.10   # red SCC base amplitude
 
+    # Final amplitudes, using both AOD frequencies [fx, fy]
     charge_pol_amps = [
-        green_amp_scale_fn(
-            get_freq_from_coords(green_coords_list[i], freq_index_green),
-            pol_base_amp,
+        round(
+            widefield.green_amp_fn_2d(
+                green_coords_list[i],
+                pol_base_amp,
+            ),
+            3,
         )
         for i in range(num_nvs)
     ]
 
     scc_amp_list = [
-        red_amp_scale_fn(
-            get_freq_from_coords(red_coords_list[i], freq_index_red),
-            scc_base_amp,
+        round(
+            widefield.red_amp_fn_2d(
+                red_coords_list[i],
+                scc_base_amp,
+            ),
+            3,
         )
         for i in range(num_nvs)
     ]
 
-    # print("charge_pol_amps range:", min(charge_pol_amps), max(charge_pol_amps))
-    # print("scc_amp_list range:", min(scc_amp_list), max(scc_amp_list))
-    # print("charge_pol_amps range:", charge_pol_amps)
+    print("charge_pol_amps range:", min(charge_pol_amps), max(charge_pol_amps))
+    print("scc_amp_list range:", min(scc_amp_list), max(scc_amp_list))
     # sys.exit()
     # nv_list[i] will have the ith coordinates from the above lists
     nv_list: list[NVSig] = []
@@ -1944,7 +1829,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    # nv_sig.expected_counts = 1900
+    nv_sig.expected_counts = 1800
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:200]
     print(f"length of NVs list:{len(nv_list)}")
@@ -1966,16 +1851,19 @@ if __name__ == "__main__":
         # do_optimize_xyz(nv_sig) 
         # pos.set_xyz_on_nv(nv_sig)
         # piezo_voltage_to_pixel_calibration()
-
-        ### warning: this direclty iamge the laser spo, boftfor starign this makesure the red laser so set to 1mw on GUI
-        ### CAUTION: direct laser imaging, check power
-        ### CAUTION Set RED ≈ 0.1 mW • Exposure ≤ 0.1ms • Low em gain ≤ 10 / ND filter if needed
-        # do_red_calibration_image(
-        #     nv_sig,
-        #     red_coords_list, 
-        #     force_laser_key=VirtualLaserKey.RED_IMAGIN,
-        # )
         
+        # widefield.plot_aod_freqs_over_space(
+        #     pixel_coords_list,
+        #     green_coords_list,
+        #     red_coords_list,
+        #     marker_size=10,
+        # )
+        # widefield.plot_amp_distribution_over_space(
+        #     pixel_coords_list,
+        #     charge_pol_amps,
+        #     scc_amp_list,
+        # )
+
         do_compensate_for_drift(nv_sig)
         
         # do_red_calibration_image(
@@ -2012,9 +1900,6 @@ if __name__ == "__main__":
         # nv_sig.coords[Coo/*rdsKey.SAMPLE] = sample_coord
         # nv_sig.coords[CoordsKey.Z] = z
         
-        # print(f"[START] Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
-        # do_scanning_image_sample(nv_sig)
-
         # # --- Step 2: Loop over all other (x, y) positions ---
         # for x in x_range:
         #     for y in y_range:
@@ -2047,11 +1932,11 @@ if __name__ == "__main__":
  
         # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
-        do_dmd_crosstalk_matrix(
-            nv_list_all=nv_list,
-            num_sources=1100,
-            dmd_radius_px=6,
-        )
+        # do_dmd_crosstalk_matrix(
+        #     nv_list_all=nv_list,
+        #     num_sources=1176,
+        #     dmd_radius_px=6,
+        # )
         
         # do_dmd_turnoff_crosstalk_extinction_matrix(nv_list)
         

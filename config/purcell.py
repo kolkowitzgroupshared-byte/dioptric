@@ -37,19 +37,19 @@ red_laser_aod = "laser_COBO_638_aod"
 # calibration_coords_red = [[41.956, 88.653],[69.523, 40.383],[90.96, 93.205]]
 
 calibration_coords_pixel = [
-        [319.989, 88.084], 
-        [205.258, 351.983], 
-        [16.982, 28.073],
+    [319.015, 83.106], 
+    [192.998, 353.981], 
+    [17.631, 41.395],
 ]
 calibration_coords_green = [
-        [73.619, 114.583],
-        [98.538, 69.144],
-        [126.906, 130.271],
+    [73.717, 115.483],
+    [100.744, 68.909],
+    [127.015, 127.768],
 ]
 calibration_coords_red = [
-        [47.3, 80.8],
-        [67.8, 44.4],
-        [90.8, 94.6],
+    [47.373, 81.539], 
+    [69.622, 44.316], 
+    [90.892, 92.654]
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -139,19 +139,20 @@ config |= {
         ),
         "dmd_DLP6500_device_id": 0,
         "dmd_DLP6500_init_state": "pass_zero_block",
-        "dmd_DLP6500_zero_radius_px": 20,
+        "dmd_DLP6500_zero_radius_px": 30,
         # Important: load final NV-chain file, not just triangle_affine_onpass.npz
         "dmd_DLP6500_init_calib_path": (
             # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1277.npz"
             # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1274.npz"
-            "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1271.npz"
+            # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1271.npz"
+            "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1176.npz"
         ),
     },
     
     ###
     "SpatialCalibrations": {
         "active_nv_coords_path": (
-            "slmsuite/nv_blob_detection/nv_blob_1271nvs_reordered.npz"
+            "slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz"
         ),
         "slm_fourier_calib_path": (
             "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00015.h5"
@@ -994,7 +995,7 @@ opx_config = {
     "waveforms": {
         # Green AOD
         "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
-        # "green_aod_cw-opti": {"type": "constant", "sample": 0.11},
+        # "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
         "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
@@ -1004,9 +1005,9 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.20},
+        "yellow_imaging": {"type": "constant", "sample": 0.30},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.344}, #1460NVs
-        "yellow_charge_readout": {"type": "constant", "sample": 0.3614},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.2514},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.4014},
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},

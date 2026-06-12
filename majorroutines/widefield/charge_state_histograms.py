@@ -421,7 +421,7 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
     data = dm.get_raw_data(
         # file_stem="2026_03_17-20_16_39-qnami-nv0_2026_02_20", load_npz=True,
-        file_stem="2026_05_10-17_31_56-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_06_11-16_52_43-qnami-nv0_2026_02_20", load_npz=True
     )
-    process_and_plot(data, do_plot_histograms=False)
+    process_and_plot(data, do_plot_histograms=True)
     kpl.show(block=True)

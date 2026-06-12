@@ -19,6 +19,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
+from utils import common
 # Generate a phase .gif
 from IPython.display import Image
 
@@ -226,7 +227,7 @@ def circles():
 # region "nv phase calulation"
 def calibration_triangle():
     # Define parameters for the equilateral triangle
-    center = (720, 520)  # Center of the triangle
+    center = (710, 530)  # Center of the triangle
     # side_length = 80  # Length of each side of the triangle
     side_length = 150  # Length of each side of the triangle
 
@@ -326,15 +327,18 @@ def nuvu2thorcam_slm(
     M = np.asarray(data["M_nuvu_to_thorcam_slm"], dtype=np.float32)
     return apply_affine(M, coords)
 
-def load_nv_coords( 
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_reordered.npz",   
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz",   
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz",   
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered.npz",   
-    file_path="slmsuite/nv_blob_detection/nv_blob_1271nvs_reordered.npz",   
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1267nvs_reordered.npz",   
-):
+# file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_reordered.npz",   
+# file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz",   
+# file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
+# file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz",   
+# file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered.npz",   
+# file_path="slmsuite/nv_blob_detection/nv_blob_1271nvs_reordered.npz",   
+# file_path="slmsuite/nv_blob_detection/nv_blob_1267nvs_reordered.npz",   
+# file_path="slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz",  
+
+def load_nv_coords():
+    config = common.get_config_dict()
+    file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
     spot_weights = data["updated_spot_weights"]

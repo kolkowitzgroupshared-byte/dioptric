@@ -30,13 +30,14 @@ from utils import kplotlib as kpl
 # =============================================================================
 # Paths
 # =============================================================================
-
-NV_COORDS_PATH = "slmsuite/nv_blob_detection/nv_blob_1271nvs_reordered.npz"
+config = common.get_config_dict()
+# NV_COORDS_PATH = "slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz"
+NV_COORDS_PATH = config["SpatialCalibrations"]["active_nv_coords_path"]
 NUVU_TO_THORCAM_SLM_PATH = "slmsuite/calibration/nuvu_to_thorcam_slm.npz"
 DMD_TRIANGLE_CALIB_PATH = "dmdsuite/calibration/triangle_affine_onpass.npz"
 
 NUVU_TO_THORCAM_DMD_OUT = "dmdsuite/calibration/nuvu_to_thorcam_dmd.npz"
-DMD_CHAIN_OUT = "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1271.npz"
+DMD_CHAIN_OUT = "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1176.npz"
 
 DMD_WIDTH = 1920
 DMD_HEIGHT = 1080
@@ -63,9 +64,7 @@ BRIDGE_TRIANGLE_THORCAM_SLM = np.array(
 
 BRIDGE_TRIANGLE_NUVU = np.array(
     [
-        [84.501, 47.424],
-        [133.605, 312.774],
-        [337.960, 139.025],
+        [82.902, 43.808], [132.309, 308.986], [336.018, 135.547]
     ],
     dtype=np.float32,
 )
@@ -296,7 +295,6 @@ def choose_order(
 # =============================================================================
 # Plot
 # =============================================================================
-
 def plot_triangle_correspondence(
     triangle_nuvu,
     triangle_thorcam_slm,
