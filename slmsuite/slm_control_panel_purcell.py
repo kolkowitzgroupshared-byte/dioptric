@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from utils import common
+from utils import data_manager as dm
 # Generate a phase .gif
 from IPython.display import Image
 
@@ -352,6 +353,9 @@ def load_nv_coords():
 
 nuvu_pixel_coords, spot_weights = load_nv_coords()
 
+data_spot_weight = dm.get_raw_data(file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data")
+spot_weights = np.array(data_spot_weight["optimal_weights"])
+
 # Take first 200 NVs
 # nuvu_pixel_coords = nuvu_pixel_coords[:200]
 
@@ -378,7 +382,7 @@ def compute_and_write_nvs_phase():
         shape=(4096, 2048),
         spot_vectors=thorcam_coords_xy,
         basis="ij",
-        # spot_amp=spot_weights,
+        spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally

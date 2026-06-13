@@ -1078,6 +1078,248 @@ def expected_diffraction_spot_size(
     print("Rayleigh range [um]:", out["rayleigh_range_um"])
 
     return out
+
+import numpy as np
+
+
+def dmd_spot_and_scaling_summary(
+    # ----------------------------
+    # Diffraction estimate inputs
+    # ----------------------------
+    wavelength_um=0.589,
+    lens_focal_length_mm=180.0,
+    beam_diameter_mm=4.0,
+    dmd_mirror_pitch_um=7.56,
+
+    # ----------------------------
+    # Experimental measured values
+    # ----------------------------
+    measured_spots=198,
+    fwhm_major_median_dmd=2.691753387451172,
+    fwhm_minor_median_dmd=2.325435161590576,
+    fwhm_major_90pct_dmd=2.978878974914551,
+    nn_pitch_min_dmd=19.559860229492188,
+    nn_pitch_5pct_dmd=19.771042346954346,
+    nn_pitch_median_dmd=20.380401611328125,
+    radius_95_dmd=2.800337791442871,
+    radius_99_dmd=3.4632749557495117,
+    radius_99_90pct_dmd=3.832697629928589,
+    safe_radius_pitch_fraction=0.4,
+
+    # ----------------------------
+    # Diamond / microscope path
+    # ----------------------------
+    diamond_nv_pitch_um=2.6,
+    objective_mag=60.0,
+    relay_f1_mm=300.0,
+    relay_f2_mm=500.0,
+):
+    """
+    Summarize DMD spot size, DMD pitch, and effective magnification.
+
+    Optical path considered:
+        SLM/readout path
+        -> 180 mm lens
+        -> DMD at focal plane
+        -> retroreflected through same path
+        -> 300 mm lens
+        -> 500 mm lens
+        -> 60x, 0.95 NA objective
+        -> diamond
+
+    Notes:
+        The measured DMD pitch gives the effective diamond-to-DMD scaling directly.
+        The 300/500 relay is compared as a possible image relay, but the measured
+        scaling determines the actual effective magnification.
+    """
+
+    # ------------------------------------------------------------------
+    # 1. Diffraction-limited spot size at DMD
+    # ------------------------------------------------------------------
+    lens_focal_length_um = lens_focal_length_mm * 1000.0
+    beam_diameter_um = beam_diameter_mm * 1000.0
+
+    # Small-angle NA estimate for beam focused by the 180 mm lens.
+    NA = beam_diameter_mm / (2.0 * lens_focal_length_mm)
+
+    # Gaussian estimate.
+    gaussian_w0_um = wavelength_um / (np.pi * NA)  # 1/e^2 radius
+    gaussian_fwhm_diameter_um = 1.1774100225154747 * gaussian_w0_um
+
+    # Airy estimates.
+    airy_first_zero_radius_um = 1.22 * wavelength_um * lens_focal_length_um / beam_diameter_um
+    airy_first_zero_diameter_um = 2.0 * airy_first_zero_radius_um
+    airy_fwhm_diameter_um = 1.03 * wavelength_um * lens_focal_length_um / beam_diameter_um
+
+    rayleigh_range_um = np.pi * gaussian_w0_um**2 / wavelength_um
+
+    gaussian_fwhm_dmd = gaussian_fwhm_diameter_um / dmd_mirror_pitch_um
+    airy_fwhm_dmd = airy_fwhm_diameter_um / dmd_mirror_pitch_um
+    airy_first_zero_dmd = airy_first_zero_diameter_um / dmd_mirror_pitch_um
+
+    # ------------------------------------------------------------------
+    # 2. Experimental DMD pitch and spot size
+    # ------------------------------------------------------------------
+    measured_pitch_um = nn_pitch_median_dmd * dmd_mirror_pitch_um
+    pitch_min_um = nn_pitch_min_dmd * dmd_mirror_pitch_um
+    pitch_5pct_um = nn_pitch_5pct_dmd * dmd_mirror_pitch_um
+
+    fwhm_major_median_um = fwhm_major_median_dmd * dmd_mirror_pitch_um
+    fwhm_minor_median_um = fwhm_minor_median_dmd * dmd_mirror_pitch_um
+    fwhm_major_90pct_um = fwhm_major_90pct_dmd * dmd_mirror_pitch_um
+
+    # ------------------------------------------------------------------
+    # 3. Effective magnification from measured DMD pitch
+    # ------------------------------------------------------------------
+    measured_mag = measured_pitch_um / diamond_nv_pitch_um
+    inferred_relay_factor = measured_mag / objective_mag
+
+    relay_mag_500_over_300 = relay_f2_mm / relay_f1_mm
+    relay_mag_300_over_500 = relay_f1_mm / relay_f2_mm
+
+    expected_mag_objective_only = objective_mag
+    expected_mag_500_over_300 = objective_mag * relay_mag_500_over_300
+    expected_mag_300_over_500 = objective_mag * relay_mag_300_over_500
+
+    expected_pitch_objective_only_um = diamond_nv_pitch_um * expected_mag_objective_only
+    expected_pitch_500_over_300_um = diamond_nv_pitch_um * expected_mag_500_over_300
+    expected_pitch_300_over_500_um = diamond_nv_pitch_um * expected_mag_300_over_500
+
+    expected_pitch_objective_only_dmd = expected_pitch_objective_only_um / dmd_mirror_pitch_um
+    expected_pitch_500_over_300_dmd = expected_pitch_500_over_300_um / dmd_mirror_pitch_um
+    expected_pitch_300_over_500_dmd = expected_pitch_300_over_500_um / dmd_mirror_pitch_um
+
+    error_vs_objective_only_pct = 100.0 * (
+        measured_mag - expected_mag_objective_only
+    ) / expected_mag_objective_only
+
+    error_vs_500_over_300_pct = 100.0 * (
+        measured_mag - expected_mag_500_over_300
+    ) / expected_mag_500_over_300
+
+    error_vs_300_over_500_pct = 100.0 * (
+        measured_mag - expected_mag_300_over_500
+    ) / expected_mag_300_over_500
+
+    # ------------------------------------------------------------------
+    # 4. Map measured DMD spot sizes back to diamond plane
+    # ------------------------------------------------------------------
+    measured_fwhm_major_diamond_um = fwhm_major_median_um / measured_mag
+    measured_fwhm_minor_diamond_um = fwhm_minor_median_um / measured_mag
+    measured_fwhm_major_90pct_diamond_um = fwhm_major_90pct_um / measured_mag
+
+    diffraction_gaussian_fwhm_diamond_um = gaussian_fwhm_diameter_um / measured_mag
+    diffraction_airy_fwhm_diamond_um = airy_fwhm_diameter_um / measured_mag
+    diffraction_airy_first_zero_diamond_um = airy_first_zero_diameter_um / measured_mag
+
+    safe_radius_from_pitch_dmd = safe_radius_pitch_fraction * nn_pitch_5pct_dmd
+
+    # ------------------------------------------------------------------
+    # Print summary
+    # ------------------------------------------------------------------
+    print("\n=== Diffraction-limited DMD spot estimate ===")
+    print(f"wavelength [um]: {wavelength_um:.4f}")
+    print(f"180 mm lens focal length [mm]: {lens_focal_length_mm:.1f}")
+    print(f"beam diameter on 180 mm lens [mm]: {beam_diameter_mm:.2f}")
+    print(f"NA ≈ D/(2f): {NA:.5f}")
+    print(f"Gaussian 1/e^2 radius [um]: {gaussian_w0_um:.3f}")
+    print(f"Gaussian FWHM diameter [um]: {gaussian_fwhm_diameter_um:.3f}")
+    print(f"Airy FWHM diameter [um]: {airy_fwhm_diameter_um:.3f}")
+    print(f"Airy first-zero diameter [um]: {airy_first_zero_diameter_um:.3f}")
+    print(f"Gaussian FWHM [DMD mirrors]: {gaussian_fwhm_dmd:.3f}")
+    print(f"Airy FWHM [DMD mirrors]: {airy_fwhm_dmd:.3f}")
+    print(f"Airy first-zero [DMD mirrors]: {airy_first_zero_dmd:.3f}")
+    print(f"Rayleigh range [um]: {rayleigh_range_um:.1f}")
+
+    print("\n=== Experimental DMD spot-size summary ===")
+    print(f"Measured spots: {measured_spots}")
+    print(f"DMD FWHM major median [mirrors]: {fwhm_major_median_dmd:.3f}")
+    print(f"DMD FWHM minor median [mirrors]: {fwhm_minor_median_dmd:.3f}")
+    print(f"DMD FWHM major 90% [mirrors]: {fwhm_major_90pct_dmd:.3f}")
+    print(f"DMD FWHM major median [um]: {fwhm_major_median_um:.3f}")
+    print(f"DMD FWHM minor median [um]: {fwhm_minor_median_um:.3f}")
+
+    print("\n=== DMD pitch summary ===")
+    print(f"Nearest-neighbor pitch min [mirrors]: {nn_pitch_min_dmd:.3f}")
+    print(f"Nearest-neighbor pitch 5% [mirrors]: {nn_pitch_5pct_dmd:.3f}")
+    print(f"Nearest-neighbor pitch median [mirrors]: {nn_pitch_median_dmd:.3f}")
+    print(f"Nearest-neighbor pitch median [um]: {measured_pitch_um:.3f}")
+
+    print("\n=== Diamond-to-DMD magnification check ===")
+    print(f"Diamond NV pitch [um]: {diamond_nv_pitch_um:.3f}")
+    print(f"Measured DMD pitch [um]: {measured_pitch_um:.3f}")
+    print(f"Inferred diamond-to-DMD magnification: {measured_mag:.3f}x")
+    print(f"Objective nominal magnification: {objective_mag:.1f}x")
+    print(f"Inferred relay factor relative to 60x objective: {inferred_relay_factor:.3f}")
+    print(f"Error vs objective-only 60x: {error_vs_objective_only_pct:.2f}%")
+
+    print("\n=== Comparison with possible relay magnifications ===")
+    print(
+        f"Objective only expected pitch: "
+        f"{expected_pitch_objective_only_um:.2f} um = "
+        f"{expected_pitch_objective_only_dmd:.2f} mirrors"
+    )
+    print(
+        f"Objective × 500/300 expected pitch: "
+        f"{expected_pitch_500_over_300_um:.2f} um = "
+        f"{expected_pitch_500_over_300_dmd:.2f} mirrors "
+        f"(error {error_vs_500_over_300_pct:.1f}%)"
+    )
+    print(
+        f"Objective × 300/500 expected pitch: "
+        f"{expected_pitch_300_over_500_um:.2f} um = "
+        f"{expected_pitch_300_over_500_dmd:.2f} mirrors "
+        f"(error {error_vs_300_over_500_pct:.1f}%)"
+    )
+
+    print("\n=== DMD radius recommendation ===")
+    print(f"Median radius for ~95% power [mirrors]: {radius_95_dmd:.3f}")
+    print(f"Median radius for ~99% power [mirrors]: {radius_99_dmd:.3f}")
+    print(f"90% radius for ~99% power [mirrors]: {radius_99_90pct_dmd:.3f}")
+    print(
+        f"Safe radius from pitch, {safe_radius_pitch_fraction:.1f} × pitch_5% "
+        f"[mirrors]: {safe_radius_from_pitch_dmd:.3f}"
+    )
+    print(f"Recommended starting radius [mirrors]: {radius_99_90pct_dmd:.3f}")
+    print(f"Recommended starting radius rounded: {int(np.ceil(radius_99_90pct_dmd))} mirrors")
+
+    print("\n=== Spot size mapped back to diamond plane ===")
+    print(f"Measured major FWHM median [um on diamond]: {measured_fwhm_major_diamond_um:.3f}")
+    print(f"Measured minor FWHM median [um on diamond]: {measured_fwhm_minor_diamond_um:.3f}")
+    print(f"Measured major FWHM 90% [um on diamond]: {measured_fwhm_major_90pct_diamond_um:.3f}")
+    print(f"Diffraction Gaussian FWHM [um on diamond]: {diffraction_gaussian_fwhm_diamond_um:.3f}")
+    print(f"Diffraction Airy FWHM [um on diamond]: {diffraction_airy_fwhm_diamond_um:.3f}")
+    print(f"Diffraction Airy first-zero [um on diamond]: {diffraction_airy_first_zero_diamond_um:.3f}")
+
+    return {
+        "NA": NA,
+        "gaussian_w0_um": gaussian_w0_um,
+        "gaussian_fwhm_diameter_um": gaussian_fwhm_diameter_um,
+        "airy_fwhm_diameter_um": airy_fwhm_diameter_um,
+        "airy_first_zero_diameter_um": airy_first_zero_diameter_um,
+        "gaussian_fwhm_dmd": gaussian_fwhm_dmd,
+        "airy_fwhm_dmd": airy_fwhm_dmd,
+        "airy_first_zero_dmd": airy_first_zero_dmd,
+        "rayleigh_range_um": rayleigh_range_um,
+        "measured_pitch_um": measured_pitch_um,
+        "measured_mag": measured_mag,
+        "inferred_relay_factor": inferred_relay_factor,
+        "expected_pitch_objective_only_dmd": expected_pitch_objective_only_dmd,
+        "expected_pitch_500_over_300_dmd": expected_pitch_500_over_300_dmd,
+        "expected_pitch_300_over_500_dmd": expected_pitch_300_over_500_dmd,
+        "error_vs_objective_only_pct": error_vs_objective_only_pct,
+        "error_vs_500_over_300_pct": error_vs_500_over_300_pct,
+        "error_vs_300_over_500_pct": error_vs_300_over_500_pct,
+        "safe_radius_from_pitch_dmd": safe_radius_from_pitch_dmd,
+        "recommended_starting_radius_dmd": radius_99_90pct_dmd,
+        "recommended_starting_radius_rounded_dmd": int(np.ceil(radius_99_90pct_dmd)),
+        "measured_fwhm_major_diamond_um": measured_fwhm_major_diamond_um,
+        "measured_fwhm_minor_diamond_um": measured_fwhm_minor_diamond_um,
+        "diffraction_gaussian_fwhm_diamond_um": diffraction_gaussian_fwhm_diamond_um,
+        "diffraction_airy_fwhm_diamond_um": diffraction_airy_fwhm_diamond_um,
+    }
+
+
 # =============================================================================
 # Run
 # =============================================================================
@@ -1107,5 +1349,5 @@ if __name__ == "__main__":
         beam_diameter_mm=4.0,
         dmd_pitch_um=7.56,
     )   
-
+    # result = dmd_spot_and_scaling_summary()
     plt.show(block=True)
