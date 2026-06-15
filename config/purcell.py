@@ -39,17 +39,17 @@ red_laser_aod = "laser_COBO_638_aod"
 calibration_coords_pixel = [
     [319.015, 83.106], 
     [192.998, 353.981], 
-    [17.631, 41.395],
+    [17.982, 41.943],
 ]
 calibration_coords_green = [
-    [73.717, 115.483],
-    [100.744, 68.909],
-    [127.015, 127.768],
+    [73.727, 115.462],
+    [100.738, 68.901],
+    [126.958, 127.769],
 ]
 calibration_coords_red = [
-    [47.373, 81.539], 
-    [69.622, 44.316], 
-    [90.892, 92.654]
+    [47.253, 81.361], 
+    [69.609, 44.003], 
+    [90.617, 92.506]
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -996,7 +996,7 @@ opx_config = {
         # Green AOD
         "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
         # "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
-        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
+        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.08},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.15},
@@ -1007,7 +1007,7 @@ opx_config = {
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.30},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.344}, #1460NVs
-        "yellow_charge_readout": {"type": "constant", "sample": 0.2800},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.2872},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.4014},
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},

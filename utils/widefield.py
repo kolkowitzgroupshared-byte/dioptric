@@ -1717,6 +1717,12 @@ def draw_circle_on_nv(
 # ----------------------------
 # Empirical calibration data
 # ----------------------------
+import numpy as np
+
+
+# ----------------------------
+# Empirical calibration data
+# ----------------------------
 GREEN_AMP = np.array([0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.14, 0.16], dtype=float)
 GREEN_PWR = np.array([12, 162, 752, 2170, 4520, 7660, 11500, 15400], dtype=float)
 
@@ -1733,57 +1739,75 @@ RED_FREQ_PWR = np.array([112, 200, 255, 260, 270, 260, 205, 110], dtype=float)
 def _interp_clipped(x, xp, fp):
     """
     1D interpolation with clipping at the calibration range.
-    Works with scalar or array x.
     """
     x = np.asarray(x, dtype=float)
     x_clip = np.clip(x, xp[0], xp[-1])
     return np.interp(x_clip, xp, fp)
 
 
-def make_aod_amp_fn_2d_same_curve(
+def _fit_power_law_gamma(amp_pts, pwr_pts):
+    """
+    Fit P = C * amp^gamma.
+
+    Only returns gamma because for QUA multipliers we only need the exponent.
+    """
+    amp_pts = np.asarray(amp_pts, dtype=float)
+    pwr_pts = np.asarray(pwr_pts, dtype=float)
+
+    valid = (amp_pts > 0) & (pwr_pts > 0)
+    log_amp = np.log(amp_pts[valid])
+    log_pwr = np.log(pwr_pts[valid])
+
+    gamma, log_c = np.polyfit(log_amp, log_pwr, 1)
+    c = np.exp(log_c)
+
+    return float(gamma), float(c)
+
+
+def make_aod_qua_multiplier_fn_2d(
     amp_pts,
     pwr_pts,
     freq_pts,
     freq_pwr_pts,
     ref_freq,
-    min_amp=None,
-    max_amp=None,
-    min_scale=0.5,
-    max_scale=2.0,
+    min_qua_amp=0.5,
+    max_qua_amp=2.0,
+    min_rel_eff=1e-6,
+    return_debug=False,
 ):
     """
-    Return a function final_amp(coords, base_amp).
+    Return a function:
 
-    coords can be:
-        scalar frequency
-        [fx, fy]
+        qua_amp(coords)
+
+    This returns a dimensionless QUA amplitude multiplier.
+
+    Important:
+        No absolute base amplitude is used.
+        QUA amp = 1.0 means use the config pulse amplitude.
 
     Model:
-        P(amp, fx, fy) ≈ g(amp) * h(fx) * h(fy)
+        P(amp, fx, fy) ≈ amp^gamma * h(fx) * h(fy)
 
-    This assumes the two AOD axes have the same frequency-efficiency curve h(f).
-    If you later measure x-axis and y-axis separately, use separate h_x and h_y.
+    Therefore, to compensate frequency loss:
 
-    Returns:
-        final amplitude, not scale factor.
+        qua_amp = (1 / [h(fx) h(fy)])^(1 / gamma)
+
+    where gamma is fit from the empirical amplitude-power curve.
     """
+
     amp_pts = np.asarray(amp_pts, dtype=float)
     pwr_pts = np.asarray(pwr_pts, dtype=float)
     freq_pts = np.asarray(freq_pts, dtype=float)
     freq_pwr_pts = np.asarray(freq_pwr_pts, dtype=float)
 
-    if min_amp is None:
-        min_amp = float(amp_pts[0])
+    gamma, c = _fit_power_law_gamma(amp_pts, pwr_pts)
 
-    if max_amp is None:
-        max_amp = float(amp_pts[-1])
-
-    ref_freq_pwr = _interp_clipped(ref_freq, freq_pts, freq_pwr_pts)
+    ref_freq_pwr = float(_interp_clipped(ref_freq, freq_pts, freq_pwr_pts))
     rel_eff_pts = freq_pwr_pts / ref_freq_pwr
 
-    def final_amp(coords, base_amp):
+    def qua_amp(coords):
         coords = np.asarray(coords, dtype=float).ravel()
-        base_amp = float(base_amp)
 
         if len(coords) == 1:
             fx = float(coords[0])
@@ -1792,61 +1816,55 @@ def make_aod_amp_fn_2d_same_curve(
             fx = float(coords[0])
             fy = float(coords[1])
 
-        # Target power at reference frequency for the chosen base amplitude.
-        target_pwr = _interp_clipped(base_amp, amp_pts, pwr_pts)
+        rel_eff_x = float(_interp_clipped(fx, freq_pts, rel_eff_pts))
+        rel_eff_y = float(_interp_clipped(fy, freq_pts, rel_eff_pts))
 
-        # Relative AOD efficiency from both axes.
-        rel_eff_x = _interp_clipped(fx, freq_pts, rel_eff_pts)
-        rel_eff_y = _interp_clipped(fy, freq_pts, rel_eff_pts)
+        rel_eff = max(rel_eff_x * rel_eff_y, min_rel_eff)
 
-        rel_eff = rel_eff_x * rel_eff_y
-        rel_eff = max(float(rel_eff), 1e-9)
+        # Dimensionless QUA multiplier relative to config.
+        multiplier_unclipped = rel_eff ** (-1.0 / gamma)
+        multiplier = float(np.clip(multiplier_unclipped, min_qua_amp, max_qua_amp))
 
-        # Required power from amplitude curve.
-        needed_pwr = target_pwr / rel_eff
-        needed_pwr = np.clip(needed_pwr, pwr_pts[0], pwr_pts[-1])
+        if return_debug:
+            return {
+                "qua_amp": multiplier,
+                "qua_amp_unclipped": float(multiplier_unclipped),
+                "fx": fx,
+                "fy": fy,
+                "rel_eff_x": rel_eff_x,
+                "rel_eff_y": rel_eff_y,
+                "rel_eff_total": rel_eff,
+                "gamma": gamma,
+                "power_law_c": c,
+            }
 
-        # Invert power -> amplitude.
-        needed_amp = _interp_clipped(needed_pwr, pwr_pts, amp_pts)
+        return multiplier
 
-        # Also limit by allowed scale relative to base_amp.
-        min_allowed_amp = base_amp * min_scale
-        max_allowed_amp = base_amp * max_scale
-
-        needed_amp = np.clip(
-            needed_amp,
-            max(min_amp, min_allowed_amp),
-            min(max_amp, max_allowed_amp),
-        )
-
-        return float(needed_amp)
-
-    return final_amp
+    return qua_amp
 
 
 # -------------------------------------------
-# Build 2D compensators
+# Build QUA multiplier functions
 # -------------------------------------------
-green_amp_fn_2d = make_aod_amp_fn_2d_same_curve(
+green_qua_amp_fn_2d = make_aod_qua_multiplier_fn_2d(
     GREEN_AMP,
     GREEN_PWR,
     GREEN_FREQ,
     GREEN_FREQ_PWR,
     ref_freq=110.0,
-    min_scale=0.5,
-    max_scale=2.0,
+    min_qua_amp=0.5,
+    max_qua_amp=2.0,
 )
 
-red_amp_fn_2d = make_aod_amp_fn_2d_same_curve(
+red_qua_amp_fn_2d = make_aod_qua_multiplier_fn_2d(
     RED_AMP,
     RED_PWR,
     RED_FREQ,
     RED_FREQ_PWR,
     ref_freq=75.0,
-    min_scale=0.5,
-    max_scale=2.0,
+    min_qua_amp=0.5,
+    max_qua_amp=2.0,
 )
-
 
 def get_freq_from_coords(coords, freq_index=0):
     """

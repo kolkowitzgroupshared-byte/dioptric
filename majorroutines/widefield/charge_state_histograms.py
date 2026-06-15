@@ -308,8 +308,7 @@ def main(
     seq_file = "charge_state_histograms.py"
     num_steps = 1
 
-    # Turn the list of NV indices to ionize into a list of True/False for
-    # each NV according to whether it should be targeted
+    # Turn the list of NV indices to ionize into a list of True/False.
     if ion_do_target_inds is None:
         ion_do_target_list = None
     else:
@@ -324,21 +323,36 @@ def main(
     pulse_gen = tb.get_server_pulse_gen()
 
     ### Collect the data
-
     def run_fn(shuffled_step_inds):
+        # Green charge polarization parameters
         pol_coords_list, pol_duration_list, pol_amp_list = (
-            widefield.get_pulse_parameter_lists(nv_list, VirtualLaserKey.CHARGE_POL)
+            widefield.get_pulse_parameter_lists(
+                nv_list,
+                VirtualLaserKey.CHARGE_POL,
+            )
         )
-        ion_coords_list = widefield.get_coords_list(nv_list, VirtualLaserKey.ION)
+
+        # Ionization parameters
+        # This requires VirtualLaserKey.ION to be defined in each NVSig
+        # if you want per-NV duration/amplitude control.
+        ion_coords_list, ion_duration_list, ion_amp_list = (
+            widefield.get_pulse_parameter_lists(
+                nv_list,
+                VirtualLaserKey.ION,
+            )
+        )
+
         seq_args = [
             pol_coords_list,
             pol_duration_list,
             pol_amp_list,
             ion_coords_list,
+            ion_duration_list,
+            ion_amp_list,
             ion_do_target_list,
             verify_charge_states,
         ]
-        # print("seq_args:", seq_args)
+
         seq_args_string = tb.encode_seq_args(seq_args)
         pulse_gen.stream_load(seq_file, seq_args_string, num_reps)
 
@@ -352,7 +366,6 @@ def main(
         save_images_avg_reps=False,
         charge_prep_fn=charge_prep_fn,
     )
-
     ### Processing
 
     timestamp = dm.get_time_stamp()

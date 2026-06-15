@@ -836,7 +836,7 @@ if __name__ == "__main__":
     analyzed_file_id = "2026_06_12-11_05_20-optimization_processed_full_raw_data"
     analyzed = dm.get_raw_data(file_stem=analyzed_file_id, load_npz=True)
 
-    new_weights = (1, 2, 1)
+    new_weights = (0, 2, 1)
 
     # 1) recompute one NV with new weights
     nv_ind = 10

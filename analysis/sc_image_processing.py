@@ -52,11 +52,11 @@ if __name__ == "__main__":
     # )
     # file_stem="2026_03_11-22_09_46-qnami-nv0_2026_02_20",
     data = dm.get_raw_data(
-        file_stem="2026_06_08-11_41_53-qnami-nv0_2026_02_20",
+        file_stem="2026_06_14-13_03_23-qnami-nv0_2026_02_20",
         load_npz=True,
     )
 
-    img_ph = np.array(data["img_array"], dtype=float)
+    img_ph = np.array(data["diff_img_array"], dtype=float)
 
     # save_dir = r"C:\Users\matth\Downloads"
     # save_path = os.path.join(save_dir, f"{file_stem}_ref_img_array.svg")
@@ -102,11 +102,33 @@ if __name__ == "__main__":
 
     # 3) Plot
     fig, ax = plt.subplots()
+    vmin, vmax = np.percentile(img_ph, [0, 99.99])
+    fig, ax = plt.subplots()
     kpl.imshow(
         ax,
         img_ph,
-        cbar_label="Estimated photons",
+        clim=[vmin, vmax],
+        no_cbar=True,
     )
+    # png_path = "dmd_image_no_background.png"
+    # svg_path = "dmd_image_no_background.svg"
+
+    # fig.savefig(
+    #     png_path,
+    #     dpi=300,
+    #     transparent=True,
+    #     bbox_inches="tight",
+    #     pad_inches=0,
+    # )
+
+    # fig.savefig(
+    #     svg_path,
+    #     transparent=True,
+    #     bbox_inches="tight",
+    #     pad_inches=0,
+    # )
+
+    # ax.axis("off")
 
     # Optional: draw the removed region
     # circ = plt.Circle((x0, y0), radius, edgecolor="None", facecolor="black", linewidth=1.5)

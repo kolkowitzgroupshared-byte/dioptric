@@ -385,8 +385,8 @@ def do_optimize_green(nv_sig):
 
 def do_optimize_red(nv_sig, ref_nv_sig):
     opti_coords = []
-    # axes_list = [Axes.X, Axes.Y]
-    axes_list = [Axes.Y, Axes.X]
+    axes_list = [Axes.X, Axes.Y]
+    # axes_list = [Axes.Y, Axes.X]
     # shuffle(axes_list)
     for ind in range(1):
         axes = axes_list[ind]
@@ -435,7 +435,7 @@ def do_optimize_pixel(nv_sig):
 def do_optimize_loop(nv_list, coords_key):
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     opti_coords_list = []
-    for nv in nv_list:
+    for nv in nv_list[3:4]:
         if coords_key == green_laser:
             opti_coords = do_optimize_green(nv)
         elif coords_key == red_laser:
@@ -1468,23 +1468,23 @@ def do_opx_constant_ac():
     #     [101.0, 101.0],  # Analog frequencies
     # )
     # Green + red
-    # opx.constant_ac(
-    #     [4, 1],  # Digital channels
-    #     [3, 4, 2, 6],  # Analog channels
-    #     [0.08, 0.08, 0.08, 0.08],  # Analog voltages;
-    #     [126.906, 130.271, 90.8, 94.6],
-    # )
+    opx.constant_ac(
+        [4, 1],  # Digital channels
+        [3, 4, 2, 6],  # Analog channels
+        [0.08, 0.08, 0.08, 0.08],  # Analog voltages;
+        [126.958, 127.769, 90.817, 92.654],
+    )
     # green_coords_list = [
-    #     [97.655, 97.261],
-    #     [73.619, 114.583],
-    #     [98.538, 69.144],
-    #     [126.906, 130.271],
+    #     [97.763, 98.184],
+    #     [73.727, 115.462],
+    #     [100.738, 68.901],
+    #     [126.958, 127.769],
     # ]
     # red_coords_list = [
-    #     [66.5, 66.9],
-    #     [47.3, 80.8],
-    #     [67.8, 44.4],
-    #     [90.8, 94.6],
+    #     [66.845,  67.629],
+    #     [47.253, 81.361], 
+    #     [69.57, 44.316], 
+    #     [90.817, 92.654]
     # ]
     # red
     # opx.constant_ac(
@@ -1506,7 +1506,7 @@ def do_opx_constant_ac():
     #     [4, 1],  # Digital channels1
     #     [3, 4, 2, 6, 7],  # Analog channels
     #     [0.10, 0.10, 0.10, 0.10, 0.35],  # Analog voltages
-    #     [101, 101, 67, 67, 0],  # Analog frequencies
+    #     [99, 99, 67, 67, 0],  # Analog frequencies
     # )
     input("Press enter to stop...")
     # sig_gen.uwave_off()
@@ -1745,19 +1745,19 @@ if __name__ == "__main__":
     #     [194.039, 189.963], 
     #     [319.015, 83.106], 
     #     [192.998, 353.981], 
-    #     [17.631, 41.395],
+    #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.768, 98.204],
-    #     [73.717, 115.483],
-    #     [100.744, 68.909],
-    #     [127.015, 127.768],
+    #     [97.763, 98.184],
+    #     [73.727, 115.462],
+    #     [100.738, 68.901],
+    #     [126.958, 127.769],
     # ]
     # red_coords_list = [
-    #     [66.5, 66.9],
-    #     [47.373, 81.539], 
-    #     [69.622, 44.316], 
-    #     [90.892, 92.654]
+    #     [66.845,  67.629],
+    #     [47.253, 81.361], 
+    #     [69.609, 44.003], 
+    #     [90.617, 92.506]
     # ]
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
@@ -1765,36 +1765,26 @@ if __name__ == "__main__":
     pol_duration_list = [1000] * num_nvs
 
     # -------------------------------------------
-    # Choose current/base amplitudes
+    # amplitudes
     # -------------------------------------------
-    pol_base_amp = 0.08   # green CHARGE_POL base amplitude
-    scc_base_amp = 0.10   # red SCC base amplitude
-
-    # Final amplitudes, using both AOD frequencies [fx, fy]
     charge_pol_amps = [
         round(
-            widefield.green_amp_fn_2d(
-                green_coords_list[i],
-                pol_base_amp,
-            ),
-            3,
+            widefield.green_qua_amp_fn_2d(green_coords_list[i]),
+            4,
         )
         for i in range(num_nvs)
     ]
 
     scc_amp_list = [
         round(
-            widefield.red_amp_fn_2d(
-                red_coords_list[i],
-                scc_base_amp,
-            ),
-            3,
+            widefield.red_qua_amp_fn_2d(red_coords_list[i]),
+            4,
         )
         for i in range(num_nvs)
     ]
 
-    print("charge_pol_amps range:", min(charge_pol_amps), max(charge_pol_amps))
-    print("scc_amp_list range:", min(scc_amp_list), max(scc_amp_list))
+    print("charge_pol QUA multipliers range:", min(charge_pol_amps), max(charge_pol_amps))
+    print("scc QUA multipliers range:", min(scc_amp_list), max(scc_amp_list))
     # sys.exit()
     # nv_list[i] will have the ith coordinates from the above lists
     nv_list: list[NVSig] = []
@@ -1818,7 +1808,8 @@ if __name__ == "__main__":
             },
             pulse_amps={
                 # VirtualLaserKey.SCC: scc_amp_list[ind],
-                # VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
+                VirtualLaserKey.ION: scc_amp_list[ind],
+                VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
             },
         )
         nv_list.append(nv_sig)
@@ -1829,7 +1820,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    nv_sig.expected_counts = 1800
+    # nv_sig.expected_counts = 1900
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:200]
     print(f"length of NVs list:{len(nv_list)}")
@@ -1930,7 +1921,7 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        # do_charge_state_histograms(nv_list)
+        do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_dmd_crosstalk_matrix(
         #     nv_list_all=nv_list,

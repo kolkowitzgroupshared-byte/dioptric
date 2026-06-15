@@ -351,30 +351,68 @@ def load_nv_coords():
 # thorcam_coords_xy = nuvu2thorcam_calibration(nuvu_pixel_coords).T
 # thorcam_coords_xy = nuvu2thorcam_calibration(nuvu_pixel_coords).T
 
-nuvu_pixel_coords, spot_weights = load_nv_coords()
+# ----------------------------
+# Load coordinates and weights
+# ----------------------------
+nuvu_pixel_coords, _ = load_nv_coords()
 
-data_spot_weight = dm.get_raw_data(file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data")
-spot_weights = np.array(data_spot_weight["optimal_weights"])
+data_spot_weight = dm.get_raw_data(
+    # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+    file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+)
 
-# Take first 200 NVs
-# nuvu_pixel_coords = nuvu_pixel_coords[:200]
+spot_weights = np.asarray(data_spot_weight["optimal_weights"], dtype=float)
+spot_weights = np.squeeze(spot_weights)
 
-# if spot_weights is not None:
-#     spot_weights = spot_weights[:200]
-    
-thorcam_coords = nuvu2thorcam_slm(nuvu_pixel_coords)   # shape: (N, 2)
-thorcam_coords_xy = thorcam_coords.T                   # shape: (2, N)
-# test_inds = [0, 10, 100, 500, 1000]
-# thorcam_coords_xy = thorcam_coords[test_inds].T
-print("thorcam_coords shape:", thorcam_coords.shape)
-print("thorcam_coords_xy shape:", thorcam_coords_xy.shape)
-print("first ThorCam coord:", thorcam_coords[0])
+# If weights are 2D, choose one row/column as needed.
+# This keeps the most common case: shape (N,)
+if spot_weights.ndim != 1:
+    print("spot_weights original shape after squeeze:", spot_weights.shape)
+    spot_weights = spot_weights.ravel()
 
-zero_nuvu = np.array([186.796, 186.907], dtype=np.float32)
-zero_thor = nuvu2thorcam_slm(zero_nuvu)
+# Transform Nuvu coordinates to ThorCam coordinates
+thorcam_coords = nuvu2thorcam_slm(nuvu_pixel_coords)  # shape: (N, 2)
+thorcam_coords_xy = thorcam_coords.T                  # shape: (2, N)
 
-print("zero_nuvu:", zero_nuvu)
-print("mapped zero_thorcam_slm:", zero_thor)
+print("nuvu_pixel_coords shape:", nuvu_pixel_coords.shape)
+print("thorcam_coords shape:", thorcam_coords_xy.shape)
+print("spot_weights shape:", spot_weights.shape)
+
+# # Match lengths safely
+# num = min(len(nuvu_pixel_coords), len(spot_weights))
+# nuvu_pixel_coords =nuvu_pixel_coords[:num]
+# spot_weights = spot_weights[:num]
+
+# print("Using NVs:", num)
+# print("spot weight min/max:", np.nanmin(spot_weights), np.nanmax(spot_weights))
+
+# # ----------------------------
+# # Plot spot weights on ThorCam
+# # ----------------------------
+# fig, ax = plt.subplots(figsize=(7, 6))
+
+# sc = ax.scatter(
+#     nuvu_pixel_coords[:, 0],
+#     nuvu_pixel_coords[:, 1],
+#     c=spot_weights,
+#     s=20,
+#     cmap="viridis",
+# )
+
+# ax.set_xlabel("ThorCam x pixel")
+# ax.set_ylabel("ThorCam y pixel")
+# ax.set_title("Optimized SLM Spot Weights")
+# ax.set_aspect("equal")
+
+# # Camera/image coordinates usually have y increasing downward.
+# # Uncomment if you want the plot to match image display orientation.
+# ax.invert_yaxis()
+
+# cbar = fig.colorbar(sc, ax=ax)
+# cbar.set_label("Spot weight")
+
+# fig.tight_layout()
+# plt.show()
 # sys.exit()
 
 def compute_and_write_nvs_phase():
@@ -418,7 +456,7 @@ def write_pre_computed_circles():
     # cam_plot()
     
 def write_pre_computed_triangle():
-    phase = np.load("slmsuite\phase\slm_calibration_triangle_20260607_154242.npy")
+    phase = np.load("slmsuite\phase\slm_calibration_triangle_20260611_150224.npy")
     slm.write(phase, settle=True)
     # cam_plot()
 

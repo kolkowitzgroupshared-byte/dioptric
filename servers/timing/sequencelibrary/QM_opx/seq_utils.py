@@ -248,24 +248,61 @@ def macro_spin_polarize(duration: int = None, amp: float = None):
     qua.wait(buffer, spin_pol_laser_el)
 
 
-def macro_ionize(ion_coords_list: list[list[float]], do_target_list: list[bool] = None):
-    """Apply an ionization pulse to each coordinate pair in the passed coords_list.
+# def macro_ionize(ion_coords_list: list[list[float]], do_target_list: list[bool] = None):
+#     """Apply an ionization pulse to each coordinate pair in the passed coords_list.
 
-    Parameters
-    ----------
-    ion_coords_list : list[list[float]]
-        List of coordinate pairs to target
-    do_target_list : list[bool], optional
-        List of whether to target an NV or not. Used to skip certain NVs.
-        Default value None targets all NVs
+#     Parameters
+#     ----------
+#     ion_coords_list : list[list[float]]
+#         List of coordinate pairs to target
+#     do_target_list : list[bool], optional
+#         List of whether to target an NV or not. Used to skip certain NVs.
+#         Default value None targets all NVs
+#     """
+#     ion_laser_name = tb.get_physical_laser_name(VirtualLaserKey.ION)
+#     ion_pulse_name = "ion"
+#     macro_run_aods([ion_laser_name], aod_suffices=[ion_pulse_name])
+#     _macro_pulse_series(
+#         ion_laser_name, ion_pulse_name, ion_coords_list, do_target_list=do_target_list
+#     )
+
+def macro_ionize(
+    ion_coords_list: list[list[float]],
+    ion_duration_list: list[int] = None,
+    ion_amp_list: list[float] = None,
+    ion_duration_override: int = None,
+    ion_amp_override: float = None,
+    aod_accees_time_override: int = None,
+    do_target_list: list[bool] = None,
+):
     """
+    Apply an ionization pulse to each coordinate pair.
+
+    ion_amp_list should contain QUA amplitude multipliers:
+        1.0 = config base amplitude
+        1.2 = 20% above config
+        0.8 = 20% below config
+    """
+
     ion_laser_name = tb.get_physical_laser_name(VirtualLaserKey.ION)
     ion_pulse_name = "ion"
-    macro_run_aods([ion_laser_name], aod_suffices=[ion_pulse_name])
-    _macro_pulse_series(
-        ion_laser_name, ion_pulse_name, ion_coords_list, do_target_list=do_target_list
+
+    macro_run_aods(
+        laser_names=[ion_laser_name],
+        aod_suffices=[ion_pulse_name],
     )
 
+    _macro_pulse_series(
+        ion_laser_name,
+        ion_pulse_name,
+        ion_coords_list,
+        ion_duration_list,
+        ion_amp_list,
+        ion_duration_override,
+        ion_amp_override,
+        aod_accees_time_override,
+        do_target_list,
+    )
 
 def macro_scc(
     scc_coords_list: list[list[float]],
@@ -655,7 +692,76 @@ def macro_pulse_combo(
 # endregion
 
 
-# region Private QUA macros
+# # region Private QUA macros
+# def _macro_single_pulse(
+#     laser_name: str,
+#     coords: list[float],
+#     pulse_name: str,
+#     duration: int = None,
+#     amp: float = None,
+#     aod_accees_time: int = None,
+#     convert_to_Hz: bool = True,
+    
+# ):
+#     """Apply a single laser pulse at the passed coordinate pair. Does not align
+#     before beginning the macro
+
+#     Parameters
+#     ----------
+#     laser_name : str
+#         Name of laser to pulse
+#     coords : list[float]
+#         Coordinate pair to target
+#     pulse_name : str
+#         Name of the pulse to play
+#     duration : int, optional
+#         Pulse duration in cc, by default whatever is in config
+#     amp : float, optional
+#         Pulse amplitude, by default whatever is in config
+#     convert_to_Hz : bool, optional
+#         Whether to convert coords from MHz to Hz, by default True
+#     """
+#     # Setup
+#     laser_el = get_laser_mod_element(laser_name)
+#     x_el = f"ao_{laser_name}_x"
+#     y_el = f"ao_{laser_name}_y"
+
+#     global _cache_pol_reps_ind
+
+#     buffer = get_widefield_operation_buffer()
+#     if aod_accees_time is not None:
+#         accees_time = aod_accees_time
+#     else:
+#         accees_time = get_aod_access_time()
+        
+
+#     if convert_to_Hz:
+#         coords = [int(el * 10**6) for el in coords]
+
+#     if amp is None:
+#         qua.play("continue", x_el)
+#         qua.play("continue", y_el)
+#     else:
+#         with qua.if_(amp == 0):
+#             qua.play("continue", x_el)
+#             qua.play("continue", y_el)
+#         with qua.else_():
+#             macro_run_aods(
+#                 laser_names=[laser_name], aod_suffices=[pulse_name], amps=[amp]
+#             )
+#     qua.update_frequency(x_el, coords[0])
+#     qua.update_frequency(y_el, coords[1])
+
+#     # Pulse the laser
+#     qua.wait(accees_time + buffer, laser_el)
+#     if duration is None:
+#         qua.play(pulse_name, laser_el)
+#     elif isinstance(duration, int) and duration == 0:
+#         pass
+#     else:
+#         qua.play(pulse_name, laser_el, duration=duration)
+#     qua.wait(buffer, laser_el)
+
 def _macro_single_pulse(
     laser_name: str,
     coords: list[float],
@@ -664,43 +770,33 @@ def _macro_single_pulse(
     amp: float = None,
     aod_accees_time: int = None,
     convert_to_Hz: bool = True,
-    
 ):
-    """Apply a single laser pulse at the passed coordinate pair. Does not align
-    before beginning the macro
-
-    Parameters
-    ----------
-    laser_name : str
-        Name of laser to pulse
-    coords : list[float]
-        Coordinate pair to target
-    pulse_name : str
-        Name of the pulse to play
-    duration : int, optional
-        Pulse duration in cc, by default whatever is in config
-    amp : float, optional
-        Pulse amplitude, by default whatever is in config
-    convert_to_Hz : bool, optional
-        Whether to convert coords from MHz to Hz, by default True
     """
-    # Setup
+    Apply a single laser pulse at the passed coordinate pair.
+    Does not align before beginning the macro.
+    """
+
     laser_el = get_laser_mod_element(laser_name)
     x_el = f"ao_{laser_name}_x"
     y_el = f"ao_{laser_name}_y"
 
-    global _cache_pol_reps_ind
-
     buffer = get_widefield_operation_buffer()
+
     if aod_accees_time is not None:
         accees_time = aod_accees_time
     else:
         accees_time = get_aod_access_time()
-        
 
+    # Keep previous behavior.
+    # In _macro_pulse_series, coords are already QUA variables in Hz,
+    # so convert_to_Hz must be False there.
     if convert_to_Hz:
         coords = [int(el * 10**6) for el in coords]
 
+    # ------------------------------------------------------------
+    # Update AOD amplitude BEFORE frequency update.
+    # amp is QUA multiplier. amp=1.0 means config base amplitude.
+    # ------------------------------------------------------------
     if amp is None:
         qua.play("continue", x_el)
         qua.play("continue", y_el)
@@ -708,23 +804,34 @@ def _macro_single_pulse(
         with qua.if_(amp == 0):
             qua.play("continue", x_el)
             qua.play("continue", y_el)
+
         with qua.else_():
             macro_run_aods(
-                laser_names=[laser_name], aod_suffices=[pulse_name], amps=[amp]
+                laser_names=[laser_name],
+                aod_suffices=[pulse_name],
+                amps=[amp],
             )
+
+    # ------------------------------------------------------------
+    # Then update AOD frequencies.
+    # ------------------------------------------------------------
     qua.update_frequency(x_el, coords[0])
     qua.update_frequency(y_el, coords[1])
 
-    # Pulse the laser
+    # ------------------------------------------------------------
+    # Wait after amplitude + frequency update before laser pulse.
+    # Increase aod_accees_time_override if amp settling is slow.
+    # ------------------------------------------------------------
     qua.wait(accees_time + buffer, laser_el)
+
     if duration is None:
         qua.play(pulse_name, laser_el)
     elif isinstance(duration, int) and duration == 0:
         pass
     else:
         qua.play(pulse_name, laser_el, duration=duration)
-    qua.wait(buffer, laser_el)
 
+    qua.wait(buffer, laser_el)
 
 def _macro_pulse_series(
     laser_name: str,
