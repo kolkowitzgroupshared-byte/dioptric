@@ -83,16 +83,14 @@ def extract_counts_1d(raw_data):
 def set_readout_mask_for_active_nvs(
     active_global_inds,
     dmd=None,
-    slm=None,
     dmd_radius_px=4,
     dmd_plane=230,
     use_dmd=True,
-    use_slm=False,
 ):
     """
-    Update DMD/SLM so that only active NVs are read out.
+    Update DMD so that only active NVs are read out.
 
-    Replace this with your actual DMD/SLM API calls.
+    Replace this with your actual DMD API calls.
 
     For your previous DMD code, something like this was used:
         dmd.pass_loaded_indices(json.dumps(active_global_inds), radius, plane)
@@ -113,14 +111,6 @@ def set_readout_mask_for_active_nvs(
             dmd_radius_px,
             dmd_plane,
         )
-
-    if use_slm:
-        if slm is None:
-            slm = tb.get_server_slm()
-
-        # Replace with your actual SLM update function.
-        # Example placeholder:
-        # slm.load_active_nv_mask(active_global_inds)
         pass
 
     time.sleep(0.05)
@@ -206,7 +196,6 @@ def adaptive_charge_initialize_to_nvm(
     dmd_radius_px=4,
     dmd_plane=230,
     use_dmd=True,
-    use_slm=False,
     save_images=False,
 ):
     """
@@ -281,13 +270,12 @@ def adaptive_charge_initialize_to_nvm(
             do_charge_polarize = True
             print("Mode: charge-polarize active NVs, then readout active NVs")
 
-        # Update DMD/SLM readout mask so only active NVs are exposed/read out.
+        # Update DMD readout mask so only active NVs are exposed/read out.
         set_readout_mask_for_active_nvs(
             active_global_inds,
             dmd_radius_px=dmd_radius_px,
             dmd_plane=dmd_plane,
             use_dmd=use_dmd,
-            use_slm=use_slm,
         )
 
         # Run one active-set attempt.
@@ -429,7 +417,6 @@ if __name__ == "__main__":
     #     dmd_radius_px=4,
     #     dmd_plane=230,
     #     use_dmd=True,
-    #     use_slm=False,
     #     save_images=False,
     # )
     pass

@@ -762,10 +762,10 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_06_10-23_19_31-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_06_14-18_44_06-qnami-nv0_2026_02_20", load_npz=True
     )
-    img_array = data["img_array"]
-    # img_array = np.array(data["ref_img_array"])
+    # img_array = data["img_array"]
+    img_array = np.array(data["ref_img_array"])
 
     # file_path="slmsuite/nv_blob_detection/nv_blob_6837nvs.npz"
     # file_path="slmsuite/nv_blob_detection/nv_blob_6904nvs.npz"

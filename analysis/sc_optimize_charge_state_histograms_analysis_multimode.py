@@ -5,16 +5,14 @@ and plot the difference
 Created on Fall 2024
 @author: saroj chand
 """
-
+import sys
+from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 from joblib import Parallel, delayed
 from scipy.optimize import curve_fit
 import analysis.bimodal_histogram as bh
-import sys
-from pathlib import Path
-import sys
-from pathlib import Path
+
 
 # Ensure this script's repo is first on sys.path
 repo_root = Path(__file__).resolve().parents[1]  # .../GitHub/dioptric

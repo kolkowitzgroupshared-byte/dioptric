@@ -110,15 +110,32 @@ def poisson_cdf(x, rate):
     return _calc_cdf(ProbDist.POISSON, x, rate)
 
 
+# def _calc_cdf(prob_dist, x, *params):
+#     """Cumulative distribution function for poisson pdf. Integrates
+#     up to and including x"""
+#     pdf = get_single_mode_pdf(prob_dist)
+#     x_floor = int(np.floor(x))
+#     val = 0
+#     for ind in range(x_floor):
+#         val += pdf(ind, *params)
+#     return val
+
 def _calc_cdf(prob_dist, x, *params):
-    """Cumulative distribution function for poisson pdf. Integrates
-    up to and including x"""
+    """
+    CDF for discrete count distributions.
+    Returns P(X <= floor(x)).
+    """
     pdf = get_single_mode_pdf(prob_dist)
     x_floor = int(np.floor(x))
-    val = 0
-    for ind in range(x_floor):
+
+    if x_floor < 0:
+        return 0.0
+
+    val = 0.0
+    for ind in range(x_floor + 1):
         val += pdf(ind, *params)
-    return val
+
+    return float(np.clip(val, 0.0, 1.0))
 
 
 def _safe_upper_lim(rate, nsig=5, min_lim=10, max_lim=50_000):
@@ -132,6 +149,34 @@ def _safe_upper_lim(rate, nsig=5, min_lim=10, max_lim=50_000):
     upper_cont = rmax + nsig * np.sqrt(max(rmax, 0.0))
     # inclusive integer bound with a reasonable floor/ceiling
     return int(min(max(int(np.ceil(upper_cont)), min_lim), max_lim))
+
+def _make_integer_histogram(counts_list):
+    """
+    Make a probability histogram for integer count data.
+
+    Returns:
+        x_vals      : integer count centers
+        hist        : probability per count value
+        hist_errs   : uncertainty of each probability bin
+        bin_counts  : raw shot counts in each bin
+    """
+    counts_list = np.asarray(counts_list, dtype=float).ravel()
+    counts_list = counts_list[np.isfinite(counts_list)]
+    counts_list = counts_list[counts_list >= 0]
+
+    xi = np.rint(counts_list).astype(int)
+    max_count = int(np.max(xi))
+
+    bin_counts = np.bincount(xi, minlength=max_count + 1).astype(float)
+    num_samples = float(np.sum(bin_counts))
+
+    x_vals = np.arange(max_count + 1, dtype=float)
+    hist = bin_counts / num_samples
+
+    # Probability uncertainty from shot noise
+    hist_errs = np.sqrt(np.maximum(bin_counts, 1.0)) / num_samples
+
+    return x_vals, hist, hist_errs, bin_counts
 
 
 def compound_poisson_pdf(z, rate):
@@ -270,26 +315,22 @@ def fit_bimodal_histogram(
 
     # no_plot = False
 
-    counts_list = counts_list.flatten()
+    counts_list = np.asarray(counts_list).flatten()
 
     # Remove outliers
     median = np.median(counts_list)
     std = np.std(counts_list)
-    counts_list = counts_list[counts_list < median + 10 * std]
+    if np.isfinite(std) and std > 0:
+        counts_list = counts_list[counts_list < median + 10 * std]
+
     num_samples = len(counts_list)
+    if num_samples < 50:
+        return None, None, None
 
-    # Histogram the counts
-    # counts_list = np.array([round(el) for el in counts_list])
-    max_count = round(max(counts_list))
-    x_vals = np.linspace(0, max_count, max_count + 1)
-    hist, bin_edges = np.histogram(
-        counts_list, bins=max_count + 1, range=(0, max_count), density=True
-    )
-
-    # Histogram error bars - assume poisson statistics for each bin's distribution
-    hist_errs = np.sqrt(hist / num_samples)
-    min_err = 1 / num_samples  # Error we would calculate for bin with one occurrence
-    hist_errs = np.where(hist_errs > min_err, hist_errs, min_err)  # Enforce no zeros
+    # Integer-count histogram
+    x_vals, hist, hist_errs, bin_counts = _make_integer_histogram(counts_list)
+    max_count = int(x_vals[-1])
+    num_samples = int(np.sum(bin_counts))
 
     ### Fit the histogram
     # Get guess params
@@ -298,6 +339,7 @@ def fit_bimodal_histogram(
     mean_dark_min = round(np.quantile(counts_list, 0.02))
     mean_bright_max = round(np.quantile(counts_list, 0.98))
     ratio_guess = 0.3
+    
     bounds = (-np.inf, np.inf)  # Default bounds
     if prob_dist is ProbDist.SKEW_GAUSSIAN:
         guess_params = [ratio_guess]
@@ -517,24 +559,28 @@ def _binom_weights(n: int, p: float) -> np.ndarray:
 
 def get_binomial_multinv_pdf(prob_dist: ProbDist, n_nvs: int):
     """
-    Mixture over k=0..N with binomial weights and rate_k = N*rate0 + k*delta.
+    Mixture over k=0..N with binomial weights and
+
+        lambda_k = bg + N*rate0 + k*delta
+
     Parameters:
-      p_minus in [0,1]
-      rate0 > 0 (per-NV NV0 rate)
-      delta >= 0 (increment per NV-)
-    Works best for ProbDist.COMPOUND_POISSON or ProbDist.POISSON.
+        p_minus : probability each NV is NV-
+        bg      : background/local offset counts
+        rate0   : per-NV NV0 contribution
+        delta   : extra counts per NV changing NV0 -> NV-
     """
     if prob_dist is ProbDist.COMPOUND_POISSON_WITH_IONIZATION:
         raise ValueError(
-            "Binomial multinv model is for *reference* histograms (no ionization)."
+            "Binomial multinv model is for reference histograms without ionization."
         )
 
     single_pdf = get_single_mode_pdf(prob_dist)
     coeff = _binom_coeffs(n_nvs)
     K = n_nvs + 1
 
-    def fn(x, p_minus, rate0, delta):
+    def fn(x, p_minus, bg, rate0, delta):
         p_minus = float(np.clip(p_minus, 0.0, 1.0))
+        bg = float(max(bg, 0.0))
         rate0 = float(max(rate0, 1e-9))
         delta = float(max(delta, 0.0))
 
@@ -547,17 +593,173 @@ def get_binomial_multinv_pdf(prob_dist: ProbDist, n_nvs: int):
         else:
             w = w / s
 
-        # lambda_k = N*rate0 + k*delta
         x_arr = np.asarray(x, dtype=float)
         y = np.zeros_like(x_arr, dtype=float)
-        base = n_nvs * rate0
+
+        base = bg + n_nvs * rate0
+
         for k in range(K):
             lam_k = base + k * delta
             y += w[k] * single_pdf(x_arr, lam_k)
+
         return y
 
     return fn
 
+
+def get_two_nv_unequal_pdf(prob_dist: ProbDist):
+    """
+    Two-NV unequal-brightness model.
+
+    Four configurations:
+        00, 10, 01, 11
+
+    Means:
+        bg + 2*rate0
+        bg + 2*rate0 + delta1
+        bg + 2*rate0 + delta2
+        bg + 2*rate0 + delta1 + delta2
+    """
+    single_pdf = get_single_mode_pdf(prob_dist)
+
+    def fn(x, p1, p2, bg, rate0, delta1, delta2):
+        p1 = float(np.clip(p1, 0.0, 1.0))
+        p2 = float(np.clip(p2, 0.0, 1.0))
+
+        bg = float(max(bg, 0.0))
+        rate0 = float(max(rate0, 1e-9))
+        delta1 = float(max(delta1, 0.0))
+        delta2 = float(max(delta2, 0.0))
+
+        x_arr = np.asarray(x, dtype=float)
+        y = np.zeros_like(x_arr, dtype=float)
+
+        base = bg + 2 * rate0
+
+        weights = [
+            (1 - p1) * (1 - p2),
+            p1 * (1 - p2),
+            (1 - p1) * p2,
+            p1 * p2,
+        ]
+
+        means = [
+            base,
+            base + delta1,
+            base + delta2,
+            base + delta1 + delta2,
+        ]
+
+        for w, lam in zip(weights, means):
+            y += w * single_pdf(x_arr, lam)
+
+        return y
+
+    return fn
+
+
+def fit_two_nv_unequal_histogram(
+    counts_list,
+    prob_dist: ProbDist,
+    no_print=True,
+    no_plot=True,
+    n_restarts: int = 8,
+    seed: int = 0,
+):
+    """
+    Fit two-NV unequal-brightness model.
+
+    popt = [p1, p2, bg, rate0, delta1, delta2]
+    """
+    from utils.tool_belt import curve_fit
+
+    counts_list = np.asarray(counts_list, dtype=float).ravel()
+    counts_list = counts_list[np.isfinite(counts_list)]
+    counts_list = counts_list[counts_list >= 0]
+
+    if counts_list.size < 50:
+        return None, None, None
+
+    median = np.median(counts_list)
+    std = np.std(counts_list)
+    if np.isfinite(std) and std > 0:
+        counts_list = counts_list[counts_list < median + 10 * std]
+
+    if counts_list.size < 50:
+        return None, None, None
+
+    x_vals, hist, hist_errs, bin_counts = _make_integer_histogram(counts_list)
+
+    q02 = float(np.quantile(counts_list, 0.02))
+    q15 = float(np.quantile(counts_list, 0.15))
+    q50 = float(np.quantile(counts_list, 0.50))
+    q85 = float(np.quantile(counts_list, 0.85))
+    q98 = float(np.quantile(counts_list, 0.98))
+
+    bg_guess = max(0.0, 0.25 * q02)
+    rate0_guess = max(1e-3, (q15 - bg_guess) / 2.0)
+
+    span = max(q98 - q15, 1e-3)
+    delta1_guess = max(1e-3, 0.4 * span)
+    delta2_guess = max(1e-3, 0.7 * span)
+
+    p1_guess = 0.7
+    p2_guess = 0.7
+
+    bounds = (
+        (0.0, 0.0, 0.0, 1e-6, 0.0, 0.0),
+        (1.0, 1.0, max(1.0, q15), max(1e-3, q98), max(1e-3, q98), max(1e-3, q98)),
+    )
+
+    fit_fn = get_two_nv_unequal_pdf(prob_dist)
+
+    rng = np.random.default_rng(seed)
+    best = None
+
+    for r in range(max(1, n_restarts)):
+        p0 = np.array(
+            [p1_guess, p2_guess, bg_guess, rate0_guess, delta1_guess, delta2_guess],
+            dtype=float,
+        )
+
+        if r > 0:
+            p0[0] = float(np.clip(p0[0] + 0.15 * rng.standard_normal(), 0.05, 0.95))
+            p0[1] = float(np.clip(p0[1] + 0.15 * rng.standard_normal(), 0.05, 0.95))
+            p0[2] = float(np.clip(p0[2] * (1.0 + 0.30 * rng.standard_normal()), bounds[0][2], bounds[1][2]))
+            p0[3] = float(np.clip(p0[3] * (1.0 + 0.25 * rng.standard_normal()), bounds[0][3], bounds[1][3]))
+            p0[4] = float(np.clip(p0[4] * (1.0 + 0.35 * rng.standard_normal()), bounds[0][4], bounds[1][4]))
+            p0[5] = float(np.clip(p0[5] * (1.0 + 0.35 * rng.standard_normal()), bounds[0][5], bounds[1][5]))
+
+        try:
+            popt, pcov, red_chi_sq = curve_fit(
+                fit_fn,
+                x_vals,
+                hist,
+                p0,
+                hist_errs,
+                bounds=bounds,
+            )
+
+            # Sort delta1/delta2 so output is easier to read
+            p1, p2, bg, rate0, d1, d2 = [float(v) for v in popt]
+            if d2 < d1:
+                popt = np.array([p2, p1, bg, rate0, d2, d1], dtype=float)
+
+            if (best is None) or (red_chi_sq < best[2]):
+                best = (popt, pcov, red_chi_sq)
+
+        except Exception:
+            continue
+
+    if best is None:
+        return None, None, None
+
+    popt, pcov, red_chi_sq = best
+
+    if not no_print:
+        print(f"[2NV unequal] popt={popt} red_chi_sq={red_chi_sq}")
+
+    return popt, pcov, red_chi_sq
 
 def fit_binomial_multinv_histogram(
     counts_list,
@@ -584,19 +786,12 @@ def fit_binomial_multinv_histogram(
     num_samples = len(counts_list)
     if num_samples < 50:
         return None, None, None
+    
+    x_vals, hist, hist_errs, bin_counts = _make_integer_histogram(counts_list)
+    max_count = int(x_vals[-1])
+    num_samples = int(np.sum(bin_counts))
 
-    max_count = int(round(float(np.max(counts_list))))
-    x_vals = np.linspace(0, max_count, max_count + 1)
-
-    hist, _ = np.histogram(
-        counts_list, bins=max_count + 1, range=(0, max_count), density=True
-    )
-
-    # histogram errors (same as your fitter) :contentReference[oaicite:3]{index=3}
-    hist_errs = np.sqrt(hist / num_samples)
-    min_err = 1 / num_samples
-    hist_errs = np.where(hist_errs > min_err, hist_errs, min_err)
-
+    # ---- Initial guesses from quantiles ----
     # ---- Initial guesses from quantiles ----
     q02 = float(np.quantile(counts_list, 0.02))
     q15 = float(np.quantile(counts_list, 0.15))
@@ -604,24 +799,34 @@ def fit_binomial_multinv_histogram(
     q98 = float(np.quantile(counts_list, 0.98))
     mean_tot = float(np.mean(counts_list))
 
-    # total rates for k=0 and k=N roughly live near low/high quantiles
-    rate0_guess = max(1e-3, q15 / n_nvs)
-    rateN_guess = max(rate0_guess + 1e-3, q65 / n_nvs)
-    delta_guess = max(1e-3, (rateN_guess - rate0_guess))  # per-NV increment
+    # background is a small baseline offset
+    bg_guess = max(0.0, 0.25 * q02)
 
-    # estimate p from mean_total ≈ N*(rate0 + p*delta)
-    mean_per = mean_tot / n_nvs
-    p_guess = (mean_per - rate0_guess) / max(delta_guess, 1e-9)
+    # low mode approximately bg + N*rate0
+    rate0_guess = max(1e-3, (q15 - bg_guess) / max(n_nvs, 1))
+
+    # spacing between charge manifolds
+    delta_guess = max(1e-3, (q98 - q15) / max(n_nvs, 1))
+
+    # estimate p from mean_total ≈ bg + N*rate0 + N*p*delta
+    p_guess = (mean_tot - bg_guess - n_nvs * rate0_guess) / max(
+        n_nvs * delta_guess, 1e-9
+    )
     p_guess = float(np.clip(p_guess, 0.05, 0.95))
 
-    # Bounds (conservative)
-    rate0_min = max(1e-6, q02 / max(n_nvs, 1))
+    # Bounds
+    bg_min = 0.0
+    bg_max = max(1.0, q15)
+
+    rate0_min = 1e-6
     rate0_max = max(rate0_min + 1e-3, q98 / max(n_nvs, 1))
-    delta_max = max(1e-3, (q98 - q02) / max(n_nvs, 1))
+
+    delta_min = 0.0
+    delta_max = max(1e-3, q98 - q02)
 
     bounds = (
-        (0.0, rate0_min, 0.0),
-        (1.0, rate0_max, delta_max),
+        (0.0, bg_min, rate0_min, delta_min),
+        (1.0, bg_max, rate0_max, delta_max),
     )
 
     fit_fn = get_binomial_multinv_pdf(prob_dist, n_nvs)
@@ -630,20 +835,33 @@ def fit_binomial_multinv_histogram(
     rng = np.random.default_rng(seed)
     best = None
     for r in range(max(1, n_restarts)):
-        p0 = np.array([p_guess, rate0_guess, delta_guess], dtype=float)
+        p0 = np.array([p_guess, bg_guess, rate0_guess, delta_guess], dtype=float)
         if r > 0:
             p0[0] = float(np.clip(p0[0] + 0.10 * rng.standard_normal(), 0.05, 0.95))
+
             p0[1] = float(
                 np.clip(
-                    p0[1] * (1.0 + 0.20 * rng.standard_normal()),
+                    p0[1] * (1.0 + 0.30 * rng.standard_normal()),
                     bounds[0][1],
                     bounds[1][1],
                 )
             )
+
             p0[2] = float(
-                np.clip(p0[2] * (1.0 + 0.20 * rng.standard_normal()), 0.0, bounds[1][2])
+                np.clip(
+                    p0[2] * (1.0 + 0.20 * rng.standard_normal()),
+                    bounds[0][2],
+                    bounds[1][2],
+                )
             )
 
+            p0[3] = float(
+                np.clip(
+                    p0[3] * (1.0 + 0.20 * rng.standard_normal()),
+                    bounds[0][3],
+                    bounds[1][3],
+                )
+            )
         try:
             popt, pcov, red_chi_sq = curve_fit(
                 fit_fn, x_vals, hist, p0, hist_errs, bounds=bounds
@@ -680,7 +898,7 @@ def determine_multithreshold_binomial_multinv(
 
     single_cdf = get_single_mode_cdf(prob_dist)
 
-    p_minus, rate0, delta = [float(v) for v in popt]
+    p_minus, bg, rate0, delta = [float(v) for v in popt]
     weights = _binom_weights(n_nvs, p_minus)  # length N+1
     K = n_nvs + 1
 
@@ -690,7 +908,7 @@ def determine_multithreshold_binomial_multinv(
 
     # CDF table: (K, Ngrid)
     cdfs = np.zeros((K, Ngrid), dtype=float)
-    base = n_nvs * max(rate0, 1e-9)
+    base = max(bg, 0.0) + n_nvs * max(rate0, 1e-9)
     delta = max(delta, 0.0)
     for k in range(K):
         lam_k = base + k * delta
@@ -751,7 +969,7 @@ def determine_threshold_any_minus_binomial_multinv(
     single_cdf = get_single_mode_cdf(prob_dist)
     single_pdf = get_single_mode_pdf(prob_dist)
 
-    p_minus, rate0, delta = [float(v) for v in popt]
+    p_minus, bg, rate0, delta = [float(v) for v in popt]
     weights = _binom_weights(n_nvs, p_minus)
     w0 = float(weights[0])
     wrest = 1.0 - w0
@@ -761,7 +979,7 @@ def determine_threshold_any_minus_binomial_multinv(
         fid = 1.0
         return (t, fid) if ret_fidelity else t
 
-    base = n_nvs * max(rate0, 1e-9)
+    base = max(bg, 0.0) + n_nvs * max(rate0, 1e-9)
     delta = max(delta, 0.0)
 
     # Build mixture CDF for rest (k>=1), normalized
@@ -797,34 +1015,54 @@ def analyze_charge_histogram_multinv_binomial(
     force_nvs: int | None = None,
     bic_extra_nv_penalty: float = 1.0,
     seed: int = 0,
+    include_unequal_2nv: bool = True,
 ):
     """
-    Try N=1..max_nvs (or force_nvs), fit binomial-structured model, select N by BIC
-    with an additional mild penalty per extra NV to discourage "always choose 3".
-    Returns a dict with consistent keys.
+    Try N=1..max_nvs, or force_nvs if given.
+    Fit binomial-structured multi-NV equal-brightness model and select N by BIC.
+
+    Main equal-brightness model:
+        lambda_k = bg + N*rate0 + k*delta
+
+    Extra diagnostic model:
+        2-NV unequal-brightness model
+
+    For compatibility, this returns the best equal-brightness model as the main fit.
+    The 2-NV unequal model is stored in candidate_results for comparison.
     """
+
     x = np.asarray(counts_list, dtype=float).ravel()
     x = x[np.isfinite(x)]
+    x = x[x >= 0]
+
     if x.size < 50:
         return {"ok": False, "reason": "too_few_samples"}
 
-    # same outlier trim as your fitter
+    # Outlier trim
     med = np.median(x)
     std = np.std(x)
     if np.isfinite(std) and std > 0:
         x = x[x < med + 10 * std]
 
-    max_count = int(round(float(np.max(x))))
+    if x.size < 50:
+        return {"ok": False, "reason": "too_few_samples_after_trim"}
+
+    # Integer-count histogram for likelihood
+    xi = np.rint(np.clip(x, 0, None)).astype(int)
+    max_count = int(np.max(xi))
     xs_int = np.arange(0, max_count + 1, dtype=float)
 
-    # histogram as counts for LL
-    xi = np.rint(np.clip(x, 0, None)).astype(int)
     bin_counts = np.bincount(xi, minlength=max_count + 1).astype(float)
     n_samp = float(np.sum(bin_counts))
 
     Ns = [int(force_nvs)] if force_nvs is not None else list(range(1, int(max_nvs) + 1))
-    best = None
 
+    best_equal = None
+    candidate_results = []
+
+    # --------------------------------------------------
+    # Equal-brightness models: 1nv_equal, 2nv_equal, 3nv_equal
+    # --------------------------------------------------
     for N in Ns:
         popt, pcov, red = fit_binomial_multinv_histogram(
             x,
@@ -835,56 +1073,170 @@ def analyze_charge_histogram_multinv_binomial(
             n_restarts=5,
             seed=seed + 19 * N,
         )
+
         if popt is None:
             continue
 
+        # popt = [p_minus, bg, rate0, delta]
+        p_minus, bg, rate0, delta = [float(v) for v in popt]
+
         pdf_fn = get_binomial_multinv_pdf(prob_dist, N)
         p = np.asarray(pdf_fn(xs_int, *popt), dtype=float)
+
+        # Defensive normalization
         p = np.clip(p, 1e-300, None)
-        p = p / float(np.sum(p))  # normalize defensively
+        p = p / float(np.sum(p))
 
         ll = float(np.sum(bin_counts * np.log(p)))
 
-        # parameter count: 3 + (N-1) "structural" penalty
-        k_free = 3 + (N - 1)
+        # Free parameters: p_minus, bg, rate0, delta
+        # plus structural penalty for larger N
+        k_free = 4 + (N - 1)
+
         bic = float(
             k_free * np.log(max(n_samp, 1.0))
             - 2.0 * ll
             + bic_extra_nv_penalty * (N - 1)
         )
 
-        # thresholds + fidelities
         thresholds, fid_multi = determine_multithreshold_binomial_multinv(
-            popt, prob_dist, N, x_max=max_count, ret_fidelity=True
+            popt,
+            prob_dist,
+            N,
+            x_max=max_count,
+            ret_fidelity=True,
         )
+
         thr_any, fid_any = determine_threshold_any_minus_binomial_multinv(
-            popt, prob_dist, N, x_max=max_count, ret_fidelity=True
+            popt,
+            prob_dist,
+            N,
+            x_max=max_count,
+            ret_fidelity=True,
         )
+
+        weights = _binom_weights(N, p_minus)
 
         res = dict(
             ok=True,
+            model=f"{N}nv_equal",
             prob_dist=prob_dist,
             n_nvs=int(N),
+
+            # Raw fit
             popt=popt,
             pcov=pcov,
+
+            # Explicit physical parameters
+            p_minus=p_minus,
+            bg=bg,
+            rate0=rate0,
+            delta=delta,
+
+            # Fit quality
             red_chi_sq=red,
             ll=ll,
             bic=bic,
-            weights=_binom_weights(N, float(popt[0])),
-            thresholds=thresholds,  # length N (multi-class)
-            threshold_any=thr_any,  # legacy binary (k=0 vs >=1)
+            k_free=k_free,
+            n_samp=n_samp,
+
+            # Classification
+            weights=weights,
+            thresholds=thresholds,
+            threshold_any=thr_any,
             fidelity_any=fid_any,
             fidelity_multiclass=fid_multi,
             x_max=max_count,
         )
 
-        if (best is None) or (res["bic"] < best["bic"]):
-            best = res
+        candidate_results.append(res)
 
-    if best is None:
+        if (best_equal is None) or (res["bic"] < best_equal["bic"]):
+            best_equal = res
+
+    if best_equal is None:
         return {"ok": False, "reason": "fit_failed"}
-    return best
 
+    # --------------------------------------------------
+    # Extra diagnostic candidate: 2-NV unequal-brightness model
+    # --------------------------------------------------
+    if include_unequal_2nv and (force_nvs is None or int(force_nvs) == 2):
+        popt, pcov, red = fit_two_nv_unequal_histogram(
+            x,
+            prob_dist,
+            no_print=True,
+            no_plot=True,
+            n_restarts=8,
+            seed=seed + 777,
+        )
+
+        if popt is not None:
+            pdf_fn = get_two_nv_unequal_pdf(prob_dist)
+            p = np.asarray(pdf_fn(xs_int, *popt), dtype=float)
+
+            p = np.clip(p, 1e-300, None)
+            p = p / float(np.sum(p))
+
+            ll = float(np.sum(bin_counts * np.log(p)))
+
+            # parameters: p1, p2, bg, rate0, delta1, delta2
+            k_free = 6
+
+            bic = float(
+                k_free * np.log(max(n_samp, 1.0))
+                - 2.0 * ll
+            )
+
+            p1, p2, bg, rate0, delta1, delta2 = [float(v) for v in popt]
+
+            res_unequal = dict(
+                ok=True,
+                model="2nv_unequal",
+                prob_dist=prob_dist,
+                n_nvs=2,
+
+                popt=popt,
+                pcov=pcov,
+
+                p1=p1,
+                p2=p2,
+                bg=bg,
+                rate0=rate0,
+                delta1=delta1,
+                delta2=delta2,
+
+                red_chi_sq=red,
+                ll=ll,
+                bic=bic,
+                k_free=k_free,
+                n_samp=n_samp,
+                x_max=max_count,
+
+                # No thresholds yet for unequal model
+                thresholds=None,
+                threshold_any=None,
+                fidelity_any=None,
+                fidelity_multiclass=None,
+            )
+
+            candidate_results.append(res_unequal)
+
+    # --------------------------------------------------
+    # Diagnostics: best candidate among all models
+    # --------------------------------------------------
+    best_any = min(candidate_results, key=lambda r: r["bic"])
+
+    best_equal["candidate_results"] = candidate_results
+    best_equal["best_candidate_model"] = best_any["model"]
+    best_equal["best_candidate_bic"] = best_any["bic"]
+    best_equal["best_equal_model"] = best_equal["model"]
+    best_equal["best_equal_bic"] = best_equal["bic"]
+    best_equal["unequal_2nv_beats_equal"] = (
+        best_any["model"] == "2nv_unequal"
+        and best_any["bic"] < best_equal["bic"]
+    )
+
+    return best_equal
 
 if __name__ == "__main__":
     kpl.init_kplotlib()

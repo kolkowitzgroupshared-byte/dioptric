@@ -178,14 +178,14 @@ def do_optimize_readout_duration(nv_list):
 
 
 def do_optimize_readout_amp(nv_list):
-    # num_steps = 21
-    num_steps = 18
+    num_steps = 24
+    # num_steps = 18
     # num_reps = 150
     # num_runs = 5
-    num_reps = 12
+    num_reps = 10
     num_runs = 200
-    min_amp = 0.8
-    max_amp = 1.2
+    min_amp = 0.5
+    max_amp = 1.5
     return optimize_charge_state_histograms.optimize_readout_amp(
         nv_list, num_steps, num_reps, num_runs, min_amp, max_amp
     )
@@ -295,7 +295,7 @@ def do_dmd_crosstalk_matrix(
         nv.representative = False
 
     nv_sub[0].representative = True
-    nv_sub[0].expected_counts = 1700.0
+    nv_sub[0].expected_counts = 1800.0
 
     print(f"num sources: {len(source_inds)}")
     print(f"num measured: {len(measured_inds)}")
@@ -435,7 +435,7 @@ def do_optimize_pixel(nv_sig):
 def do_optimize_loop(nv_list, coords_key):
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     opti_coords_list = []
-    for nv in nv_list[3:4]:
+    for nv in nv_list:
         if coords_key == green_laser:
             opti_coords = do_optimize_green(nv)
         elif coords_key == red_laser:
@@ -1748,21 +1748,22 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.763, 98.184],
-    #     [73.727, 115.462],
-    #     [100.738, 68.901],
-    #     [126.958, 127.769],
+    #     [97.779, 98.172],
+    #     [73.751, 115.459],
+    #     [100.761, 68.885],
+    #     [127.002, 127.767],
     # ]
     # red_coords_list = [
-    #     [66.845,  67.629],
-    #     [47.253, 81.361], 
-    #     [69.609, 44.003], 
-    #     [90.617, 92.506]
+    #     [66.999, 67.784],
+    #     [47.273, 81.359],
+    #     [69.628, 43.99],
+    #     [90.653, 92.505],
     # ]
+    
     num_nvs = len(pixel_coords_list)
     threshold_list = [None] * num_nvs
     scc_duration_list = [88] * num_nvs
-    pol_duration_list = [1000] * num_nvs
+    pol_duration_list = [2000] * num_nvs
 
     # -------------------------------------------
     # amplitudes
@@ -1807,7 +1808,7 @@ if __name__ == "__main__":
                 VirtualLaserKey.CHARGE_POL: pol_duration_list[ind],
             },
             pulse_amps={
-                # VirtualLaserKey.SCC: scc_amp_list[ind],
+                VirtualLaserKey.SCC: scc_amp_list[ind],
                 VirtualLaserKey.ION: scc_amp_list[ind],
                 VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
             },
@@ -1820,9 +1821,9 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    # nv_sig.expected_counts = 1900
+    nv_sig.expected_counts = 1800
     # nv_list = nv_list[::-1]  # flipping the order of NVs
-    # nv_list = nv_list[:200]
+    # nv_list = nv_list[:600]
     print(f"length of NVs list:{len(nv_list)}")
     # sys.exit()
     # endregion
@@ -1863,7 +1864,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)     
+        do_widefield_image_sample(nv_sig, 50)     
         
         # do_widefield_image_sample(nv_sig, 200)
 
@@ -1921,11 +1922,11 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        do_charge_state_histograms(nv_list)
+        # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_dmd_crosstalk_matrix(
         #     nv_list_all=nv_list,
-        #     num_sources=1176,
+        #     num_sources=20,
         #     dmd_radius_px=6,
         # )
         
@@ -1936,7 +1937,7 @@ if __name__ == "__main__":
 
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
-        # do_optimize_readout_amp(nv_list)
+        do_optimize_readout_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
     
         # do_optimize_readout_duration(nv_list)

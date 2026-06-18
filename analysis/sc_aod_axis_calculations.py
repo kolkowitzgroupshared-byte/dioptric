@@ -1,13 +1,24 @@
 # -*- coding: utf-8 -*-
 """
-Concise AOD axis calculation relative to rotated square NV/pillar array.
+AOD axis calculation relative to rotated square NV/pillar array.
 
-Outputs:
-    - Green/red affine residuals
-    - Pillar-axis estimate with square-lattice constraint
+This version includes:
+    - Raw affine fit for green/red AODs
+    - 90-degree constrained AOD fit for green/red AODs
+    - Square-lattice constrained pillar-axis estimate
     - Green/red/pillar angular mismatch
     - Suggested pillar-aligned 3-point calibration targets
     - One summary plot
+
+Model for 90-constrained AOD fit:
+    pixel = t + aod_x * u + aod_y * v
+
+with:
+    u = s1 * [cos(theta), sin(theta)]
+    v = s2 * [-sin(theta), cos(theta)]
+
+Therefore:
+    angle(u, v) = 90 degrees exactly.
 """
 
 import numpy as np
@@ -21,43 +32,47 @@ kpl.init_kplotlib()
 # INPUTS
 # =============================================================================
 
-REF_PIXEL = np.array([199.6929931640625, 201.93699645996094], dtype=float)
+REF_PIXEL = np.array([186.627, 177.289], dtype=float)
 
 calibration_coords_pixel = np.array(
     [
-        [199.693, 201.937], 
-        [342.93, 44.107], 
-        [204.188, 358.94], 
-        [26.876, 39.953],
+        [194.039, 189.963],
+        [319.015, 83.106],
+        [192.998, 353.981],
+        [17.982, 41.943],
     ],
     dtype=float,
 )
 
 calibration_coords_green = np.array(
     [
-        [99.688, 99.907],
-        [70.713, 125.418],
-        [102.296, 71.721],
-        [127.177, 132.538],
+        [97.763, 98.184],
+        [73.727, 115.462],
+        [100.738, 68.901],
+        [126.958, 127.769],
     ],
     dtype=float,
 )
 
 calibration_coords_red = np.array(
     [
-        [65.59, 65.255],
-        [42.505, 85.81],
-        [67.262, 42.154],
-        [88.161, 91.279],
+        [66.845, 67.629],
+        [47.253, 81.361],
+        [69.609, 44.003],
+        [90.617, 92.506],
     ],
     dtype=float,
 )
 
-npz_path = "slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered_after_sample_rotation.npz"
+npz_path = "slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz"
 
 TARGET_STEP_IN_LATTICE_SPACINGS = 15
 ROTATE_PILLAR_BY_90 = False
 SHOW_PLOT = True
+
+# If True, use 90-degree constrained AOD basis for final analysis.
+# If False, use raw affine basis.
+USE_90_CONSTRAINED_AOD = True
 
 
 # =============================================================================
@@ -65,6 +80,10 @@ SHOW_PLOT = True
 # =============================================================================
 
 def fit_affine(src, dst):
+    """
+    General affine fit:
+        dst = src @ A.T + t
+    """
     src = np.asarray(src, dtype=float)
     dst = np.asarray(dst, dtype=float)
 
@@ -76,11 +95,17 @@ def fit_affine(src, dst):
 
 
 def src_to_camera(src_pts, A, t):
+    """
+    Convert AOD/source coordinates to camera pixel coordinates.
+    """
     src_pts = np.asarray(src_pts, dtype=float)
     return src_pts @ A.T + t
 
 
 def camera_to_src(pixel_pts, A, t):
+    """
+    Convert camera pixel coordinates to AOD/source coordinates.
+    """
     pixel_pts = np.asarray(pixel_pts, dtype=float)
     return (pixel_pts - t) @ np.linalg.inv(A).T
 
@@ -92,6 +117,7 @@ def normalize(v):
 
 
 def normalize_cols(B):
+    B = np.asarray(B, dtype=float)
     return B / np.linalg.norm(B, axis=0, keepdims=True)
 
 
@@ -100,10 +126,17 @@ def angle_deg(v):
 
 
 def wrap_axis_angle_deg(angle):
+    """
+    Wrap an axis angle into [-90, +90) degrees.
+    Axis has 180-degree equivalence.
+    """
     return ((float(angle) + 90.0) % 180.0) - 90.0
 
 
 def axis_delta_deg(a, b):
+    """
+    Difference between two axis angles, respecting 180-degree axis symmetry.
+    """
     return ((float(a) - float(b) + 90.0) % 180.0) - 90.0
 
 
@@ -132,6 +165,10 @@ def report_affine_fit(name, src_pts, dst_pts, A, t):
     err = np.linalg.norm(residuals, axis=1)
 
     print(f"\n=== {name} affine fit ===")
+    print("A matrix:")
+    print(A)
+    print("t vector:")
+    print(t)
     print("RMS error [px]:", np.sqrt(np.mean(err**2)))
     print("max error [px]:", np.max(err))
     print("per-point error [px]:", err)
@@ -144,16 +181,198 @@ def axis_report(name, basis):
     e2 = basis[:, 1]
 
     print(f"\n=== {name} ===")
+    print("axis 1 vector:", e1)
+    print("axis 2 vector:", e2)
+
     print("axis 1 angle raw:", angle_deg(e1))
     print("axis 1 angle wrapped:", wrap_axis_angle_deg(angle_deg(e1)))
     print("axis 2 angle raw:", angle_deg(e2))
     print("axis 2 angle wrapped:", wrap_axis_angle_deg(angle_deg(e2)))
+
     print("axis 1 length:", np.linalg.norm(e1))
     print("axis 2 length:", np.linalg.norm(e2))
 
     cosang = np.dot(e1, e2) / (np.linalg.norm(e1) * np.linalg.norm(e2))
     cosang = np.clip(cosang, -1.0, 1.0)
-    print("inter-axis angle:", np.degrees(np.arccos(cosang)))
+    inter_axis_angle = np.degrees(np.arccos(cosang))
+    print("inter-axis angle:", inter_axis_angle)
+
+    return inter_axis_angle
+
+
+# =============================================================================
+# 90-DEGREE CONSTRAINED AOD FIT
+# =============================================================================
+
+def _aod_90_objective_for_theta(theta, src_c, dst_c):
+    """
+    For a fixed theta, solve best s1 and s2 analytically.
+
+    Model:
+        dst_c = x * s1 * r + y * s2 * rp
+
+    where:
+        r  = [cos(theta), sin(theta)]
+        rp = [-sin(theta), cos(theta)]
+
+    Returns:
+        objective, s1, s2
+    """
+    x = src_c[:, 0]
+    y = src_c[:, 1]
+
+    r = np.array([np.cos(theta), np.sin(theta)], dtype=float)
+    rp = np.array([-np.sin(theta), np.cos(theta)], dtype=float)
+
+    dst_r = dst_c @ r
+    dst_rp = dst_c @ rp
+
+    denom_x = np.sum(x**2)
+    denom_y = np.sum(y**2)
+
+    if denom_x < 1e-15:
+        s1 = 0.0
+    else:
+        s1 = np.sum(x * dst_r) / denom_x
+
+    if denom_y < 1e-15:
+        s2 = 0.0
+    else:
+        s2 = np.sum(y * dst_rp) / denom_y
+
+    pred = np.outer(x * s1, r) + np.outer(y * s2, rp)
+    resid = dst_c - pred
+    obj = float(np.sum(resid**2))
+
+    return obj, s1, s2
+
+
+def _golden_section_minimize_periodic(func, a, b, n_iter=80):
+    """
+    Simple pure-numpy golden-section search.
+    """
+    gr = (np.sqrt(5.0) - 1.0) / 2.0
+
+    c = b - gr * (b - a)
+    d = a + gr * (b - a)
+
+    fc = func(c)
+    fd = func(d)
+
+    for _ in range(n_iter):
+        if fc < fd:
+            b = d
+            d = c
+            fd = fc
+            c = b - gr * (b - a)
+            fc = func(c)
+        else:
+            a = c
+            c = d
+            fc = fd
+            d = a + gr * (b - a)
+            fd = func(d)
+
+    theta = 0.5 * (a + b)
+    return theta, func(theta)
+
+
+def fit_affine_90_constrained(src, dst, n_grid=720):
+    """
+    Fit an affine-like transform with constrained orthogonal columns.
+
+    Model:
+        dst = src @ A.T + t
+
+    with:
+        A[:, 0] = s1 * [cos(theta), sin(theta)]
+        A[:, 1] = s2 * [-sin(theta), cos(theta)]
+
+    Therefore the two AOD axes are exactly 90 degrees apart.
+
+    This allows different magnifications along the two AOD axes,
+    but no shear between them.
+    """
+    src = np.asarray(src, dtype=float)
+    dst = np.asarray(dst, dtype=float)
+
+    src_mean = np.mean(src, axis=0)
+    dst_mean = np.mean(dst, axis=0)
+
+    src_c = src - src_mean
+    dst_c = dst - dst_mean
+
+    def objective(theta):
+        obj, _, _ = _aod_90_objective_for_theta(theta, src_c, dst_c)
+        return obj
+
+    # Coarse search over 0 to pi because axis direction has 180-degree symmetry.
+    theta_grid = np.linspace(0.0, np.pi, n_grid, endpoint=False)
+    obj_grid = np.array([objective(th) for th in theta_grid])
+    best_idx = int(np.argmin(obj_grid))
+    theta0 = theta_grid[best_idx]
+
+    # Refine around the best coarse grid point.
+    step = np.pi / n_grid
+    a = theta0 - 2.0 * step
+    b = theta0 + 2.0 * step
+
+    theta_best, _ = _golden_section_minimize_periodic(objective, a, b)
+    theta_best = theta_best % np.pi
+
+    _, s1, s2 = _aod_90_objective_for_theta(theta_best, src_c, dst_c)
+
+    r = np.array([np.cos(theta_best), np.sin(theta_best)], dtype=float)
+    rp = np.array([-np.sin(theta_best), np.cos(theta_best)], dtype=float)
+
+    A90 = np.column_stack([s1 * r, s2 * rp])
+
+    # Translation after fixing A
+    t90 = dst_mean - src_mean @ A90.T
+
+    return A90, t90
+
+
+def enforce_90_keep_axis1(A):
+    """
+    Alternative simple method:
+    keep axis-1 direction fixed and rotate axis-2 to the nearest perpendicular.
+
+    This is not the final method used by default, but useful for comparison.
+    """
+    e1 = normalize(A[:, 0])
+    e2 = np.array([-e1[1], e1[0]], dtype=float)
+
+    if np.dot(e2, A[:, 1]) < 0:
+        e2 = -e2
+
+    s1 = np.linalg.norm(A[:, 0])
+    s2 = np.linalg.norm(A[:, 1])
+
+    A90 = np.column_stack([s1 * e1, s2 * e2])
+    return A90
+
+
+def refit_translation_for_fixed_A(src, dst, A):
+    """
+    Best translation after fixing A.
+    """
+    src = np.asarray(src, dtype=float)
+    dst = np.asarray(dst, dtype=float)
+    return np.mean(dst, axis=0) - np.mean(src, axis=0) @ A.T
+
+
+def fit_affine_90_keep_axis1(src, dst):
+    """
+    Simple post-processing method:
+        1. Fit raw affine.
+        2. Force second axis to be perpendicular to first.
+        3. Refit translation only.
+    """
+    A_raw, t_raw = fit_affine(src, dst)
+    A90 = enforce_90_keep_axis1(A_raw)
+    t90 = refit_translation_for_fixed_A(src, dst, A90)
+    return A90, t90, A_raw, t_raw
 
 
 # =============================================================================
@@ -184,6 +403,8 @@ def estimate_square_lattice_basis_initial(points, n_neighbors=4):
     weights = np.asarray(weights, dtype=float)
 
     phi = np.arctan2(vecs[:, 1], vecs[:, 0])
+
+    # Four-fold order parameter for square lattice.
     psi4 = np.sum(weights * np.exp(1j * 4 * phi)) / np.sum(weights)
     theta = np.angle(psi4) / 4.0
 
@@ -209,6 +430,10 @@ def fit_square_lattice_similarity(grid_ij, pixel_pts):
     with:
         u = [a, b]
         v = [-b, a]
+
+    This forces:
+        |u| = |v|
+        angle(u, v) = 90 degrees
     """
     G = np.asarray(grid_ij, dtype=float)
     P = np.asarray(pixel_pts, dtype=float)
@@ -300,7 +525,10 @@ def estimate_square_lattice_basis_constrained(
         clip_px = max(residual_clip_frac * pitch, min_residual_clip_px)
         active_new = resid_norm < clip_px
 
-        rms = float(np.sqrt(np.mean(resid_norm[active_new] ** 2)))
+        if np.sum(active_new) > 0:
+            rms = float(np.sqrt(np.mean(resid_norm[active_new] ** 2)))
+        else:
+            rms = np.inf
 
         print(
             f"square fit iter {it}: "
@@ -334,6 +562,10 @@ def estimate_square_lattice_basis_constrained(
 
 
 def orient_square_basis_to_reference(basis, ref_vec):
+    """
+    Choose among equivalent square-basis orientations so axis 1 is closest
+    to a reference vector.
+    """
     e1 = basis[:, 0]
     e2 = basis[:, 1]
     ref = normalize(ref_vec)
@@ -350,6 +582,9 @@ def orient_square_basis_to_reference(basis, ref_vec):
 
 
 def best_rigid_rotation_deg(from_basis, to_basis):
+    """
+    Best rotation angle that maps from_basis to to_basis.
+    """
     F = normalize_cols(from_basis)
     T = normalize_cols(to_basis)
 
@@ -371,6 +606,56 @@ def make_triplet_targets(anchor_pix, pillar_basis, pitch_px, step):
 
 
 # =============================================================================
+# EXTRA DIAGNOSTICS
+# =============================================================================
+
+def compare_raw_and_constrained(name, src_pts, dst_pts, A_raw, t_raw, A90, t90):
+    print(f"\n\n================ {name}: RAW VS 90-CONSTRAINED ================")
+
+    _, _, err_raw = report_affine_fit(
+        f"{name} RAW",
+        src_pts,
+        dst_pts,
+        A_raw,
+        t_raw,
+    )
+
+    _, _, err_90 = report_affine_fit(
+        f"{name} 90-CONSTRAINED",
+        src_pts,
+        dst_pts,
+        A90,
+        t90,
+    )
+
+    print(f"\n{name} RMS increase from enforcing 90 deg [px]:")
+    print(np.sqrt(np.mean(err_90**2)) - np.sqrt(np.mean(err_raw**2)))
+
+    axis_report(f"{name} RAW basis", A_raw)
+    axis_report(f"{name} 90-CONSTRAINED basis", A90)
+
+
+def report_basis_mismatch(green_basis, red_basis, pillar_basis):
+    green_ang = angle_deg(green_basis[:, 0])
+    red_ang = angle_deg(red_basis[:, 0])
+    pillar_ang = angle_deg(pillar_basis[:, 0])
+
+    print("\n=== Wrapped angle summary ===")
+    print("green wrapped:", wrap_axis_angle_deg(green_ang))
+    print("red wrapped:", wrap_axis_angle_deg(red_ang))
+    print("pillar wrapped:", wrap_axis_angle_deg(pillar_ang))
+
+    print("\n=== Axis mismatch relative to pillar ===")
+    print("green - pillar:", axis_delta_deg(green_ang, pillar_ang))
+    print("red   - pillar:", axis_delta_deg(red_ang, pillar_ang))
+    print("green - red:", axis_delta_deg(green_ang, red_ang))
+
+    print("\n=== Best rigid rotations into pillar basis ===")
+    print("green -> pillar:", best_rigid_rotation_deg(green_basis, pillar_basis))
+    print("red   -> pillar:", best_rigid_rotation_deg(red_basis, pillar_basis))
+
+
+# =============================================================================
 # PLOTTING
 # =============================================================================
 
@@ -378,42 +663,88 @@ def draw_basis(ax, origin, basis, label, color, axis_len=130):
     e1 = normalize(basis[:, 0]) * axis_len
     e2 = normalize(basis[:, 1]) * axis_len
 
-    ax.arrow(origin[0], origin[1], e1[0], e1[1],
-             length_includes_head=True, head_width=6, head_length=10,
-             linewidth=2.2, color=color)
+    ax.arrow(
+        origin[0],
+        origin[1],
+        e1[0],
+        e1[1],
+        length_includes_head=True,
+        head_width=6,
+        head_length=10,
+        linewidth=2.2,
+        color=color,
+    )
 
-    ax.arrow(origin[0], origin[1], e2[0], e2[1],
-             length_includes_head=True, head_width=6, head_length=10,
-             linewidth=2.2, color=color)
+    ax.arrow(
+        origin[0],
+        origin[1],
+        e2[0],
+        e2[1],
+        length_includes_head=True,
+        head_width=6,
+        head_length=10,
+        linewidth=2.2,
+        color=color,
+    )
 
     ax.text(origin[0] + e1[0] + 4, origin[1] + e1[1] + 4, f"{label} 1", color=color)
     ax.text(origin[0] + e2[0] + 4, origin[1] + e2[1] + 4, f"{label} 2", color=color)
 
 
-def plot_summary(nv_pixel, common_origin, calib_pixels, green_basis, red_basis, pillar_basis, target_pixels):
+def plot_summary(
+    nv_pixel,
+    common_origin,
+    calib_pixels,
+    green_basis,
+    red_basis,
+    pillar_basis,
+    target_pixels,
+):
     fig, ax = plt.subplots(figsize=(8, 6))
 
-    ax.scatter(nv_pixel[:, 0], nv_pixel[:, 1], s=8, alpha=0.35, color="gray", label="NVs")
-    ax.scatter(calib_pixels[:, 0], calib_pixels[:, 1], s=80, marker="s", color="black", label="AOD calib pixels")
+    ax.scatter(
+        nv_pixel[:, 0],
+        nv_pixel[:, 1],
+        s=8,
+        alpha=0.35,
+        color="gray",
+        label="NVs",
+    )
 
-    ax.scatter([common_origin[0]], [common_origin[1]], s=120, marker="x", color="red", label="Reference NV")
+    ax.scatter(
+        calib_pixels[:, 0],
+        calib_pixels[:, 1],
+        s=20,
+        marker="s",
+        color="black",
+        label="AOD calib pixels",
+    )
+
+    ax.scatter(
+        [common_origin[0]],
+        [common_origin[1]],
+        s=20,
+        marker="x",
+        color="red",
+        label="Reference NV",
+    )
 
     draw_basis(ax, common_origin, green_basis, "green", "limegreen")
     draw_basis(ax, common_origin, red_basis, "red", "crimson")
     draw_basis(ax, common_origin, pillar_basis, "pillar", "royalblue")
 
-    ax.scatter(
-        target_pixels[:, 0],
-        target_pixels[:, 1],
-        s=140,
-        marker="+",
-        linewidths=2.5,
-        color="gold",
-        label="Suggested targets",
-    )
+    # ax.scatter(
+    #     target_pixels[:, 0],
+    #     target_pixels[:, 1],
+    #     s=20,
+    #     marker="+",
+    #     linewidths=2.5,
+    #     color="gold",
+    #     label="Suggested targets",
+    # )
 
-    for i, p in enumerate(target_pixels):
-        ax.text(p[0] + 5, p[1] + 5, f"T{i}", color="gold")
+    # for i, p in enumerate(target_pixels):
+    #     ax.text(p[0] + 5, p[1] + 5, f"T{i}", color="gold")
 
     ax.set_title("AOD axes relative to pillar lattice")
     ax.set_xlabel("Pixel X")
@@ -439,45 +770,91 @@ def main():
 
     common_origin, ref_idx = choose_anchor_near_ref(nv_pixel, REF_PIXEL)
 
-    A_green, t_green = fit_affine(calibration_coords_green, calibration_coords_pixel)
-    A_red, t_red = fit_affine(calibration_coords_red, calibration_coords_pixel)
+    # -------------------------------------------------------------------------
+    # Raw affine fits
+    # -------------------------------------------------------------------------
+    A_green_raw, t_green_raw = fit_affine(
+        calibration_coords_green,
+        calibration_coords_pixel,
+    )
+
+    A_red_raw, t_red_raw = fit_affine(
+        calibration_coords_red,
+        calibration_coords_pixel,
+    )
+
+    # -------------------------------------------------------------------------
+    # 90-degree constrained AOD fits
+    # -------------------------------------------------------------------------
+    A_green_90, t_green_90 = fit_affine_90_constrained(
+        calibration_coords_green,
+        calibration_coords_pixel,
+    )
+
+    A_red_90, t_red_90 = fit_affine_90_constrained(
+        calibration_coords_red,
+        calibration_coords_pixel,
+    )
+
+    compare_raw_and_constrained(
+        "GREEN",
+        calibration_coords_green,
+        calibration_coords_pixel,
+        A_green_raw,
+        t_green_raw,
+        A_green_90,
+        t_green_90,
+    )
+
+    compare_raw_and_constrained(
+        "RED",
+        calibration_coords_red,
+        calibration_coords_pixel,
+        A_red_raw,
+        t_red_raw,
+        A_red_90,
+        t_red_90,
+    )
+
+    # Choose which AOD calibration to use downstream.
+    if USE_90_CONSTRAINED_AOD:
+        A_green, t_green = A_green_90, t_green_90
+        A_red, t_red = A_red_90, t_red_90
+        print("\nUsing 90-degree constrained AOD calibration downstream.")
+    else:
+        A_green, t_green = A_green_raw, t_green_raw
+        A_red, t_red = A_red_raw, t_red_raw
+        print("\nUsing raw affine AOD calibration downstream.")
 
     green_basis = A_green.copy()
     red_basis = A_red.copy()
 
-    report_affine_fit("GREEN", calibration_coords_green, calibration_coords_pixel, A_green, t_green)
-    report_affine_fit("RED", calibration_coords_red, calibration_coords_pixel, A_red, t_red)
-
+    # -------------------------------------------------------------------------
+    # Pillar square-lattice basis
+    # -------------------------------------------------------------------------
     pillar_basis, pillar_info = estimate_square_lattice_basis_constrained(
         nv_pixel,
         ref_pixel=REF_PIXEL,
     )
 
+    # Orient pillar axis 1 to be close to red AOD axis 1.
     pillar_basis = orient_square_basis_to_reference(pillar_basis, red_basis[:, 0])
 
     if ROTATE_PILLAR_BY_90:
         pillar_basis = rotate_basis_90(pillar_basis)
 
-    axis_report("GREEN basis", green_basis)
-    axis_report("RED basis", red_basis)
+    # -------------------------------------------------------------------------
+    # Axis reports
+    # -------------------------------------------------------------------------
+    axis_report("GREEN final basis", green_basis)
+    axis_report("RED final basis", red_basis)
     axis_report("PILLAR basis", pillar_basis)
 
-    green_ang = angle_deg(green_basis[:, 0])
-    red_ang = angle_deg(red_basis[:, 0])
-    pillar_ang = angle_deg(pillar_basis[:, 0])
+    report_basis_mismatch(green_basis, red_basis, pillar_basis)
 
-    print("\n=== Wrapped angle summary ===")
-    print("green wrapped:", wrap_axis_angle_deg(green_ang))
-    print("red wrapped:", wrap_axis_angle_deg(red_ang))
-    print("pillar wrapped:", wrap_axis_angle_deg(pillar_ang))
-    print("green - pillar:", axis_delta_deg(green_ang, pillar_ang))
-    print("red   - pillar:", axis_delta_deg(red_ang, pillar_ang))
-    print("green - red:", axis_delta_deg(green_ang, red_ang))
-
-    print("\n=== Best rigid rotations into pillar basis ===")
-    print("green -> pillar:", best_rigid_rotation_deg(green_basis, pillar_basis))
-    print("red   -> pillar:", best_rigid_rotation_deg(red_basis, pillar_basis))
-
+    # -------------------------------------------------------------------------
+    # Suggested pillar-aligned target pixels
+    # -------------------------------------------------------------------------
     pitch_px = pillar_info["pitch_px"]
     target_pixels = make_triplet_targets(
         common_origin,
@@ -517,10 +894,23 @@ def main():
 
     return {
         "common_origin": common_origin,
+        "ref_idx": ref_idx,
+
+        "A_green_raw": A_green_raw,
+        "t_green_raw": t_green_raw,
+        "A_red_raw": A_red_raw,
+        "t_red_raw": t_red_raw,
+
+        "A_green_90": A_green_90,
+        "t_green_90": t_green_90,
+        "A_red_90": A_red_90,
+        "t_red_90": t_red_90,
+
         "green_basis": green_basis,
         "red_basis": red_basis,
         "pillar_basis": pillar_basis,
         "pillar_info": pillar_info,
+
         "target_pixels": target_pixels,
         "green_target_coords": green_target_coords,
         "red_target_coords": red_target_coords,
@@ -528,4 +918,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    results = main()

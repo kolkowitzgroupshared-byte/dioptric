@@ -42,14 +42,14 @@ calibration_coords_pixel = [
     [17.982, 41.943],
 ]
 calibration_coords_green = [
-    [73.727, 115.462],
-    [100.738, 68.901],
-    [126.958, 127.769],
+    [73.751, 115.459],
+    [100.761, 68.885],
+    [127.002, 127.767],
 ]
 calibration_coords_red = [
-    [47.253, 81.361], 
-    [69.609, 44.003], 
-    [90.617, 92.506]
+    [47.273, 81.359],
+    [69.628, 43.99],
+    [90.653, 92.505]
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {

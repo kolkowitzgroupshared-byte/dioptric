@@ -101,6 +101,10 @@ def macro(
 
             if do_ionize:
                 macro_ionize_sub(reverse=False)
+                # Wait after ionization before charge readout
+                post_ion_wait_cc = seq_utils.convert_ns_to_cc(200_000)  # 200 us
+                qua.align()
+                qua.wait(post_ion_wait_cc, "do_camera_trigger")
 
         else:
             with qua.if_(random_order == 1):
@@ -108,12 +112,20 @@ def macro(
 
                 if do_ionize:
                     macro_ionize_sub(reverse=False)
+                    # Wait after ionization before charge readout
+                    post_ion_wait_cc = seq_utils.convert_ns_to_cc(200_000)  # 200 us
+                    qua.align()
+                    qua.wait(post_ion_wait_cc, "do_camera_trigger")
 
             with qua.else_():
                 macro_polarize_sub(reverse=True)
 
                 if do_ionize:
                     macro_ionize_sub(reverse=True)
+                    # Wait after ionization before charge readout
+                    post_ion_wait_cc = seq_utils.convert_ns_to_cc(200_000)  # 200 us
+                    qua.align()
+                    qua.wait(post_ion_wait_cc, "do_camera_trigger")
 
         seq_utils.macro_charge_state_readout(
             readout_duration_override,
