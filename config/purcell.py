@@ -139,7 +139,7 @@ config |= {
         ),
         "dmd_DLP6500_device_id": 0,
         "dmd_DLP6500_init_state": "pass_zero_block",
-        "dmd_DLP6500_zero_radius_px": 30,
+        "dmd_DLP6500_zero_radius_px": 20,
         # Important: load final NV-chain file, not just triangle_affine_onpass.npz
         "dmd_DLP6500_init_calib_path": (
             # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1277.npz"
@@ -293,7 +293,7 @@ config |= {
             },
             VirtualLaserKey.WIDEFIELD_IMAGING: {
                 "physical_name": yellow_laser,
-                "duration": 60e6,
+                "duration": 50e6,
                 # "duration": 24e6,
             },
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 10e3},
@@ -736,6 +736,9 @@ opx_config = {
             },
             "operations": {"on": "do_on", "off": "do_off"},
         },
+        # ---------------------------------------------------------------------
+        # Red / 638 AOD elements
+        # ---------------------------------------------------------------------
         "ao_laser_COBO_638_x": {
             "singleInput": {"port": ("con1", 2)},
             "intermediate_frequency": 75e6,
@@ -748,6 +751,21 @@ opx_config = {
                 "continue": "ao_off",
             },
         },
+
+        # New second red x tone for row-pair multiplexing
+        "ao_laser_COBO_638_x_2": {
+            "singleInput": {"port": ("con1", 2)},
+            "intermediate_frequency": 75e6,
+            "sticky": {"analog": True, "duration": ramp_to_zero_duration},
+            "operations": {
+                "aod_cw": "red_aod_cw-scc",
+                "aod_cw-opti": "red_aod_cw-opti",
+                "aod_cw-ion": "red_aod_cw-ion",
+                "aod_cw-scc": "red_aod_cw-scc",
+                "continue": "ao_off",
+            },
+        },
+
         "ao_laser_COBO_638_y": {
             "singleInput": {"port": ("con1", 6)},
             "intermediate_frequency": 75e6,
@@ -760,6 +778,10 @@ opx_config = {
                 "continue": "ao_off",
             },
         },
+
+        # ---------------------------------------------------------------------
+        # Green / 520 AOD elements
+        # ---------------------------------------------------------------------
         "ao_laser_INTE_520_x": {
             "singleInput": {"port": ("con1", 3)},
             "intermediate_frequency": 110e6,
@@ -774,6 +796,23 @@ opx_config = {
                 "continue": "ao_off",
             },
         },
+
+        # New second green x tone for row-pair multiplexing
+        "ao_laser_INTE_520_x_2": {
+            "singleInput": {"port": ("con1", 3)},
+            "intermediate_frequency": 110e6,
+            "sticky": {"analog": True, "duration": ramp_to_zero_duration},
+            "operations": {
+                "aod_cw": "green_aod_cw-charge_pol",
+                "aod_cw-opti": "green_aod_cw-opti",
+                "aod_cw-charge_pol": "green_aod_cw-charge_pol",
+                "aod_cw-spin_pol": "green_aod_cw-spin_pol",
+                "aod_cw-shelving": "green_aod_cw-shelving",
+                "aod_cw-scc": "green_aod_cw-scc",
+                "continue": "ao_off",
+            },
+        },
+
         "ao_laser_INTE_520_y": {
             "singleInput": {"port": ("con1", 4)},
             "intermediate_frequency": 110e6,
@@ -996,7 +1035,7 @@ opx_config = {
         # Green AOD
         "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
         # "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
-        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.08},
+        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.09},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.15},
@@ -1005,9 +1044,8 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.30},
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.344}, #1460NVs
-        "yellow_charge_readout": {"type": "constant", "sample": 0.2872},
+        "yellow_imaging": {"type": "constant", "sample": 0.35},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.3503}, #1460NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.4014},
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},

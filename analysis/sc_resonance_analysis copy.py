@@ -435,9 +435,10 @@ if __name__ == "__main__":
     # =============================================================================
 
     # FILE_STEM = "2026_06_16-02_26_28-qnami-nv0_2026_02_20"
-    FILE_STEM = "2026_06_16-21_08_58-qnami-nv0_2026_02_20"
+    # FILE_STEM = "2026_06_16-21_08_58-qnami-nv0_2026_02_20"
     # FILE_STEM = "2026_06_17-07_16_02-qnami-nv0_2026_02_20"
-
+    FILE_STEM = "2026_06_18-07_09_51-qnami-nv0_2026_02_20"
+    
     NV_CHECK = 10          # NV/pillar index to inspect
     FREQ_CHECK = None      # None = pool all microwave freqs; or set e.g. 5
     LOW_MODE_Q = 0.15      # lower quantile used as NV0/background proxy

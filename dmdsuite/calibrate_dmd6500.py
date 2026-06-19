@@ -737,7 +737,7 @@ def calibrate_zero_order_onpass(
         cam=cam,
         cam_pts=cam_pts,
         axis="x",
-        positions=np.arange(880, 940, 4),
+        positions=np.arange(850, 1000, 2),
         stripe_width=stripe_width,
         plane=220,
         exposure=exposure,
@@ -750,7 +750,7 @@ def calibrate_zero_order_onpass(
         cam=cam,
         cam_pts=cam_pts,
         axis="y",
-        positions=np.arange(500, 560, 4),
+        positions=np.arange(450, 600, 2),
         stripe_width=stripe_width,
         plane=221,
         exposure=exposure,
@@ -1391,22 +1391,22 @@ if __name__ == "__main__":
 
     # To reprocess the new compressed DMD raw .npz, set this to the .npz path.
     LOAD_NPZ_PATH = None
-    # main(
-    #     load_file_id=LOAD_FILE_ID,
-    #     load_npz_path=LOAD_NPZ_PATH,
-    #     reuse_zero_order=False,
-    #     force_zero_order=True,
-    #     use_yellow=True,
-    #     yellow_channel=7,
-    #     yellow_amp=0.04,
-    # )
-    # take a quick image
-    do_thorcam_hardware_roi_with_yellow(
-    label="full-image-test",
-    exposure=0.0001,
-    yellow_amp=0.13,
-    roi_xywh=None,
+    main(
+        load_file_id=LOAD_FILE_ID,
+        load_npz_path=LOAD_NPZ_PATH,
+        reuse_zero_order=False,
+        force_zero_order=True,
+        use_yellow=True,
+        yellow_channel=7,
+        yellow_amp=0.03,
     )
+    # take a quick image
+    # do_thorcam_hardware_roi_with_yellow(
+    # label="full-image-test",
+    # exposure=0.0001,
+    # yellow_amp=0.08,
+    # roi_xywh=None,
+    # )
     # do_thorcam_hardware_roi_with_yellow(
     #     label="hardware-roi-test",
     #     exposure=0.0001,

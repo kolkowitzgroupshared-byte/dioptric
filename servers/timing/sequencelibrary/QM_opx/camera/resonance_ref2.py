@@ -16,7 +16,8 @@ from qm.simulate import SimulationConfig
 
 import utils.common as common
 from servers.timing.sequencelibrary.QM_opx import seq_utils
-from servers.timing.sequencelibrary.QM_opx.camera import base_scc_sequence
+# from servers.timing.sequencelibrary.QM_opx.camera import base_scc_sequence
+from servers.timing.sequencelibrary.QM_opx.camera import base_scc_sequence_pairs as base_scc_sequence
 
 
 def get_seq(
@@ -67,7 +68,7 @@ if __name__ == "__main__":
     config_module = common.get_config_module()
     config = config_module.config
     opx_config = config_module.opx_config
-    opx_config["pulses"]["yellow_spin_pol"]["length"] = 10e3
+    opx_config["pulses"]["yellow_spin_pol"]["length"] = 1e3
 
     qm_opx_args = config["DeviceIDs"]["QM_opx_args"]
     qmm = QuantumMachinesManager(**qm_opx_args)
@@ -76,20 +77,28 @@ if __name__ == "__main__":
     try:
         seq, seq_ret_vals = get_seq(
             [
-                [[108.477, 107.282], [109.356, 108.789]],
+                [[108.477, 107.282], [109.356, 107.282]],
                 [220, 220],
                 [1.0, 1.0],
-                [[73.558, 71.684], [74.227, 72.947]],
+                [[73.558, 71.684], [74.227, 71.684]],
                 [124, 124],
                 [1.0, 1.0],
                 [False, False],
                 [0],
+                # pairwise options
+                {
+                    "pairwise_init": True,
+                    "pairwise_scc": True,
+                    "y_tol_MHz": 0.05,
+                    "spin_pol": True,
+                    "aod_access_time_override": None,
+                },
             ],
             [70, 219],
             1,
         )
 
-        sim_config = SimulationConfig(duration=int(300e3 / 4))
+        sim_config = SimulationConfig(duration=int(200e3 / 4))
         sim = opx.simulate(seq, sim_config)
         samples = sim.get_simulated_samples()
         samples.con1.plot()

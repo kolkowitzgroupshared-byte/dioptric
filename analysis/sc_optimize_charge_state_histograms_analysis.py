@@ -6,6 +6,7 @@ Created on Fall 2024
 @author: saroj chand
 """
 
+import sys
 import matplotlib.pyplot as plt
 import numpy as np
 from joblib import Parallel, delayed
@@ -817,7 +818,7 @@ if __name__ == "__main__":
     file_id = "2026_03_22-21_49_52-qnami-nv0_2026_02_20"
     file_id = "2026_04_03-08_23_00-qnami-nv0_2026_02_20" ## 1277
     file_id = "2026_06_11-19_58_49-qnami-nv0_2026_02_20" ## 1176
-    
+    file_id = "2026_06_17-20_57_41-qnami-nv0_2026_02_20" ## 1176
     
     ## pol amp var
     # file_id = "2026_03_24-21_11_43-qnami-nv0_2026_02_20" ## 1460
@@ -829,17 +830,17 @@ if __name__ == "__main__":
     # raw_data = dm.get_raw_data(file_stem=file_id, load_npz=True)
     # process_and_plot(raw_data, do_plot=False)
     # process_and_plot_charge(raw_data, do_plot=True)
-    
-    
+    # sys.exit()
 
-
-    analyzed_file_id = "2026_06_12-11_05_20-optimization_processed_full_raw_data"
+    # analyzed_file_id = "2026_06_12-11_05_20-optimization_processed_full_raw_data"
+    analyzed_file_id = "2026_06_18-13_45_20-optimization_processed_full_raw_data"
+    
     analyzed = dm.get_raw_data(file_stem=analyzed_file_id, load_npz=True)
 
-    new_weights = (0, 2, 1)
+    new_weights = (0, 1, 1)
 
     # 1) recompute one NV with new weights
-    nv_ind = 10
+    nv_ind =1100
     opt_step, opt_prep, opt_readout, opt_score = recompute_optimal_from_processed(
         analyzed,
         nv_ind=nv_ind,
@@ -879,10 +880,9 @@ if __name__ == "__main__":
     timestamp = dm.get_time_stamp()
     weights_str = "_".join(str(w) for w in new_weights)
     file_name = f"recomputed_summary_w_{weights_str}_{analyzed_file_id}"
-    file_path = dm.get_file_path(__file__, timestamp, file_name)
-    dm.save_raw_data(summary_to_save, file_path)
-
-    print(f"Saved recomputed summary to: {file_path}")
+    # file_path = dm.get_file_path(__file__, timestamp, file_name)
+    # dm.save_raw_data(summary_to_save, file_path)
+    # print(f"Saved recomputed summary to: {file_path}")
 
     # 3) plot metric curves for one NV
     fig1 = plot_processed_nv_metrics(analyzed, nv_ind=nv_ind, weights=new_weights)
