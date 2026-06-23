@@ -146,6 +146,7 @@ config |= {
             # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1274.npz"
             # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1271.npz"
             "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1176.npz"
+            # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_814.npz"
         ),
     },
     
@@ -153,6 +154,7 @@ config |= {
     "SpatialCalibrations": {
         "active_nv_coords_path": (
             "slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz"
+            # "slmsuite/nv_blob_detection/nv_blob_814nvs_reordered_inside_dmd.npz"
         ),
         "slm_fourier_calib_path": (
             "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00015.h5"
@@ -186,8 +188,8 @@ config |= {
                 "physical_name": "sig_gen_STAN_sg394_0",
                 "uwave_power": 11.0,
                 "frequency": 2.7752,
-                "rabi_period": 256,
-                "pi_pulse": 128,
+                "rabi_period": 192,
+                "pi_pulse": 96,
                 "pi_on_2_pulse": 64,
             },
             1: {
@@ -1045,7 +1047,7 @@ opx_config = {
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.35},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.3503}, #1460NVs
+        "yellow_charge_readout": {"type": "constant", "sample": 0.3113}, #1460NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.4014},
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},

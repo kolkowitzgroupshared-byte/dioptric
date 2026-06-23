@@ -63,67 +63,6 @@ from utils.constants import VirtualLaserKey
 # =============================================================================
 # Plotting
 # =============================================================================
-
-# def plot_histograms(
-#     sig_counts_list,
-#     ref_counts_list,
-#     no_title=True,
-#     ax=None,
-#     density=False,
-# ):
-#     """
-#     Plot signal/reference histograms.
-
-#     sig_counts_list:
-#         With ionization pulse. Used only visually.
-
-#     ref_counts_list:
-#         Without ionization pulse. Used for analysis.
-
-#     No background subtraction is applied.
-#     """
-
-#     laser_key = VirtualLaserKey.WIDEFIELD_CHARGE_READOUT
-#     laser_dict = tb.get_virtual_laser_dict(laser_key)
-#     readout = laser_dict["duration"]
-#     readout_ms = int(readout / 1e6)
-
-#     if ax is None:
-#         fig, ax = plt.subplots()
-#     else:
-#         fig = None
-
-#     if not no_title:
-#         ax.set_title(f"Charge-state histograms, readout = {readout_ms} ms")
-
-#     ax.set_xlabel("Integrated counts")
-#     ax.set_ylabel("Probability" if density else "Number of occurrences")
-
-#     # Use matplotlib hist directly so labels are reliable.
-#     ax.hist(
-#         sig_counts_list,
-#         bins="auto",
-#         density=density,
-#         histtype="step",
-#         linewidth=1.5,
-#         label="With ionization pulse, visual only",
-#     )
-
-#     ax.hist(
-#         ref_counts_list,
-#         bins="auto",
-#         density=density,
-#         histtype="step",
-#         linewidth=1.5,
-#         label="Without ionization pulse, fitted",
-#     )
-
-#     ax.set_xlim(-0.5, None)
-
-#     if fig is not None:
-#         return fig
-
-
 def plot_histograms(
     sig_counts_list,
     ref_counts_list,
@@ -780,6 +719,36 @@ def process_and_plot(
     # -------------------------------------------------------------------------
     # Optional save of analysis-only result.
     # -------------------------------------------------------------------------
+    # if save_analysis:
+    #     timestamp = dm.get_time_stamp()
+
+    #     try:
+    #         repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
+    #         repr_nv_name = repr_nv_sig.name
+    #     except Exception:
+    #         repr_nv_name = "multinv-charge-analysis"
+
+    #     analysis_raw_data = {
+    #         "timestamp": timestamp,
+    #         "source_timestamp": raw_data.get("timestamp", None),
+    #         "source_file_id": raw_data.get("file_id", None),
+    #         # "nv_list": nv_list,
+    #         "charge_hist_multinv_binomial": analysis_dict,
+    #     }
+
+    #     file_path = dm.get_file_path(
+    #         __file__,
+    #         timestamp,
+    #         f"{repr_nv_name}-ref-only-multinv-charge-analysis",
+    #     )
+
+    #     dm.save_raw_data(
+    #         analysis_raw_data,
+    #         file_path,
+    #         keys_to_compress=[],
+    #     )
+
+    #     print("Saved reference-only multi-NV charge analysis:", file_path)
     if save_analysis:
         timestamp = dm.get_time_stamp()
 
@@ -789,12 +758,41 @@ def process_and_plot(
         except Exception:
             repr_nv_name = "multinv-charge-analysis"
 
+        one_nv_inds = np.where(
+            ok_arr & (np.rint(n_nvs_est_arr).astype(int) == 1)
+        )[0]
+
+        two_nv_inds = np.where(
+            ok_arr & (np.rint(n_nvs_est_arr).astype(int) == 2)
+        )[0]
+
+        three_nv_inds = np.where(
+            ok_arr & (np.rint(n_nvs_est_arr).astype(int) == 3)
+        )[0]
+
+        # Make a safe copy for saving.
+        analysis_dict_save = dict(analysis_dict)
+
+        # Remove possibly recursive / heavy diagnostics.
+        analysis_dict_save["candidate_results"] = None
+
+        # Add direct index lists.
+        analysis_dict_save["one_nv_inds"] = one_nv_inds
+        analysis_dict_save["two_nv_inds"] = two_nv_inds
+        analysis_dict_save["three_nv_inds"] = three_nv_inds
+
         analysis_raw_data = {
             "timestamp": timestamp,
             "source_timestamp": raw_data.get("timestamp", None),
             "source_file_id": raw_data.get("file_id", None),
-            "nv_list": nv_list,
-            "charge_hist_multinv_binomial": analysis_dict,
+
+            # Save names only, NOT full NVSig objects.
+            "nv_names": [
+                getattr(nv, "name", str(i))
+                for i, nv in enumerate(nv_list)
+            ],
+
+            "charge_hist_multinv_binomial": analysis_dict_save,
         }
 
         file_path = dm.get_file_path(
@@ -810,6 +808,7 @@ def process_and_plot(
         )
 
         print("Saved reference-only multi-NV charge analysis:", file_path)
+        print("Saved 1-NV pillars:", len(one_nv_inds))
 
     return hist_figs
 
@@ -1799,7 +1798,8 @@ if __name__ == "__main__":
 
     raw_data = dm.get_raw_data(
         # file_stem="2026_03_02-17_30_11-qnami-nv0_2026_02_20", ## 1277 working NVs
-        file_stem="2026_06_14-18_44_06-qnami-nv0_2026_02_20",
+        # file_stem="2026_06_14-18_44_06-qnami-nv0_2026_02_20",
+        file_stem="2026_06_20-19_22_52-qnami-nv0_2026_02_20",
         load_npz=True,
     )
 
@@ -1841,6 +1841,7 @@ if __name__ == "__main__":
         "charge_hist_multinv_binomial"
     ]
 
+
     # print_metric_definitions()
 
     # # Optional: summary scatter plots
@@ -1851,20 +1852,36 @@ if __name__ == "__main__":
     # )
 
 
+    # analysis = analysis_data["charge_hist_multinv_binomial"]
+
+    # num_reps = 2000   # replace with your real num_reps * num_runs if known
+    # print_three_nv_statistical_counts(
+    #     analysis,
+    #     pillar_ind=16,
+    #     num_shots=num_reps,
+    # )
+    # sys.exit()
+
+    analysis_data = dm.get_raw_data(
+        file_stem="2026_06_15-01_24_30-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis",
+        load_npz=True,
+    )
+
     analysis = analysis_data["charge_hist_multinv_binomial"]
 
-    num_reps = 2000   # replace with your real num_reps * num_runs if known
-    print_three_nv_statistical_counts(
-        analysis,
-        pillar_ind=16,
-        num_shots=num_reps,
-    )
+    one_nv_inds = np.where(
+        np.asarray(analysis["ok"], dtype=bool)
+        & (np.rint(analysis["n_nvs_est"]).astype(int) == 1)
+    )[0]
+
+    print(one_nv_inds)
+    print("num 1-NV pillars:", len(one_nv_inds))
     sys.exit()
+    
     # -------------------------------------------------------------------------
     # Look at selected 2-NV and 3-NV pillars
     # -------------------------------------------------------------------------
     analysis = raw_data["charge_hist_multinv_binomial"]
-
     ok = np.asarray(analysis["ok"], dtype=bool)
     n_nvs_est = np.asarray(analysis["n_nvs_est"], dtype=float)
     fidelity_multi = np.asarray(analysis["fidelity_multiclass"], dtype=float)
@@ -1872,6 +1889,15 @@ if __name__ == "__main__":
     threshold_any = np.asarray(analysis["threshold_any"], dtype=float)
     ref_mean_k = np.asarray(analysis["ref_mean_num_minus"], dtype=float)
 
+    one_nv_inds = np.where(ok & (np.rint(n_nvs_est).astype(int) == 1))[0]
+
+    print("\n1-NV pillar indices:")
+    print(one_nv_inds)
+
+    print("\nNumber of 1-NV pillars:", len(one_nv_inds))
+    
+    sys.exit()
+    
     two_nv_inds = np.where(ok & (n_nvs_est == 2))[0]
     three_nv_inds = np.where(ok & (n_nvs_est == 3))[0]
 
@@ -1883,7 +1909,7 @@ if __name__ == "__main__":
 
     print("\nNumber of 2-NV pillars:", len(two_nv_inds))
     print("Number of 3-NV pillars:", len(three_nv_inds))
-
+  
     # -------------------------------------------------------------------------
     # Plot a few example histograms
     # -------------------------------------------------------------------------
@@ -1933,8 +1959,7 @@ if __name__ == "__main__":
             pillar_ind=int(pillar_ind),
             density=True,
         )
-
-
+        
     # -------------------------------------------------------------------------
     # Save histograms for selected 2-NV and 3-NV pillars
     # -------------------------------------------------------------------------

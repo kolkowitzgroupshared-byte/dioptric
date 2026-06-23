@@ -354,21 +354,21 @@ def load_nv_coords():
 # ----------------------------
 # Load coordinates and weights
 # ----------------------------
-nuvu_pixel_coords, _ = load_nv_coords()
+nuvu_pixel_coords, spot_weights = load_nv_coords()
 
-data_spot_weight = dm.get_raw_data(
-    # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
-    # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
-    file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
-)
-spot_weights = np.asarray(data_spot_weight["optimal_weights"], dtype=float)
-spot_weights = np.squeeze(spot_weights)
+# data_spot_weight = dm.get_raw_data(
+#     # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+#     # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+#     file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
+# )
+# spot_weights = np.asarray(data_spot_weight["optimal_weights"], dtype=float)
+# spot_weights = np.squeeze(spot_weights)
 
 # If weights are 2D, choose one row/column as needed.
 # This keeps the most common case: shape (N,)
-if spot_weights.ndim != 1:
-    print("spot_weights original shape after squeeze:", spot_weights.shape)
-    spot_weights = spot_weights.ravel()
+# if spot_weights.ndim != 1:
+#     print("spot_weights original shape after squeeze:", spot_weights.shape)
+#     spot_weights = spot_weights.ravel()
 
 # Transform Nuvu coordinates to ThorCam coordinates
 thorcam_coords = nuvu2thorcam_slm(nuvu_pixel_coords)  # shape: (N, 2)

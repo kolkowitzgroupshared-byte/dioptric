@@ -1031,18 +1031,39 @@ if __name__ == "__main__":
     # include_indices = [i for i, val in enumerate(prep_fidelity_list) if val >= 0.4 or val is None]
     # include_indices =  [i for i, val in enumerate(snr_float) if val >= 0.02]
     
-    data = dm.get_raw_data(
-        # file_stem="2026_03_25-16_28_08-charge_state_analysis_hist_data_raw_data", load_npz=True
-        # file_stem="2026_03_25-18_15_53-charge_state_analysis_hist_data_raw_data", load_npz=True
-        file_stem="2026_03_26-20_09_33-charge_state_analysis_hist_data_raw_data", load_npz=True
+    # data = dm.get_raw_data(
+    #     # file_stem="2026_03_25-16_28_08-charge_state_analysis_hist_data_raw_data", load_npz=True
+    #     # file_stem="2026_03_25-18_15_53-charge_state_analysis_hist_data_raw_data", load_npz=True
+    #     file_stem="2026_03_26-20_09_33-charge_state_analysis_hist_data_raw_data", load_npz=True
+    # )
+    # readout_fidelity_list = data["readout_fidelity_list"]
+    # prep_fidelity_list = data["prep_fidelity_list"]
+    
+    data_spot_weight = dm.get_raw_data(
+    # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+    # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+    file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
     )
-    readout_fidelity_list = data["readout_fidelity_list"]
-    prep_fidelity_list = data["prep_fidelity_list"]
+    spot_weights = np.asarray(data_spot_weight["optimal_weights"], dtype=float)
+    # spot_weights = np.squeeze(spot_weights)
+    
+    analysis_data = dm.get_raw_data(
+        file_stem="2026_06_15-01_24_30-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis",
+        load_npz=True,
+    )
+
+    analysis = analysis_data["charge_hist_multinv_binomial"]
+
+    one_nv_inds = np.where(
+        np.asarray(analysis["ok"], dtype=bool)
+        & (np.rint(analysis["n_nvs_est"]).astype(int) == 1)
+    )[0]
     # include_indices = [
     #     i for i, val in enumerate(readout_fidelity_list)
     #     if (val is None) or (isinstance(val, (int, float)) and not math.isnan(val) and val >= 0.7)
     # ]
     include_indices = list(range(len(filtered_reordered_coords)))
+    include_indices = one_nv_inds
     # include_indices = [
     #     i
     #     for i, (v1, v2) in enumerate(zip(readout_fidelity_list, prep_fidelity_list))
@@ -1058,7 +1079,7 @@ if __name__ == "__main__":
     # filtered_pol_durs = [pol_duration_list[i] for i in include_indices]
     # filtered_scc_durs = [scc_duration_list[i] for i in include_indices]
 
-    aom_voltage = 0.3614
+    aom_voltage = 0.3514
     # a, b, c = [3.7e5, 6.97, 8e-14]
     # a, b, c = 161266.751, 6.617, -19.492
     a, b, c = 1.5133e04, 2.6976, -38.63  # UPDATED 2025-09-17
@@ -1154,7 +1175,7 @@ if __name__ == "__main__":
     # save_results(
     #     filtered_reordered_coords,
     #     filtered_reordered_spot_weights,
-    #     filename="slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz",
+    #     filename="slmsuite/nv_blob_detection/nv_blob_814nvs_reordered_inside_dmd.npz",
     # )
 
     # # Plot the original image with circles around each NV
