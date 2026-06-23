@@ -42,14 +42,14 @@ calibration_coords_pixel = [
     [17.982, 41.943],
 ]
 calibration_coords_green = [
-    [73.751, 115.459],
-    [100.761, 68.885],
-    [127.002, 127.767],
+    [73.744, 115.449],
+    [100.741, 68.886],
+    [126.938, 127.751],
 ]
 calibration_coords_red = [
     [47.273, 81.359],
     [69.628, 43.99],
-    [90.653, 92.505]
+    [90.653, 92.505],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -139,13 +139,13 @@ config |= {
         ),
         "dmd_DLP6500_device_id": 0,
         "dmd_DLP6500_init_state": "pass_zero_block",
-        "dmd_DLP6500_zero_radius_px": 20,
+        "dmd_DLP6500_zero_radius_px": 11,
         # Important: load final NV-chain file, not just triangle_affine_onpass.npz
         "dmd_DLP6500_init_calib_path": (
             # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1277.npz"
             # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1274.npz"
             # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1271.npz"
-            "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1176.npz"
+            "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd.npz"
             # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_814.npz"
         ),
     },
@@ -1047,7 +1047,7 @@ opx_config = {
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.35},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.3113}, #1460NVs
+        "yellow_charge_readout": {"type": "constant", "sample": 0.3513}, #1460NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.4014},
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},

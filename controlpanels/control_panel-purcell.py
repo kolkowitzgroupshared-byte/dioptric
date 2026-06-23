@@ -183,7 +183,7 @@ def do_optimize_readout_amp(nv_list):
     # num_reps = 150
     # num_runs = 5
     num_reps = 10
-    num_runs = 200
+    num_runs = 400
     min_amp = 0.5
     max_amp = 1.5
     return optimize_charge_state_histograms.optimize_readout_amp(
@@ -1748,10 +1748,10 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.779, 98.172],
-    #     [73.751, 115.459],
-    #     [100.761, 68.885],
-    #     [127.002, 127.767],
+    #     [97.763, 98.159],
+    #     [73.744, 115.449],
+    #     [100.741, 68.886],
+    #     [126.938, 127.751],
     # ]
     # red_coords_list = [
     #     [66.999, 67.784],
@@ -1821,9 +1821,9 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    nv_sig.expected_counts = 1800
+    # nv_sig.expected_counts = 1800
     # nv_list = nv_list[::-1]  # flipping the order of NVs
-    # nv_list = nv_list[:600]
+    # nv_list = nv_list[:200]
     print(f"length of NVs list:{len(nv_list)}")
     # sys.exit()
     # endregion
@@ -1865,7 +1865,6 @@ if __name__ == "__main__":
         # )
 
         # do_widefield_image_sample(nv_sig, 50)     
-        
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list:
@@ -1922,11 +1921,11 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        # do_charge_state_histograms(nv_list)
+        do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_dmd_crosstalk_matrix(
         #     nv_list_all=nv_list,
-        #     num_sources=20,
+        #     num_sources=200,
         #     dmd_radius_px=6,
         # )
         

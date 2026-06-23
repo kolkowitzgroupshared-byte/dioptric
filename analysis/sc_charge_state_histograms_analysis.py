@@ -1803,19 +1803,19 @@ if __name__ == "__main__":
         load_npz=True,
     )
 
-    process_and_plot(
-        raw_data,
-        do_plot_histograms=False,
-        prob_dist=ProbDist.COMPOUND_POISSON,
-        max_nvs_per_position=3,
-        force_nvs=None,
-        bic_extra_nv_penalty=2.0,
-        save_analysis=True,
-        save_hist_figs=False,
-    )
+    # process_and_plot(
+    #     raw_data,
+    #     do_plot_histograms=False,
+    #     prob_dist=ProbDist.COMPOUND_POISSON,
+    #     max_nvs_per_position=3,
+    #     force_nvs=None,
+    #     bic_extra_nv_penalty=2.0,
+    #     save_analysis=True,
+    #     save_hist_figs=False,
+    # )
 
-    kpl.show(block=True)
-    sys.exit()
+    # kpl.show(block=True)
+    # sys.exit()
     # =============================================================================
     # Analysed 
     # ============================================================================

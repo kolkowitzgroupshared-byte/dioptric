@@ -30,6 +30,8 @@ from slmsuite.hardware.slms.thorlabs import ThorSLM
 from slmsuite.holography import analysis, toolbox
 from slmsuite.holography.algorithms import SpotHologram
 
+from slmsuite.nv_coords_weights_reorder_reassign import curve_extreme_weights_simple
+
 warnings.filterwarnings("ignore")
 mpl.rc("image", cmap="Blues")
 
@@ -356,13 +358,17 @@ def load_nv_coords():
 # ----------------------------
 nuvu_pixel_coords, spot_weights = load_nv_coords()
 
-# data_spot_weight = dm.get_raw_data(
-#     # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
-#     # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
-#     file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
-# )
-# spot_weights = np.asarray(data_spot_weight["optimal_weights"], dtype=float)
+data_spot_weight = dm.get_raw_data(
+    # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+    # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+    file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
+)
+spot_weights = data_spot_weight["optimal_weights"]
 # spot_weights = np.squeeze(spot_weights)
+spot_weights = curve_extreme_weights_simple(
+        spot_weights, scaling_factor=1.0
+    )
+spot_weights = np.array(spot_weights)
 
 # If weights are 2D, choose one row/column as needed.
 # This keeps the most common case: shape (N,)
@@ -376,7 +382,7 @@ thorcam_coords_xy = thorcam_coords.T                  # shape: (2, N)
 
 print("nuvu_pixel_coords shape:", nuvu_pixel_coords.shape)
 print("thorcam_coords shape:", thorcam_coords_xy.shape)
-print("spot_weights shape:", spot_weights.shape)
+# print("spot_weights shape:", spot_weights.shape)
 
 # # Match lengths safely
 # num = min(len(nuvu_pixel_coords), len(spot_weights))
@@ -430,7 +436,7 @@ def compute_and_write_nvs_phase():
         feedback="computational_spot",
         stat_groups=["computational_spot"],
     )
-# 
+    # Precondition computationally
     initial_phase = hologram.extract_phase()
     # Define the path to save the phase data1
     file_path = r"slmsuite\computed_phase"

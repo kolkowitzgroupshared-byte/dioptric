@@ -126,7 +126,7 @@ def run_one_active_charge_attempt(
     do_charge_polarize,
     num_reps=1,
     num_runs=1,
-    seq_file="charge_state_adaptive_active.py",
+    seq_file="adaptive_charge_initialization.py",
     save_images=False,
 ):
     """
