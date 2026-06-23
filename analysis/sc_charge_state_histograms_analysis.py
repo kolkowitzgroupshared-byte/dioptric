@@ -29,9 +29,17 @@ Updated: June 2026
 
 from __future__ import annotations
 
+import os
+
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
 import sys
 import traceback
 from typing import Optional
+from joblib import Parallel, delayed
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -63,66 +71,6 @@ from utils.constants import VirtualLaserKey
 # =============================================================================
 # Plotting
 # =============================================================================
-
-# def plot_histograms(
-#     sig_counts_list,
-#     ref_counts_list,
-#     no_title=True,
-#     ax=None,
-#     density=False,
-# ):
-#     """
-#     Plot signal/reference histograms.
-
-#     sig_counts_list:
-#         With ionization pulse. Used only visually.
-
-#     ref_counts_list:
-#         Without ionization pulse. Used for analysis.
-
-#     No background subtraction is applied.
-#     """
-
-#     laser_key = VirtualLaserKey.WIDEFIELD_CHARGE_READOUT
-#     laser_dict = tb.get_virtual_laser_dict(laser_key)
-#     readout = laser_dict["duration"]
-#     readout_ms = int(readout / 1e6)
-
-#     if ax is None:
-#         fig, ax = plt.subplots()
-#     else:
-#         fig = None
-
-#     if not no_title:
-#         ax.set_title(f"Charge-state histograms, readout = {readout_ms} ms")
-
-#     ax.set_xlabel("Integrated counts")
-#     ax.set_ylabel("Probability" if density else "Number of occurrences")
-
-#     # Use matplotlib hist directly so labels are reliable.
-#     ax.hist(
-#         sig_counts_list,
-#         bins="auto",
-#         density=density,
-#         histtype="step",
-#         linewidth=1.5,
-#         label="With ionization pulse, visual only",
-#     )
-
-#     ax.hist(
-#         ref_counts_list,
-#         bins="auto",
-#         density=density,
-#         histtype="step",
-#         linewidth=1.5,
-#         label="Without ionization pulse, fitted",
-#     )
-
-#     ax.set_xlim(-0.5, None)
-
-#     if fig is not None:
-#         return fig
-
 
 def plot_histograms(
     sig_counts_list,
@@ -199,6 +147,8 @@ def plot_histograms(
     if fig is not None:
         return fig
 
+
+
 # =============================================================================
 # Helper functions
 # =============================================================================
@@ -213,6 +163,31 @@ def safe_float(x):
     except Exception:
         return np.nan
 
+
+def make_json_safe(obj):
+    """
+    Convert analysis objects to JSON/orjson-safe objects.
+
+    This avoids recursion/serialization problems from numpy arrays,
+    numpy scalars, and nested objects.
+    """
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+
+    if isinstance(obj, np.generic):
+        return obj.item()
+
+    if isinstance(obj, dict):
+        return {str(k): make_json_safe(v) for k, v in obj.items()}
+
+    if isinstance(obj, (list, tuple)):
+        return [make_json_safe(v) for v in obj]
+
+    if isinstance(obj, (str, int, float, bool)) or obj is None:
+        return obj
+
+    # Avoid saving arbitrary Python objects.
+    return str(obj)
 
 def classify_multinv_counts(counts, thresholds):
     """
@@ -342,6 +317,72 @@ def feedback_classify_count(counts, threshold_any, thresholds_multiclass, n_nvs_
 # =============================================================================
 # Main reference-only multi-NV analysis
 # =============================================================================
+def fit_one_pillar_multinv_job(
+    ind,
+    ref_counts_list,
+    prob_dist_name,
+    max_nvs_per_position,
+    force_nvs,
+    bic_extra_nv_penalty,
+):
+    """
+    Parallel worker for one pillar.
+
+    Important:
+    This function must be defined at top level, outside process_and_plot,
+    especially on Windows.
+    """
+
+    try:
+        prob_dist = ProbDist[prob_dist_name]
+
+        ref_counts_list = np.asarray(ref_counts_list, dtype=float).flatten()
+
+        fit = analyze_charge_histogram_multinv_binomial(
+            ref_counts_list,
+            prob_dist=prob_dist,
+            max_nvs=max_nvs_per_position,
+            force_nvs=force_nvs,
+            bic_extra_nv_penalty=bic_extra_nv_penalty,
+            seed=ind,
+        )
+
+        if not fit.get("ok", False):
+            return {
+                "ind": int(ind),
+                "ok": False,
+                "fit": None,
+                "ref_summary": None,
+                "error": None,
+            }
+
+        n_est = int(fit["n_nvs"])
+        threshold_any = safe_float(fit["threshold_any"])
+        thresholds_multiclass = np.asarray(fit["thresholds"], dtype=float)
+
+        ref_summary = summarize_ref_classification(
+            ref_counts=ref_counts_list,
+            threshold_any=threshold_any,
+            thresholds_multiclass=thresholds_multiclass,
+            n_nvs=n_est,
+        )
+
+        return {
+            "ind": int(ind),
+            "ok": True,
+            "fit": fit,
+            "ref_summary": ref_summary,
+            "error": None,
+        }
+
+    except Exception:
+        return {
+            "ind": int(ind),
+            "ok": False,
+            "fit": None,
+            "ref_summary": None,
+            "error": traceback.format_exc(),
+        }
 
 def process_and_plot(
     raw_data,
@@ -352,6 +393,8 @@ def process_and_plot(
     bic_extra_nv_penalty: float = 2.0,
     save_analysis: bool = False,
     save_hist_figs: bool = False,
+    n_jobs: int = 12,
+    joblib_verbose: int = 10,
 ):
     """
     Reference-only multi-NV charge-state histogram analysis.
@@ -371,6 +414,14 @@ def process_and_plot(
 
     Outputs are saved into:
         raw_data["charge_hist_multinv_binomial"]
+
+    Parallelization
+    ---------------
+    The expensive per-pillar fitting is parallelized using joblib.
+
+    For your i9-12900K:
+        start with n_jobs=12
+        then test n_jobs=8, 10, 14, 16
     """
 
     nv_list = raw_data["nv_list"]
@@ -411,7 +462,6 @@ def process_and_plot(
     best_equal_bic_arr = np.full(num_positions, np.nan)
     unequal_2nv_beats_equal_arr = np.full(num_positions, False, dtype=bool)
     candidate_results_list = [None for _ in range(num_positions)]
-    
 
     ref_p_any_minus_arr = np.full(num_positions, np.nan)
     ref_mean_num_minus_arr = np.full(num_positions, np.nan)
@@ -428,32 +478,69 @@ def process_and_plot(
     hist_figs = [None for _ in range(num_positions)]
 
     # -------------------------------------------------------------------------
-    # Per-pillar analysis
+    # Parallel per-pillar fitting
     # -------------------------------------------------------------------------
-    for ind in range(num_positions):
+    print("\n=== Starting parallel multi-NV reference-only fits ===")
+    print(f"Number of pillars: {num_positions}")
+    print(f"n_jobs: {n_jobs}")
+    print(f"prob_dist: {prob_dist.name}")
+    print(f"max_nvs_per_position: {max_nvs_per_position}")
+    print(f"force_nvs: {force_nvs}")
+    print(f"bic_extra_nv_penalty: {bic_extra_nv_penalty}")
+
+    if n_jobs is None or int(n_jobs) == 1:
+        parallel_results = [
+            fit_one_pillar_multinv_job(
+                ind,
+                ref_counts_lists[ind],
+                prob_dist.name,
+                max_nvs_per_position,
+                force_nvs,
+                bic_extra_nv_penalty,
+            )
+            for ind in range(num_positions)
+        ]
+    else:
+        parallel_results = Parallel(
+            n_jobs=int(n_jobs),
+            backend="loky",
+            verbose=joblib_verbose,
+            batch_size=1,
+        )(
+            delayed(fit_one_pillar_multinv_job)(
+                ind,
+                ref_counts_lists[ind],
+                prob_dist.name,
+                max_nvs_per_position,
+                force_nvs,
+                bic_extra_nv_penalty,
+            )
+            for ind in range(num_positions)
+        )
+
+    # Keep results ordered by original pillar index.
+    parallel_results = sorted(parallel_results, key=lambda x: x["ind"])
+
+    # -------------------------------------------------------------------------
+    # Fill arrays from fit results.
+    # -------------------------------------------------------------------------
+    for result in parallel_results:
+        ind = int(result["ind"])
+
         sig_counts_list = sig_counts_lists[ind]
         ref_counts_list = ref_counts_lists[ind]
 
-        # ---------------------------------------------------------------------
-        # Fit reference/no-ionization branch only.
-        # ---------------------------------------------------------------------
-        try:
-            fit = analyze_charge_histogram_multinv_binomial(
-                ref_counts_list,
-                prob_dist=prob_dist,
-                max_nvs=max_nvs_per_position,
-                force_nvs=force_nvs,
-                bic_extra_nv_penalty=bic_extra_nv_penalty,
-                seed=ind,
-            )
-        except Exception:
+        if result["error"] is not None:
             print(f"\nMulti-NV fit failed for pillar index {ind}")
-            print(traceback.format_exc())
+            print(result["error"])
             continue
 
-        if not fit.get("ok", False):
+        if not result["ok"]:
             print(f"\nMulti-NV fit not OK for pillar index {ind}")
             continue
+
+        fit = result["fit"]
+        ref_summary = result["ref_summary"]
 
         ok_arr[ind] = True
 
@@ -475,7 +562,7 @@ def process_and_plot(
         bg = safe_float(fit.get("bg", np.nan))
         rate0 = safe_float(fit.get("rate0", np.nan))
         delta = safe_float(fit.get("delta", np.nan))
-        
+
         # P(any NV-) from fitted reference weights.
         # For N>1, this generalizes old prep fidelity = 1 - P(k=0).
         prep_fidelity_any_ref = 1.0 - float(weights[0])
@@ -498,20 +585,19 @@ def process_and_plot(
 
         model_list[ind] = fit.get("model", None)
         best_candidate_model_list[ind] = fit.get("best_candidate_model", None)
-        best_candidate_bic_arr[ind] = safe_float(fit.get("best_candidate_bic", np.nan))
-        best_equal_bic_arr[ind] = safe_float(fit.get("best_equal_bic", np.nan))
-        unequal_2nv_beats_equal_arr[ind] = bool(fit.get("unequal_2nv_beats_equal", False))
-        candidate_results_list[ind] = fit.get("candidate_results", None)
-        # ---------------------------------------------------------------------
-        # Classify reference branch only.
-        # ---------------------------------------------------------------------
-        ref_summary = summarize_ref_classification(
-            ref_counts=ref_counts_list,
-            threshold_any=threshold_any,
-            thresholds_multiclass=thresholds_multiclass,
-            n_nvs=n_est,
+        best_candidate_bic_arr[ind] = safe_float(
+            fit.get("best_candidate_bic", np.nan)
         )
+        best_equal_bic_arr[ind] = safe_float(fit.get("best_equal_bic", np.nan))
+        unequal_2nv_beats_equal_arr[ind] = bool(
+            fit.get("unequal_2nv_beats_equal", False)
+        )
+        candidate_results_list[ind] = fit.get("candidate_results", None)
 
+        # ---------------------------------------------------------------------
+        # Reference classification only.
+        # This was already computed inside the worker.
+        # ---------------------------------------------------------------------
         ref_p_any_minus_arr[ind] = ref_summary["p_any_minus"]
         ref_mean_num_minus_arr[ind] = ref_summary["mean_num_minus"]
         ref_prob_k_list[ind] = ref_summary["prob_k"]
@@ -547,9 +633,13 @@ def process_and_plot(
             # Model-selection diagnostics.
             "model": fit.get("model", None),
             "best_candidate_model": fit.get("best_candidate_model", None),
-            "best_candidate_bic": safe_float(fit.get("best_candidate_bic", np.nan)),
+            "best_candidate_bic": safe_float(
+                fit.get("best_candidate_bic", np.nan)
+            ),
             "best_equal_bic": safe_float(fit.get("best_equal_bic", np.nan)),
-            "unequal_2nv_beats_equal": bool(fit.get("unequal_2nv_beats_equal", False)),
+            "unequal_2nv_beats_equal": bool(
+                fit.get("unequal_2nv_beats_equal", False)
+            ),
 
             # Reference-branch statistics only.
             "ref_p_any_minus": float(ref_summary["p_any_minus"]),
@@ -580,6 +670,7 @@ def process_and_plot(
 
         # ---------------------------------------------------------------------
         # Plot: signal branch shown only visually; fit is reference only.
+        # This remains serial. Do not plot inside parallel workers.
         # ---------------------------------------------------------------------
         if do_plot_histograms:
             fig = plot_histograms(
@@ -604,7 +695,7 @@ def process_and_plot(
             #     k = 0, 1, ..., N
             #
             # The no-NV-minus mode is centered near:
-            #     base = N * rate0
+            #     base = bg + N * rate0
             #
             # Each additional NV- adds approximately delta counts.
             base = bg + n_est * rate0
@@ -700,6 +791,9 @@ def process_and_plot(
         "force_nvs": None if force_nvs is None else int(force_nvs),
         "bic_extra_nv_penalty": float(bic_extra_nv_penalty),
 
+        # Parallel settings.
+        "n_jobs": None if n_jobs is None else int(n_jobs),
+
         # Validity and number of NVs per pillar.
         "ok": ok_arr,
         "n_nvs_est": n_nvs_est_arr,
@@ -789,12 +883,26 @@ def process_and_plot(
         except Exception:
             repr_nv_name = "multinv-charge-analysis"
 
+        # Make a lightweight save copy.
+        # Keep the full analysis in raw_data, but avoid saving recursive/heavy objects.
+        analysis_dict_for_save = dict(analysis_dict)
+
+        # These are the most likely to cause recursion / huge files.
+        analysis_dict_for_save["candidate_results"] = None
+        analysis_dict_for_save["ref_k_est"] = None
+
+        # Save simple NV names instead of full NV objects.
+        nv_names = [
+            getattr(nv, "name", str(ind))
+            for ind, nv in enumerate(nv_list)
+        ]
+
         analysis_raw_data = {
             "timestamp": timestamp,
             "source_timestamp": raw_data.get("timestamp", None),
             "source_file_id": raw_data.get("file_id", None),
-            "nv_list": nv_list,
-            "charge_hist_multinv_binomial": analysis_dict,
+            "nv_names": nv_names,
+            "charge_hist_multinv_binomial": make_json_safe(analysis_dict_for_save),
         }
 
         file_path = dm.get_file_path(
@@ -812,7 +920,6 @@ def process_and_plot(
         print("Saved reference-only multi-NV charge analysis:", file_path)
 
     return hist_figs
-
 
 # =============================================================================
 # Compact plotting style + metric explanations
@@ -1048,12 +1155,20 @@ def plot_histograms(
 
     Green:
         reference branch, without ionization pulse, used for fitting.
+
+    This version does not require the global config["Optics"] entry.
     """
 
-    laser_key = VirtualLaserKey.WIDEFIELD_CHARGE_READOUT
-    laser_dict = tb.get_virtual_laser_dict(laser_key)
-    readout = laser_dict["duration"]
-    readout_ms = int(readout / 1e6)
+    # Try to get readout duration from config, but do not require it.
+    readout_ms = None
+    try:
+        laser_key = VirtualLaserKey.WIDEFIELD_CHARGE_READOUT
+        laser_dict = tb.get_virtual_laser_dict(laser_key)
+        readout = laser_dict.get("duration", None)
+        if readout is not None:
+            readout_ms = int(readout / 1e6)
+    except Exception:
+        readout_ms = None
 
     labels = [
         "With ionization pulse",
@@ -1076,7 +1191,10 @@ def plot_histograms(
         fig = None
 
     if not no_title:
-        ax.set_title(f"Charge-state histograms, readout = {readout_ms} ms")
+        if readout_ms is None:
+            ax.set_title("Charge-state histograms")
+        else:
+            ax.set_title(f"Charge-state histograms, readout = {readout_ms} ms")
 
     ax.set_xlabel("Integrated counts")
     ax.set_ylabel("Probability" if density else "Number of occurrences")
@@ -1100,7 +1218,6 @@ def plot_histograms(
 
     if fig is not None:
         return fig
-
 
 # =============================================================================
 # Compact scatter plots
@@ -1799,19 +1916,24 @@ if __name__ == "__main__":
 
     raw_data = dm.get_raw_data(
         # file_stem="2026_03_02-17_30_11-qnami-nv0_2026_02_20", ## 1277 working NVs
-        file_stem="2026_06_14-18_44_06-qnami-nv0_2026_02_20",
+        file_stem="2026_06_18-14_53_41-qnami-nv0_2026_02_20", ## 1176 working NVs
+        # file_stem="2026_06_14-18_44_06-qnami-nv0_2026_02_20",
+        # file_stem="2026_06_20-19_22_52-qnami-nv0_2026_02_20",
+        # file_stem="2026_06_23-12_05_32-qnami-nv0_2026_02_20",
+        
         load_npz=True,
     )
 
     process_and_plot(
-        raw_data,
-        do_plot_histograms=False,
-        prob_dist=ProbDist.COMPOUND_POISSON,
-        max_nvs_per_position=3,
-        force_nvs=None,
-        bic_extra_nv_penalty=2.0,
-        save_analysis=True,
-        save_hist_figs=False,
+    raw_data,
+    do_plot_histograms=False,
+    prob_dist=ProbDist.COMPOUND_POISSON,
+    max_nvs_per_position=1,
+    force_nvs=None,
+    bic_extra_nv_penalty=2.0,
+    save_analysis=True,
+    save_hist_figs=False,
+    n_jobs=12,
     )
 
     kpl.show(block=True)
@@ -1822,7 +1944,9 @@ if __name__ == "__main__":
 
     
     analysis_data = dm.get_raw_data(
-        file_stem="2026_06_15-01_24_30-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis",
+        # file_stem="2026_06_15-01_24_30-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis",  #1176NVs
+        # file_stem="2026_06_22-18_39_58-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", #1176NVs
+        file_stem="2026_06_22-18_39_58-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", #814NVs
         load_npz=True,
     )
 
@@ -1836,34 +1960,60 @@ if __name__ == "__main__":
     
 
 
-    # Attach saved analysis to original raw data so histogram plotting works.
-    raw_data["charge_hist_multinv_binomial"] = analysis_data[
-        "charge_hist_multinv_binomial"
-    ]
+    # # Attach saved analysis to original raw data so histogram plotting works.
+    # raw_data["charge_hist_multinv_binomial"] = analysis_data[
+    #     "charge_hist_multinv_binomial"
+    # ]
 
-    # print_metric_definitions()
+    # # print_metric_definitions()
 
-    # # Optional: summary scatter plots
-    # figs = plot_all_charge_multinv_summaries(
-    #     analysis_data,
-    #     coords_key="pixel",
-    #     save_figs=True,
+    # analysis = analysis_data["charge_hist_multinv_binomial"]
+
+    # num_reps = 2000   # replace with your real num_reps * num_runs if known
+    # print_three_nv_statistical_counts(
+    #     analysis,
+    #     pillar_ind=16,
+    #     num_shots=num_reps,
     # )
+    # kpl.show(block=True)
+    # sys.exit()
 
+    # =============================================================================
+    # Analyzed data: load saved analysis and attach it to original raw data
+    # =============================================================================
 
+    analysis_data = dm.get_raw_data(
+        file_stem="2026_06_22-18_39_58-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis",
+        load_npz=True,
+    )
+
+    # New lightweight saved file has this structure:
+    # analysis_data["charge_hist_multinv_binomial"] = actual analysis dictionary
     analysis = analysis_data["charge_hist_multinv_binomial"]
 
-    num_reps = 2000   # replace with your real num_reps * num_runs if known
-    print_three_nv_statistical_counts(
-        analysis,
-        pillar_ind=16,
-        num_shots=num_reps,
+    # Attach saved analysis to original raw_data so histogram plotting can use:
+    #   raw_data["counts"]
+    #   raw_data["nv_list"]
+    #   raw_data["charge_hist_multinv_binomial"]
+    raw_data["charge_hist_multinv_binomial"] = analysis
+
+    # Optional: print available keys
+    print("\nLoaded analysis keys:")
+    print(list(analysis.keys()))
+
+    # =============================================================================
+    # Plot summary figures from saved analysis
+    # =============================================================================
+
+    figs = plot_all_charge_multinv_summaries(
+        raw_data,
+        coords_key="pixel",
+        save_figs=True,
     )
-    sys.exit()
-    # -------------------------------------------------------------------------
-    # Look at selected 2-NV and 3-NV pillars
-    # -------------------------------------------------------------------------
-    analysis = raw_data["charge_hist_multinv_binomial"]
+
+    # =============================================================================
+    # Find selected 2-NV and 3-NV pillars
+    # =============================================================================
 
     ok = np.asarray(analysis["ok"], dtype=bool)
     n_nvs_est = np.asarray(analysis["n_nvs_est"], dtype=float)
@@ -1884,10 +2034,10 @@ if __name__ == "__main__":
     print("\nNumber of 2-NV pillars:", len(two_nv_inds))
     print("Number of 3-NV pillars:", len(three_nv_inds))
 
-    # -------------------------------------------------------------------------
-    # Plot a few example histograms
-    # -------------------------------------------------------------------------
+    # =============================================================================
     # Choose best examples by multi-class fidelity
+    # =============================================================================
+
     num_examples = 10
 
     two_nv_best = two_nv_inds[
@@ -1918,7 +2068,10 @@ if __name__ == "__main__":
             f"mean_k={ref_mean_k[ind]:.2f}"
         )
 
-    # Plot histograms for selected 2-NV pillars
+    # =============================================================================
+    # Plot histograms for selected 2-NV and 3-NV pillars
+    # =============================================================================
+
     for pillar_ind in two_nv_best:
         plot_one_pillar_hist_and_fit(
             raw_data,
@@ -1926,7 +2079,6 @@ if __name__ == "__main__":
             density=True,
         )
 
-    # Plot histograms for selected 3-NV pillars
     for pillar_ind in three_nv_best:
         plot_one_pillar_hist_and_fit(
             raw_data,
@@ -1935,23 +2087,21 @@ if __name__ == "__main__":
         )
 
 
-    # -------------------------------------------------------------------------
-    # Save histograms for selected 2-NV and 3-NV pillars
-    # -------------------------------------------------------------------------
-    save_selected_pillar_histograms(
-        raw_data,
-        two_nv_best,
-        label="best-2nv-charge-hist",
-        density=True,
-        close_figs=True,
-    )
+    # # Optional: save selected histogram figures
+    # save_selected_pillar_histograms(
+    #     raw_data,
+    #     two_nv_best,
+    #     label="best-2nv-charge-hist",
+    #     density=True,
+    #     close_figs=True,
+    # )
 
-    save_selected_pillar_histograms(
-        raw_data,
-        three_nv_best,
-        label="best-3nv-charge-hist",
-        density=True,
-        close_figs=True,
-    )
+    # save_selected_pillar_histograms(
+    #     raw_data,
+    #     three_nv_best,
+    #     label="best-3nv-charge-hist",
+    #     density=True,
+    #     close_figs=True,
+    # )
 
     kpl.show(block=True)
