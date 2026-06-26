@@ -25,6 +25,7 @@ def get_seq(
     step_vals,
     optimize_pol_or_readout,
     optimize_duration_or_amp,
+    repeated_readout,
     num_reps,
 ):
     if optimize_duration_or_amp:
@@ -67,6 +68,7 @@ def get_seq(
                 pol_amp_override=pol_amp_override,
                 readout_duration_override=readout_duration_override,
                 readout_amp_override=readout_amp_override,
+                repeated_readout=repeated_readout,
             )
 
         with qua.for_each_(override_var, step_vals):

@@ -42,9 +42,9 @@ calibration_coords_pixel = [
     [17.982, 41.943],
 ]
 calibration_coords_green = [
-    [73.744, 115.449],
-    [100.741, 68.886],
-    [126.938, 127.751],
+    [73.753, 115.443],
+    [100.747, 68.886],
+    [126.98, 127.747],
 ]
 calibration_coords_red = [
     [47.273, 81.359],
@@ -1037,7 +1037,7 @@ opx_config = {
         # Green AOD
         "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
         # "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
-        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.09},
+        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.08},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.15},

@@ -1,25 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-Adaptive active-set charge initialization sequence.
+Charge state readout after polarization/ionization, no spin manipulation.
 
-This sequence is intended to be called repeatedly from Python with only the
-currently active NVs.
+Used for both:
+    1. old conditional initialization
+    2. DMD conditional initialization
 
-Arguments:
-    ion_coords_list
-    pol_coords_list
-    pol_duration_list
-    pol_amp_list
-    do_charge_polarize
-    num_reps
-
-Important:
-    The DMD/SLM mask should be updated on the host side before this sequence
-    is run, so that only active NVs are read out.
+DMD is NOT controlled here.
+DMD is controlled in Python charge_prep_fn.
 """
 
 import matplotlib.pyplot as plt
-
 from qm import QuantumMachinesManager, qua
 from qm.simulate import SimulationConfig
 
@@ -32,7 +23,6 @@ def get_seq(
     pol_coords_list,
     pol_duration_list,
     pol_amp_list,
-    do_charge_polarize,
     num_reps,
 ):
     if num_reps is None:
@@ -45,9 +35,12 @@ def get_seq(
         seq_utils.macro_run_aods()
 
         def one_rep(rep_ind=None):
-            # For actual NV- initialization, do NOT ionize first.
-            # Only apply charge polarization to active NVs if requested.
-            if do_charge_polarize:
+            # rep 0: ionize all selected NVs, then readout
+            with qua.if_(rep_ind == 0):
+                seq_utils.macro_ionize(ion_coords_list)
+
+            # rep > 0: conditional charge polarization, then readout
+            with qua.else_():
                 seq_utils.macro_polarize(
                     pol_coords_list,
                     pol_duration_list,
@@ -57,16 +50,13 @@ def get_seq(
                     verify_charge_states=False,
                 )
 
-            # Readout should be spatially restricted by DMD/SLM host-side mask.
             seq_utils.macro_charge_state_readout()
-
             seq_utils.macro_wait_for_trigger()
 
         seq_utils.handle_reps(one_rep, num_reps, wait_for_trigger=False)
         seq_utils.macro_pause()
 
-    seq_ret_vals = []
-    return seq, seq_ret_vals
+    return seq, []
 
 
 if __name__ == "__main__":

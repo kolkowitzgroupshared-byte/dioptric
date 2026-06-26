@@ -762,7 +762,7 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_06_14-18_44_06-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_06_24-14_48_43-qnami-nv0_2026_02_20", load_npz=True
     )
     # img_array = data["img_array"]
     img_array = np.array(data["ref_img_array"])
@@ -783,9 +783,7 @@ if __name__ == "__main__":
     config = common.get_config_dict()
     file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
     print(file_path)
-    nv_coordinates, spot_weights = load_nv_coords(
-        file_path = file_path
-    )
+    nv_coordinates, spot_weights = load_nv_coords(file_path=file_path)
     
     # fitted_data = dm.get_raw_data(file_stem="2026_03_23-16_39_03-optimal_values_2026_03_22-21_49_52-qnami-nv0_2026_02_20")
     # saved_summary = dm.get_raw_data(file_stem="2026_03_26-18_13_04-recomputed_summary_w_1_2_1_2026_03_26-15_04_19-optimization_processed_full_raw_data")
@@ -1051,9 +1049,7 @@ if __name__ == "__main__":
         file_stem="2026_06_15-01_24_30-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis",
         load_npz=True,
     )
-
     analysis = analysis_data["charge_hist_multinv_binomial"]
-
     one_nv_inds = np.where(
         np.asarray(analysis["ok"], dtype=bool)
         & (np.rint(analysis["n_nvs_est"]).astype(int) == 1)
@@ -1073,8 +1069,9 @@ if __name__ == "__main__":
     #     and v1 >= 0.7 and v2 >= 0.2
     # ]
     # print(np.sort(list(include_indices)))
-    filtered_reordered_coords = [filtered_reordered_coords[i] for i in include_indices]
-    updated_spot_weights = [spot_weights[i] for i in include_indices]
+    # filtered_reordered_coords = [filtered_reordered_coords[i] for i in include_indices]
+    # updated_spot_weights = [spot_weights[i] for i in include_indices]
+    updated_spot_weights = spot_weights
 
     # filtered_pol_durs = [pol_duration_list[i] for i in include_indices]
     # filtered_scc_durs = [scc_duration_list[i] for i in include_indices]

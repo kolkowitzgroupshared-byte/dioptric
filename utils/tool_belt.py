@@ -729,6 +729,11 @@ def get_server_pulse_gen():
     return common.get_server("pulse_gen")
 
 
+def get_server_dmd():
+    """Get the pulse gen server for this setup, e.g. opx or swabian"""
+    return common.get_server("dmd")
+
+
 def get_server_pulse_streamer():
     """Get the pulse gen server for this setup, e.g. opx or swabian"""
     return common.get_server("pulse_streamer")

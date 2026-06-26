@@ -486,9 +486,9 @@ class DmdDlp6500(LabradServer):
         ON-pass convention:
             white / 255 = pass
         """
-        # self._require_dmd()
-        # self._show_pass_all(zero_block=True)
-        pass
+        self._require_dmd()
+        self._show_pass_all(zero_block=True)
+        # pass
         
     @setting(2, zero_block="b")
     def pass_all(self, c, zero_block=True):

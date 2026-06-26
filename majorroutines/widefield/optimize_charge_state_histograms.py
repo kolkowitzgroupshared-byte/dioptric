@@ -400,25 +400,27 @@ def optimize_pol_duration(
     nv_list, num_steps, num_reps, num_runs, min_duration, max_duration
 ):
     return _main(
-        nv_list, num_steps, num_reps, num_runs, min_duration, max_duration, True, True
+        nv_list, num_steps, num_reps, num_runs, min_duration, max_duration, True, True, False
     )
 
 
 def optimize_pol_amp(nv_list, num_steps, num_reps, num_runs, min_amp, max_amp):
-    return _main(nv_list, num_steps, num_reps, num_runs, min_amp, max_amp, True, False)
+    return _main(nv_list, num_steps, num_reps, num_runs, min_amp, max_amp, True, False, False)
 
 
 def optimize_readout_duration(
     nv_list, num_steps, num_reps, num_runs, min_duration, max_duration
 ):
     return _main(
-        nv_list, num_steps, num_reps, num_runs, min_duration, max_duration, False, True
+        nv_list, num_steps, num_reps, num_runs, min_duration, max_duration, False, True, False
     )
 
 
 def optimize_readout_amp(nv_list, num_steps, num_reps, num_runs, min_amp, max_amp):
-    return _main(nv_list, num_steps, num_reps, num_runs, min_amp, max_amp, False, False)
+    return _main(nv_list, num_steps, num_reps, num_runs, min_amp, max_amp, False, False, False)
 
+def optimize_readout_amp_repeated_readout(nv_list, num_steps, num_reps, num_runs, min_amp, max_amp):
+    return _main(nv_list, num_steps, num_reps, num_runs, min_amp, max_amp, False, False, True)
 
 def _main(
     nv_list,
@@ -429,6 +431,7 @@ def _main(
     max_step_val,
     optimize_pol_or_readout,
     optimize_duration_or_amp,
+    repeated_readout, 
 ):
     ### Initial setup
     print("Main Function Started")
@@ -440,7 +443,7 @@ def _main(
     pulse_gen = tb.get_server_pulse_gen()
     # print(step_vals)
     # return
-
+    num_exps = 4 if repeated_readout else 2
     ### Collect the data
 
     def run_fn(shuffled_step_inds):
@@ -459,13 +462,20 @@ def _main(
             shuffled_step_vals,
             optimize_pol_or_readout,
             optimize_duration_or_amp,
+            repeated_readout,
         ]
         # print(seq_args)
         seq_args_string = tb.encode_seq_args(seq_args)
         pulse_gen.stream_load(seq_file, seq_args_string, num_reps)
 
-    raw_data = base_routine.main(nv_list, num_steps, num_reps, num_runs, run_fn=run_fn)
-
+    raw_data = base_routine.main(
+        nv_list,
+        num_steps,
+        num_reps,
+        num_runs,
+        run_fn=run_fn,
+        num_exps=num_exps,
+    )
     ### Processing
 
     timestamp = dm.get_time_stamp()
@@ -478,6 +488,7 @@ def _main(
         "max_step_val": max_step_val,
         "optimize_pol_or_readout": optimize_pol_or_readout,
         "optimize_duration_or_amp": optimize_duration_or_amp,
+        "repeated_readout": repeated_readout,
     }
 
     try:

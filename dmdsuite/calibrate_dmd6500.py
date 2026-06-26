@@ -706,7 +706,7 @@ def calibrate_zero_order_onpass(
     exposure=0.0001,
     roi=12,
     stripe_width=40,
-    zero_radius_px=30,
+    zero_radius_px=11,
     save_scan_images=True,
 ):
     """
@@ -837,7 +837,7 @@ def calibrate_triangle_onpass(
         "triangle_x": x_raw,
     }
     process_and_plot(tmp_data, show=True)
-    input("X scan done. Press Enter for Y scan...")
+    # input("X scan done. Press Enter for Y scan...")
 
     y_positions, y_drop, dmd_y, y_raw = scan_dmd_axis_for_spots_onpass(
         dmd=dmd,
@@ -1291,7 +1291,7 @@ def main(
                 exposure=exposure_zero,
                 roi=8,
                 stripe_width=20,
-                zero_radius_px=30,
+                zero_radius_px=11,
                 save_scan_images=save_scan_images,
             )
             zero_data["timestamp"] = timestamp
@@ -1391,15 +1391,15 @@ if __name__ == "__main__":
 
     # To reprocess the new compressed DMD raw .npz, set this to the .npz path.
     LOAD_NPZ_PATH = None
-    main(
-        load_file_id=LOAD_FILE_ID,
-        load_npz_path=LOAD_NPZ_PATH,
-        reuse_zero_order=True,
-        force_zero_order=False,
-        use_yellow=True,
-        yellow_channel=7,
-        yellow_amp=0.04,
-    )
+    # main(
+    #     load_file_id=LOAD_FILE_ID,
+    #     load_npz_path=LOAD_NPZ_PATH,
+    #     reuse_zero_order=True,
+    #     force_zero_order=False,
+    #     use_yellow=True,
+    #     yellow_channel=7,
+    #     yellow_amp=0.045,
+    # )
     # take a quick image
     # do_thorcam_hardware_roi_with_yellow(
     # label="full-image-test",
