@@ -1,46 +1,13 @@
-// {
-//     // Use IntelliSense to learn about possible attributes.
-//     // Hover to view descriptions of existing attributes.
-//     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-//     "version": "0.2.0",
-//     "configurations": [
-//         {
-//             "name": "Debug console",
-//             "type": "python",
-//             "request": "launch",
-//             "program": "${file}",
-//             "console": "internalConsole",
-//             // "redirectOutput": true,
-//             "suppressMultipleSessionWarning": true,
-//             "justMyCode": false,
-//         },
-//         {
-//             "name": "Integrated terminal",
-//             "type": "python",
-//             "request": "launch",
-//             "program": "${file}",
-//             "console": "integratedTerminal",
-//             // "redirectOutput": true,
-//             "suppressMultipleSessionWarning": true,
-//             "justMyCode": false,
-//         }
-//     ]
-// }
-
-
 {
-  // --- your existing env bits ---
   "python.envFile": "${workspaceFolder}/.vscode/.env",
   "python-envs.defaultEnvManager": "ms-python.python:conda",
   "python-envs.defaultPackageManager": "ms-python.python:conda",
   "python-envs.pythonProjects": [],
 
-  // --- Python / Pylance ---
   "python.analysis.typeCheckingMode": "off",
-  "python.defaultInterpreterPath": "C:\\Users\\Saroj Chand\\miniconda3\\envs\\dioptric\\python.exe",
-  "python.terminal.activateEnvironment": true,   // VS Code will 'conda activate' for you
+  "python.defaultInterpreterPath": "C:\\Users\\saroj\\.conda\\envs\\dioptric\\python.exe",
+  "python.terminal.activateEnvironment": true,
 
-  // --- Make every new terminal start in (dioptric) on PowerShell ---
   "terminal.integrated.profiles.windows": {
     "Conda (dioptric, PowerShell)": {
       "source": "PowerShell",
@@ -48,9 +15,10 @@
       "args": [
         "-NoExit",
         "-Command",
-        "(& 'C:\\Users\\Saroj Chand\\miniconda3\\condabin\\conda.bat' 'shell.powershell' 'hook') | Out-String | Invoke-Expression; conda activate dioptric"
+        "(& 'C:\\ProgramData\\miniconda3\\condabin\\conda.bat' 'shell.powershell' 'hook') | Out-String | Invoke-Expression; conda activate dioptric"
       ]
     }
   },
-  "terminal.integrated.defaultProfile.windows": "Conda (dioptric, PowerShell)"
+
+  "terminal.integrated.defaultProfile.windows": "Conda (dioptric, PowerShell)",
 }

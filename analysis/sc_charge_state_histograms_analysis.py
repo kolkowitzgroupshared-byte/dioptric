@@ -1916,11 +1916,12 @@ if __name__ == "__main__":
 
     raw_data = dm.get_raw_data(
         # file_stem="2026_03_02-17_30_11-qnami-nv0_2026_02_20", ## 1277 working NVs
-        file_stem="2026_06_18-14_53_41-qnami-nv0_2026_02_20", ## 1176 working NVs
+        # file_stem="2026_06_18-14_53_41-qnami-nv0_2026_02_20", ## 1176 working NVs
         # file_stem="2026_06_14-18_44_06-qnami-nv0_2026_02_20",
         # file_stem="2026_06_20-19_22_52-qnami-nv0_2026_02_20",
         # file_stem="2026_06_23-12_05_32-qnami-nv0_2026_02_20",
-        
+        file_stem="2026_06_23-15_11_05-qnami-nv0_2026_02_20", ## 1176 working NVs
+
         load_npz=True,
     )
 
@@ -1928,7 +1929,7 @@ if __name__ == "__main__":
     raw_data,
     do_plot_histograms=False,
     prob_dist=ProbDist.COMPOUND_POISSON,
-    max_nvs_per_position=1,
+    max_nvs_per_position=3,
     force_nvs=None,
     bic_extra_nv_penalty=2.0,
     save_analysis=True,
@@ -1939,26 +1940,23 @@ if __name__ == "__main__":
     kpl.show(block=True)
     sys.exit()
     # =============================================================================
-    # Analysed 
-    # ============================================================================
-
-    
+    # Analyzed data: load saved analysis and attach it to original raw data
+    # =============================================================================
     analysis_data = dm.get_raw_data(
         # file_stem="2026_06_15-01_24_30-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis",  #1176NVs
         # file_stem="2026_06_22-18_39_58-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", #1176NVs
+        # file_stem="2026_06_22-18_39_58-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", #814NVs
         file_stem="2026_06_22-18_39_58-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", #814NVs
         load_npz=True,
     )
 
     # print_metric_definitions()
 
-    # figs = plot_all_charge_multinv_summaries(
+    # figs = plot_all_charge_multinv_summaries( 
     #     analysis_data,
     #     coords_key="pixel",
     #     save_figs=True,
     # )
-    
-
 
     # # Attach saved analysis to original raw data so histogram plotting works.
     # raw_data["charge_hist_multinv_binomial"] = analysis_data[
@@ -1978,14 +1976,7 @@ if __name__ == "__main__":
     # kpl.show(block=True)
     # sys.exit()
 
-    # =============================================================================
-    # Analyzed data: load saved analysis and attach it to original raw data
-    # =============================================================================
 
-    analysis_data = dm.get_raw_data(
-        file_stem="2026_06_22-18_39_58-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis",
-        load_npz=True,
-    )
 
     # New lightweight saved file has this structure:
     # analysis_data["charge_hist_multinv_binomial"] = actual analysis dictionary
@@ -2004,7 +1995,6 @@ if __name__ == "__main__":
     # =============================================================================
     # Plot summary figures from saved analysis
     # =============================================================================
-
     figs = plot_all_charge_multinv_summaries(
         raw_data,
         coords_key="pixel",
@@ -2037,7 +2027,6 @@ if __name__ == "__main__":
     # =============================================================================
     # Choose best examples by multi-class fidelity
     # =============================================================================
-
     num_examples = 10
 
     two_nv_best = two_nv_inds[
