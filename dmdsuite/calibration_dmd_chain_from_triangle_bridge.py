@@ -37,7 +37,7 @@ NUVU_TO_THORCAM_SLM_PATH = "slmsuite/calibration/nuvu_to_thorcam_slm.npz"
 DMD_TRIANGLE_CALIB_PATH = "dmdsuite/calibration/triangle_affine_onpass.npz"
 
 NUVU_TO_THORCAM_DMD_OUT = "dmdsuite/calibration/nuvu_to_thorcam_dmd.npz"
-DMD_CHAIN_OUT = "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1176.npz"
+DMD_CHAIN_OUT = "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd.npz"
 
 DMD_WIDTH = 1920
 DMD_HEIGHT = 1080
@@ -55,16 +55,16 @@ MAX_ALLOWED_ZERO_ERROR_PX = 50.0
 
 BRIDGE_TRIANGLE_THORCAM_SLM = np.array(
     [
-        [849.90381057, 595.0],
-        [590.09618943, 595.0],
-        [720.0, 370.0],
+        [839.90381057, 605.0],
+        [580.09618943,  605.0],
+        [710.0,        380.0],
     ],
     dtype=np.float32,
 )
 
 BRIDGE_TRIANGLE_NUVU = np.array(
     [
-        [82.902, 43.808], [132.309, 308.986], [336.018, 135.547]
+        [75.567, 55.14], [125.18, 320.554], [328.957, 146.755]
     ],
     dtype=np.float32,
 )

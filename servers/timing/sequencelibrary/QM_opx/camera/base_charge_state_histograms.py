@@ -34,6 +34,7 @@ def macro(
     readout_duration_override=None,
     readout_amp_override=None,
     aod_accees_time_override=None,
+    repeated_readout= False,
 ):
     if num_reps is None:
         num_reps = 1
@@ -131,12 +132,23 @@ def macro(
             readout_duration_override,
             readout_amp_override,
         )
-
         seq_utils.macro_wait_for_trigger()
-
+        
+        # repeated-readout test:
+        # Do a second readout immediately after the first one, without any
+        # re-polarization or re-ionization. Comparing readout 1 and readout 2
+        # tells us how much the first readout perturbs the charge state.
+        if repeated_readout:
+            seq_utils.macro_charge_state_readout(
+                readout_duration_override,
+                readout_amp_override,
+            )
+            seq_utils.macro_wait_for_trigger()
+        
     def one_rep(rep_ind=None):
         for do_ionize in [True, False]:
             one_exp(do_ionize)
+
 
     seq_utils.handle_reps(one_rep, num_reps, wait_for_trigger=False)
     seq_utils.macro_pause()

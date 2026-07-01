@@ -38,6 +38,7 @@ from utils import widefield as widefield
 #     ax.set_xlabel("Delay (ns)")
 #     ax.set_ylabel("Counts")
 #     return fig
+
 def create_median_data_figure(raw_data):
     nv_list = raw_data["nv_list"]
     delays = raw_data["taus"]  # assumed in ns

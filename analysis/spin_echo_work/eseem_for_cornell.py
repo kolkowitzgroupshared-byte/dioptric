@@ -1,20 +1,34 @@
+
 from pathlib import Path
 import numpy as np
 import pandas as pd
-import json
+# ----------------------------------------------------------------------
+# Basic helpers
+# ----------------------------------------------------------------------
+def _unit(v):
+    v = np.asarray(v, dtype=float)
+    n = np.linalg.norm(v)
+    if n == 0:
+        raise ValueError("Cannot normalize zero vector.")
+    return v / n
+
 
 # ----------------------------------------------------------------------
-# B Filed
-# ----------------------------------------------------------------------
-B_vec_G = np.array([-48.67047318, -32.07615947, 22.49657427], dtype=float)  ##62.48G
-B_vec_T = B_vec_G * 1e-4
-
-# ----------------------------------------------------------------------
-# Load A tensor
+# Read hyperfine table
 # ----------------------------------------------------------------------
 def read_hyperfine_table_safe(path: str | Path) -> pd.DataFrame:
+    """
+    Read NV-2 hyperfine table.
+
+    Expected columns:
+        index distance x y z Axx Ayy Azz Axy Axz Ayz
+
+    The A tensor entries are assumed to be in MHz.
+    Positions are assumed to be in Angstrom.
+    """
+
     path = Path(path)
-    # find first data row that starts with an integer (skip headers/junk)
+
     with path.open("r", encoding="utf-8", errors="ignore") as f:
         lines = f.readlines()
 
@@ -22,9 +36,9 @@ def read_hyperfine_table_safe(path: str | Path) -> pd.DataFrame:
         s = s.lstrip()
         if not s:
             return False
-        t = s.split()[0]
+        token = s.split()[0]
         try:
-            int(t)
+            int(token)
             return True
         except Exception:
             return False
@@ -34,7 +48,7 @@ def read_hyperfine_table_safe(path: str | Path) -> pd.DataFrame:
     except StopIteration:
         raise RuntimeError(f"Could not locate data start in hyperfine file: {path}")
 
-    HF_COLS = [
+    hf_cols = [
         "index",
         "distance",
         "x",
@@ -47,244 +61,250 @@ def read_hyperfine_table_safe(path: str | Path) -> pd.DataFrame:
         "Axz",
         "Ayz",
     ]
-    # primary path: pandas
-    try:
-        df = pd.read_csv(
-            path,
-            sep=r"\s+",  # robust whitespace split
-            engine="python",
-            comment="#",  # ignore commented tails
-            header=None,
-            names=HF_COLS,
-            usecols=list(range(11)),  # ensure exactly 11 cols
-            skiprows=data_start,
-            na_filter=False,
-        )
-        # enforce dtypes
-        df = df.astype(
-            {
-                "index": int,
-                "distance": float,
-                "x": float,
-                "y": float,
-                "z": float,
-                "Axx": float,
-                "Ayy": float,
-                "Azz": float,
-                "Axy": float,
-                "Axz": float,
-                "Ayz": float,
-            },
-            errors="ignore",
-        )
-        return df
-    except Exception as e:
-        # fallback: numpy → DataFrame
-        arr = np.loadtxt(
-            path,
-            comments="#",
-            dtype=float,
-            ndmin=2,
-        )
-        if arr.shape[1] < 11:
-            raise RuntimeError(
-                f"Expected ≥11 columns, found {arr.shape[1]} in {path}"
-            ) from e
-        arr = arr[:, :11]
-        df = pd.DataFrame(arr, columns=HF_COLS)
-        # index is float now; coerce to int safely
-        df["index"] = df["index"].round().astype(int)
-        return df
 
-# ----------------------------------------------------------------------
-# Spin-1/2 operators (Pauli / 2)
-# ----------------------------------------------------------------------
-Sx = 0.5 * np.array([[0, 1],
-                     [1, 0]], float)
-Sy = 0.5 * np.array([[0,-1j],
-                     [1j, 0]], complex)
-Sz = 0.5 * np.array([[1, 0],
-                     [0,-1]], float)
+    df = pd.read_csv(
+        path,
+        sep=r"\s+",
+        engine="python",
+        comment="#",
+        header=None,
+        names=hf_cols,
+        usecols=list(range(11)),
+        skiprows=data_start,
+    )
 
-# ----------------------------------------------------------------------
-# Geometry + Hamiltonian helpers
-# ----------------------------------------------------------------------
-def _build_U_from_orientation(orientation, phi_deg: float = 0.0):
+    df = df.astype(
+        {
+            "index": int,
+            "distance": float,
+            "x": float,
+            "y": float,
+            "z": float,
+            "Axx": float,
+            "Ayy": float,
+            "Azz": float,
+            "Axy": float,
+            "Axz": float,
+            "Ayz": float,
+        }
+    )
+
+    return df
+
+
+def get_A_file_from_row(row):
     """
-    Build a rotation matrix U that sends cubic axes to the NV frame for
-    a given orientation (±1, ±1, ±1) and an optional in-plane twist phi_deg.
-    """
-    ez = np.asarray(orientation, float)
-    ez /= np.linalg.norm(ez)
+    Build the hyperfine tensor and position vector from one table row.
 
-    # pick a trial x-axis not collinear with ez
-    trial = np.array([1.0, -1.0, 0.0])
-    if abs(np.dot(trial / np.linalg.norm(trial), ez)) > 0.95:
-        trial = np.array([0.0, 1.0, -1.0])
+    The table tensor is treated as A_file, i.e. in the dataset local frame.
 
-    ex = trial - np.dot(trial, ez) * ez
-    ex /= np.linalg.norm(ex)
-    ey = np.cross(ez, ex)
-    ey /= np.linalg.norm(ey)
-
-    U0 = np.column_stack([ex, ey, ez])
-
-    phi = np.deg2rad(phi_deg)
-    Rz = np.array([[np.cos(phi), -np.sin(phi), 0.0],
-                   [np.sin(phi),  np.cos(phi), 0.0],
-                   [0.0,          0.0,        1.0]])
-    return U0 @ Rz, ez
-
-
-def essem_lines_by_diag(
-    A_file_Hz: np.ndarray,
-    orientation=(1, 1, 1),
-    B_lab_vec=None,
-    gamma_n_Hz_per_T: float = 10.705e6,
-    ms: int = -1,
-    phi_deg: float = 0.0,
-):
-    """
-    Diagonalize the nuclear Hamiltonian with and without hyperfine to get
-    ESEEM frequencies f_- and f_+ for a single 13C site.
-
-    Parameters
-    ----------
-    A_file_Hz : (3,3) array
-        Hyperfine tensor (Hz) in the NV-(111) frame.
-    orientation : tuple
-        NV orientation in cubic coordinates (e.g. (1,1,1)).
-    B_lab_vec : array-like, shape (3,)
-        Lab-frame B-field vector. Units must match gamma_n_Hz_per_T.
-    gamma_n_Hz_per_T : float
-        Nuclear gyromagnetic ratio in Hz/T (13C: 10.705e6 Hz/T).
-    ms : int
-        Electron spin manifold (+/-1). For NV- ESEEM, typically -1.
-    phi_deg : float
-        Additional in-plane twist of hyperfine tensor about NV z.
+    For the NV-2 30.12.2023 dataset:
+        z_file || <111>
 
     Returns
     -------
-    f_minus, f_plus, fI_split, omega_ms_split, A_cubic, z_nv_cubic
-        All in Hz (except A_cubic tensor and unit vector z_nv_cubic).
+    A_file_Hz : 3x3 ndarray
+        Hyperfine tensor in Hz.
+
+    pos_file_A : 3-vector ndarray
+        13C position in Angstrom, in the dataset local frame.
     """
-    if B_lab_vec is None:
-        raise ValueError("B_lab_vec must be provided.")
 
-    # rotate A into cubic frame for this NV
-    U, z_nv_cubic = _build_U_from_orientation(orientation, phi_deg=phi_deg)
-    A_cubic = U @ A_file_Hz @ U.T
+    A_file_Hz = np.array(
+        [
+            [row.Axx, row.Axy, row.Axz],
+            [row.Axy, row.Ayy, row.Ayz],
+            [row.Axz, row.Ayz, row.Azz],
+        ],
+        dtype=float,
+    ) * 1e6  # MHz -> Hz
 
-    B_lab = np.asarray(B_lab_vec, float)
-    Bmag = float(np.linalg.norm(B_lab))
-    if Bmag == 0.0:
-        raise ValueError("B field magnitude is zero.")
-    bx, by, bz = B_lab / Bmag
+    pos_file_A = np.array([row.x, row.y, row.z], dtype=float)
 
-    # nuclear Zeeman
-    fI_Hz = gamma_n_Hz_per_T * Bmag
-    HZ = fI_Hz * (bx * Sx + by * Sy + bz * Sz)
-
-    # hyperfine term projected along NV axis (ms-dependent)
-    Aeff_vec = A_cubic @ z_nv_cubic
-    Hhf = float(ms) * (Aeff_vec[0] * Sx + Aeff_vec[1] * Sy + Aeff_vec[2] * Sz)
-
-    evals0 = np.linalg.eigvalsh(HZ)
-    evalsms = np.linalg.eigvalsh(HZ + Hhf)
-
-    fI_split = float(abs(evals0[1] - evals0[0]))
-    omega_ms_split = float(abs(evalsms[1] - evalsms[0]))
-
-    f_minus = abs(omega_ms_split - fI_split)
-    f_plus = omega_ms_split + fI_split
-    return f_minus, f_plus, fI_split, omega_ms_split, A_cubic, z_nv_cubic
+    return A_file_Hz, pos_file_A
 
 
 # ----------------------------------------------------------------------
-# 1) Build and save full ESEEM catalog
+# Frame rotations
 # ----------------------------------------------------------------------
-def build_essem_catalog(
-    hyperfine_path: str,
-    B_lab_vec,
-    orientations=((1, 1, 1), (1, 1, -1), (1, -1, 1), (-1, 1, 1)),
-    distance_max_A: float = 22.0,
-    gamma_n_Hz_per_T: float = 10.705e6,
-    ms: int = -1,
-    phi_deg: float = 0.0,
-    out_json: str = "essem_freq_catalog.json",
-    out_csv: str = "essem_freq_catalog.csv",
+def U_111_to_cubic():
+    """
+    Dataset local [111] frame -> cubic/lab frame.
+
+    Convention:
+        v_cubic = U @ v_file
+        A_cubic = U @ A_file @ U.T
+
+    For the NV-2 30.12.2023 dataset:
+        z_file || <111>
+    """
+
+    ex = _unit([1.0, -1.0, 0.0])
+    ez = _unit([1.0, 1.0, 1.0])
+    ey = _unit(np.cross(ez, ex))
+
+    return np.column_stack([ex, ey, ez])
+
+
+def make_R_NV(nv_axis_crystal, x_hint_crystal=(1.0, -1.0, 0.0)):
+    """
+    Cubic/lab frame -> target NV frame.
+
+    Returns R such that:
+        v_NV = R @ v_cubic
+        A_NV = R @ A_cubic @ R.T
+
+    nv_axis_crystal:
+        Target NV orientation in cubic/lab frame, e.g. (1,1,1).
+
+    x_hint_crystal:
+        Direction used to define the local x axis after projection
+        perpendicular to the NV axis. For the [111] dataset, (1,-1,0)
+        is a natural choice.
+    """
+
+    ez = _unit(nv_axis_crystal)
+
+    x_hint = _unit(x_hint_crystal)
+    ex = x_hint - np.dot(x_hint, ez) * ez
+
+    # If x_hint is nearly parallel to the NV axis, choose another direction.
+    if np.linalg.norm(ex) < 1e-9:
+        x_hint = _unit([0.0, 1.0, -1.0])
+        ex = x_hint - np.dot(x_hint, ez) * ez
+
+    ex = _unit(ex)
+
+    # Right-handed frame.
+    ey = _unit(np.cross(ez, ex))
+
+    # Rows are local basis vectors written in cubic coordinates.
+    R = np.vstack([ex, ey, ez])
+
+    return R
+
+
+def compute_hyperfine_components(A_tensor_Hz, dir_hat):
+    """
+    Compute A_parallel and A_perp relative to dir_hat.
+
+    dir_hat should be the magnetic-field direction in the same frame
+    as A_tensor_Hz.
+    """
+
+    ez = _unit(dir_hat)
+
+    tmp = np.array([1.0, 0.0, 0.0])
+    if abs(np.dot(tmp, ez)) > 0.9:
+        tmp = np.array([0.0, 1.0, 0.0])
+
+    e1 = tmp - np.dot(tmp, ez) * ez
+    e1 = _unit(e1)
+
+    e2 = _unit(np.cross(ez, e1))
+
+    A_par = float(ez @ A_tensor_Hz @ ez)
+
+    A_perp = float(
+        np.sqrt(
+            (e1 @ A_tensor_Hz @ ez) ** 2
+            + (e2 @ A_tensor_Hz @ ez) ** 2
+        )
+    )
+
+    return A_par, A_perp
+
+
+def rotate_site_for_experiment(
+    A_file_Hz,
+    pos_file_A,
+    B_lab_G,
+    nv_axis_crystal=(1, 1, 1),
 ):
     """
-    Reads the hyperfine table, computes (f-, f+) for all sites within distance_max_A
-    and all NV orientations; saves JSON+CSV with handy fields for later fitting.
+    Full pipeline for one 13C site.
 
-    Units:
-      - Axx, Ayy, ... in your table are assumed MHz -> multiplied by 1e6 to Hz.
-      - B_lab_vec units must match gamma_n_Hz_per_T (default assumes Tesla).
+    A_file_Hz:
+        Hyperfine tensor from the NV-2 30.12.2023 dataset.
+        Dataset frame has z || <111>.
+
+    pos_file_A:
+        13C position from the dataset local frame, in Angstrom.
+
+    B_lab_G:
+        Experimentally extracted lab/sample-frame B vector in Gauss.
+
+    nv_axis_crystal:
+        Target NV orientation in cubic/lab frame.
     """
-    df = read_hyperfine_table_safe(hyperfine_path).copy()
-    df = df[df["distance"] <= float(distance_max_A)].reset_index(drop=True)
 
-    B_lab = np.asarray(B_lab_vec, float)
-    Bmag = float(np.linalg.norm(B_lab))
-    B_hat = B_lab / Bmag
+    B_lab_T = np.asarray(B_lab_G, dtype=float) * 1e-4
 
-    records = []
-    for ori in orientations:
-        ori_tuple = tuple(int(x) for x in ori)
+    # Dataset local [111] frame -> cubic/lab.
+    U_file_to_cubic = U_111_to_cubic()
 
-        for i, row in df.iterrows():
-            # A_file in Hz (NV-(111) frame)
-            A_file_Hz = np.array(
-                [
-                    [row.Axx, row.Axy, row.Axz],
-                    [row.Axy, row.Ayy, row.Ayz],
-                    [row.Axz, row.Ayz, row.Azz],
-                ],
-                float,
-            ) * 1e6  # MHz -> Hz
+    A_cubic_Hz = U_file_to_cubic @ A_file_Hz @ U_file_to_cubic.T
+    pos_cubic_A = U_file_to_cubic @ np.asarray(pos_file_A, dtype=float)
 
-            (
-                fm,
-                fp,
-                fI,
-                wms,
-                A_cubic,
-                z_nv,
-            ) = essem_lines_by_diag(
-                A_file_Hz=A_file_Hz,
-                orientation=ori,
-                B_lab_vec=B_lab,
-                gamma_n_Hz_per_T=gamma_n_Hz_per_T,
-                ms=ms,
-                phi_deg=phi_deg,
-            )
+    # Cubic/lab -> target NV frame.
+    R_NV = make_R_NV(nv_axis_crystal)
 
-            # amplitude proxy: ~ sin^2(theta)*(A_perp/omega)^2
-            A_par = float(B_hat @ A_cubic @ B_hat)
-            A_perp_vec = A_cubic @ B_hat - A_par * B_hat
-            A_perp = float(np.linalg.norm(A_perp_vec))
-            cos_th = float(np.clip(B_hat @ (z_nv / np.linalg.norm(z_nv)), -1, 1))
-            sin2_th = 1.0 - cos_th**2
-            amp_wt = (A_perp / max(wms, 1e-30)) ** 2 * sin2_th
+    B_NV_T = R_NV @ B_lab_T
+    B_hat_NV = B_NV_T / np.linalg.norm(B_NV_T)
 
-            records.append(
-                {
-                    "orientation": ori_tuple,
-                    "site_index": int(i),
-                    "distance_A": float(row["distance"]),
-                    "f_minus_Hz": float(fm),
-                    "f_plus_Hz": float(fp),
-                    "fI_Hz": float(fI),
-                    "omega_ms_Hz": float(wms),
-                    "A_par_Hz": float(A_par),
-                    "A_perp_Hz": float(A_perp),
-                    "amp_weight": float(amp_wt),
-                }
-            )
+    A_NV_Hz = R_NV @ A_cubic_Hz @ R_NV.T
+    pos_NV_A = R_NV @ pos_cubic_A
 
-    # Save JSON
-    with open(out_json, "w") as f:
-        json.dump(records, f, indent=2)
+    A_par_Hz, A_perp_Hz = compute_hyperfine_components(
+        A_NV_Hz,
+        B_hat_NV,
+    )
 
-    return records
+    return {
+        "R_NV": R_NV,
+        "B_NV_G": B_NV_T / 1e-4,
+        "B_parallel_G": float((B_NV_T / 1e-4)[2]),
+        "B_transverse_G": float(np.linalg.norm((B_NV_T / 1e-4)[:2])),
+        "A_cubic_Hz": A_cubic_Hz,
+        "A_NV_Hz": A_NV_Hz,
+        "pos_cubic_A": pos_cubic_A,
+        "pos_NV_A": pos_NV_A,
+        "A_parallel_Hz": float(A_par_Hz),
+        "A_perp_Hz": float(A_perp_Hz),
+    }
+
+if __name__ == "__main__":
+    hyperfine_path = "analysis/nv_hyperfine_coupling/nv-2.txt"
+
+    # Example measured B-field vector from ODMR, in lab/sample frame, Gauss.
+    B_lab_G = np.array([-48.67047318, -32.07615947, 22.49657427])
+
+    # Example target NV orientation.
+    nv_axis_crystal = (1, 1, 1)
+
+    df = read_hyperfine_table_safe(hyperfine_path)
+
+    results = []
+
+    for _, row in df.iterrows():
+        A_file_Hz, pos_file_A = get_A_file_from_row(row)
+
+        out = rotate_site_for_experiment(
+            A_file_Hz=A_file_Hz,
+            pos_file_A=pos_file_A,
+            B_lab_G=B_lab_G,
+            nv_axis_crystal=nv_axis_crystal,
+        )
+
+        results.append(
+            {
+                "site_index": int(row["index"]),
+                "distance_A": float(row["distance"]),
+                "B_parallel_G": out["B_parallel_G"],
+                "B_transverse_G": out["B_transverse_G"],
+                "A_parallel_Hz": out["A_parallel_Hz"],
+                "A_perp_Hz": out["A_perp_Hz"],
+            }
+        )
+
+    print(results[:5])

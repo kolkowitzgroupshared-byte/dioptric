@@ -59,7 +59,7 @@ from majorroutines.widefield import (
     widefield_coherence,
     xy,
     dmd_turnoff_crosstalk_extinction_matrix,
-
+    adaptive_charge_initialization,
 )
 
 # from slmsuite import optimize_slm_calibration
@@ -156,9 +156,9 @@ def do_optimize_pol_amp(nv_list):
     # num_reps = 150
     # num_runs = 5
     num_reps = 10
-    num_runs = 220
-    min_amp = 0.7
-    max_amp = 1.2
+    num_runs = 200
+    min_amp = 0.5
+    max_amp = 1.5
     return optimize_charge_state_histograms.optimize_pol_amp(
         nv_list, num_steps, num_reps, num_runs, min_amp, max_amp
     )
@@ -183,10 +183,25 @@ def do_optimize_readout_amp(nv_list):
     # num_reps = 150
     # num_runs = 5
     num_reps = 10
-    num_runs = 200
+    num_runs = 400
     min_amp = 0.5
     max_amp = 1.5
     return optimize_charge_state_histograms.optimize_readout_amp(
+        nv_list, num_steps, num_reps, num_runs, min_amp, max_amp
+    )
+    
+    
+    
+def do_optimize_readout_amp_repeated_readout(nv_list):
+    num_steps = 24
+    # num_steps = 18
+    # num_reps = 150
+    # num_runs = 5
+    num_reps = 10
+    num_runs = 200
+    min_amp = 0.5
+    max_amp = 1.5
+    return optimize_charge_state_histograms.optimize_readout_amp_repeated_readout(
         nv_list, num_steps, num_reps, num_runs, min_amp, max_amp
     )
 
@@ -249,12 +264,43 @@ def do_charge_state_histograms_images(nv_list, vary_pol_laser=False):
 
 
 def do_charge_state_conditional_init(nv_list):
-    num_reps = 20
-    num_runs = 10
+    num_reps = 10
+    num_runs = 4
     # num_runs = 400
     return charge_state_conditional_init.main(nv_list, num_reps, num_runs)
 
 
+
+def do_adaptive_charge_initialization(nv_list):
+    adaptive_charge_initialization.main(
+        nv_list,
+        num_reps=10,
+        num_runs=4,
+        mode="dmd_block_confirmed",
+        dmd_indices=None,      # full nv_list, DMD index = nv_list index
+        dmd_radius_px=8,
+        dmd_plane=230,
+        confirm_margin_counts=1.0,
+        save_images=True,
+        save_images_avg_reps=False,
+        save_data=True,
+        save_fig=True,
+        save_image_frames=True,
+        save_movie=True,
+    )
+    
+    
+    # adaptive_charge_initialization.run_old_and_dmd_compare(
+    #     nv_list,
+    #     num_reps=10,
+    #     num_runs=4,
+    #     dmd_indices=None,
+    #     dmd_radius_px=8,
+    #     dmd_plane=230,
+    #     confirm_margin_counts=1.0,
+    #     save_images=True,
+    # )
+    
 def unique_keep_order(vals):
     out = []
     for val in vals:
@@ -270,7 +316,7 @@ def do_dmd_crosstalk_matrix(
     dmd_radius_px=8,
     num_reps=200,
     num_runs=1,
-    chain_path="dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1176.npz",
+    chain_path="dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd.npz",
 ):
     print("len(nv_list_all):", len(nv_list_all))
 
@@ -1694,7 +1740,7 @@ if __name__ == "__main__":
     date_str = "2026_02_20"
     sample_coords = [-1.20, -0.75]
     z_coord = -1.7
-    # z_coord = -4.0
+    # z_coord = -4.2
     
     config = common.get_config_dict()
     file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
@@ -1748,20 +1794,86 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.779, 98.172],
-    #     [73.751, 115.459],
-    #     [100.761, 68.885],
-    #     [127.002, 127.767],
+    #     [97.762, 98.157],
+    #     [73.753, 115.443],
+    #     [100.747, 68.886],
+    #     [126.98, 127.747],
     # ]
     # red_coords_list = [
-    #     [66.999, 67.784],
-    #     [47.273, 81.359],
-    #     [69.628, 43.99],
-    #     [90.653, 92.505],
+    #     [66.985, 67.771],
+    #     [47.274, 81.346],
+    #     [69.616, 43.991],
+    #     [90.635, 92.489],
     # ]
     
+    analysis_data = dm.get_raw_data(
+        file_stem="2026_06_23-16_12_54-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis",
+        load_npz=True,
+    )
+    analysis = analysis_data["charge_hist_multinv_binomial"]
+    threshold_list = analysis["threshold_any"]
+    
+    
+    analysis_data = dm.get_raw_data(
+        file_stem="2026_06_23-16_12_54-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis",
+        load_npz=True,
+    )
+
+    analysis = analysis_data["charge_hist_multinv_binomial"]
+
+    threshold = np.asarray(analysis["threshold_any"], dtype=float)
+    ok = np.asarray(analysis["ok"], dtype=bool)
+    n_est = np.rint(np.asarray(analysis["n_nvs_est"], dtype=float)).astype(int)
+    fidelity = np.asarray(analysis["readout_fidelity_any"], dtype=float)
+
+    # Basic good 1-NV filter
+    mask = (
+        ok
+        # & (n_est == 1)
+        & np.isfinite(threshold)
+        & np.isfinite(fidelity)
+        & (fidelity >= 0.90)
+    )
+
+    thr_good = threshold[mask]
+    inds_good = np.where(mask)[0]
+
+    median_thr = np.nanmedian(thr_good)
+    mad_thr = np.nanmedian(np.abs(thr_good - median_thr))
+
+    # Choose thresholds close to median.
+    # 2.5*MAD is a good first conservative window.
+    near_median_mask_local = np.abs(thr_good - median_thr) <= 2.5 * mad_thr
+
+    selected_inds = inds_good[near_median_mask_local]
+    # selected_inds = inds_good[mad_thr]
+
+    # Sort by fidelity, best first
+    # selected_inds = selected_inds[np.argsort(fidelity[selected_inds])[::-1]]
+
+    # Start small
+    # selected_inds = selected_inds[:50]
+
+    # print("median threshold:", median_thr)
+    # print("MAD threshold:", mad_thr)
+    # print("num good 1-NV:", len(inds_good))
+    # print("num near median:", np.sum(near_median_mask_local))
+    # print("num selected:", len(selected_inds))
+    # print("selected inds:", selected_inds)
+    # print("selected threshold range:", np.nanmin(threshold[selected_inds]), np.nanmax(threshold[selected_inds]))
+    # print("selected fidelity range:", np.nanmin(fidelity[selected_inds]), np.nanmax(fidelity[selected_inds]))
+
+    # plt.figure()
+    # plt.hist(thr_good, bins=60, alpha=0.5, label="good 1-NV")
+    # plt.axvline(median_thr, color="k", linestyle="--", label="median")
+    # plt.hist(threshold[selected_inds], bins=20, alpha=0.8, label="selected")
+    # plt.xlabel("threshold_any")
+    # plt.ylabel("count")
+    # plt.legend()
+    # plt.show(block=True)
+    # sys.exit()
     num_nvs = len(pixel_coords_list)
-    threshold_list = [None] * num_nvs
+    # threshold_list = [None] * num_nvs
     scc_duration_list = [88] * num_nvs
     pol_duration_list = [2000] * num_nvs
 
@@ -1790,7 +1902,7 @@ if __name__ == "__main__":
     # nv_list[i] will have the ith coordinates from the above lists
     nv_list: list[NVSig] = []
     for ind in range(num_nvs):
-        # if ind not in indices_113_MHz:
+        # if ind not in selected_inds:
         #     continue
         coords = {
             CoordsKey.SAMPLE: sample_coords,
@@ -1821,9 +1933,9 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    nv_sig.expected_counts = 1800
+    # nv_sig.expected_counts = 1850
     # nv_list = nv_list[::-1]  # flipping the order of NVs
-    # nv_list = nv_list[:600]
+    # nv_list = nv_list[:200]
     print(f"length of NVs list:{len(nv_list)}")
     # sys.exit()
     # endregion
@@ -1865,7 +1977,6 @@ if __name__ == "__main__":
         # )
 
         # do_widefield_image_sample(nv_sig, 50)     
-        
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list:
@@ -1924,10 +2035,11 @@ if __name__ == "__main__":
  
         # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
+        # do_adaptive_charge_initialization(nv_list)
         # do_dmd_crosstalk_matrix(
         #     nv_list_all=nv_list,
-        #     num_sources=20,
-        #     dmd_radius_px=6,
+        #     num_sources=200,
+        #     dmd_radius_px=4,
         # )
         
         # do_dmd_turnoff_crosstalk_extinction_matrix(nv_list)
@@ -1938,6 +2050,7 @@ if __name__ == "__main__":
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
         # do_optimize_readout_amp(nv_list)
+        do_optimize_readout_amp_repeated_readout(nv_list)
         # do_optimize_pol_duration(nv_list)
     
         # do_optimize_readout_duration(nv_list)
@@ -1971,7 +2084,7 @@ if __name__ == "__main__":
         # do_calibrate_iq_delay(nv_list)
         # do_rabi(nv_list)
         # do_power_rabi(nv_list)
-        do_resonance(nv_list)
+        # do_resonance(nv_list)
         # do_optimize_pol_duration(nv_list)
         # do_rabi(nv_list)
         # do_deer_hahn(nv_list)

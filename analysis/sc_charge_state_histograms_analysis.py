@@ -874,6 +874,36 @@ def process_and_plot(
     # -------------------------------------------------------------------------
     # Optional save of analysis-only result.
     # -------------------------------------------------------------------------
+    # if save_analysis:
+    #     timestamp = dm.get_time_stamp()
+
+    #     try:
+    #         repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
+    #         repr_nv_name = repr_nv_sig.name
+    #     except Exception:
+    #         repr_nv_name = "multinv-charge-analysis"
+
+    #     analysis_raw_data = {
+    #         "timestamp": timestamp,
+    #         "source_timestamp": raw_data.get("timestamp", None),
+    #         "source_file_id": raw_data.get("file_id", None),
+    #         # "nv_list": nv_list,
+    #         "charge_hist_multinv_binomial": analysis_dict,
+    #     }
+
+    #     file_path = dm.get_file_path(
+    #         __file__,
+    #         timestamp,
+    #         f"{repr_nv_name}-ref-only-multinv-charge-analysis",
+    #     )
+
+    #     dm.save_raw_data(
+    #         analysis_raw_data,
+    #         file_path,
+    #         keys_to_compress=[],
+    #     )
+
+    #     print("Saved reference-only multi-NV charge analysis:", file_path)
     if save_analysis:
         timestamp = dm.get_time_stamp()
 
@@ -918,6 +948,7 @@ def process_and_plot(
         )
 
         print("Saved reference-only multi-NV charge analysis:", file_path)
+        print("Saved 1-NV pillars:", len(one_nv_inds))
 
     return hist_figs
 
@@ -1937,8 +1968,8 @@ if __name__ == "__main__":
     n_jobs=12,
     )
 
-    kpl.show(block=True)
-    sys.exit()
+    # kpl.show(block=True)
+    # sys.exit()
     # =============================================================================
     # Analyzed data: load saved analysis and attach it to original raw data
     # =============================================================================
@@ -2012,6 +2043,15 @@ if __name__ == "__main__":
     threshold_any = np.asarray(analysis["threshold_any"], dtype=float)
     ref_mean_k = np.asarray(analysis["ref_mean_num_minus"], dtype=float)
 
+    one_nv_inds = np.where(ok & (np.rint(n_nvs_est).astype(int) == 1))[0]
+
+    print("\n1-NV pillar indices:")
+    print(one_nv_inds)
+
+    print("\nNumber of 1-NV pillars:", len(one_nv_inds))
+    
+    sys.exit()
+    
     two_nv_inds = np.where(ok & (n_nvs_est == 2))[0]
     three_nv_inds = np.where(ok & (n_nvs_est == 3))[0]
 

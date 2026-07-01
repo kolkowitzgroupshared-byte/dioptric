@@ -218,7 +218,7 @@ class DmdDlp6500(LabradServer):
         # That will upload pass/block planes and apply pass_zero_block
         # using zero_dmd_xy from the final chain file.
         # -----------------------------------------------------------------
-        self._show_pass_all(zero_block=False)
+        self._show_pass_all(zero_block=True)
 
         logging.info(
             "DMD connected. Final-chain calibration loaded if available. "
@@ -486,9 +486,9 @@ class DmdDlp6500(LabradServer):
         ON-pass convention:
             white / 255 = pass
         """
-        # self._require_dmd()
-        # self._show_pass_all(zero_block=True)
-        pass
+        self._require_dmd()
+        self._show_pass_all(zero_block=True)
+        # pass
         
     @setting(2, zero_block="b")
     def pass_all(self, c, zero_block=True):
