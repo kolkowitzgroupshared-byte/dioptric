@@ -13,7 +13,6 @@ from random import shuffle
 
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 from joblib import Parallel, delayed
 from matplotlib.animation import FuncAnimation
 from matplotlib.patches import Circle
