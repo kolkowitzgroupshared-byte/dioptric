@@ -812,6 +812,592 @@ def process_and_plot_charge(raw_data, do_plot=False):
     return
 
 
+def _fit_bimodal_threshold(counts_data, prob_dist=ProbDist.COMPOUND_POISSON):
+    """
+    Fit charge-state histogram and return threshold/fidelity.
+    """
+    try:
+        out = fit_bimodal_histogram(
+            counts_data,
+            prob_dist,
+            no_plot=True,
+        )
+
+        if len(out) == 3:
+            popt, pcov, chi_squared = out
+        else:
+            popt, chi_squared = out
+            pcov = None
+
+        if popt is None:
+            return {
+                "threshold": np.nan,
+                "readout_fidelity": np.nan,
+                "prep_fidelity": np.nan,
+                "goodness_of_fit": np.nan,
+                "fit_success": False,
+                "fit_params": None,
+            }
+
+        threshold, readout_fidelity = determine_threshold(
+            popt,
+            prob_dist,
+            dark_mode_weight=0.5,
+            ret_fidelity=True,
+        )
+
+        prep_fidelity = 1 - popt[0]
+
+        return {
+            "threshold": float(threshold),
+            "readout_fidelity": float(readout_fidelity),
+            "prep_fidelity": float(prep_fidelity),
+            "goodness_of_fit": float(chi_squared),
+            "fit_success": True,
+            "fit_params": np.asarray(popt, dtype=float),
+        }
+
+    except Exception as exc:
+        print("Fit failed:", exc)
+        return {
+            "threshold": np.nan,
+            "readout_fidelity": np.nan,
+            "prep_fidelity": np.nan,
+            "goodness_of_fit": np.nan,
+            "fit_success": False,
+            "fit_params": None,
+        }
+
+
+def _conditional_mean(values):
+    values = np.asarray(values, dtype=float)
+    if values.size == 0:
+        return np.nan
+    return float(np.nanmean(values))
+
+
+def _get_readout_amp_axis(raw_data):
+    """
+    Convert swept OPX amplitude scale to estimated readout power in uW.
+
+    If opx_config is unavailable, return the raw sweep values.
+    """
+    min_step_val = raw_data["min_step_val"]
+    max_step_val = raw_data["max_step_val"]
+    num_steps = raw_data["num_steps"]
+
+    step_vals_raw = np.linspace(min_step_val, max_step_val, num_steps)
+
+    optimize_pol_or_readout = raw_data["optimize_pol_or_readout"]
+    optimize_duration_or_amp = raw_data["optimize_duration_or_amp"]
+
+    if optimize_pol_or_readout:
+        return step_vals_raw, "Polarization parameter"
+
+    if optimize_duration_or_amp:
+        return step_vals_raw * 1e-6, "Readout duration (ms)"
+
+    # Readout amplitude case
+    try:
+        yellow_charge_readout_amp = raw_data["opx_config"]["waveforms"][
+            "yellow_charge_readout"
+        ]["sample"]
+
+        # Your empirical AOM voltage/power calibration.
+        a, b, c = 1.5133e04, 2.6976, -38.63
+
+        aom_voltage = step_vals_raw * yellow_charge_readout_amp
+        readout_power_uW = a * (aom_voltage**b) + c
+
+        return readout_power_uW, "Readout power (uW)"
+
+    except Exception:
+        return step_vals_raw, "Readout amplitude scale"
+
+
+def process_repeated_readout_amp(
+    raw_data,
+    do_plot=True,
+    save_data=True,
+    min_readout_fidelity=0.85,
+    min_same_state_survival=0.95,
+    min_nvm_survival=0.95,
+):
+    """
+    Analyze repeated-readout amplitude sweep.
+
+    Expected counts shape:
+        counts[exp, nv, run, step, rep]
+
+    Expected repeated-readout exp order:
+        exp 0 = ionized, readout 1
+        exp 1 = ionized, readout 2
+        exp 2 = no-ionization, readout 1
+        exp 3 = no-ionization, readout 2
+
+    Main goal:
+        choose the lowest readout amplitude / photon dose that gives reliable
+        classification and high charge-state survival.
+    """
+
+    nv_list = raw_data["nv_list"]
+    num_nvs = len(nv_list)
+    num_steps = int(raw_data["num_steps"])
+
+    counts = np.asarray(raw_data["counts"], dtype=float)
+
+    if counts.shape[0] < 4:
+        raise ValueError(
+            f"Repeated-readout analysis expects 4 experiments, got {counts.shape[0]}"
+        )
+
+    step_vals, x_label = _get_readout_amp_axis(raw_data)
+
+    ion_r1_exp = 0
+    ion_r2_exp = 1
+    noion_r1_exp = 2
+    noion_r2_exp = 3
+
+    prob_dist = ProbDist.COMPOUND_POISSON
+
+    def process_nv_step(nv_ind, step_ind):
+        ion_r1 = counts[ion_r1_exp, nv_ind, :, step_ind, :].flatten()
+        ion_r2 = counts[ion_r2_exp, nv_ind, :, step_ind, :].flatten()
+
+        noion_r1 = counts[noion_r1_exp, nv_ind, :, step_ind, :].flatten()
+        noion_r2 = counts[noion_r2_exp, nv_ind, :, step_ind, :].flatten()
+
+        # Use readout 1 from both branches to set threshold/fidelity.
+        r1_for_fit = np.concatenate([ion_r1, noion_r1])
+
+        fit_res = _fit_bimodal_threshold(r1_for_fit, prob_dist=prob_dist)
+        threshold = fit_res["threshold"]
+
+        if not np.isfinite(threshold):
+            fit_res.update(
+                {
+                    "same_state_survival": np.nan,
+                    "nvm_survival": np.nan,
+                    "nv0_survival": np.nan,
+                    "nvm_to_nv0_prob": np.nan,
+                    "nv0_to_nvm_prob": np.nan,
+                    "mean_counts_r1": np.nan,
+                    "mean_counts_r2": np.nan,
+                }
+            )
+            return fit_res
+
+        ion_s1 = ion_r1 > threshold
+        ion_s2 = ion_r2 > threshold
+
+        noion_s1 = noion_r1 > threshold
+        noion_s2 = noion_r2 > threshold
+
+        s1 = np.concatenate([ion_s1, noion_s1])
+        s2 = np.concatenate([ion_s2, noion_s2])
+
+        same_state_survival = float(np.mean(s1 == s2))
+
+        # NV- survival: P(readout2 says NV- | readout1 said NV-)
+        nvm_survival = _conditional_mean(s2[s1])
+
+        # NV0 survival: P(readout2 says NV0 | readout1 said NV0)
+        nv0_survival = _conditional_mean(~s2[~s1])
+
+        nvm_to_nv0_prob = (
+            1 - nvm_survival if np.isfinite(nvm_survival) else np.nan
+        )
+        nv0_to_nvm_prob = (
+            1 - nv0_survival if np.isfinite(nv0_survival) else np.nan
+        )
+
+        mean_counts_r1 = float(np.nanmean(r1_for_fit))
+        mean_counts_r2 = float(np.nanmean(np.concatenate([ion_r2, noion_r2])))
+
+        fit_res.update(
+            {
+                "same_state_survival": same_state_survival,
+                "nvm_survival": nvm_survival,
+                "nv0_survival": nv0_survival,
+                "nvm_to_nv0_prob": nvm_to_nv0_prob,
+                "nv0_to_nvm_prob": nv0_to_nvm_prob,
+                "mean_counts_r1": mean_counts_r1,
+                "mean_counts_r2": mean_counts_r2,
+            }
+        )
+
+        return fit_res
+
+    flat_results = Parallel(n_jobs=-1)(
+        delayed(process_nv_step)(nv_ind, step_ind)
+        for nv_ind in range(num_nvs)
+        for step_ind in range(num_steps)
+    )
+
+    threshold_arr = np.full((num_nvs, num_steps), np.nan)
+    readout_fidelity_arr = np.full((num_nvs, num_steps), np.nan)
+    prep_fidelity_arr = np.full((num_nvs, num_steps), np.nan)
+    goodness_of_fit_arr = np.full((num_nvs, num_steps), np.nan)
+    fit_success_arr = np.zeros((num_nvs, num_steps), dtype=bool)
+
+    same_state_survival_arr = np.full((num_nvs, num_steps), np.nan)
+    nvm_survival_arr = np.full((num_nvs, num_steps), np.nan)
+    nv0_survival_arr = np.full((num_nvs, num_steps), np.nan)
+    nvm_to_nv0_prob_arr = np.full((num_nvs, num_steps), np.nan)
+    nv0_to_nvm_prob_arr = np.full((num_nvs, num_steps), np.nan)
+    mean_counts_r1_arr = np.full((num_nvs, num_steps), np.nan)
+    mean_counts_r2_arr = np.full((num_nvs, num_steps), np.nan)
+
+    fit_params_arr = np.empty((num_nvs, num_steps), dtype=object)
+
+    for flat_ind, res in enumerate(flat_results):
+        nv_ind = flat_ind // num_steps
+        step_ind = flat_ind % num_steps
+
+        threshold_arr[nv_ind, step_ind] = res["threshold"]
+        readout_fidelity_arr[nv_ind, step_ind] = res["readout_fidelity"]
+        prep_fidelity_arr[nv_ind, step_ind] = res["prep_fidelity"]
+        goodness_of_fit_arr[nv_ind, step_ind] = res["goodness_of_fit"]
+        fit_success_arr[nv_ind, step_ind] = res["fit_success"]
+        fit_params_arr[nv_ind, step_ind] = res["fit_params"]
+
+        same_state_survival_arr[nv_ind, step_ind] = res["same_state_survival"]
+        nvm_survival_arr[nv_ind, step_ind] = res["nvm_survival"]
+        nv0_survival_arr[nv_ind, step_ind] = res["nv0_survival"]
+        nvm_to_nv0_prob_arr[nv_ind, step_ind] = res["nvm_to_nv0_prob"]
+        nv0_to_nvm_prob_arr[nv_ind, step_ind] = res["nv0_to_nvm_prob"]
+        mean_counts_r1_arr[nv_ind, step_ind] = res["mean_counts_r1"]
+        mean_counts_r2_arr[nv_ind, step_ind] = res["mean_counts_r2"]
+
+    # Aggregate curves.
+    median_readout_fidelity = np.nanmedian(readout_fidelity_arr, axis=0)
+    median_same_state_survival = np.nanmedian(same_state_survival_arr, axis=0)
+    median_nvm_survival = np.nanmedian(nvm_survival_arr, axis=0)
+    median_nv0_survival = np.nanmedian(nv0_survival_arr, axis=0)
+    median_counts_r1 = np.nanmedian(mean_counts_r1_arr, axis=0)
+    median_goodness_of_fit = np.nanmedian(goodness_of_fit_arr, axis=0)
+
+    avg_readout_fidelity = np.nanmean(readout_fidelity_arr, axis=0)
+    avg_same_state_survival = np.nanmean(same_state_survival_arr, axis=0)
+    avg_nvm_survival = np.nanmean(nvm_survival_arr, axis=0)
+    avg_nv0_survival = np.nanmean(nv0_survival_arr, axis=0)
+
+    # Choose lowest photon dose / amplitude that passes criteria.
+    good = (
+        np.isfinite(median_readout_fidelity)
+        & np.isfinite(median_same_state_survival)
+        & np.isfinite(median_nvm_survival)
+        & (median_readout_fidelity >= min_readout_fidelity)
+        & (median_same_state_survival >= min_same_state_survival)
+        & (median_nvm_survival >= min_nvm_survival)
+    )
+
+    if np.any(good):
+        optimal_step_ind = int(np.where(good)[0][0])
+        optimal_reason = "lowest step satisfying thresholds"
+    else:
+        # Fallback: maximize balanced score with small penalty for photon dose.
+        def norm01(x):
+            x = np.asarray(x, dtype=float)
+            return (x - np.nanmin(x)) / (np.nanmax(x) - np.nanmin(x) + 1e-12)
+
+        score = (
+            0.40 * norm01(median_readout_fidelity)
+            + 0.40 * norm01(median_same_state_survival)
+            + 0.15 * norm01(median_nvm_survival)
+            + 0.05 * (1 - norm01(median_counts_r1))
+        )
+
+        optimal_step_ind = int(np.nanargmax(score))
+        optimal_reason = "fallback max score; thresholds not all satisfied"
+
+    optimal_step_val = float(step_vals[optimal_step_ind])
+
+    results = {
+        "analysis_type": "repeated_readout_amp",
+        "num_nvs": int(num_nvs),
+        "num_steps": int(num_steps),
+        "step_vals": np.asarray(step_vals, dtype=float).tolist(),
+        "x_label": x_label,
+        "exp_order": {
+            "0": "ionized_readout_1",
+            "1": "ionized_readout_2",
+            "2": "noion_readout_1",
+            "3": "noion_readout_2",
+        },
+        "criteria": {
+            "min_readout_fidelity": float(min_readout_fidelity),
+            "min_same_state_survival": float(min_same_state_survival),
+            "min_nvm_survival": float(min_nvm_survival),
+        },
+        "optimal_step_ind": int(optimal_step_ind),
+        "optimal_step_val": float(optimal_step_val),
+        "optimal_reason": optimal_reason,
+        "threshold_arr": threshold_arr.tolist(),
+        "readout_fidelity_arr": readout_fidelity_arr.tolist(),
+        "prep_fidelity_arr": prep_fidelity_arr.tolist(),
+        "goodness_of_fit_arr": goodness_of_fit_arr.tolist(),
+        "fit_success_arr": fit_success_arr.tolist(),
+        "same_state_survival_arr": same_state_survival_arr.tolist(),
+        "nvm_survival_arr": nvm_survival_arr.tolist(),
+        "nv0_survival_arr": nv0_survival_arr.tolist(),
+        "nvm_to_nv0_prob_arr": nvm_to_nv0_prob_arr.tolist(),
+        "nv0_to_nvm_prob_arr": nv0_to_nvm_prob_arr.tolist(),
+        "mean_counts_r1_arr": mean_counts_r1_arr.tolist(),
+        "mean_counts_r2_arr": mean_counts_r2_arr.tolist(),
+        "median_readout_fidelity": median_readout_fidelity.tolist(),
+        "median_same_state_survival": median_same_state_survival.tolist(),
+        "median_nvm_survival": median_nvm_survival.tolist(),
+        "median_nv0_survival": median_nv0_survival.tolist(),
+        "median_counts_r1": median_counts_r1.tolist(),
+        "median_goodness_of_fit": median_goodness_of_fit.tolist(),
+        "avg_readout_fidelity": avg_readout_fidelity.tolist(),
+        "avg_same_state_survival": avg_same_state_survival.tolist(),
+        "avg_nvm_survival": avg_nvm_survival.tolist(),
+        "avg_nv0_survival": avg_nv0_survival.tolist(),
+    }
+
+    if save_data:
+        timestamp = dm.get_time_stamp()
+        file_name = "repeated_readout_amp_processed"
+        file_path = dm.get_file_path(__file__, timestamp, file_name)
+        dm.save_raw_data(make_json_safe(results), file_path)
+        print("Saved repeated-readout analysis:", file_path)
+
+    print("\n=== Repeated-readout optimization ===")
+    print("Optimal step index:", optimal_step_ind)
+    print(f"Optimal {x_label}: {optimal_step_val:.4g}")
+    print("Reason:", optimal_reason)
+    print(
+        "At optimum: "
+        f"readout fid={median_readout_fidelity[optimal_step_ind]:.3f}, "
+        f"same-state survival={median_same_state_survival[optimal_step_ind]:.3f}, "
+        f"NV- survival={median_nvm_survival[optimal_step_ind]:.3f}, "
+        f"NV0 survival={median_nv0_survival[optimal_step_ind]:.3f}"
+    )
+
+    if do_plot:
+        fig = plot_repeated_readout_amp_summary(results)
+        return results, fig
+
+    return results
+
+
+def plot_repeated_readout_amp_summary(results):
+    step_vals = np.asarray(results["step_vals"], dtype=float)
+    x_label = results["x_label"]
+
+    readout = np.asarray(results["median_readout_fidelity"], dtype=float)
+    same_survival = np.asarray(results["median_same_state_survival"], dtype=float)
+    nvm_survival = np.asarray(results["median_nvm_survival"], dtype=float)
+    nv0_survival = np.asarray(results["median_nv0_survival"], dtype=float)
+    counts_r1 = np.asarray(results["median_counts_r1"], dtype=float)
+
+    opt_ind = int(results["optimal_step_ind"])
+    opt_val = float(results["optimal_step_val"])
+
+    fig, ax1 = plt.subplots(figsize=(7, 5))
+
+    ax1.plot(step_vals, readout, label="Readout fidelity")
+    ax1.plot(step_vals, same_survival, label="Same-state survival")
+    ax1.plot(step_vals, nvm_survival, label="NV$^-$ survival")
+    ax1.plot(step_vals, nv0_survival, label="NV$^0$ survival")
+
+    ax1.axvline(
+        opt_val,
+        linestyle="--",
+        label=f"Chosen = {opt_val:.3g}",
+    )
+
+    ax1.set_xlabel(x_label)
+    ax1.set_ylabel("Probability")
+    ax1.set_ylim(0, 1.02)
+    ax1.grid(True, alpha=0.3)
+
+    ax2 = ax1.twinx()
+    ax2.plot(
+        step_vals,
+        counts_r1,
+        linestyle=":",
+        label="Median counts R1",
+    )
+    ax2.set_ylabel("Median counts")
+
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc="lower right", fontsize=9)
+
+    ax1.set_title(
+        "Repeated readout optimization\n"
+        f"chosen index {opt_ind}, {x_label}={opt_val:.3g}"
+    )
+
+    fig.tight_layout()
+    return fig
+
+
+def print_repeated_readout_nv_summary(results, nv_ind, step_ind=None):
+    if step_ind is None:
+        step_ind = int(results["optimal_step_ind"])
+
+    step_vals = np.asarray(results["step_vals"], dtype=float)
+    x_label = results["x_label"]
+
+    readout_fid = float(results["readout_fidelity_arr"][nv_ind][step_ind])
+    same_surv = float(results["same_state_survival_arr"][nv_ind][step_ind])
+    nvm_surv = float(results["nvm_survival_arr"][nv_ind][step_ind])
+    nv0_surv = float(results["nv0_survival_arr"][nv_ind][step_ind])
+    threshold = float(results["threshold_arr"][nv_ind][step_ind])
+
+    print("\n=== Repeated-readout NV summary ===")
+    print(f"NV index: {nv_ind}")
+    print(f"Step index: {step_ind}")
+    print(f"{x_label}: {step_vals[step_ind]:.4g}")
+    print(f"Threshold: {threshold:.3f}")
+    print(f"Readout fidelity: {readout_fid:.3f}")
+    print(f"Same-state survival: {same_surv:.3f}")
+    print(f"NV- survival: {nvm_surv:.3f}")
+    print(f"NV0 survival: {nv0_surv:.3f}")
+    
+
+def plot_repeated_readout_nv_histograms(
+    raw_data,
+    results,
+    nv_ind,
+    step_ind=None,
+    bins=60,
+    density=True,
+):
+    """
+    Plot repeated-readout histograms for one NV and one readout amplitude.
+
+    Expected exp order:
+        exp 0 = ionized, readout 1
+        exp 1 = ionized, readout 2
+        exp 2 = no-ionization, readout 1
+        exp 3 = no-ionization, readout 2
+    """
+
+    if step_ind is None:
+        step_ind = int(results["optimal_step_ind"])
+
+    counts = np.asarray(raw_data["counts"], dtype=float)
+
+    if counts.shape[0] < 4:
+        raise ValueError(
+            f"Expected 4 experiments for repeated readout, got {counts.shape[0]}"
+        )
+
+    step_vals = np.asarray(results["step_vals"], dtype=float)
+    x_label = results["x_label"]
+
+    threshold = float(results["threshold_arr"][nv_ind][step_ind])
+
+    ion_r1 = counts[0, nv_ind, :, step_ind, :].flatten()
+    ion_r2 = counts[1, nv_ind, :, step_ind, :].flatten()
+    noion_r1 = counts[2, nv_ind, :, step_ind, :].flatten()
+    noion_r2 = counts[3, nv_ind, :, step_ind, :].flatten()
+
+    r1_all = np.concatenate([ion_r1, noion_r1])
+    r2_all = np.concatenate([ion_r2, noion_r2])
+
+    readout_fid = float(results["readout_fidelity_arr"][nv_ind][step_ind])
+    same_surv = float(results["same_state_survival_arr"][nv_ind][step_ind])
+    nvm_surv = float(results["nvm_survival_arr"][nv_ind][step_ind])
+    nv0_surv = float(results["nv0_survival_arr"][nv_ind][step_ind])
+
+    fig, axes = plt.subplots(2, 2, figsize=(10, 7))
+    axes = axes.ravel()
+
+    hist_kwargs = dict(bins=bins, density=density, alpha=0.45)
+
+    # Ionized branch
+    axes[0].hist(ion_r1, label="R1", **hist_kwargs)
+    axes[0].hist(ion_r2, label="R2", **hist_kwargs)
+    axes[0].axvline(threshold, linestyle="--", color="k", label="Threshold")
+    axes[0].set_title("Ionized branch")
+    axes[0].set_xlabel("Integrated counts")
+    axes[0].set_ylabel("Probability" if density else "Counts")
+    axes[0].legend()
+
+    # No-ionization branch
+    axes[1].hist(noion_r1, label="R1", **hist_kwargs)
+    axes[1].hist(noion_r2, label="R2", **hist_kwargs)
+    axes[1].axvline(threshold, linestyle="--", color="k", label="Threshold")
+    axes[1].set_title("No-ionization branch")
+    axes[1].set_xlabel("Integrated counts")
+    axes[1].legend()
+
+    # Combined readout 1 vs readout 2
+    axes[2].hist(r1_all, label="Readout 1", **hist_kwargs)
+    axes[2].hist(r2_all, label="Readout 2", **hist_kwargs)
+    axes[2].axvline(threshold, linestyle="--", color="k", label="Threshold")
+    axes[2].set_title("Combined R1 vs R2")
+    axes[2].set_xlabel("Integrated counts")
+    axes[2].set_ylabel("Probability" if density else "Counts")
+    axes[2].legend()
+
+    # Metric text
+    axes[3].axis("off")
+    txt = (
+        f"NV {nv_ind}\n"
+        f"step index = {step_ind}\n"
+        f"{x_label} = {step_vals[step_ind]:.4g}\n\n"
+        f"threshold = {threshold:.2f}\n"
+        f"readout fidelity = {readout_fid:.3f}\n"
+        f"same-state survival = {same_surv:.3f}\n"
+        f"NV$^-$ survival = {nvm_surv:.3f}\n"
+        f"NV$^0$ survival = {nv0_surv:.3f}\n\n"
+        f"mean R1 counts = {np.nanmean(r1_all):.1f}\n"
+        f"mean R2 counts = {np.nanmean(r2_all):.1f}"
+    )
+    axes[3].text(0.05, 0.95, txt, va="top", ha="left", fontsize=11)
+
+    fig.suptitle(
+        f"Repeated-readout histogram example: NV {nv_ind}",
+        fontsize=14,
+    )
+
+    fig.tight_layout()
+    return fig
+
+
+def pick_repeated_readout_example_nvs(results, step_ind=None):
+    """
+    Pick representative NVs:
+        good NV: high readout fidelity and high survival
+        destructive NV: low NV- survival
+        median NV: near median combined score
+    """
+
+    if step_ind is None:
+        step_ind = int(results["optimal_step_ind"])
+
+    readout = np.asarray(results["readout_fidelity_arr"], dtype=float)[:, step_ind]
+    same = np.asarray(results["same_state_survival_arr"], dtype=float)[:, step_ind]
+    nvm = np.asarray(results["nvm_survival_arr"], dtype=float)[:, step_ind]
+    nv0 = np.asarray(results["nv0_survival_arr"], dtype=float)[:, step_ind]
+
+    score = 0.35 * readout + 0.25 * same + 0.30 * nvm + 0.10 * nv0
+
+    finite = np.isfinite(score)
+    valid_inds = np.where(finite)[0]
+
+    if len(valid_inds) == 0:
+        raise ValueError("No valid NVs found.")
+
+    good_nv = int(valid_inds[np.nanargmax(score[valid_inds])])
+    bad_nvm_nv = int(valid_inds[np.nanargmin(nvm[valid_inds])])
+
+    median_score = np.nanmedian(score[valid_inds])
+    median_nv = int(valid_inds[np.nanargmin(np.abs(score[valid_inds] - median_score))])
+
+    return {
+        "good_nv": good_nv,
+        "low_nv_minus_survival_nv": bad_nvm_nv,
+        "median_nv": median_nv,
+    }
+
 if __name__ == "__main__":
     kpl.init_kplotlib()
     ## readout amp
@@ -820,6 +1406,9 @@ if __name__ == "__main__":
     file_id = "2026_06_11-19_58_49-qnami-nv0_2026_02_20" ## 1176
     file_id = "2026_06_17-20_57_41-qnami-nv0_2026_02_20" ## 1176
     
+    ### REPEATED_READOUT_FILE_STEM
+    file_id = "2026_06_26-21_58_16-qnami-nv0_2026_02_20" ## 1176
+    
     ## pol amp var
     # file_id = "2026_03_24-21_11_43-qnami-nv0_2026_02_20" ## 1460
     # file_id = "2026_03_25-23_32_41-qnami-nv0_2026_02_20" ## 1306
@@ -827,10 +1416,36 @@ if __name__ == "__main__":
     ## pol dur var
     # file_id = "2026_03_17-06_00_50-qnami-nv0_2026_02_20"
 
-    # raw_data = dm.get_raw_data(file_stem=file_id, load_npz=True)
+    raw_data = dm.get_raw_data(file_stem=file_id, load_npz=True)
+    
     # process_and_plot(raw_data, do_plot=False)
     # process_and_plot_charge(raw_data, do_plot=True)
-    # sys.exit()
+    
+    results, fig = process_repeated_readout_amp(
+        raw_data,
+        do_plot=True,
+        save_data=True,
+        min_readout_fidelity=0.85,
+        min_same_state_survival=0.95,
+        min_nvm_survival=0.95,
+    )    
+    
+    results = dm.get_raw_data(
+    file_stem="2026_06_27-15_10_02-repeated_readout_amp_processed",
+    load_npz=True,
+    )
+
+    step_ind = int(results["optimal_step_ind"])
+
+    example_nvs = pick_repeated_readout_example_nvs(results, step_ind=step_ind)
+
+    for label, nv_ind in example_nvs.items():
+        print("\n", label)
+        print_repeated_readout_nv_summary(results, nv_ind, step_ind=step_ind)
+        plot_repeated_readout_nv_histograms(raw_data, results, nv_ind, step_ind)
+        kpl.show(block=True)
+
+    sys.exit()
 
     # analyzed_file_id = "2026_06_12-11_05_20-optimization_processed_full_raw_data"
     analyzed_file_id = "2026_06_18-13_45_20-optimization_processed_full_raw_data"
