@@ -25,6 +25,7 @@ from majorroutines.caf_spectroscopy import (
     lifetime_caf_recovery,
     lifetime_caf_single_shot,
     monitor_power,
+    move_slider,
     sideillum_resonance,
     single_lifetime,
     singlet_search,
@@ -106,6 +107,13 @@ def do_awg_test():
 def do_power_monitor():
     monitor_power.main()
     return
+
+
+def do_move_slider(slider_num, slot_num):
+    move_slider.main(
+        slider_num=slider_num,
+        slot_num=slot_num,
+    )
 
 
 def do_stationary_count(nv_sig, disable_opt=None):
@@ -553,6 +561,23 @@ def do_stationary_count(nv_sig, disable_opt=None):
     )
 
 
+def do_two_slider_moves():
+    """
+    A bundled function to pass into run_while_active.
+    Executes two slider movements while the pulse streamer is held constant.
+    """
+    print("Executing first slider move...")
+    do_move_slider(slider_num=1, slot_num=1)
+
+    # Optional: add a small pause if your hardware needs time to settle
+    time.sleep(1.0)
+
+    print("Executing second slider move...")
+    do_move_slider(slider_num=3, slot_num=0)
+
+    time.sleep(1.0)
+
+
 def do_pulse_streamer_constant(
     digital_channels=(2,), analog0=None, analog1=None, run_while_active=None
 ):
@@ -604,8 +629,10 @@ if __name__ == "__main__":
     th_sig.expected_counts = None  # raw counts, none when unknown
 
     try:
+        # do_move_slider(1,0)
         do_pulse_streamer_constant(
-            digital_channels=(1,),  # run_while_active=do_power_monitor
+            digital_channels=(1,),
+            # run_while_active=do_two_slider_moves(),  # do_power_monitor
         )
         # ^leave the comma at the end or it will complain
         # do_power_monitor()
