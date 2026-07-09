@@ -34,6 +34,7 @@ class ProbDist(Enum):
     POISSON = auto()
     BROADENED_POISSON = auto()
     COMPOUND_POISSON = auto()  # See wiki 11/14
+    BROADENED_COMPOUND_POISSON = auto()
     GAUSSIAN = auto()
     SKEW_GAUSSIAN = auto()
     COMPOUND_POISSON_WITH_IONIZATION = auto()  # See Cambria PRX 2025
@@ -241,6 +242,78 @@ def compound_poisson_cdf(x, rate):
     return _calc_cdf(ProbDist.COMPOUND_POISSON, x, rate)
 
 
+
+def broadened_compound_poisson_pdf(z, rate, sigma):
+    """
+    Discrete broadened compound-Poisson PMF.
+
+    Physical meaning:
+        First generate ideal compound-Poisson photon counts m.
+        Then add Gaussian technical broadening with width sigma.
+        Finally bin back into integer count bin z.
+
+    P(z | rate, sigma)
+        = sum_m P_CP(m | rate) *
+          integral_{z-0.5}^{z+0.5} Normal(y | m, sigma) dy
+
+    This lets a single charge-state peak be broader than pure compound-Poisson,
+    so the fitter is less tempted to invent fake extra NV modes.
+    """
+
+    if isinstance(z, list):
+        z = np.array(z)
+
+    z_not_array = not isinstance(z, np.ndarray)
+    if z_not_array:
+        z = np.array([z], dtype=float)
+
+    z = np.asarray(z, dtype=float).ravel()
+
+    rate = float(max(rate, 1e-12))
+    sigma = float(max(sigma, 1e-9))
+
+    # Sum over ideal integer counts m.
+    upper_lim = _safe_upper_lim(
+        rate + 6.0 * sigma,
+        nsig=7,
+        min_lim=20,
+        max_lim=50_000,
+    )
+
+    m_vals = np.arange(0, upper_lim + 1, dtype=float)
+
+    # Ideal compound-Poisson probability for m.
+    p_m = compound_poisson_pdf(m_vals, rate)
+    p_m = np.asarray(p_m, dtype=float)
+    p_m = np.where(np.isfinite(p_m), p_m, 0.0)
+    p_m = np.clip(p_m, 0.0, None)
+
+    s = float(np.sum(p_m))
+    if s > 0 and np.isfinite(s):
+        p_m = p_m / s
+
+    # Probability that Gaussian-broadened value lands in integer bin z.
+    # Shape: len(m_vals) x len(z)
+    z_lo = z[None, :] - 0.5
+    z_hi = z[None, :] + 0.5
+    m = m_vals[:, None]
+
+    bin_prob = norm.cdf((z_hi - m) / sigma) - norm.cdf((z_lo - m) / sigma)
+    bin_prob = np.where(np.isfinite(bin_prob), bin_prob, 0.0)
+    bin_prob = np.clip(bin_prob, 0.0, 1.0)
+
+    ret_val = p_m @ bin_prob
+
+    if z_not_array:
+        return float(ret_val[0])
+
+    return ret_val
+
+
+def broadened_compound_poisson_cdf(x, rate, sigma):
+    return _calc_cdf(ProbDist.BROADENED_COMPOUND_POISSON, x, rate, sigma)
+
+
 def compound_poisson_with_ionization_cdf(x, lambda_0, lambda_m, ion):
     return _calc_cdf(
         ProbDist.COMPOUND_POISSON_WITH_IONIZATION, x, lambda_0, lambda_m, ion
@@ -363,6 +436,35 @@ def fit_bimodal_histogram(
         bounds = (
             (0, mean_dark_min, mean_dark_min),
             (1, mean_bright_max, mean_bright_max),
+        )
+
+    elif prob_dist is ProbDist.BROADENED_COMPOUND_POISSON:
+        sigma_dark_guess = max(2.0, 0.25 * np.sqrt(max(mean_dark_guess, 1.0)))
+        sigma_bright_guess = max(2.0, 0.25 * np.sqrt(max(mean_bright_guess, 1.0)))
+
+        guess_params = (
+            ratio_guess,
+            mean_dark_guess,
+            sigma_dark_guess,
+            mean_bright_guess,
+            sigma_bright_guess,
+        )
+
+        bounds = (
+            (
+                0.0,
+                mean_dark_min,
+                0.25,
+                mean_dark_min,
+                0.25,
+            ),
+            (
+                1.0,
+                mean_bright_max,
+                max(3.0, 0.75 * mean_bright_guess),
+                mean_bright_max,
+                max(3.0, 0.75 * mean_bright_guess),
+            ),
         )
     elif prob_dist is ProbDist.COMPOUND_POISSON_WITH_IONIZATION:
         guess_params = (ratio_guess, mean_dark_guess, mean_bright_guess, 0.0)
