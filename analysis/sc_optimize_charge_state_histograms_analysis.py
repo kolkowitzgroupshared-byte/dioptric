@@ -996,6 +996,73 @@ def plot_ref_histogram_from_processed(
 
     return fig
 
+def recompute_optimal_step_index_from_processed(
+    analyzed_data,
+    nv_ind,
+    weights=(1, 1, 1),
+    skip_first=2,
+):
+    """
+    Return the optimal step index for one NV using the same score rule as
+    find_optimal_value_geom_mean().
+    """
+
+    w1, w2, w3 = weights
+
+    step_vals = np.asarray(analyzed_data["step_vals"], dtype=float)
+    prep = np.asarray(analyzed_data["prep_fidelity_arr"][nv_ind], dtype=float)
+    readout = np.asarray(analyzed_data["readout_fidelity_arr"][nv_ind], dtype=float)
+    gof = np.asarray(analyzed_data["goodness_of_fit_arr"][nv_ind], dtype=float)
+
+    original_inds = np.arange(step_vals.size)
+
+    step_vals_use = step_vals[skip_first:]
+    prep_use = prep[skip_first:]
+    readout_use = readout[skip_first:]
+    gof_use = gof[skip_first:]
+    inds_use = original_inds[skip_first:]
+
+    good = (
+        np.isfinite(step_vals_use)
+        & np.isfinite(prep_use)
+        & np.isfinite(readout_use)
+        & np.isfinite(gof_use)
+    )
+
+    if not np.any(good):
+        raise ValueError(f"No finite optimization values for NV {nv_ind}.")
+
+    step_vals_use = step_vals_use[good]
+    prep_use = prep_use[good]
+    readout_use = readout_use[good]
+    gof_use = gof_use[good]
+    inds_use = inds_use[good]
+
+    norm_prep = (prep_use - np.nanmin(prep_use)) / (
+        np.nanmax(prep_use) - np.nanmin(prep_use) + 1e-12
+    )
+
+    norm_readout = (readout_use - np.nanmin(readout_use)) / (
+        np.nanmax(readout_use) - np.nanmin(readout_use) + 1e-12
+    )
+
+    norm_gof = (gof_use - np.nanmin(gof_use)) / (
+        np.nanmax(gof_use) - np.nanmin(gof_use) + 1e-12
+    )
+
+    score = w1 * norm_prep + w2 * norm_readout + w3 * (1.0 - norm_gof)
+
+    best_local = int(np.nanargmax(score))
+    best_step_ind = int(inds_use[best_local])
+
+    return {
+        "step_ind": best_step_ind,
+        "step_val": float(step_vals[best_step_ind]),
+        "prep_fidelity": float(prep[best_step_ind]),
+        "readout_fidelity": float(readout[best_step_ind]),
+        "goodness_of_fit": float(gof[best_step_ind]),
+        "score": float(score[best_local]),
+    }
 
 # =============================================================================
 # Example usage
@@ -1006,7 +1073,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # Option A: process new raw data with CPU parallel fitting.
     # -------------------------------------------------------------------------
-    run_new_processing = True
+    run_new_processing = False
 
     file_id = "2026_06_24-23_33_18-qnami-nv0_2026_02_20" ## pol amp
     file_id = "2026_06_26-21_58_16-qnami-nv0_2026_02_20" ## readout amp
@@ -1036,6 +1103,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     analyzed_file_id = "2026_06_26-01_41_43-optimization_processed_full_raw_data"
     analyzed_file_id = "2026_06_30-18_16_28-optimization_processed_full_2026_06_24-23_33_18-qnami-nv0_2026_02_20"
+    analyzed_file_id = "2026_07_09-13_04_44-optimization_processed_full_2026_07_08-22_48_57-qnami-nv0_2026_02_20"
     
     analyzed = dm.get_raw_data(
         file_stem=analyzed_file_id,
@@ -1067,10 +1135,10 @@ if __name__ == "__main__":
     file_name = f"recomputed_summary_w_{weights_str}_{analyzed_file_id}"
     file_path = dm.get_file_path(__file__, timestamp, file_name)
 
-    dm.save_raw_data(
-        make_json_safe(summary),
-        file_path,
-    )
+    # dm.save_raw_data(
+    #     make_json_safe(summary),
+    #     file_path,
+    # )
 
     print("Saved recomputed summary:", file_path)
 
@@ -1102,102 +1170,29 @@ if __name__ == "__main__":
         )
 
         try:
+            opt_info = recompute_optimal_step_index_from_processed(
+                analyzed,
+                nv_ind=nv_ind,
+                weights=new_weights,
+                skip_first=2,
+            )
+
+            opt_step_ind = opt_info["step_ind"]
+
+            print(
+                f"Plotting optimal histogram for NV {nv_ind}: "
+                f"step_ind={opt_step_ind}, "
+                f"step_val={opt_info['step_val']:.3f}"
+            )
+
             plot_ref_histogram_from_processed(
                 analyzed,
                 nv_ind=nv_ind,
-                step_ind=8,
+                step_ind=opt_step_ind,
                 density=True,
             )
+
         except Exception as e:
-            print(f"Could not plot histogram for NV {nv_ind}: {e}")
+            print(f"Could not plot optimal histogram for NV {nv_ind}: {e}")
 
     kpl.show(block=True)
-
-# if __name__ == "__main__":
-#     kpl.init_kplotlib()
-#     ## readout amp
-#     file_id = "2026_03_22-21_49_52-qnami-nv0_2026_02_20"
-#     file_id = "2026_04_03-08_23_00-qnami-nv0_2026_02_20" ## 1277
-#     file_id = "2026_06_11-19_58_49-qnami-nv0_2026_02_20" ## 1176
-#     file_id = "2026_06_17-20_57_41-qnami-nv0_2026_02_20" ## 1176
-    
-#     ## pol amp var
-#     # file_id = "2026_03_24-21_11_43-qnami-nv0_2026_02_20" ## 1460
-#     # file_id = "2026_03_25-23_32_41-qnami-nv0_2026_02_20" ## 1306
-#     file_id = "2026_06_24-23_33_18-qnami-nv0_2026_02_20" ## 1176 two readouts
-    
-    
-#     ## pol dur var
-#     # file_id = "2026_03_17-06_00_50-qnami-nv0_2026_02_20"
-
-#     # raw_data = dm.get_raw_data(file_stem=file_id, load_npz=True)
-#     # process_and_plot(raw_data, do_plot=False)
-#     # process_and_plot_charge(raw_data, do_plot=True)
-#     # sys.exit()
-
-#     # analyzed_file_id = "2026_06_12-11_05_20-optimization_processed_full_raw_data"
-#     # analyzed_file_id = "2026_06_18-13_45_20-optimization_processed_full_raw_data" ### readout amp var
-#     analyzed_file_id = "2026_06_26-01_41_43-optimization_processed_full_raw_data" ### pol amp var
-    
-#     analyzed = dm.get_raw_data(file_stem=analyzed_file_id, load_npz=True)
-
-#     new_weights = (1, 0, 1)
-
-#     # 1) recompute one NV with new weights
-#     for nv_ind in range(int(analyzed["num_nvs"])):
-#         opt_step, opt_prep, opt_readout, opt_score = recompute_optimal_from_processed(
-#             analyzed,
-#             nv_ind=nv_ind,
-#             weights=new_weights,
-#         )
-#         print(
-#             f"NV {nv_ind}: opt_step={opt_step}, prep={opt_prep}, "
-#             f"readout={opt_readout}, score={opt_score}")
-        
-#         # 3) plot metric curves for one NV
-#         fig1 = plot_processed_nv_metrics(analyzed, nv_ind=nv_ind, weights=new_weights)
-
-#         # 4) plot one saved reference histogram at a chosen step
-#         fig2 = plot_ref_histogram_from_processed(
-#             analyzed,
-#             nv_ind=nv_ind,
-#             step_ind=8,
-#             density=True,
-#         )
-#         plt.show(block=True)
-
-
-#     # 2) recompute all NVs with new weights
-#     summary = recompute_all_optimal_values_from_processed(
-#         analyzed,
-#         weights=new_weights,
-#     )
-#     print("num valid NVs:", len(summary["valid_step_vals"]))
-#     print("mean optimal step:", np.nanmean(summary["optimal_step_vals"]))
-
-#     if "optimal_weights" in summary:
-#         print("optimal_weights:", list(summary["optimal_weights"]))
-#         print("total_power:", summary["total_power"])
-#         print("aom_voltage:", summary["aom_voltage"])
-
-#     # add metadata to saved summary
-#     summary["source_analyzed_file"] = analyzed_file_id
-#     summary["nv_checked"] = nv_ind
-#     summary["single_nv_result"] = {
-#         "nv_ind": int(nv_ind),
-#         "opt_step": float(opt_step),
-#         "opt_prep": float(opt_prep),
-#         "opt_readout": float(opt_readout),
-#         "opt_score": float(opt_score),
-#     }
-
-#     summary_to_save = make_json_safe(summary)
-
-#     timestamp = dm.get_time_stamp()
-#     weights_str = "_".join(str(w) for w in new_weights)
-#     file_name = f"recomputed_summary_w_{weights_str}_{analyzed_file_id}"
-#     # file_path = dm.get_file_path(__file__, timestamp, file_name)
-#     # dm.save_raw_data(summary_to_save, file_path)
-#     # print(f"Saved recomputed summary to: {file_path}")
-
-#     kpl.show(block=True)
