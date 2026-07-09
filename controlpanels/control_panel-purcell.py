@@ -1787,6 +1787,7 @@ if __name__ == "__main__":
     # print("red fy range:", red_arr[:, 1].min(), red_arr[:, 1].max())
 
     # sys.exit()
+
     # pixel_coords_list =[
     #     [194.039, 189.963], 
     #     [319.015, 83.106], 
@@ -1794,16 +1795,16 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.762, 98.157],
-    #     [73.753, 115.443],
-    #     [100.747, 68.886],
-    #     [126.98, 127.747],
+    #     [97.743, 98.174],
+    #     [73.723, 115.464],
+    #     [100.718, 68.902],
+    #     [126.943, 127.763],
     # ]
     # red_coords_list = [
-    #     [66.985, 67.771],
-    #     [47.274, 81.346],
-    #     [69.616, 43.991],
-    #     [90.635, 92.489],
+    #     [66.979, 67.769],
+    #     [47.257, 81.346],
+    #     [69.608, 43.988],
+    #     [90.646, 92.468],
     # ]
     
     analysis_data = dm.get_raw_data(
@@ -1976,10 +1977,10 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)     
+        do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 200)
 
-        # for nv in nv_list:
+        # for nv in nv_list: 
         #     do_scanning_image_sample_zoom(nv)
 
         # do_scanning_image_sample(nv_sig)
@@ -2050,7 +2051,7 @@ if __name__ == "__main__":
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
         # do_optimize_readout_amp(nv_list)
-        do_optimize_readout_amp_repeated_readout(nv_list)
+        # do_optimize_readout_amp_repeated_readout(nv_list)
         # do_optimize_pol_duration(nv_list)
     
         # do_optimize_readout_duration(nv_list)

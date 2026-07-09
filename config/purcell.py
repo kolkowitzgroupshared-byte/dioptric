@@ -42,14 +42,14 @@ calibration_coords_pixel = [
     [17.982, 41.943],
 ]
 calibration_coords_green = [
-    [73.753, 115.443],
-    [100.747, 68.886],
-    [126.98, 127.747],
+    [73.723, 115.464],
+    [100.718, 68.902],
+    [126.943, 127.763],
 ]
 calibration_coords_red = [
-    [47.273, 81.359],
-    [69.628, 43.99],
-    [90.653, 92.505],
+    [47.257, 81.346],
+    [69.608, 43.988],
+    [90.646, 92.468],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -142,19 +142,15 @@ config |= {
         "dmd_DLP6500_zero_radius_px": 11,
         # Important: load final NV-chain file, not just triangle_affine_onpass.npz
         "dmd_DLP6500_init_calib_path": (
-            # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1277.npz"
-            # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1274.npz"
-            # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1271.npz"
             "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd.npz"
-            # "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_814.npz"
         ),
     },
     
     ###
     "SpatialCalibrations": {
         "active_nv_coords_path": (
-            "slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz"
-            # "slmsuite/nv_blob_detection/nv_blob_814nvs_reordered_inside_dmd.npz"
+            # "slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz"
+            "slmsuite/nv_blob_detection/nv_blob_814nvs_reordered_inside_dmd.npz"
         ),
         "slm_fourier_calib_path": (
             "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00015.h5"
@@ -1037,7 +1033,7 @@ opx_config = {
         # Green AOD
         "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
         # "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
-        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.08},
+        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.15},
