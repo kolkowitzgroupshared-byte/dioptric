@@ -2050,7 +2050,7 @@ if __name__ == "__main__":
 
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
-        # do_optimize_readout_amp(nv_list)
+        do_optimize_readout_amp(nv_list)
         # do_optimize_readout_amp_repeated_readout(nv_list)
         # do_optimize_pol_duration(nv_list)
     
