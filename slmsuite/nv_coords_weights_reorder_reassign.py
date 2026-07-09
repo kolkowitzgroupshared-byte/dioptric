@@ -762,7 +762,7 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_06_24-14_48_43-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_07_08-16_09_46-qnami-nv0_2026_02_20", load_npz=True
     )
     # img_array = data["img_array"]
     img_array = np.array(data["ref_img_array"])
@@ -1050,6 +1050,7 @@ if __name__ == "__main__":
         load_npz=True,
     )
     analysis = analysis_data["charge_hist_multinv_binomial"]
+
     one_nv_inds = np.where(
         np.asarray(analysis["ok"], dtype=bool)
         & (np.rint(analysis["n_nvs_est"]).astype(int) == 1)

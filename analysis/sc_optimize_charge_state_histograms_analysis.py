@@ -1010,7 +1010,8 @@ if __name__ == "__main__":
 
     file_id = "2026_06_24-23_33_18-qnami-nv0_2026_02_20" ## pol amp
     file_id = "2026_06_26-21_58_16-qnami-nv0_2026_02_20" ## readout amp
-
+    file_id = "2026_07_08-22_48_57-qnami-nv0_2026_02_20" ## readout amp
+    
     if run_new_processing:
         raw_data = dm.get_raw_data(
             file_stem=file_id,
