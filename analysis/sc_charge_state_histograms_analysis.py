@@ -1951,8 +1951,8 @@ if __name__ == "__main__":
         # file_stem="2026_06_14-18_44_06-qnami-nv0_2026_02_20",
         # file_stem="2026_06_20-19_22_52-qnami-nv0_2026_02_20",
         # file_stem="2026_06_23-12_05_32-qnami-nv0_2026_02_20",
+        # file_stem="2026_06_23-15_11_05-qnami-nv0_2026_02_20", ## 1176 working NVs
         file_stem="2026_06_23-15_11_05-qnami-nv0_2026_02_20", ## 1176 working NVs
-
         load_npz=True,
     )
 
