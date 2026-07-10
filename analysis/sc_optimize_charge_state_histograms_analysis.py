@@ -1064,9 +1064,88 @@ def recompute_optimal_step_index_from_processed(
         "score": float(score[best_local]),
     }
 
-# =============================================================================
-# Example usage
-# =============================================================================
+
+def plot_prep_vs_readout_optimal_only(
+    analyzed_data,
+    weights=(1, 1, 1),
+    skip_first=2,
+):
+    """
+    One point per NV:
+        x = prep fidelity at that NV's optimal step
+        y = readout fidelity at that NV's optimal step
+    """
+
+    prep_arr = np.asarray(analyzed_data["prep_fidelity_arr"], dtype=float)
+    readout_arr = np.asarray(analyzed_data["readout_fidelity_arr"], dtype=float)
+    num_nvs = int(analyzed_data["num_nvs"])
+
+    prep_opt = []
+    readout_opt = []
+    opt_step_inds = []
+    opt_step_vals = []
+
+    for nv_ind in range(num_nvs):
+        try:
+            opt_info = recompute_optimal_step_index_from_processed(
+                analyzed_data,
+                nv_ind=nv_ind,
+                weights=weights,
+                skip_first=skip_first,
+            )
+
+            step_ind = int(opt_info["step_ind"])
+
+            prep_val = prep_arr[nv_ind, step_ind]
+            readout_val = readout_arr[nv_ind, step_ind]
+
+            if np.isfinite(prep_val) and np.isfinite(readout_val):
+                prep_opt.append(prep_val)
+                readout_opt.append(readout_val)
+                opt_step_inds.append(step_ind)
+                opt_step_vals.append(opt_info["step_val"])
+
+        except Exception as e:
+            print(f"Skipping NV {nv_ind}: {e}")
+
+    prep_opt = np.asarray(prep_opt, dtype=float)
+    readout_opt = np.asarray(readout_opt, dtype=float)
+    opt_step_inds = np.asarray(opt_step_inds, dtype=int)
+    opt_step_vals = np.asarray(opt_step_vals, dtype=float)
+
+    fig, ax = plt.subplots(figsize=(6.5, 5.5))
+
+    sc = ax.scatter(
+        readout_opt,
+        prep_opt,
+        c=opt_step_vals,   # color by optimal step value
+        s=18,
+        alpha=0.75,
+    )
+    ax.set_xlabel("Readout fidelity")
+    ax.set_ylabel("Prep fidelity")
+    ax.set_xlim(0, 1.02)
+    ax.set_ylim(0, 1.02)
+    ax.set_title("Prep vs readout fidelity at each NV's optimal step")
+    ax.grid(True, linestyle="--", alpha=0.4)
+
+    cbar = plt.colorbar(sc, ax=ax)
+    cbar.set_label(analyzed_data.get("x_label", "Optimal step value"))
+
+    # optional median marker
+    # if prep_opt.size > 0:
+    #     ax.scatter(
+    #         np.nanmedian(prep_opt),
+    #         np.nanmedian(readout_opt),
+    #         marker="x",
+    #         s=80,
+    #         color="black",
+    #         label="Median point",
+    #     )
+    #     ax.legend(fontsize=8)
+
+    return fig
+
 if __name__ == "__main__":
     kpl.init_kplotlib()
 
@@ -1074,7 +1153,6 @@ if __name__ == "__main__":
     # Option A: process new raw data with CPU parallel fitting.
     # -------------------------------------------------------------------------
     run_new_processing = False
-
     file_id = "2026_06_24-23_33_18-qnami-nv0_2026_02_20" ## pol amp
     file_id = "2026_06_26-21_58_16-qnami-nv0_2026_02_20" ## readout amp
     file_id = "2026_07_08-22_48_57-qnami-nv0_2026_02_20" ## readout amp
@@ -1110,7 +1188,7 @@ if __name__ == "__main__":
         load_npz=True,
     )
 
-    new_weights = (0, 1, 1)
+    new_weights = (1, 1, 1)
 
     print("GPU available:", GPU_AVAILABLE)
 
@@ -1119,6 +1197,13 @@ if __name__ == "__main__":
         weights=new_weights,
     )
 
+    plot_prep_vs_readout_optimal_only(
+        analyzed,
+        weights=new_weights,
+        skip_first=2,
+    )
+    kpl.show(block=True)
+    
     print("used_gpu:", summary.get("used_gpu", False))
     print("num valid NVs:", len(summary["valid_step_vals"]))
     print("mean optimal step:", np.nanmean(summary["optimal_step_vals"]))
@@ -1145,8 +1230,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # Plot only selected NVs. Do not plot all 1176 with block=True.
     # -------------------------------------------------------------------------
-    inspect_nv_inds = [0, 10, 50, 100, 500, 1100]
-
+    inspect_nv_inds = [0, 1, 2, 3, 10, 50, 100, 500, 1100]
     for nv_ind in inspect_nv_inds:
         if nv_ind >= int(analyzed["num_nvs"]):
             continue

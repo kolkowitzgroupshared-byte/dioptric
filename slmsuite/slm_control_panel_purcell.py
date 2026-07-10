@@ -363,8 +363,10 @@ data_spot_weight = dm.get_raw_data(
     # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
     file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
 )
-spot_weights = data_spot_weight["optimal_weights"]
-# spot_weights = np.squeeze(spot_weights)
+# spot_weights = data_spot_weight["optimal_weights"]
+# # spot_weights = np.squeeze(spot_weights)
+
+
 spot_weights = curve_extreme_weights_simple(
         spot_weights, scaling_factor=1.0
     )
@@ -382,7 +384,7 @@ thorcam_coords_xy = thorcam_coords.T                  # shape: (2, N)
 
 print("nuvu_pixel_coords shape:", nuvu_pixel_coords.shape)
 print("thorcam_coords shape:", thorcam_coords_xy.shape)
-# print("spot_weights shape:", spot_weights.shape)
+print("spot_weights shape:", spot_weights.shape)
 
 # # Match lengths safely
 # num = min(len(nuvu_pixel_coords), len(spot_weights))
@@ -426,13 +428,13 @@ def compute_and_write_nvs_phase():
         shape=(4096, 2048),
         spot_vectors=thorcam_coords_xy,
         basis="ij",
-        # spot_amp=spot_weights,
+        spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally
     hologram.optimize(
         "WGS-Kim",
-        maxiter=40,
+        maxiter=30,
         feedback="computational_spot",
         stat_groups=["computational_spot"],
     )
@@ -444,9 +446,9 @@ def compute_and_write_nvs_phase():
     now = datetime.now()
     date_time_str = now.strftime("%Y%m%d_%H%M%S")
     filename = f"slm_phase_{num_nvs}nvs_{date_time_str}.npy"
-    # file_path = dm.get_file_path(__file__, filename)
     # Save the phase data
     save(initial_phase, file_path, filename)
+    # write
     slm.write(initial_phase, settle=True)
     # cam_plot()
     
@@ -523,6 +525,7 @@ try:
     # load_wavefront_calibration()
     
     compute_and_write_nvs_phase()
+    # write_pre_computed_nvs_phase()
     
     # calibration_triangle()
     # write_pre_computed_triangle()

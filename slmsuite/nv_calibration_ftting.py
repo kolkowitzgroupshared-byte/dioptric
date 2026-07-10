@@ -97,7 +97,7 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
     # Load the image array (replace this with your own method for loading image data)
     data = dm.get_raw_data(
-        file_stem="2026_07_08-15_31_12-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_07_09-20_12_01-qnami-nv0_2026_02_20", load_npz=True
     )
     img_array = np.array(data["img_array"])
     fig, ax = plt.subplots()
@@ -106,7 +106,7 @@ if __name__ == "__main__":
     # List of initial peak yellow coordinates
     # initial_peaks = np.array([[338.04, 361.354], [311.711, 11.032], [18.043, 209.58]])
     # initial_peaks = np.array([[86.308, 53.796], [96.167, 329.863], [318.204, 185.924], [187.621, 194.013]])
-    initial_peaks = np.array([[76.366, 54.462], [126.362, 320.062], [329.796, 146.27]])
+    initial_peaks = np.array([[76.379, 54.428], [126.399, 320.062], [329.873, 146.403]])
     
     # red calibration
     # initial_peaks = np.array([[123.486, 9.115], [16.951, 242.751], [237.556, 240.186]])

@@ -278,7 +278,7 @@ def do_adaptive_charge_initialization(nv_list):
         num_runs=4,
         mode="dmd_block_confirmed",
         dmd_indices=None,      # full nv_list, DMD index = nv_list index
-        dmd_radius_px=8,
+        dmd_radius_px=6,
         dmd_plane=230,
         confirm_margin_counts=1.0,
         save_images=True,
@@ -1744,7 +1744,6 @@ if __name__ == "__main__":
     
     config = common.get_config_dict()
     file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
-
     pixel_coords_list = load_nv_coords(file_path=file_path).tolist()
 
     green_coords_list = [
@@ -1808,45 +1807,20 @@ if __name__ == "__main__":
     # ]
     
     analysis_data = dm.get_raw_data(
-        file_stem="2026_06_23-16_12_54-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis",
+        # file_stem="2026_06_23-16_12_54-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##1176NVs
+        # file_stem="2026_07_09-21_39_43-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
+        file_stem="2026_07_10-12_52_52-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
         load_npz=True,
     )
+
     analysis = analysis_data["charge_hist_multinv_binomial"]
     threshold_list = analysis["threshold_any"]
-    
-    
-    analysis_data = dm.get_raw_data(
-        file_stem="2026_06_23-16_12_54-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis",
-        load_npz=True,
-    )
-
-    analysis = analysis_data["charge_hist_multinv_binomial"]
-
     threshold = np.asarray(analysis["threshold_any"], dtype=float)
     ok = np.asarray(analysis["ok"], dtype=bool)
     n_est = np.rint(np.asarray(analysis["n_nvs_est"], dtype=float)).astype(int)
     fidelity = np.asarray(analysis["readout_fidelity_any"], dtype=float)
 
-    # Basic good 1-NV filter
-    mask = (
-        ok
-        # & (n_est == 1)
-        & np.isfinite(threshold)
-        & np.isfinite(fidelity)
-        & (fidelity >= 0.90)
-    )
 
-    thr_good = threshold[mask]
-    inds_good = np.where(mask)[0]
-
-    median_thr = np.nanmedian(thr_good)
-    mad_thr = np.nanmedian(np.abs(thr_good - median_thr))
-
-    # Choose thresholds close to median.
-    # 2.5*MAD is a good first conservative window.
-    near_median_mask_local = np.abs(thr_good - median_thr) <= 2.5 * mad_thr
-
-    selected_inds = inds_good[near_median_mask_local]
     # selected_inds = inds_good[mad_thr]
 
     # Sort by fidelity, best first
@@ -1963,6 +1937,7 @@ if __name__ == "__main__":
         #     red_coords_list,
         #     marker_size=10,
         # )
+        
         # widefield.plot_amp_distribution_over_space(
         #     pixel_coords_list,
         #     charge_pol_amps,
@@ -1977,7 +1952,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_widefield_image_sample(nv_sig, 50)     
+        # do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list: 
@@ -2034,13 +2009,13 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        # do_charge_state_histograms(nv_list)
+        do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_dmd_crosstalk_matrix(
         #     nv_list_all=nv_list,
         #     num_sources=200,
-        #     dmd_radius_px=4,
+        #     dmd_radius_px=6,
         # )
         
         # do_dmd_turnoff_crosstalk_extinction_matrix(nv_list)
@@ -2050,7 +2025,7 @@ if __name__ == "__main__":
 
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
-        do_optimize_readout_amp(nv_list)
+        # do_optimize_readout_amp(nv_list)
         # do_optimize_readout_amp_repeated_readout(nv_list)
         # do_optimize_pol_duration(nv_list)
     

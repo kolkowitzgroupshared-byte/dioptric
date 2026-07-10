@@ -1394,11 +1394,11 @@ if __name__ == "__main__":
         # file_stem="2026_06_23-19_23_49-qnami-nv0_2026_02_20-old", 
         # file_stem="2026_06_23-21_03_10-qnami-nv0_2026_02_20-dmd_block_confirmed", 
         # file_stem="2026_06_23-21_23_53-qnami-nv0_2026_02_20-dmd_block_confirmed", 
-        file_stem="2026_06_23-21_58_45-qnami-nv0_2026_02_20-dmd_block_confirmed", 
-        
+        # file_stem="2026_06_23-21_58_45-qnami-nv0_2026_02_20-dmd_block_confirmed", 
+        file_stem="2026_07_10-11_41_33-qnami-nv0_2026_02_20-dmd_block_confirmed", 
         load_npz=True)
+    
     timestamp = raw_data["timestamp"]
-
     file_path = dm.get_file_path(__file__,timestamp,"movie")
     
     # save_blink_gif(
@@ -1418,16 +1418,16 @@ if __name__ == "__main__":
     #     clim=None,
     #     interval_ms=500,
     # )
-    save_blink_gif(
-    raw_data,
-    file_path,
-    max_reps=20,
-    interval_ms=500,
-    background_percentile=5,
-    bg_smooth_sigma=2,
-    frame_smooth_sigma=0,
-    contrast_percentiles=(60, 99.8),
-    )
+    # save_blink_gif(
+    #     raw_data,
+    #     file_path,
+    #     max_reps=20,
+    #     interval_ms=500,
+    #     background_percentile=5,
+    #     bg_smooth_sigma=2,
+    #     frame_smooth_sigma=0,
+    #     contrast_percentiles=(60, 99.8),
+    #     )
     # save_blink_gif(
     #     raw_data,
     #     file_path,
@@ -1436,17 +1436,17 @@ if __name__ == "__main__":
     #     interval_ms=10,
     # )
     
-    # save_cumulative_initialized_movie(
-    #     raw_data,
-    #     file_path,
-    #     mode=raw_data.get("mode", "dmd_block_confirmed"),
-    #     max_reps=100,
-    #     patch_radius=2,
-    #     clim=None,
-    #     interval_ms=1000,
-    #     probability_weight=True,
-    #     bright_gain=1.0,
-    # )
+    save_cumulative_initialized_movie(
+        raw_data,
+        file_path,
+        mode=raw_data.get("mode", "dmd_block_confirmed"),
+        max_reps=100,
+        patch_radius=2,
+        clim=None,
+        interval_ms=500,
+        probability_weight=True,
+        bright_gain=1.0,
+    )
 
     # fig = process_and_plot(raw_data, mode=raw_data.get("mode", "old"), save_fig=True)
     kpl.show(block=True)

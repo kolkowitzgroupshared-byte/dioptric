@@ -948,7 +948,7 @@ def process_and_plot(
         )
 
         print("Saved reference-only multi-NV charge analysis:", file_path)
-        print("Saved 1-NV pillars:", len(one_nv_inds))
+        # print("Saved 1-NV pillars:", len(one_nv_inds))
 
     return hist_figs
 
@@ -1944,6 +1944,7 @@ def print_three_nv_statistical_counts(analysis, pillar_ind, num_shots=None):
 
 if __name__ == "__main__":
     kpl.init_kplotlib()
+    run_new_processing = True
 
     raw_data = dm.get_raw_data(
         # file_stem="2026_03_02-17_30_11-qnami-nv0_2026_02_20", ## 1277 working NVs
@@ -1952,24 +1953,27 @@ if __name__ == "__main__":
         # file_stem="2026_06_20-19_22_52-qnami-nv0_2026_02_20",
         # file_stem="2026_06_23-12_05_32-qnami-nv0_2026_02_20",
         # file_stem="2026_06_23-15_11_05-qnami-nv0_2026_02_20", ## 1176 working NVs
-        file_stem="2026_06_23-15_11_05-qnami-nv0_2026_02_20", ## 1176 working NVs
+        # file_stem="2026_06_23-15_11_05-qnami-nv0_2026_02_20", ## 1176 working NVs
+        # file_stem="2026_07_09-20_49_40-qnami-nv0_2026_02_20", ## 814 working NVs 50ms radout
+        # file_stem="2026_07_10-12_06_57-qnami-nv0_2026_02_20", ## 814 working NVs 50ms radout
+        file_stem="2026_07_10-15_29_21-qnami-nv0_2026_02_20", ## 814 working NVs 200ms readout
         load_npz=True,
     )
+    if run_new_processing:
+        process_and_plot(
+            raw_data,
+            do_plot_histograms=False,
+            prob_dist=ProbDist.COMPOUND_POISSON,
+            max_nvs_per_position=1,
+            force_nvs=None,
+            bic_extra_nv_penalty=2.0,
+            save_analysis=True,
+            save_hist_figs=False,
+            n_jobs=12,
+            )
 
-    process_and_plot(
-    raw_data,
-    do_plot_histograms=False,
-    prob_dist=ProbDist.COMPOUND_POISSON,
-    max_nvs_per_position=3,
-    force_nvs=None,
-    bic_extra_nv_penalty=2.0,
-    save_analysis=True,
-    save_hist_figs=False,
-    n_jobs=12,
-    )
-
-    # kpl.show(block=True)
-    # sys.exit()
+        kpl.show(block=True)
+        sys.exit()
     # =============================================================================
     # Analyzed data: load saved analysis and attach it to original raw data
     # =============================================================================
@@ -1977,7 +1981,8 @@ if __name__ == "__main__":
         # file_stem="2026_06_15-01_24_30-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis",  #1176NVs
         # file_stem="2026_06_22-18_39_58-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", #1176NVs
         # file_stem="2026_06_22-18_39_58-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", #814NVs
-        file_stem="2026_06_22-18_39_58-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", #814NVs
+        # file_stem="2026_06_22-18_39_58-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", #814NVs
+        file_stem="2026_07_09-21_39_43-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", #814NVs
         load_npz=True,
     )
 

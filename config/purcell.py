@@ -302,8 +302,8 @@ config |= {
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 1e6},
             VirtualLaserKey.WIDEFIELD_CHARGE_READOUT: {
                 "physical_name": yellow_laser,
-                # "duration": 60e6,
-                "duration": 50e6,
+                "duration": 200e6,
+                # "duration": 50e6,
                 # "duration": 24e6,  # for red calibration
             },
             # LaserKey.WIDEFIELD_CHARGE_READOUT: {"physical_name": yellow_laser, "duration": 100e6},
@@ -1033,7 +1033,7 @@ opx_config = {
         # Green AOD
         "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
         # "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
-        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.08},
+        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.15},
@@ -1043,8 +1043,8 @@ opx_config = {
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.35},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.3513}, #1460NVs
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.4014},
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.3513},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.244},
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other

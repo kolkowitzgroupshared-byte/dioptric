@@ -40,7 +40,7 @@ from joblib import Parallel, delayed
 # Compatibility patch for old labrad with newer NumPy
 if not hasattr(np, "bool8"):
     np.bool8 = np.bool_
-
+from analysis import bimodal_histogram
 from analysis.bimodal_histogram import (
     ProbDist,
     determine_threshold,
@@ -415,38 +415,82 @@ def compute_repeated_readout_score(
     goodness1_of_fit,
     goodness2_of_fit,
     step_vals,
-    score_weights=(0.25, 0.20, 0.20, 0.30, 0.05),
+    ref_nv0_survival=None,
+    score_weights=(0.35, 0.35, 0.20, 0.10),
 ):
     """
-    Score components:
-        readout1 fidelity          high is good
-        readout2 fidelity          high is good
-        same-state survival        high is good
-        NV- survival               high is good, penalizes ionization
-        low dose/amplitude         lower is better
+    Non-destructive two-readout score.
 
-    Goodness-of-fit is applied as a mild multiplicative mask through an inverted
-    normalized chi-square.
+    Components:
+        two_readout_fidelity:
+            min(R1 fidelity, R2 fidelity)
+            This forces both readouts to work.
+
+        nondestructive_survival:
+            survival between R1 and R2.
+            High value means R1 did not disturb the charge state.
+
+        fit_quality:
+            favors well-fit histograms.
+
+        low_power:
+            weak preference for lower readout amplitude/duration.
+
+    score_weights:
+        (w_fidelity, w_survival, w_fit_quality, w_low_power)
     """
 
-    w_r1, w_r2, w_same, w_nvm, w_low = score_weights
+    w_fid, w_survival, w_fit, w_low = score_weights
 
-    fit_quality = 0.5 * (
-        1.0 - _norm01(goodness1_of_fit)
-    ) + 0.5 * (
+    readout1_fidelity = np.asarray(readout1_fidelity, dtype=float)
+    readout2_fidelity = np.asarray(readout2_fidelity, dtype=float)
+    ref_same_state_survival = np.asarray(ref_same_state_survival, dtype=float)
+    ref_nvm_survival = np.asarray(ref_nvm_survival, dtype=float)
+    goodness1_of_fit = np.asarray(goodness1_of_fit, dtype=float)
+    goodness2_of_fit = np.asarray(goodness2_of_fit, dtype=float)
+    step_vals = np.asarray(step_vals, dtype=float)
+
+    # Both readouts must be good. If one is bad, this is bad.
+    two_readout_fidelity = np.minimum(readout1_fidelity, readout2_fidelity)
+
+    # Non-destructive survival. Main one is NV- survival, because you care
+    # about preserving reference NV- after the first readout.
+    if ref_nv0_survival is None:
+        nondestructive_survival = 0.5 * (
+            ref_same_state_survival + ref_nvm_survival
+        )
+    else:
+        ref_nv0_survival = np.asarray(ref_nv0_survival, dtype=float)
+        nondestructive_survival = (
+            0.40 * ref_same_state_survival
+            + 0.40 * ref_nvm_survival
+            + 0.20 * ref_nv0_survival
+        )
+
+    # Lower chi-square is better.
+    fit_quality = 0.5 * (1.0 - _norm01(goodness1_of_fit)) + 0.5 * (
         1.0 - _norm01(goodness2_of_fit)
     )
 
+    low_power = 1.0 - _norm01(step_vals)
+
     score = (
-        w_r1 * _norm01(readout1_fidelity)
-        + w_r2 * _norm01(readout2_fidelity)
-        + w_same * _norm01(ref_same_state_survival)
-        + w_nvm * _norm01(ref_nvm_survival)
-        + w_low * (1.0 - _norm01(step_vals))
+        w_fid * _norm01(two_readout_fidelity)
+        + w_survival * _norm01(nondestructive_survival)
+        + w_fit * fit_quality
+        + w_low * low_power
     )
 
-    score = score + 0.10 * fit_quality
-    score = np.where(np.isfinite(score), score, np.nan)
+    bad = (
+        ~np.isfinite(readout1_fidelity)
+        | ~np.isfinite(readout2_fidelity)
+        | ~np.isfinite(ref_same_state_survival)
+        | ~np.isfinite(ref_nvm_survival)
+        | ~np.isfinite(goodness1_of_fit)
+        | ~np.isfinite(goodness2_of_fit)
+    )
+
+    score = np.where(bad, np.nan, score)
     return score
 
 
@@ -518,6 +562,7 @@ def choose_optimal_step(
         goodness1_of_fit,
         goodness2_of_fit,
         step_vals,
+        ref_nv0_survival=ref_nv0_survival,
         score_weights=score_weights,
     )
 
@@ -851,6 +896,15 @@ def process_repeated_readout_survival(
         print("Per-NV mean optimal step:", float(np.nanmean(valid_step_vals)))
         print("Per-NV median optimal step:", float(np.nanmedian(valid_step_vals)))
         print("Number valid NVs:", int(valid_step_vals.size))
+        
+    if "optimal_weights" in results and len(results["optimal_weights"]) > 0:
+        weights = np.asarray(results["optimal_weights"], dtype=float)
+        print("\n=== Per-NV optimal readout weights ===")
+        print("mean weight:", float(np.nanmean(weights)))
+        print("median weight:", float(np.nanmedian(weights)))
+        print("min weight:", float(np.nanmin(weights)))
+        print("max weight:", float(np.nanmax(weights)))
+        print("std weight:", float(np.nanstd(weights)))
 
     if save_data:
         timestamp = dm.get_time_stamp()
@@ -880,11 +934,6 @@ def _fit_params_to_list_object(fit_params_arr, num_nvs, num_steps):
         ]
         for nv_ind in range(num_nvs)
     ]
-
-
-# =============================================================================
-# Plotting
-# =============================================================================
 
 
 def _population_optimum(results):
@@ -954,8 +1003,7 @@ def plot_repeated_readout_survival_summary(results):
     )
     if opt_ind is not None:
         title += f"\nchosen index {opt_ind}, {x_label}={opt_val:.4g}"
-    fig.suptitle(title)
-    plt.tight_layout()
+    fig.suptitle(title, fontsize=15)
     return fig
 
 
@@ -1001,14 +1049,13 @@ def plot_repeated_readout_all_nv_scatters(results, alpha=0.28, size=12):
         ax.plot(step_vals, med, color="black", lw=2, label="Median")
         if np.isfinite(opt_val):
             ax.axvline(opt_val, color="red", linestyle="--", label="Optimal")
-        ax.set_title(title)
+        ax.set_title(title,fontsize=15)
         ax.set_xlabel(x_label)
         ax.set_ylabel(ylabel)
         ax.grid(True, linestyle="--", alpha=0.35)
         ax.legend(fontsize=8)
 
-    fig.suptitle("All-NV repeated-readout scatter diagnostics")
-    plt.tight_layout()
+    fig.suptitle("All-NV repeated-readout scatter diagnostics", fontsize=15)
     return fig
 
 
@@ -1042,10 +1089,9 @@ def plot_per_nv_optimal_step_distribution(results):
 
     ax.set_xlabel(x_label)
     ax.set_ylabel("Number of NVs")
-    ax.set_title("Distribution of per-NV optimal readout settings")
+    ax.set_title("Distribution of per-NV optimal readout settings", fontsize=15)
     ax.legend()
     ax.grid(True, linestyle="--", alpha=0.4)
-    plt.tight_layout()
     return fig
 
 
@@ -1067,19 +1113,19 @@ def plot_optimum_metric_scatter(results):
     sc0 = axes[0].scatter(r1, nvm, c=step, s=18, alpha=0.75)
     axes[0].set_xlabel("R1 fidelity")
     axes[0].set_ylabel("Ref NV- survival")
-    axes[0].set_title("Readout fidelity vs ionization survival")
+    axes[0].set_title("Readout fidelity vs ionization survival",fontsize=15)
     plt.colorbar(sc0, ax=axes[0], label=results["x_label"])
 
     sc1 = axes[1].scatter(r2, nvm, c=step, s=18, alpha=0.75)
     axes[1].set_xlabel("R2 fidelity")
     axes[1].set_ylabel("Ref NV- survival")
-    axes[1].set_title("R2 fidelity vs ionization survival")
+    axes[1].set_title("R2 fidelity vs ionization survival",fontsize=15)
     plt.colorbar(sc1, ax=axes[1], label=results["x_label"])
 
     sc2 = axes[2].scatter(same, nvm, c=step, s=18, alpha=0.75)
     axes[2].set_xlabel("Ref same-state survival")
     axes[2].set_ylabel("Ref NV- survival")
-    axes[2].set_title("Survival consistency")
+    axes[2].set_title("Survival consistency", fontsize=15)
     plt.colorbar(sc2, ax=axes[2], label=results["x_label"])
 
     for ax in axes:
@@ -1088,7 +1134,6 @@ def plot_optimum_metric_scatter(results):
         ax.set_ylim(0, 1.02)
 
     fig.suptitle("All NVs at their own selected optimum")
-    plt.tight_layout()
     return fig
 
 
@@ -1137,37 +1182,309 @@ def print_nv_optimum_summary(results, nv_ind):
     print("aom voltage:", opt["aom_voltage"])
 
 
-# =============================================================================
-# Example usage
-# =============================================================================
+def _format_fit_params_for_display(popt, prob_dist_local, red_chi_sq=None):
+    """
+    Human-readable fit parameter string for display in text box.
+    """
+    if popt is None:
+        return "fit params: None"
 
+    popt = np.asarray(popt, dtype=float).ravel()
+    num_single = bimodal_histogram.get_single_mode_num_params(prob_dist_local)
+
+    try:
+        dark_weight = float(popt[0])
+        bright_weight = 1.0 - dark_weight
+
+        dark_params = popt[1 : 1 + num_single]
+        bright_params = popt[1 + num_single : 1 + 2 * num_single]
+
+        lines = [
+            f"w0 = {dark_weight:.3f}",
+            f"w- = {bright_weight:.3f}",
+        ]
+
+        if num_single == 1:
+            lines += [
+                f"NV0 rate = {dark_params[0]:.2f}",
+                f"NV- rate = {bright_params[0]:.2f}",
+            ]
+        else:
+            lines += [
+                "NV0: " + ", ".join(f"{v:.2f}" for v in dark_params),
+                "NV-: " + ", ".join(f"{v:.2f}" for v in bright_params),
+            ]
+
+        if red_chi_sq is not None and np.isfinite(red_chi_sq):
+            lines.append(f"red χ² = {red_chi_sq:.3f}")
+
+        return "\n".join(lines)
+
+    except Exception:
+        return "fit params unreadable"
+
+
+def plot_two_readout_histograms_at_optimum(
+    raw_data,
+    analyzed_data,
+    nv_ind,
+    step_ind=None,
+    density=True,
+):
+    """
+    kplotlib-style two-readout histogram plot.
+
+    Left:
+        ionized R1 + reference R1 + R1 fit
+
+    Right:
+        ionized R2 + reference R2 + R2 fit
+
+    Colors:
+        ionized/reference histogram and NV0 fit = red
+        reference/NV- fit = green
+        combined fit = blue
+    """
+
+    counts_all = np.asarray(raw_data["counts"], dtype=float)
+
+    if step_ind is None:
+        step_ind = analyzed_data["per_nv_optimal_values"][nv_ind]["optimal_step_ind"]
+
+    if step_ind is None or int(step_ind) < 0:
+        raise ValueError(f"NV {nv_ind} has no valid optimal step.")
+
+    step_ind = int(step_ind)
+
+    ion_r1 = counts_all[0, nv_ind, :, step_ind, :].flatten()
+    ion_r2 = counts_all[1, nv_ind, :, step_ind, :].flatten()
+    ref_r1 = counts_all[2, nv_ind, :, step_ind, :].flatten()
+    ref_r2 = counts_all[3, nv_ind, :, step_ind, :].flatten()
+
+    ion_r1 = ion_r1[np.isfinite(ion_r1)]
+    ion_r2 = ion_r2[np.isfinite(ion_r2)]
+    ref_r1 = ref_r1[np.isfinite(ref_r1)]
+    ref_r2 = ref_r2[np.isfinite(ref_r2)]
+
+    threshold = float(
+        np.asarray(analyzed_data["threshold_arr"], dtype=float)[nv_ind, step_ind]
+    )
+
+    fit1_success = bool(
+        np.asarray(analyzed_data["fit1_success_arr"])[nv_ind, step_ind]
+    )
+    fit2_success = bool(
+        np.asarray(analyzed_data["fit2_success_arr"])[nv_ind, step_ind]
+    )
+
+    fit1_params = analyzed_data["fit1_params_arr"][nv_ind][step_ind]
+    fit2_params = analyzed_data["fit2_params_arr"][nv_ind][step_ind]
+
+    gof1 = float(
+        np.asarray(analyzed_data["goodness1_of_fit_arr"], dtype=float)[
+            nv_ind, step_ind
+        ]
+    )
+    gof2 = float(
+        np.asarray(analyzed_data["goodness2_of_fit_arr"], dtype=float)[
+            nv_ind, step_ind
+        ]
+    )
+
+    step_vals = np.asarray(analyzed_data["step_vals"], dtype=float)
+    x_label = analyzed_data["x_label"]
+    step_val = float(step_vals[step_ind])
+
+    prob_dist_name = analyzed_data.get("prob_dist_name", "COMPOUND_POISSON")
+    prob_dist_local = ProbDist[prob_dist_name]
+
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5), sharey=True)
+
+    plot_items = [
+        {
+            "title": "Readout 1",
+            "ax": axes[0],
+            "ion_counts": ion_r1,
+            "ref_counts": ref_r1,
+            "fit_success": fit1_success,
+            "fit_params": fit1_params,
+            "red_chi_sq": gof1,
+            "r_fid": analyzed_data["per_nv_optimal_values"][nv_ind][
+                "readout1_fidelity"
+            ],
+        },
+        {
+            "title": "Readout 2",
+            "ax": axes[1],
+            "ion_counts": ion_r2,
+            "ref_counts": ref_r2,
+            "fit_success": fit2_success,
+            "fit_params": fit2_params,
+            "red_chi_sq": gof2,
+            "r_fid": analyzed_data["per_nv_optimal_values"][nv_ind][
+                "readout2_fidelity"
+            ],
+        },
+    ]
+
+    for item in plot_items:
+        ax = item["ax"]
+        ion_counts = item["ion_counts"]
+        ref_counts = item["ref_counts"]
+
+        kpl.histogram(
+            ax,
+            ion_counts,
+            density=density,
+            color=kpl.KplColors.RED,
+            label="Ionized branch",
+        )
+
+        kpl.histogram(
+            ax,
+            ref_counts,
+            density=density,
+            color=kpl.KplColors.GREEN,
+            label="Reference branch",
+        )
+
+        ax.set_xlabel("Integrated counts")
+        ax.set_ylabel("Probability" if density else "Occurrences")
+        ax.set_title(
+            f"{item['title']}: fidelity={item['r_fid']:.3f}", fontsize=15
+        )
+
+        if np.isfinite(threshold):
+            ax.axvline(
+                threshold,
+                color=kpl.KplColors.GRAY,
+                ls="dashed",
+                label=f"Threshold = {threshold:.1f}",
+            )
+
+        if item["fit_success"] and item["fit_params"] is not None:
+            popt = np.asarray(item["fit_params"], dtype=float)
+
+            combined_counts = np.concatenate([ion_counts, ref_counts])
+            x_max = max(
+                np.nanmax(combined_counts) if combined_counts.size > 0 else 0,
+                threshold if np.isfinite(threshold) else 0,
+            )
+            x_vals = np.linspace(0, x_max + 1, 1000)
+
+            single_mode_num_params = bimodal_histogram.get_single_mode_num_params(
+                prob_dist_local
+            )
+            single_mode_pdf = bimodal_histogram.get_single_mode_pdf(prob_dist_local)
+            bimodal_pdf = bimodal_histogram.get_bimodal_pdf(prob_dist_local)
+
+            dark_mode_line = popt[0] * single_mode_pdf(
+                x_vals,
+                *popt[1 : 1 + single_mode_num_params],
+            )
+
+            bright_mode_line = (1.0 - popt[0]) * single_mode_pdf(
+                x_vals,
+                *popt[1 + single_mode_num_params :],
+            )
+
+            bimodal_line = bimodal_pdf(x_vals, *popt)
+
+            kpl.plot_line(
+                ax,
+                x_vals,
+                dark_mode_line,
+                color=kpl.KplColors.RED,
+                # label="NV$^{0}$ mode",
+            )
+
+            kpl.plot_line(
+                ax,
+                x_vals,
+                bright_mode_line,
+                color=kpl.KplColors.GREEN,
+                # label="NV$^{-}$ mode",
+            )
+
+            kpl.plot_line(
+                ax,
+                x_vals,
+                bimodal_line,
+                color=kpl.KplColors.BLUE,
+                # label="Combined fit",
+            )
+
+            param_text = _format_fit_params_for_display(
+                popt,
+                prob_dist_local,
+                red_chi_sq=item["red_chi_sq"],
+            )
+
+            ax.text(
+                0.98,
+                0.7,
+                param_text,
+                transform=ax.transAxes,
+                ha="right",
+                va="top",
+                fontsize=11,
+                bbox={
+                    "boxstyle": "round",
+                    "facecolor": "white",
+                    "alpha": 0.85,
+                },
+            )
+
+        ax.legend(loc=kpl.Loc.UPPER_RIGHT, fontsize=11)
+
+    opt = analyzed_data["per_nv_optimal_values"][nv_ind]
+
+    fig.suptitle(
+        f"NV {nv_ind}, step {step_ind}, {x_label} = {step_val:.3f}\n"
+        f"ref same = {opt['ref_same_state_survival']:.3f}, "
+        f"ref NV- survival = {opt['ref_nvm_survival']:.3f}, "
+        f"ref NV0 survival = {opt['ref_nv0_survival']:.3f}",
+        fontsize=15
+    )
+
+    plt.tight_layout()
+    return fig
 
 if __name__ == "__main__":
     kpl.init_kplotlib()
 
-    run_new_analysis = True
+    run_new_analysis = False
 
-    file_id = "2026_06_26-21_58_16-qnami-nv0_2026_02_20"
-
-    if run_new_analysis:
-        raw_data = dm.get_raw_data(
+    # file_id = "2026_06_26-21_58_16-qnami-nv0_2026_02_20"
+    file_id = "2026_07_09-04_28_20-qnami-nv0_2026_02_20"
+    raw_data = dm.get_raw_data(
             file_stem=file_id,
             load_npz=True,
         )
-        raw_data["file_stem"] = file_id
-
+    raw_data["file_stem"] = file_id
+    
+    if run_new_analysis:
         results = process_repeated_readout_survival(
             raw_data,
             do_plot=True,
             save_data=True,
             n_jobs=12,
             joblib_verbose=10,
-            min_readout1_fidelity=0.85,
-            min_readout2_fidelity=0.85,
-            min_ref_same_state_survival=0.95,
-            min_ref_nvm_survival=0.95,
+
+            # Both readouts must classify well.
+            min_readout1_fidelity=0.88,
+            min_readout2_fidelity=0.88,
+
+            # Non-destructive condition.
+            min_ref_same_state_survival=0.96,
+            min_ref_nvm_survival=0.97,
+
+            # Use this if NV0 survival is meaningful/stable.
             min_ref_nv0_survival=None,
-            score_weights=(0.25, 0.20, 0.20, 0.30, 0.05),
+
+            # New score weights:
+            # fidelity, survival, fit quality, low power
+            score_weights=(0.35, 0.40, 0.15, 0.10),
         )
 
         plot_optimum_metric_scatter(results)
@@ -1180,20 +1497,28 @@ if __name__ == "__main__":
         kpl.show(block=True)
         sys.exit()
 
-    processed_file = "PUT_PROCESSED_REPEATED_READOUT_SURVIVAL_FILE_HERE"
+    processed_file = "2026_07_09-15_04_15-repeated_readout_survival_processed_2026_07_09-04_28_20-qnami-nv0_2026_02_20"
     results = dm.get_raw_data(
         file_stem=processed_file,
         load_npz=True,
     )
 
     plot_repeated_readout_survival_summary(results)
-    plot_repeated_readout_all_nv_scatters(results)
-    plot_per_nv_optimal_step_distribution(results)
+    # plot_repeated_readout_all_nv_scatters(results)
+    # plot_per_nv_optimal_step_distribution(results)
     plot_optimum_metric_scatter(results)
 
     reps = pick_representative_nvs(results)
     for label, nv_ind in reps.items():
         print("\n", label)
         print_nv_optimum_summary(results, nv_ind)
+
+        plot_two_readout_histograms_at_optimum(
+            raw_data,
+            results,
+            nv_ind=nv_ind,
+            step_ind=None,
+            density=True,
+        )
 
     kpl.show(block=True)
