@@ -265,7 +265,7 @@ def fit_single_nv_cpu_job(ind, ref_counts, prob_dist_name):
         threshold, readout_fidelity = determine_threshold(
             popt,
             prob_dist,
-            dark_mode_weight=0.5,
+            dark_mode_weight=0.2,
             ret_fidelity=True,
         )
 
@@ -914,8 +914,8 @@ def plot_prep_vs_readout_single_step(raw_data_or_analysis, use_multiclass=False)
     model_kind = analysis.get("model_kind", "single")
 
     if model_kind == "single":
-        x = np.asarray(analysis["prep_fidelity"], dtype=float)
         y = np.asarray(analysis["readout_fidelity"], dtype=float)
+        x = np.asarray(analysis["prep_fidelity"], dtype=float)
         xlabel = "Prep fidelity"
         ylabel = "Readout fidelity"
     else:
@@ -1164,10 +1164,11 @@ if __name__ == "__main__":
     # User settings
     # =============================================================================
 
-    FILE_ID = "2026_07_10-12_06_57-qnami-nv0_2026_02_20"
+    # FILE_ID = "2026_07_10-12_06_57-qnami-nv0_2026_02_20"
+    FILE_ID = "2026_07_10-16_57_47-qnami-nv0_2026_02_20", ## 814 working NVs 200ms readout
 
     # "single" or "multi"
-    MODEL_KIND = "multi"
+    MODEL_KIND = "single"
 
     # "cpu" or "gpu"
     BACKEND = "cpu"
@@ -1176,7 +1177,8 @@ if __name__ == "__main__":
     SIG_EXP_IND = 0
     FIT_EXP_IND = 1
 
-    PROB_DIST = ProbDist.COMPOUND_POISSON
+    # PROB_DIST = ProbDist.COMPOUND_POISSON
+    PROB_DIST = ProbDist.BROADENED_COMPOUND_POISSON
     N_JOBS = 12
     JOBLIB_VERBOSE = 10
 
