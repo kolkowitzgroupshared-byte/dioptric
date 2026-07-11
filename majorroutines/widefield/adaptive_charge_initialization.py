@@ -34,6 +34,7 @@ import json
 import time
 import traceback
 import copy
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -64,6 +65,10 @@ def _get_thresholds(nv_list):
         thresholds.append(float(threshold))
     return np.asarray(thresholds, dtype=float)
 
+
+def _append_to_file_path(file_path, suffix):
+    file_path = Path(file_path)
+    return file_path.with_name(f"{file_path.name}-{suffix}")
 
 def _copy_nv_list_with_margin(nv_list, confirm_margin_counts=0.0):
     """
@@ -347,6 +352,108 @@ def make_dmd_all_on_charge_prep_fn(
     return charge_prep_fn
 
 
+def make_final_check_charge_prep_fn(
+    base_charge_prep_fn,
+    num_nvs,
+    final_check_rep_ind,
+    mode="old",
+    dmd_radius_px=8,
+    dmd_plane=230,
+    dmd_settle_s=0.001,
+    verbose=True,
+):
+    """
+    Intercept the final extra rep.
+
+    For the final-check rep:
+        - no charge prep
+        - all NVs are removed from OPX target list
+        - DMD is pass-all/block-none so previously known NVs can be imaged
+    """
+
+    pulse_gen = tb.get_server_pulse_gen()
+    dmd = tb.get_server_dmd() if mode.startswith("dmd") else None
+
+    def wrapped_charge_prep_fn(rep_ind, nv_list, initial_states_list=None):
+        if rep_ind == final_check_rep_ind:
+            if mode.startswith("dmd"):
+                _dmd_pass_all_block_none(
+                    dmd=dmd,
+                    dmd_radius_px=dmd_radius_px,
+                    dmd_plane=dmd_plane,
+                    use_dmd=True,
+                    dmd_settle_s=dmd_settle_s,
+                )
+
+            # Important: prevent charge prep on final-check image.
+            pulse_gen.insert_input_stream(
+                "_cache_target_list",
+                np.zeros(num_nvs, dtype=bool).tolist(),
+            )
+
+            if verbose:
+                print(
+                    f"[final check] rep {rep_ind}: "
+                    "DMD pass-all, OPX target list all False"
+                )
+
+            return
+
+        return base_charge_prep_fn(rep_ind, nv_list, initial_states_list)
+
+    return wrapped_charge_prep_fn
+
+
+def make_timed_charge_prep_fn(
+    base_charge_prep_fn,
+    timing_records,
+    verbose=False,
+):
+    """
+    Record time at every rep.
+
+    Saves:
+        run_ind
+        rep_ind
+        elapsed_s_from_run_start
+        wall_s
+    """
+
+    run_counter = {"run_ind": -1}
+    run_t0 = {"t": None}
+
+    def timed_charge_prep_fn(rep_ind, nv_list, initial_states_list=None):
+        now = time.perf_counter()
+
+        if rep_ind == 0:
+            run_counter["run_ind"] += 1
+            run_t0["t"] = now
+
+        run_ind = run_counter["run_ind"]
+
+        if run_t0["t"] is None:
+            elapsed_s = np.nan
+        else:
+            elapsed_s = now - run_t0["t"]
+
+        timing_records.append(
+            {
+                "run_ind": int(run_ind),
+                "rep_ind": int(rep_ind),
+                "elapsed_s_from_run_start": float(elapsed_s),
+                "wall_s": float(now),
+            }
+        )
+
+        if verbose:
+            print(
+                f"[timing] run {run_ind}, rep {rep_ind}, "
+                f"elapsed {elapsed_s:.3f} s"
+            )
+
+        return base_charge_prep_fn(rep_ind, nv_list, initial_states_list)
+
+    return timed_charge_prep_fn
 # =============================================================================
 # Reconstruction and plotting
 # =============================================================================
@@ -371,8 +478,19 @@ def reconstruct_confirmed_history(raw_data, mode="old"):
     counts = np.asarray(raw_data["counts"], dtype=float)[0]  # [nv, run, step, rep]
     counts = counts[:, :, 0, :]                              # [nv, run, rep]
 
-    num_nvs, num_runs, num_reps = counts.shape
+    num_nvs, num_runs, num_reps_total = counts.shape
 
+    num_reps_analysis = int(
+        raw_data.get(
+            "num_reps_analysis",
+            raw_data.get("num_reps_normal", num_reps_total),
+        )
+    )
+
+    counts = counts[:, :, :num_reps_analysis]
+    
+    num_nvs, num_runs, num_reps = counts.shape
+    
     raw_states = counts > thresholds[:, None, None]
 
     if mode in ["old", "dmd_all_on"]:
@@ -427,8 +545,9 @@ def process_and_plot(raw_data, mode=None, mean_val=None, save_fig=False):
     nv_list = raw_data["nv_list"]
     num_nvs = len(nv_list)
     num_runs = int(raw_data["num_runs"])
-    num_reps = int(raw_data["num_reps"])
-
+    num_reps_total = int(raw_data["num_reps"])
+    num_reps = int(raw_data.get("num_reps_analysis", num_reps_total))
+    
     feedback = reconstruct_confirmed_history(raw_data, mode=mode)
     raw_data["feedback_summary"] = feedback
 
@@ -437,7 +556,7 @@ def process_and_plot(raw_data, mode=None, mean_val=None, save_fig=False):
 
     reps_vals = np.arange(num_reps)
 
-    xlim = min(11, num_reps)
+    xlim = min(11, num_reps, len(avg_fraction))
     reps_vals_plot = reps_vals[:xlim]
     avg_fraction_plot = avg_fraction[:xlim]
     ste_fraction_plot = ste_fraction[:xlim]
@@ -517,6 +636,201 @@ def process_and_plot(raw_data, mode=None, mean_val=None, save_fig=False):
     return fig
 
 
+def plot_final_check_image(
+    raw_data,
+    mode=None,
+    img_coords=None,
+    clim=None,
+    marker_size=16,
+):
+    """
+    Plot the final-check image averaged over runs.
+
+    This uses the extra final rep:
+        final_check_rep_ind = raw_data["final_check_rep_ind"]
+
+    The image is taken with DMD pass-all and no extra charge prep.
+    """
+
+    if "img_arrays" not in raw_data:
+        print("No img_arrays in raw_data. Cannot plot final-check image.")
+        return None
+
+    if "final_check_rep_ind" not in raw_data:
+        print("No final_check_rep_ind in raw_data. Skipping final-check plot.")
+        return None
+
+    final_rep_ind = int(raw_data["final_check_rep_ind"])
+
+    img_arrays = np.asarray(raw_data["img_arrays"], dtype=float)
+
+    # Expected shape: [exp, run, step, rep, y, x]
+    imgs = img_arrays[0, :, 0, final_rep_ind, :, :]  # [run, y, x]
+    avg_final_img = np.nanmean(imgs, axis=0)
+
+    if clim is None:
+        vmin = np.nanpercentile(avg_final_img, 50)
+        vmax = np.nanpercentile(avg_final_img, 99.8)
+        clim = (vmin, vmax)
+
+    nv_list = raw_data["nv_list"]
+    coords_xy = None
+
+    try:
+        coords_xy = _coerce_img_coords(nv_list, img_coords=img_coords)
+    except Exception:
+        coords_xy = None
+        print("Could not overlay NV coordinates on final-check image.")
+
+    fig, ax = plt.subplots(figsize=(7, 6))
+
+    im = ax.imshow(
+        avg_final_img,
+        vmin=clim[0],
+        vmax=clim[1],
+        origin="upper",
+    )
+
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_label("photons")
+
+    ax.set_title(
+        f"Final-check image, rep {final_rep_ind}\n"
+        "DMD pass-all, no extra charge prep",
+        fontsize=14,
+    )
+
+    if coords_xy is not None:
+        x = coords_xy[:, 0]
+        y = coords_xy[:, 1]
+
+        ax.scatter(
+            x,
+            y,
+            s=marker_size,
+            facecolors="none",
+            edgecolors="white",
+            linewidths=0.8,
+            label="previous NV positions",
+        )
+
+        ax.legend(loc="upper right", fontsize=8)
+
+    ax.set_axis_off()
+
+    return fig
+
+def _rep_timing_array(raw_data):
+    records = raw_data.get("rep_timing_records", None)
+
+    if records is None or len(records) == 0:
+        return None
+
+    num_runs = int(raw_data["num_runs"])
+    num_reps_total = int(
+        raw_data.get(
+            "num_reps_total",
+            raw_data.get("num_reps", 0),
+        )
+    )
+
+    timing = np.full((num_runs, num_reps_total), np.nan, dtype=float)
+
+    for rec in records:
+        run_ind = int(rec["run_ind"])
+        rep_ind = int(rec["rep_ind"])
+
+        if 0 <= run_ind < num_runs and 0 <= rep_ind < num_reps_total:
+            timing[run_ind, rep_ind] = float(rec["elapsed_s_from_run_start"])
+
+    return timing
+
+
+def plot_rep_timing_summary(raw_data):
+    """
+    Plot timing averaged across runs.
+
+    Top:
+        elapsed time from start of run
+
+    Bottom:
+        time between consecutive reps
+    """
+
+    timing = _rep_timing_array(raw_data)
+
+    if timing is None:
+        print("No rep_timing_records found. Skipping timing plot.")
+        return None
+
+    num_runs, num_reps_total = timing.shape
+    reps = np.arange(num_reps_total)
+
+    mean_elapsed = np.nanmean(timing, axis=0)
+    ste_elapsed = (
+        np.nanstd(timing, axis=0, ddof=1) / np.sqrt(num_runs)
+        if num_runs > 1
+        else np.zeros(num_reps_total)
+    )
+
+    delta = np.full_like(timing, np.nan)
+    delta[:, 0] = 0.0
+    delta[:, 1:] = np.diff(timing, axis=1)
+
+    mean_delta = np.nanmean(delta, axis=0)
+    ste_delta = (
+        np.nanstd(delta, axis=0, ddof=1) / np.sqrt(num_runs)
+        if num_runs > 1
+        else np.zeros(num_reps_total)
+    )
+
+    final_check_rep_ind = raw_data.get("final_check_rep_ind", None)
+
+    fig, axes = plt.subplots(2, 1, figsize=(8, 7), sharex=True)
+
+    axes[0].errorbar(
+        reps,
+        mean_elapsed,
+        yerr=ste_elapsed,
+        marker="o",
+        linestyle="-",
+        capsize=3,
+    )
+    axes[0].set_ylabel("Elapsed time from run start (s)")
+    axes[0].grid(True, alpha=0.3)
+
+    axes[1].errorbar(
+        reps,
+        mean_delta,
+        yerr=ste_delta,
+        marker="o",
+        linestyle="-",
+        capsize=3,
+    )
+    axes[1].set_xlabel("Rep index")
+    axes[1].set_ylabel("Time since previous rep (s)")
+    axes[1].grid(True, alpha=0.3)
+
+    if final_check_rep_ind is not None:
+        final_check_rep_ind = int(final_check_rep_ind)
+
+        for ax in axes:
+            ax.axvline(
+                final_check_rep_ind,
+                color="red",
+                linestyle="--",
+                linewidth=1.5,
+                label="final check",
+            )
+            ax.legend(fontsize=8)
+
+    fig.suptitle(
+        f"Rep timing averaged over {num_runs} runs",
+        fontsize=14,
+    )
+
+    plt.tight_layout()
+    return fig
 # =============================================================================
 # Image saving helpers
 # =============================================================================
@@ -565,16 +879,12 @@ def save_avg_rep_images(raw_data, file_path, reps_to_save=None, clim=None):
         )
         ax.set_axis_off()
 
-        rep_file_path = f"{file_path}-avg-img-rep{rep_ind}"
+        rep_file_path = _append_to_file_path(file_path, f"avg-img-rep{rep_ind}")
         dm.save_figure(fig, rep_file_path)
 
         saved_figs.append(fig)
 
     return saved_figs
-
-
-from pathlib import Path
-from matplotlib.animation import FuncAnimation, PillowWriter
 
 
 def save_blink_gif(
@@ -1112,7 +1422,6 @@ def save_cumulative_initialized_movie(
 # =============================================================================
 # Main routine
 # =============================================================================
-
 def main(
     nv_list,
     num_reps,
@@ -1131,6 +1440,8 @@ def main(
     save_movie=True,
     reset_dmd_on_exit=True,
     verbose=True,
+    take_final_check_image=True,
+    track_rep_timing=True,
 ):
     """
     Run conditional charge initialization in one of three modes.
@@ -1152,6 +1463,15 @@ def main(
 
     seq_file = "charge_state_conditional_init.py"
     num_steps = 1
+    
+    num_reps_analysis = int(num_reps)
+
+    if take_final_check_image:
+        final_check_rep_ind = num_reps_analysis
+        num_reps_total = num_reps_analysis + 1
+    else:
+        final_check_rep_ind = None
+        num_reps_total = num_reps_analysis
 
     nv_run_list = _copy_nv_list_with_margin(
         nv_list,
@@ -1170,6 +1490,10 @@ def main(
     print("save_images:", save_images)
     print("confirm_margin_counts:", confirm_margin_counts)
     print("threshold range:", np.nanmin(thresholds), np.nanmax(thresholds))
+    print("num_reps analysis:", num_reps_analysis)
+    print("num_reps total:", num_reps_total)
+    print("take_final_check_image:", take_final_check_image)
+    print("final_check_rep_ind:", final_check_rep_ind)
 
     if mode == "old":
         charge_prep_fn = base_routine.charge_prep_no_verification_skip_first_rep
@@ -1195,6 +1519,26 @@ def main(
             verbose=verbose,
         )
 
+    rep_timing_records = []
+
+    if take_final_check_image:
+        charge_prep_fn = make_final_check_charge_prep_fn(
+            charge_prep_fn,
+            num_nvs=num_nvs,
+            final_check_rep_ind=final_check_rep_ind,
+            mode=mode,
+            dmd_radius_px=dmd_radius_px,
+            dmd_plane=dmd_plane,
+            dmd_settle_s=dmd_settle_s,
+            verbose=verbose,
+        )
+
+    if track_rep_timing:
+        charge_prep_fn = make_timed_charge_prep_fn(
+            charge_prep_fn,
+            timing_records=rep_timing_records,
+            verbose=False,
+        )
     pulse_gen = tb.get_server_pulse_gen()
 
     def run_fn(shuffled_step_inds):
@@ -1225,14 +1569,14 @@ def main(
         pulse_gen.stream_load(
             seq_file,
             seq_args_string,
-            num_reps,
+            num_reps_total,
         )
 
     try:
         raw_data = base_routine.main(
             nv_run_list,
             num_steps,
-            num_reps,
+            num_reps_total,
             num_runs,
             run_fn=run_fn,
             save_images=save_images,
@@ -1264,6 +1608,13 @@ def main(
         "confirm_margin_counts": confirm_margin_counts,
         "timestamp": dm.get_time_stamp(),
         "img_array-units": "photons",
+        "num_reps_analysis": int(num_reps_analysis),
+        "num_reps_total": int(num_reps_total),
+        "take_final_check_image": bool(take_final_check_image),
+        "final_check_rep_ind": None
+        if final_check_rep_ind is None
+        else int(final_check_rep_ind),
+        "rep_timing_records": rep_timing_records,
     }
 
     try:
@@ -1299,6 +1650,25 @@ def main(
 
         if save_fig and fig is not None:
             dm.save_figure(fig, file_path)
+
+        if save_fig:
+            try:
+                fig_timing = plot_rep_timing_summary(raw_data)
+                if fig_timing is not None:
+                    dm.save_figure(fig_timing, _append_to_file_path(file_path, "rep-timing"))
+                    print("Saved rep timing plot:", f"{file_path}-rep-timing")
+            except Exception:
+                print("Could not save rep timing plot:")
+                print(traceback.format_exc())
+
+            try:
+                fig_final = plot_final_check_image(raw_data)
+                if fig_final is not None:
+                    dm.save_figure(fig_final, _append_to_file_path(file_path, "final-check-image"))
+                    print("Saved final-check image:", f"{file_path}-final-check-image")
+            except Exception:
+                print("Could not save final-check image:")
+                print(traceback.format_exc())
 
         if save_images and save_image_frames:
             try:
