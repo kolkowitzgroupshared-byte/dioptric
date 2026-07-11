@@ -291,7 +291,8 @@ config |= {
             },
             VirtualLaserKey.WIDEFIELD_IMAGING: {
                 "physical_name": yellow_laser,
-                "duration": 50e6,
+                "duration": 100e6,
+                # "duration": 50e6,
                 # "duration": 24e6,
             },
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 10e3},
@@ -302,7 +303,7 @@ config |= {
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 1e6},
             VirtualLaserKey.WIDEFIELD_CHARGE_READOUT: {
                 "physical_name": yellow_laser,
-                "duration": 200e6,
+                "duration": 100e6,
                 # "duration": 50e6,
                 # "duration": 24e6,  # for red calibration
             },
@@ -1044,7 +1045,7 @@ opx_config = {
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.35},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3513},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.244},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.27},
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other

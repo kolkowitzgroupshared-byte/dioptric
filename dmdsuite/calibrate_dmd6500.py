@@ -881,6 +881,19 @@ def _ensure_parent_dir(path):
         path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
+def _npz_path_from_dm_path(file_path):
+    """
+    Convert a dm.get_file_path path to a real .npz path and ensure folder exists.
+
+    If dm path is:
+        .../name.txt
+
+    this returns:
+        .../name.npz
+    """
+    file_path = Path(file_path)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    return file_path.with_suffix(".npz")
 
 def save_zero_order_calibration_npz(
     zero_data,
@@ -1066,8 +1079,10 @@ def do_thorcam_hardware_roi_with_yellow(
         timestamp = dm.get_time_stamp()
         file_path = dm.get_file_path(__file__, timestamp, label)
 
+        npz_path = _npz_path_from_dm_path(file_path)
+
         np.savez_compressed(
-            str(file_path) + ".npz",
+            npz_path,
             img=np.asarray(img),
             roi_xywh=save_roi_xywh,
             img_sum=np.asarray(np.sum(img), dtype=np.float32),
@@ -1093,14 +1108,15 @@ def do_thorcam_hardware_roi_with_yellow(
         ax.set_ylabel(y_label)
         fig.colorbar(ax.images[0], ax=ax, label="counts")
         dm.save_figure(fig, file_path)
-        print("Saved image:", str(file_path) + ".npz")
-
-        plt.show(block=False)
+        print("Saved image data:", npz_path)
+        print("Saved image figure:", file_path)
 
         if wait_before_cleanup:
             input("Press Enter to turn off yellow...")
+            
+        plt.show(block=False)
 
-        return img, centroid_xy, str(file_path) + ".npz"
+        return img, centroid_xy, str(npz_path)
 
     finally:
         try:
@@ -1401,13 +1417,13 @@ if __name__ == "__main__":
     #     yellow_amp=0.045,
     # )
     # take a quick image
-    # do_thorcam_hardware_roi_with_yellow(
-    # label="full-image-test",
-    # exposure=0.0001,
-    # yellow_amp=0.04,
-    # roi_xywh=None,
-    # )
-    # do_thorcam_hardware_roi_with_yellow(
+    do_thorcam_hardware_roi_with_yellow(
+    label="full-image-test",
+    exposure=0.0001,
+    yellow_amp=0.04,
+    roi_xywh=None,
+    )
+    # do_thorcam_hardware_roi_with_yellow(``
     #     label="hardware-roi-test",
     #     exposure=0.0001,
     #     yellow_channel=7,

@@ -1456,7 +1456,9 @@ if __name__ == "__main__":
     run_new_analysis = False
 
     # file_id = "2026_06_26-21_58_16-qnami-nv0_2026_02_20"
-    file_id = "2026_07_09-04_28_20-qnami-nv0_2026_02_20"
+    # file_id = "2026_07_09-04_28_20-qnami-nv0_2026_02_20"
+    file_id = "2026_07_11-04_37_50-qnami-nv0_2026_02_20"
+    
     raw_data = dm.get_raw_data(
             file_stem=file_id,
             load_npz=True,
