@@ -914,8 +914,8 @@ def plot_prep_vs_readout_single_step(raw_data_or_analysis, use_multiclass=False)
     model_kind = analysis.get("model_kind", "single")
 
     if model_kind == "single":
-        x = np.asarray(analysis["prep_fidelity"], dtype=float)
         y = np.asarray(analysis["readout_fidelity"], dtype=float)
+        x = np.asarray(analysis["prep_fidelity"], dtype=float)
         xlabel = "Prep fidelity"
         ylabel = "Readout fidelity"
     else:
@@ -1154,9 +1154,202 @@ def plot_example_histograms(raw_data, inds, density=True):
             print(traceback.format_exc())
 
 
-# =============================================================================
-# Main
-# =============================================================================
+def load_saved_single_step_analysis(raw_data, analysis_file_stem):
+    """
+    Load saved single-step charge histogram analysis and attach it to raw_data.
+
+    This avoids rerunning the CPU/GPU fitting.
+    """
+    analysis_data = dm.get_raw_data(
+        file_stem=analysis_file_stem,
+        load_npz=True,
+    )
+
+    print("\nLoaded saved analysis file:")
+    print(analysis_file_stem)
+
+    print("\nTop-level saved keys:")
+    print(list(analysis_data.keys()))
+
+    if "single_step_charge_histogram" in analysis_data:
+        analysis = analysis_data["single_step_charge_histogram"]
+    else:
+        # fallback if saved file is already the analysis dictionary
+        analysis = analysis_data
+
+    # Convert common fields back to numpy arrays.
+    array_keys = [
+        "ok",
+        "threshold",
+        "readout_fidelity",
+        "prep_fidelity",
+        "red_chi_sq",
+        "n_nvs_est",
+        "threshold_any",
+        "readout_fidelity_any",
+        "fidelity_multiclass",
+        "prep_fidelity_any_ref",
+        "p_minus",
+        "bg",
+        "rate0",
+        "delta",
+        "ref_p_any_minus",
+        "ref_mean_num_minus",
+    ]
+
+    for key in array_keys:
+        if key in analysis:
+            analysis[key] = np.asarray(analysis[key])
+
+    raw_data["single_step_charge_histogram"] = analysis
+
+    print("\nAttached saved analysis to raw_data['single_step_charge_histogram']")
+    print("Analysis keys:")
+    print(list(analysis.keys()))
+
+    if "ok" in analysis:
+        ok = np.asarray(analysis["ok"], dtype=bool)
+        print("Good fits:", int(np.sum(ok)), "/", len(ok))
+
+    return analysis, analysis_data
+
+
+def print_single_step_saved_summary(raw_data):
+    """
+    Print useful numbers from saved single-step analysis.
+    """
+    analysis = get_analysis(raw_data)
+    model_kind = analysis.get("model_kind", "single")
+
+    print("\n=== Saved single-step analysis summary ===")
+    print("model_kind:", model_kind)
+    print("backend_used:", analysis.get("backend_used", None))
+    print("prob_dist:", analysis.get("prob_dist", None))
+    print("fit_exp_ind:", analysis.get("fit_exp_ind", None))
+    print("sig_exp_ind:", analysis.get("sig_exp_ind", None))
+    print("num_positions:", analysis.get("num_positions", None))
+
+    if "ok" in analysis:
+        ok = np.asarray(analysis["ok"], dtype=bool)
+        print("Good fits:", int(np.sum(ok)), "/", len(ok))
+
+    if model_kind == "single":
+        prep = np.asarray(analysis["prep_fidelity"], dtype=float)
+        readout = np.asarray(analysis["readout_fidelity"], dtype=float)
+        threshold = np.asarray(analysis["threshold"], dtype=float)
+
+        good = np.asarray(analysis.get("ok", np.ones_like(prep, dtype=bool)), dtype=bool)
+        good = good & np.isfinite(prep) & np.isfinite(readout)
+
+        print("median prep fidelity:", np.nanmedian(prep[good]))
+        print("median readout fidelity:", np.nanmedian(readout[good]))
+        print("median threshold:", np.nanmedian(threshold[good]))
+
+    else:
+        prep = np.asarray(analysis["prep_fidelity_any_ref"], dtype=float)
+        fid_any = np.asarray(analysis["readout_fidelity_any"], dtype=float)
+        fid_multi = np.asarray(analysis["fidelity_multiclass"], dtype=float)
+        n_est = np.asarray(analysis["n_nvs_est"], dtype=float)
+
+        good = np.asarray(analysis.get("ok", np.ones_like(prep, dtype=bool)), dtype=bool)
+        good = good & np.isfinite(prep)
+
+        print("median prep any-NV-:", np.nanmedian(prep[good]))
+        print("median readout fidelity any:", np.nanmedian(fid_any[good]))
+        print("median multiclass fidelity:", np.nanmedian(fid_multi[good]))
+
+        for n in sorted(np.unique(n_est[np.isfinite(n_est)])):
+            n = int(n)
+            num = int(np.sum(good & (np.rint(n_est).astype(int) == n)))
+            print(f"num estimated {n}-NV pillars:", num)
+
+
+def get_best_single_step_inds(raw_data, num_examples=12, sort_key="readout_fidelity"):
+    """
+    Return best indices from saved analysis.
+
+    sort_key options for single:
+        readout_fidelity
+        prep_fidelity
+        red_chi_sq   # lower is better
+
+    sort_key options for multi:
+        fidelity_multiclass
+        readout_fidelity_any
+        prep_fidelity_any_ref
+        red_chi_sq   # lower is better
+    """
+    analysis = get_analysis(raw_data)
+
+    ok = np.asarray(analysis.get("ok", []), dtype=bool)
+    if ok.size == 0:
+        ok = np.ones(int(analysis.get("num_positions", len(raw_data["nv_list"]))), dtype=bool)
+
+    vals = np.asarray(analysis[sort_key], dtype=float)
+
+    good = ok & np.isfinite(vals)
+    valid_inds = np.where(good)[0]
+
+    if sort_key == "red_chi_sq":
+        order = valid_inds[np.argsort(vals[valid_inds])]
+    else:
+        order = valid_inds[np.argsort(vals[valid_inds])[::-1]]
+
+    return order[:num_examples]
+
+
+def save_selected_single_step_histograms(
+    raw_data,
+    inds,
+    label="saved-single-step-hist",
+    density=True,
+    close_figs=True,
+):
+    """
+    Save histogram figures for selected NV/pillar indices using saved analysis.
+    """
+    analysis = get_analysis(raw_data)
+    timestamp = raw_data.get("timestamp", dm.get_time_stamp())
+    saved_paths = []
+
+    for ind in inds:
+        ind = int(ind)
+
+        try:
+            model_kind = analysis.get("model_kind", "single")
+
+            if model_kind == "single":
+                fig, ax = plot_single_nv_hist_and_fit(
+                    raw_data,
+                    ind,
+                    density=density,
+                )
+            else:
+                fig, ax = plot_multi_nv_hist_and_fit(
+                    raw_data,
+                    ind,
+                    density=density,
+                )
+
+            file_path = dm.get_file_path(
+                __file__,
+                timestamp,
+                f"{label}-ind{ind}",
+            )
+
+            dm.save_figure(fig, file_path)
+            saved_paths.append(file_path)
+
+            print("Saved:", file_path)
+
+            if close_figs:
+                plt.close(fig)
+
+        except Exception:
+            print(f"Could not save histogram for index {ind}")
+            print(traceback.format_exc())
+
+    return saved_paths
 
 if __name__ == "__main__":
     kpl.init_kplotlib()
@@ -1164,15 +1357,17 @@ if __name__ == "__main__":
     # User settings
     # =============================================================================
 
-    FILE_ID = "2026_07_10-12_06_57-qnami-nv0_2026_02_20"
+    # FILE_ID = "2026_07_10-12_06_57-qnami-nv0_2026_02_20"
+    FILE_ID = "2026_07_10-16_57_47-qnami-nv0_2026_02_20", ## 814 working NVs 200ms readout
+    # FILE_ID = "2026_07_13-17_00_15-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
+    FILE_ID = "2026_07_14-13_06_11-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
 
-    # "single" or "multi"
-    MODEL_KIND = "multi"
+ 
+    RUN_NEW_PROCESSING = False
 
-    # "cpu" or "gpu"
+    MODEL_KIND = "single"
     BACKEND = "cpu"
 
-    # Branches. FIT_EXP_IND is the histogram that is actually fitted.
     SIG_EXP_IND = 0
     FIT_EXP_IND = 1
 
@@ -1180,12 +1375,10 @@ if __name__ == "__main__":
     N_JOBS = 12
     JOBLIB_VERBOSE = 10
 
-    # Multi-NV settings
     MAX_NVS_PER_POSITION = 3
     FORCE_NVS: Optional[int] = None
     BIC_EXTRA_NV_PENALTY = 2.0
 
-    # GPU settings. These are only used if BACKEND = "gpu" and the GPU fitter imports.
     GPU_MODEL_MODE_SINGLE = "bimodal"
     GPU_MODEL_MODE_MULTI = "strict_auto"
     GPU_FIT_CHUNK_SIZE = 128
@@ -1193,42 +1386,120 @@ if __name__ == "__main__":
     GPU_REFINE_FIT_CHUNK_SIZE = 32
 
     SAVE_ANALYSIS = True
+
     DO_PLOT_SUMMARY = True
     DO_PLOT_EXAMPLE_HISTS = True
-    EXAMPLE_INDS = [0, 1, 2, 3, 10, 50, 100]
+    DO_SAVE_SELECTED_HISTS = True
+
+    NUM_EXAMPLES = 12
+
+    # For single-NV:
+    SORT_KEY = "readout_fidelity"
+    # SORT_KEY = "prep_fidelity"
+    # SORT_KEY = "red_chi_sq"
+
+    # Manual examples if desired.
+    EXAMPLE_INDS = [0, 1, 2, 3, 10, 50, 100, 200, 300, 400, 500, 600, 700, 800]
+
+    # =============================================================================
+    # Load original raw data
+    # =============================================================================
 
     raw_data = dm.get_raw_data(
         file_stem=FILE_ID,
         load_npz=True,
     )
+
     raw_data["file_stem"] = FILE_ID
 
-    analysis = process_single_step_charge_histograms(
-        raw_data,
-        model_kind=MODEL_KIND,
-        backend=BACKEND,
-        fit_exp_ind=FIT_EXP_IND,
-        sig_exp_ind=SIG_EXP_IND,
-        prob_dist=PROB_DIST,
-        n_jobs=N_JOBS,
-        joblib_verbose=JOBLIB_VERBOSE,
-        max_nvs_per_position=MAX_NVS_PER_POSITION,
-        force_nvs=FORCE_NVS,
-        bic_extra_nv_penalty=BIC_EXTRA_NV_PENALTY,
-        save_analysis=SAVE_ANALYSIS,
-    )
+    # =============================================================================
+    # Either run new processing or load saved analysis
+    # =============================================================================
+
+    if RUN_NEW_PROCESSING:
+        analysis = process_single_step_charge_histograms(
+            raw_data,
+            model_kind=MODEL_KIND,
+            backend=BACKEND,
+            fit_exp_ind=FIT_EXP_IND,
+            sig_exp_ind=SIG_EXP_IND,
+            prob_dist=PROB_DIST,
+            n_jobs=N_JOBS,
+            joblib_verbose=JOBLIB_VERBOSE,
+            max_nvs_per_position=MAX_NVS_PER_POSITION,
+            force_nvs=FORCE_NVS,
+            bic_extra_nv_penalty=BIC_EXTRA_NV_PENALTY,
+            save_analysis=SAVE_ANALYSIS,
+        )
+
+    else:
+        analysis, analysis_data = load_saved_single_step_analysis(
+            raw_data,
+            SAVED_ANALYSIS_FILE_ID,
+        )
+
+    # =============================================================================
+    # Print summary
+    # =============================================================================
+
+    print_single_step_saved_summary(raw_data)
+
+    # =============================================================================
+    # Plot summary
+    # =============================================================================
 
     if DO_PLOT_SUMMARY:
-        plot_prep_vs_readout_single_step(raw_data, use_multiclass=False)
+        plot_prep_vs_readout_single_step(
+            raw_data,
+            use_multiclass=False,
+        )
 
-        if MODEL_KIND == "multi":
-            plot_prep_vs_readout_single_step(raw_data, use_multiclass=True)
+        if analysis.get("model_kind", MODEL_KIND) == "multi":
+            plot_prep_vs_readout_single_step(
+                raw_data,
+                use_multiclass=True,
+            )
+
+    # =============================================================================
+    # Choose examples from saved analysis
+    # =============================================================================
+
+    best_inds = get_best_single_step_inds(
+        raw_data,
+        num_examples=NUM_EXAMPLES,
+        sort_key=SORT_KEY,
+    )
+
+    print(f"\nBest examples by {SORT_KEY}:")
+    print(best_inds)
+
+    # Use best indices by default.
+    inds_to_plot = best_inds
+    # Or use manual examples:
+    # inds_to_plot = EXAMPLE_INDS
+
+    # =============================================================================
+    # Plot example histograms
+    # =============================================================================
 
     if DO_PLOT_EXAMPLE_HISTS:
         plot_example_histograms(
             raw_data,
-            EXAMPLE_INDS,
+            inds_to_plot,
             density=True,
+        )
+
+    # =============================================================================
+    # Save selected histograms
+    # =============================================================================
+
+    if DO_SAVE_SELECTED_HISTS:
+        save_selected_single_step_histograms(
+            raw_data,
+            inds_to_plot,
+            label=f"best-{SORT_KEY}-single-step",
+            density=True,
+            close_figs=True,
         )
 
     kpl.show(block=True)
