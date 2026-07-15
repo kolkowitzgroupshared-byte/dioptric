@@ -1695,16 +1695,16 @@ def plot_all_charge_multinv_summaries(
     # Index scatter plots
     # ---------------------------------------------------------------------
     keys_to_plot = [
-        ("n_nvs_est", get_metric_label("n_nvs_est")),
-        ("threshold_any", get_metric_label("threshold_any")),
-        ("readout_fidelity_any", get_metric_label("readout_fidelity_any")),
-        ("fidelity_multiclass", get_metric_label("fidelity_multiclass")),
-        ("prep_fidelity_any_ref", get_metric_label("prep_fidelity_any_ref")),
-        ("ref_p_any_minus", get_metric_label("ref_p_any_minus")),
-        ("ref_mean_num_minus", get_metric_label("ref_mean_num_minus")),
+        # ("n_nvs_est", get_metric_label("n_nvs_est")),
+        # ("threshold_any", get_metric_label("threshold_any")),
+        # ("readout_fidelity_any", get_metric_label("readout_fidelity_any")),
+        # ("fidelity_multiclass", get_metric_label("fidelity_multiclass")),
+        # ("prep_fidelity_any_ref", get_metric_label("prep_fidelity_any_ref")),
+        # ("ref_p_any_minus", get_metric_label("ref_p_any_minus")),
+        # ("ref_mean_num_minus", get_metric_label("ref_mean_num_minus")),
         ("p_minus", get_metric_label("p_minus")),
-        ("rate0", get_metric_label("rate0")),
-        ("delta", get_metric_label("delta")),
+        # ("rate0", get_metric_label("rate0")),
+        # ("delta", get_metric_label("delta")),
         ("red_chi_sq", get_metric_label("red_chi_sq")),
     ]
 
@@ -1724,29 +1724,29 @@ def plot_all_charge_multinv_summaries(
     # ---------------------------------------------------------------------
     # Thresholds, weights, occupancy, fidelity summary
     # ---------------------------------------------------------------------
-    for plot_fn, name in [
-        (plot_thresholds_vs_index, "thresholds"),
-        (plot_weights_vs_index, "weights"),
-        (plot_n_nv_count_summary, "NV occupancy summary"),
-        (plot_fidelity_any_vs_multiclass, "fidelity_any vs fidelity_multiclass"),
-    ]:
-        try:
-            fig, ax = plot_fn(raw_data)
-            figs.append(fig)
-        except Exception:
-            print(f"Could not plot {name}")
-            print(traceback.format_exc())
+    # for plot_fn, name in [
+    #     (plot_thresholds_vs_index, "thresholds"),
+    #     (plot_weights_vs_index, "weights"),
+    #     (plot_n_nv_count_summary, "NV occupancy summary"),
+    #     (plot_fidelity_any_vs_multiclass, "fidelity_any vs fidelity_multiclass"),
+    # ]:
+    #     try:
+    #         fig, ax = plot_fn(raw_data)
+    #         figs.append(fig)
+    #     except Exception:
+    #         print(f"Could not plot {name}")
+    #         print(traceback.format_exc())
 
     # ---------------------------------------------------------------------
     # Pair scatter plots
     # ---------------------------------------------------------------------
     pair_plots = [
-        ("delta", "readout_fidelity_any", "delta", "Binary fidelity"),
-        ("delta", "fidelity_multiclass", "delta", "Multi-class fidelity"),
-        ("p_minus", "fidelity_multiclass", "p_minus", "Multi-class fidelity"),
+        # ("delta", "readout_fidelity_any", "delta", "Binary fidelity"),
+        # ("delta", "fidelity_multiclass", "delta", "Multi-class fidelity"),
+        ("fidelity_multiclass", "p_minus", "Readout fidelity", "p_minus"),
         ("threshold_any", "delta", "Any-NV$^{-}$ threshold", "delta"),
-        ("n_nvs_est", "threshold_any", "Estimated NVs", "Any-NV$^{-}$ threshold"),
-        ("n_nvs_est", "ref_mean_num_minus", "Estimated NVs", "Mean k"),
+        # ("n_nvs_est", "threshold_any", "Estimated NVs", "Any-NV$^{-}$ threshold"),
+        # ("n_nvs_est", "ref_mean_num_minus", "Estimated NVs", "Mean k"),
     ]
 
     for x_key, y_key, xlabel, ylabel in pair_plots:
@@ -1766,32 +1766,32 @@ def plot_all_charge_multinv_summaries(
     # ---------------------------------------------------------------------
     # Spatial maps
     # ---------------------------------------------------------------------
-    if coords_key is not None:
-        spatial_keys = [
-            ("n_nvs_est", get_metric_label("n_nvs_est")),
-            ("threshold_any", get_metric_label("threshold_any")),
-            ("readout_fidelity_any", get_metric_label("readout_fidelity_any")),
-            ("fidelity_multiclass", get_metric_label("fidelity_multiclass")),
-            ("ref_mean_num_minus", get_metric_label("ref_mean_num_minus")),
-            ("p_minus", get_metric_label("p_minus")),
-            ("rate0", get_metric_label("rate0")),
-            ("delta", get_metric_label("delta")),
-            ("red_chi_sq", get_metric_label("red_chi_sq")),
-        ]
+    # if coords_key is not None:
+    #     spatial_keys = [
+    #         ("n_nvs_est", get_metric_label("n_nvs_est")),
+    #         ("threshold_any", get_metric_label("threshold_any")),
+    #         ("readout_fidelity_any", get_metric_label("readout_fidelity_any")),
+    #         ("fidelity_multiclass", get_metric_label("fidelity_multiclass")),
+    #         ("ref_mean_num_minus", get_metric_label("ref_mean_num_minus")),
+    #         ("p_minus", get_metric_label("p_minus")),
+    #         ("rate0", get_metric_label("rate0")),
+    #         ("delta", get_metric_label("delta")),
+    #         ("red_chi_sq", get_metric_label("red_chi_sq")),
+    #     ]
 
-        for key, label in spatial_keys:
-            try:
-                fig, ax = scatter_metric_spatial(
-                    raw_data,
-                    key,
-                    coords_key=coords_key,
-                    cbar_label=label,
-                    title=f"{label} map",
-                )
-                figs.append(fig)
-            except Exception:
-                print(f"Could not make spatial map for {key}")
-                print(traceback.format_exc())
+    #     for key, label in spatial_keys:
+    #         try:
+    #             fig, ax = scatter_metric_spatial(
+    #                 raw_data,
+    #                 key,
+    #                 coords_key=coords_key,
+    #                 cbar_label=label,
+    #                 title=f"{label} map",
+    #             )
+    #             figs.append(fig)
+    #         except Exception:
+    #             print(f"Could not make spatial map for {key}")
+    #             print(traceback.format_exc())
 
     # ---------------------------------------------------------------------
     # Optional save
@@ -1811,7 +1811,7 @@ def plot_all_charge_multinv_summaries(
 def save_selected_pillar_histograms(
     raw_data,
     pillar_inds,
-    label,
+    # label,
     density=True,
     close_figs=True,
 ):
@@ -1859,7 +1859,7 @@ def save_selected_pillar_histograms(
         fid_any = fidelity_any[pillar_ind]
 
         file_label = (
-            f"{label}-pillar-{pillar_ind:04d}"
+            f"pillar-{pillar_ind:04d}"
             f"-N{n_est}"
             f"-fidmulti-{fid_multi:.3f}"
             f"-fidany-{fid_any:.3f}"
@@ -1938,13 +1938,10 @@ def print_three_nv_statistical_counts(analysis, pillar_ind, num_shots=None):
             f"separation={delta:.2f} counts, "
             f"d'={dprime:.2f}"
         )
-# =============================================================================
-# Example usage
-# ============================================================================
 
 if __name__ == "__main__":
     kpl.init_kplotlib()
-    run_new_processing = True
+    run_new_processing = False
 
     raw_data = dm.get_raw_data(
         # file_stem="2026_03_02-17_30_11-qnami-nv0_2026_02_20", ## 1277 working NVs
@@ -1956,7 +1953,10 @@ if __name__ == "__main__":
         # file_stem="2026_06_23-15_11_05-qnami-nv0_2026_02_20", ## 1176 working NVs
         # file_stem="2026_07_09-20_49_40-qnami-nv0_2026_02_20", ## 814 working NVs 50ms radout
         # file_stem="2026_07_10-12_06_57-qnami-nv0_2026_02_20", ## 814 working NVs 50ms radout
-        file_stem="2026_07_10-15_29_21-qnami-nv0_2026_02_20", ## 814 working NVs 200ms readout
+        # file_stem="2026_07_10-15_29_21-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
+        # file_stem="2026_07_13-15_06_14-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
+        # file_stem="2026_07_13-15_38_32-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
+        file_stem="2026_07_13-17_00_15-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
         load_npz=True,
     )
     if run_new_processing:
@@ -1982,7 +1982,8 @@ if __name__ == "__main__":
         # file_stem="2026_06_22-18_39_58-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", #1176NVs
         # file_stem="2026_06_22-18_39_58-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", #814NVs
         # file_stem="2026_06_22-18_39_58-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", #814NVs
-        file_stem="2026_07_09-21_39_43-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", #814NVs
+        # file_stem="2026_07_09-21_39_43-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", #814NVs
+        file_stem="2026_07_13-16_02_12-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", #814NVs
         load_npz=True,
     )
 
@@ -2031,12 +2032,11 @@ if __name__ == "__main__":
     # =============================================================================
     # Plot summary figures from saved analysis
     # =============================================================================
-    figs = plot_all_charge_multinv_summaries(
-        raw_data,
-        coords_key="pixel",
-        save_figs=True,
-    )
-
+    # figs = plot_all_charge_multinv_summaries(
+    #     raw_data,
+    #     coords_key="pixel",
+    #     save_figs=True,
+    # )
     # =============================================================================
     # Find selected 2-NV and 3-NV pillars
     # =============================================================================
@@ -2055,7 +2055,7 @@ if __name__ == "__main__":
 
     print("\nNumber of 1-NV pillars:", len(one_nv_inds))
     
-    sys.exit()
+    # sys.exit()
     
     two_nv_inds = np.where(ok & (n_nvs_est == 2))[0]
     three_nv_inds = np.where(ok & (n_nvs_est == 3))[0]
@@ -2073,6 +2073,10 @@ if __name__ == "__main__":
     # Choose best examples by multi-class fidelity
     # =============================================================================
     num_examples = 10
+    
+    one_nv_best = one_nv_inds[
+        np.argsort(fidelity_multi[one_nv_inds])[::-1]
+    ][:num_examples]
 
     two_nv_best = two_nv_inds[
         np.argsort(fidelity_multi[two_nv_inds])[::-1]
@@ -2081,6 +2085,16 @@ if __name__ == "__main__":
     three_nv_best = three_nv_inds[
         np.argsort(fidelity_multi[three_nv_inds])[::-1]
     ][:num_examples]
+
+    print("\nBest 1-NV examples by multi-class fidelity:")
+    for ind in one_nv_best:
+        print(
+            f"pillar {ind}: "
+            f"fid_multi={fidelity_multi[ind]:.3f}, "
+            f"fid_any={fidelity_any[ind]:.3f}, "
+            f"threshold_any={threshold_any[ind]:.1f}, "
+            f"mean_k={ref_mean_k[ind]:.2f}"
+        )
 
     print("\nBest 2-NV examples by multi-class fidelity:")
     for ind in two_nv_best:
@@ -2106,6 +2120,15 @@ if __name__ == "__main__":
     # Plot histograms for selected 2-NV and 3-NV pillars
     # =============================================================================
 
+    # one_nv_best = range(0, 10)  # Example: first 10 pillars
+    for pillar_ind in one_nv_best:
+        plot_one_pillar_hist_and_fit(
+            raw_data,
+            pillar_ind=int(pillar_ind),
+            density=True,
+        )
+
+
     for pillar_ind in two_nv_best:
         plot_one_pillar_hist_and_fit(
             raw_data,
@@ -2122,13 +2145,13 @@ if __name__ == "__main__":
 
 
     # # Optional: save selected histogram figures
-    # save_selected_pillar_histograms(
-    #     raw_data,
-    #     two_nv_best,
-    #     label="best-2nv-charge-hist",
-    #     density=True,
-    #     close_figs=True,
-    # )
+    save_selected_pillar_histograms(
+        raw_data,
+        one_nv_best,
+        # label="best-1nv-charge-hist",
+        density=True,
+        close_figs=True,
+    )
 
     # save_selected_pillar_histograms(
     #     raw_data,
