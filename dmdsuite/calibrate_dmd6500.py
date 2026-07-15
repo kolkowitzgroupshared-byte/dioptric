@@ -1410,19 +1410,19 @@ if __name__ == "__main__":
     # main(
     #     load_file_id=LOAD_FILE_ID,
     #     load_npz_path=LOAD_NPZ_PATH,
-    #     reuse_zero_order=True,
-    #     force_zero_order=False,
+    #     reuse_zero_order=False,
+    #     force_zero_order=True,
     #     use_yellow=True,
     #     yellow_channel=7,
     #     yellow_amp=0.045,
     # )
     # take a quick image
-    do_thorcam_hardware_roi_with_yellow(
-    label="full-image-test",
-    exposure=0.0001,
-    yellow_amp=0.04,
-    roi_xywh=None,
-    )
+    # do_thorcam_hardware_roi_with_yellow(
+    # label="full-image-test",
+    # exposure=0.0001,
+    # yellow_amp=0.04,
+    # roi_xywh=None,
+    # )
     # do_thorcam_hardware_roi_with_yellow(``
     #     label="hardware-roi-test",
     #     exposure=0.0001,

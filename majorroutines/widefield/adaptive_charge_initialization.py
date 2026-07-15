@@ -154,6 +154,90 @@ def _dmd_block_confirmed(
 
     return confirmed_dmd_indices
 
+def _dmd_gate_minimal_indices(
+    confirmed_mask,
+    dmd_indices,
+    dmd=None,
+    dmd_radius_px=8,
+    dmd_plane=230,
+    use_dmd=True,
+    dmd_settle_s=0.001,
+    verbose=False,
+):
+    """
+    Fast hybrid DMD gating.
+
+    Goal:
+        confirmed NVs should be blocked
+        active/unconfirmed NVs should be passed
+
+    Two equivalent ways:
+
+        A) white/pass background + black/block confirmed disks
+           draw num_confirmed disks
+
+        B) black/block background + white/pass active disks
+           draw num_active disks
+
+    This function chooses the smaller one.
+    """
+
+    confirmed_mask = np.asarray(confirmed_mask, dtype=bool)
+    dmd_indices = np.asarray(dmd_indices, dtype=int)
+
+    active_mask = ~confirmed_mask
+
+    confirmed_dmd_indices = dmd_indices[confirmed_mask].astype(int).tolist()
+    active_dmd_indices = dmd_indices[active_mask].astype(int).tolist()
+
+    num_confirmed = len(confirmed_dmd_indices)
+    num_active = len(active_dmd_indices)
+
+    if not use_dmd:
+        return {
+            "method": "none",
+            "num_confirmed": num_confirmed,
+            "num_active": num_active,
+            "num_drawn": 0,
+        }
+
+    if dmd is None:
+        dmd = tb.get_server_dmd()
+
+    if num_confirmed <= num_active:
+        # White/pass background, black/block confirmed NVs.
+        method = "block_confirmed"
+        dmd.block_loaded_indices(
+            json.dumps(confirmed_dmd_indices),
+            int(dmd_radius_px),
+            int(dmd_plane),
+        )
+        num_drawn = num_confirmed
+
+    else:
+        # Black/block background, white/pass active NVs.
+        method = "pass_active"
+        dmd.pass_loaded_indices(
+            json.dumps(active_dmd_indices),
+            int(dmd_radius_px),
+            int(dmd_plane),
+        )
+        num_drawn = num_active
+
+    time.sleep(dmd_settle_s)
+
+    if verbose:
+        print(
+            f"DMD hybrid gate: method={method}, "
+            f"confirmed={num_confirmed}, active={num_active}, drawn={num_drawn}"
+        )
+
+    return {
+        "method": method,
+        "num_confirmed": num_confirmed,
+        "num_active": num_active,
+        "num_drawn": num_drawn,
+    }
 
 def _dmd_pass_all_block_none(
     dmd=None,
@@ -186,7 +270,6 @@ def _dmd_pass_all_block_none(
 # =============================================================================
 # Charge-prep functions
 # =============================================================================
-
 def make_dmd_block_confirmed_charge_prep_fn(
     num_nvs,
     dmd_indices=None,
@@ -195,19 +278,8 @@ def make_dmd_block_confirmed_charge_prep_fn(
     use_dmd=True,
     dmd_settle_s=0.001,
     verbose=True,
+    profile_records=None,
 ):
-    """
-    Custom charge_prep_fn compatible with base_routine.main.
-
-    Same idea as old conditional init:
-        rep 0: no charge prep, only the sequence's rep0 behavior
-        rep > 0: send _cache_target_list to OPX
-
-    Difference:
-        keeps persistent confirmed_nvm mask.
-        once NV is confirmed NV-, DMD blocks it and OPX stops targeting it.
-    """
-
     dmd_indices = _prepare_dmd_indices(num_nvs, dmd_indices)
     pulse_gen = tb.get_server_pulse_gen()
     dmd = tb.get_server_dmd() if use_dmd else None
@@ -218,13 +290,20 @@ def make_dmd_block_confirmed_charge_prep_fn(
 
     def update_dmd_if_needed(confirmed_mask, force=False):
         confirmed_mask = np.asarray(confirmed_mask, dtype=bool)
+        num_blocked = int(np.sum(confirmed_mask))
 
         if (
             not force
             and last_confirmed_mask["mask"] is not None
             and np.array_equal(confirmed_mask, last_confirmed_mask["mask"])
         ):
-            return
+            return {
+                "dmd_changed": False,
+                "dmd_s": 0.0,
+                "num_blocked": num_blocked,
+            }
+
+        t0 = time.perf_counter()
 
         _dmd_block_confirmed(
             confirmed_mask,
@@ -237,30 +316,66 @@ def make_dmd_block_confirmed_charge_prep_fn(
             verbose=verbose,
         )
 
+        t1 = time.perf_counter()
+
         last_confirmed_mask["mask"] = confirmed_mask.copy()
+
+        return {
+            "dmd_changed": True,
+            "dmd_s": float(t1 - t0),
+            "num_blocked": num_blocked,
+        }
 
     def charge_prep_fn(rep_ind, nv_list, initial_states_list=None):
         nonlocal confirmed_nvm
 
-        # Start of each run.
+        t_total0 = time.perf_counter()
+
+        # --------------------------------------------------------------
+        # Start of each run
+        # --------------------------------------------------------------
         if rep_ind == 0:
             run_counter["run_ind"] += 1
             confirmed_nvm[:] = False
             last_confirmed_mask["mask"] = None
 
-            # DMD pass all / block no NV sites.
-            update_dmd_if_needed(confirmed_nvm, force=True)
+            dmd_info = update_dmd_if_needed(confirmed_nvm, force=True)
+
+            t_total1 = time.perf_counter()
+
+            if profile_records is not None:
+                profile_records.append(
+                    {
+                        "mode": "dmd_block_confirmed",
+                        "run_ind": int(run_counter["run_ind"]),
+                        "rep_ind": int(rep_ind),
+                        "phase": "rep0_start",
+                        "newly_confirmed": 0,
+                        "confirmed": 0,
+                        "active": int(num_nvs),
+                        "classify_s": 0.0,
+                        "dmd_s": dmd_info["dmd_s"],
+                        "dmd_changed": bool(dmd_info["dmd_changed"]),
+                        "opx_s": 0.0,
+                        "total_callback_s": float(t_total1 - t_total0),
+                    }
+                )
 
             if verbose:
                 print(
                     f"[DMD block confirmed] run {run_counter['run_ind']}, "
-                    f"rep {rep_ind}: start run, no NVs blocked"
+                    f"rep {rep_ind}: start, "
+                    f"dmd={dmd_info['dmd_s']:.3f}s, "
+                    f"total={t_total1 - t_total0:.3f}s"
                 )
 
-            # Match old skip-first-rep behavior: no target list on rep 0.
             return
 
-        # Update confirmation from previous readout.
+        # --------------------------------------------------------------
+        # Classify previous rep
+        # --------------------------------------------------------------
+        t_class0 = time.perf_counter()
+
         if initial_states_list is not None:
             states = np.asarray(initial_states_list, dtype=bool)
             active_prev = ~confirmed_nvm
@@ -271,14 +386,47 @@ def make_dmd_block_confirmed_charge_prep_fn(
 
         active_mask = ~confirmed_nvm
 
-        # DMD blocks confirmed NVs.
-        update_dmd_if_needed(confirmed_nvm, force=False)
+        t_class1 = time.perf_counter()
 
-        # OPX targets only unconfirmed NVs.
+        # --------------------------------------------------------------
+        # DMD update
+        # --------------------------------------------------------------
+        dmd_info = update_dmd_if_needed(confirmed_nvm, force=False)
+
+        # --------------------------------------------------------------
+        # OPX stream update
+        # --------------------------------------------------------------
+        t_opx0 = time.perf_counter()
+
         pulse_gen.insert_input_stream(
             "_cache_target_list",
             active_mask.astype(bool).tolist(),
         )
+
+        t_opx1 = time.perf_counter()
+        t_total1 = time.perf_counter()
+
+        classify_s = float(t_class1 - t_class0)
+        opx_s = float(t_opx1 - t_opx0)
+        total_s = float(t_total1 - t_total0)
+
+        if profile_records is not None:
+            profile_records.append(
+                {
+                    "mode": "dmd_block_confirmed",
+                    "run_ind": int(run_counter["run_ind"]),
+                    "rep_ind": int(rep_ind),
+                    "phase": "normal_feedback",
+                    "newly_confirmed": int(np.sum(newly_confirmed)),
+                    "confirmed": int(np.sum(confirmed_nvm)),
+                    "active": int(np.sum(active_mask)),
+                    "classify_s": classify_s,
+                    "dmd_s": dmd_info["dmd_s"],
+                    "dmd_changed": bool(dmd_info["dmd_changed"]),
+                    "opx_s": opx_s,
+                    "total_callback_s": total_s,
+                }
+            )
 
         if verbose:
             print(
@@ -286,11 +434,14 @@ def make_dmd_block_confirmed_charge_prep_fn(
                 f"rep {rep_ind}: "
                 f"new={int(np.sum(newly_confirmed))}, "
                 f"confirmed={int(np.sum(confirmed_nvm))}/{num_nvs}, "
-                f"active={int(np.sum(active_mask))}/{num_nvs}"
+                f"active={int(np.sum(active_mask))}/{num_nvs}, "
+                f"classify={classify_s:.3f}s, "
+                f"dmd={dmd_info['dmd_s']:.3f}s, "
+                f"opx={opx_s:.3f}s, "
+                f"total={total_s:.3f}s"
             )
 
     return charge_prep_fn
-
 
 def make_dmd_all_on_charge_prep_fn(
     num_nvs,
@@ -361,21 +512,18 @@ def make_final_check_charge_prep_fn(
     dmd_plane=230,
     dmd_settle_s=0.001,
     verbose=True,
+    profile_records=None,
 ):
-    """
-    Intercept the final extra rep.
-
-    For the final-check rep:
-        - no charge prep
-        - all NVs are removed from OPX target list
-        - DMD is pass-all/block-none so previously known NVs can be imaged
-    """
-
     pulse_gen = tb.get_server_pulse_gen()
     dmd = tb.get_server_dmd() if mode.startswith("dmd") else None
 
     def wrapped_charge_prep_fn(rep_ind, nv_list, initial_states_list=None):
         if rep_ind == final_check_rep_ind:
+            t_total0 = time.perf_counter()
+
+            # DMD pass-all
+            t_dmd0 = time.perf_counter()
+
             if mode.startswith("dmd"):
                 _dmd_pass_all_block_none(
                     dmd=dmd,
@@ -385,16 +533,47 @@ def make_final_check_charge_prep_fn(
                     dmd_settle_s=dmd_settle_s,
                 )
 
-            # Important: prevent charge prep on final-check image.
+            t_dmd1 = time.perf_counter()
+
+            # OPX target list all false
+            t_opx0 = time.perf_counter()
+
             pulse_gen.insert_input_stream(
                 "_cache_target_list",
                 np.zeros(num_nvs, dtype=bool).tolist(),
             )
 
+            t_opx1 = time.perf_counter()
+            t_total1 = time.perf_counter()
+
+            dmd_s = float(t_dmd1 - t_dmd0)
+            opx_s = float(t_opx1 - t_opx0)
+            total_s = float(t_total1 - t_total0)
+
+            if profile_records is not None:
+                profile_records.append(
+                    {
+                        "mode": mode,
+                        "run_ind": None,
+                        "rep_ind": int(rep_ind),
+                        "phase": "final_check",
+                        "newly_confirmed": 0,
+                        "confirmed": None,
+                        "active": 0,
+                        "classify_s": 0.0,
+                        "dmd_s": dmd_s,
+                        "dmd_changed": True,
+                        "opx_s": opx_s,
+                        "total_callback_s": total_s,
+                    }
+                )
+
             if verbose:
                 print(
                     f"[final check] rep {rep_ind}: "
-                    "DMD pass-all, OPX target list all False"
+                    f"dmd_pass_all={dmd_s:.3f}s, "
+                    f"opx_all_false={opx_s:.3f}s, "
+                    f"total={total_s:.3f}s"
                 )
 
             return
@@ -402,7 +581,6 @@ def make_final_check_charge_prep_fn(
         return base_charge_prep_fn(rep_ind, nv_list, initial_states_list)
 
     return wrapped_charge_prep_fn
-
 
 def make_timed_charge_prep_fn(
     base_charge_prep_fn,
@@ -538,7 +716,7 @@ def reconstruct_confirmed_history(raw_data, mode="old"):
     }
 
 
-def process_and_plot(raw_data, mode=None, mean_val=None, save_fig=False):
+def process_and_plot(raw_data, mode=None, mean_val=None, save_fig=True):
     if mode is None:
         mode = raw_data.get("mode", "old")
 
@@ -719,6 +897,357 @@ def plot_final_check_image(
     ax.set_axis_off()
 
     return fig
+
+
+def analyze_and_plot_final_check(
+    raw_data,
+    mode=None,
+    img_coords=None,
+    clim=None,
+    marker_size=16,
+    majority_threshold=0.5,
+    save_data=True,
+    save_fig=True,
+):
+    """
+    Combined final-check analysis + simplified plot.
+
+    Final-check rep:
+        DMD pass-all
+        no extra charge prep
+        classify all NVs using final-check counts
+
+    Classification:
+        count > threshold  -> NV-
+        count <= threshold -> NV0
+
+    Main questions answered:
+        1. How many NVs are NV- at the final check?
+        2. Of the NVs that were previously NV-, how many remain NV-?
+    """
+
+    if mode is None:
+        mode = raw_data.get("mode", "old")
+
+    final_rep_ind = raw_data.get("final_check_rep_ind", None)
+    if final_rep_ind is None:
+        raise ValueError("No final_check_rep_ind found.")
+
+    final_rep_ind = int(final_rep_ind)
+
+    nv_list = raw_data["nv_list"]
+    num_nvs = len(nv_list)
+
+    if "thresholds" in raw_data:
+        thresholds = np.asarray(raw_data["thresholds"], dtype=float)
+    else:
+        thresholds = _get_thresholds(nv_list)
+
+    counts = np.asarray(raw_data["counts"], dtype=float)
+
+    # counts shape: [exp, nv, run, step, rep]
+    final_counts = counts[0, :, :, 0, final_rep_ind]  # [nv, run]
+
+    # True = NV-
+    final_state = final_counts > thresholds[:, None]  # [nv, run]
+
+    num_runs = final_state.shape[1]
+
+    # Previous state before final check
+    feedback = reconstruct_confirmed_history(raw_data, mode=mode)
+    previous_state = np.asarray(
+        feedback["confirmed_history"],
+        dtype=bool,
+    )[:, :, -1]  # [nv, run]
+
+    # ------------------------------------------------------------------
+    # Per-run counts
+    # ------------------------------------------------------------------
+    previous_nvm_by_run = np.sum(previous_state, axis=0)
+    final_nvm_by_run = np.sum(final_state, axis=0)
+
+    retained_nvm_by_run = np.sum(previous_state & final_state, axis=0)
+    lost_nvm_by_run = np.sum(previous_state & (~final_state), axis=0)
+    new_nvm_by_run = np.sum((~previous_state) & final_state, axis=0)
+
+    previous_frac_by_run = previous_nvm_by_run / num_nvs
+    final_frac_by_run = final_nvm_by_run / num_nvs
+
+    retention_frac_by_run = np.full(num_runs, np.nan, dtype=float)
+    good_prev = previous_nvm_by_run > 0
+    retention_frac_by_run[good_prev] = (
+        retained_nvm_by_run[good_prev] / previous_nvm_by_run[good_prev]
+    )
+
+    # ------------------------------------------------------------------
+    # Mean over runs
+    # ------------------------------------------------------------------
+    mean_previous_nvm = float(np.mean(previous_nvm_by_run))
+    mean_final_nvm = float(np.mean(final_nvm_by_run))
+    mean_retained_nvm = float(np.mean(retained_nvm_by_run))
+    mean_lost_nvm = float(np.mean(lost_nvm_by_run))
+    mean_new_nvm = float(np.mean(new_nvm_by_run))
+
+    mean_previous_frac = float(np.mean(previous_frac_by_run))
+    mean_final_frac = float(np.mean(final_frac_by_run))
+    mean_retention_frac = float(np.nanmean(retention_frac_by_run))
+
+    # ------------------------------------------------------------------
+    # Per-NV majority over runs
+    # ------------------------------------------------------------------
+    p_previous_nvm_by_nv = np.mean(previous_state, axis=1)
+    p_final_nvm_by_nv = np.mean(final_state, axis=1)
+
+    previous_majority_nvm = p_previous_nvm_by_nv >= majority_threshold
+    final_majority_nvm = p_final_nvm_by_nv >= majority_threshold
+
+    retained_majority_nvm = previous_majority_nvm & final_majority_nvm
+    lost_majority_nvm = previous_majority_nvm & (~final_majority_nvm)
+    new_majority_nvm = (~previous_majority_nvm) & final_majority_nvm
+
+    num_previous_majority_nvm = int(np.sum(previous_majority_nvm))
+    num_final_majority_nvm = int(np.sum(final_majority_nvm))
+    num_retained_majority_nvm = int(np.sum(retained_majority_nvm))
+    num_lost_majority_nvm = int(np.sum(lost_majority_nvm))
+    num_new_majority_nvm = int(np.sum(new_majority_nvm))
+
+    if num_previous_majority_nvm > 0:
+        majority_retention_frac = float(
+            num_retained_majority_nvm / num_previous_majority_nvm
+        )
+    else:
+        majority_retention_frac = np.nan
+
+    summary = {
+        "analysis_type": "final_check_charge_state",
+        "mode": mode,
+        "num_nvs": int(num_nvs),
+        "num_runs": int(num_runs),
+        "final_check_rep_ind": int(final_rep_ind),
+        "majority_threshold": float(majority_threshold),
+
+        # Per-run arrays
+        "previous_nvm_by_run": previous_nvm_by_run.tolist(),
+        "final_nvm_by_run": final_nvm_by_run.tolist(),
+        "retained_nvm_by_run": retained_nvm_by_run.tolist(),
+        "lost_nvm_by_run": lost_nvm_by_run.tolist(),
+        "new_nvm_by_run": new_nvm_by_run.tolist(),
+        "previous_frac_by_run": previous_frac_by_run.tolist(),
+        "final_frac_by_run": final_frac_by_run.tolist(),
+        "retention_frac_by_run": retention_frac_by_run.tolist(),
+
+        # Mean run-level numbers
+        "mean_previous_nvm": mean_previous_nvm,
+        "mean_final_nvm": mean_final_nvm,
+        "mean_retained_nvm": mean_retained_nvm,
+        "mean_lost_nvm": mean_lost_nvm,
+        "mean_new_nvm": mean_new_nvm,
+        "mean_previous_frac": mean_previous_frac,
+        "mean_final_frac": mean_final_frac,
+        "mean_retention_frac": mean_retention_frac,
+
+        # Per-NV majority numbers
+        "p_previous_nvm_by_nv": p_previous_nvm_by_nv.tolist(),
+        "p_final_nvm_by_nv": p_final_nvm_by_nv.tolist(),
+        "previous_majority_nvm": previous_majority_nvm.tolist(),
+        "final_majority_nvm": final_majority_nvm.tolist(),
+        "retained_majority_nvm": retained_majority_nvm.tolist(),
+
+        "num_previous_majority_nvm": num_previous_majority_nvm,
+        "num_final_majority_nvm": num_final_majority_nvm,
+        "num_retained_majority_nvm": num_retained_majority_nvm,
+        "num_lost_majority_nvm": num_lost_majority_nvm,
+        "num_new_majority_nvm": num_new_majority_nvm,
+        "majority_retention_frac": majority_retention_frac,
+    }
+
+    print("\n=== Final-check charge-state analysis ===")
+    print("mode:", mode)
+    print("final check rep:", final_rep_ind)
+    print("num NVs:", num_nvs)
+    print("num runs:", num_runs)
+
+    print("\nMean over runs:")
+    print("previous NV-:", mean_previous_nvm)
+    print("final NV-:", mean_final_nvm)
+    print("retained previous NV-:", mean_retained_nvm)
+    print("lost previous NV-:", mean_lost_nvm)
+    print("new final NV-:", mean_new_nvm)
+    print("final NV- fraction:", mean_final_frac)
+    print("P(final NV- | previous NV-):", mean_retention_frac)
+
+    print("\nMajority over runs:")
+    print("previous majority NV-:", num_previous_majority_nvm, "/", num_nvs)
+    print("final majority NV-:", num_final_majority_nvm, "/", num_nvs)
+    print(
+        "retained previous majority NV-:",
+        num_retained_majority_nvm,
+        "/",
+        num_previous_majority_nvm,
+    )
+    print("lost previous majority NV-:", num_lost_majority_nvm)
+    print("new majority NV-:", num_new_majority_nvm)
+    print("majority retention fraction:", majority_retention_frac)
+
+    # ------------------------------------------------------------------
+    # Save summary data
+    # ------------------------------------------------------------------
+    if save_data:
+        timestamp = raw_data.get("timestamp", dm.get_time_stamp())
+        save_path = dm.get_file_path(
+            __file__,
+            timestamp,
+            f"final-check-combined-summary-{mode}",
+        )
+        dm.save_raw_data(summary, save_path)
+        print("Saved final-check summary:", save_path)
+
+    # ------------------------------------------------------------------
+    # Plot
+    # ------------------------------------------------------------------
+    fig = None
+
+    if save_fig or "img_arrays" in raw_data:
+        fig, axes = plt.subplots(1, 2, figsize=(11, 5))
+
+        # --------------------------------------------------------------
+        # Left: final-check image
+        # --------------------------------------------------------------
+        ax = axes[0]
+
+        if "img_arrays" in raw_data:
+            img_arrays = np.asarray(raw_data["img_arrays"], dtype=float)
+
+            # img_arrays shape: [exp, run, step, rep, y, x]
+            imgs = img_arrays[0, :, 0, final_rep_ind, :, :]  # [run, y, x]
+            avg_img = np.nanmean(imgs, axis=0)
+
+            if clim is None:
+                vmin = np.nanpercentile(avg_img, 50)
+                vmax = np.nanpercentile(avg_img, 99.8)
+                clim_use = (vmin, vmax)
+            else:
+                clim_use = clim
+
+            im = ax.imshow(
+                avg_img,
+                vmin=clim_use[0],
+                vmax=clim_use[1],
+                origin="upper",
+            )
+
+            coords_xy = _coerce_img_coords(nv_list, img_coords=img_coords)
+            x = coords_xy[:, 0]
+            y = coords_xy[:, 1]
+
+            ax.scatter(
+                x[final_majority_nvm],
+                y[final_majority_nvm],
+                s=marker_size,
+                facecolors="none",
+                edgecolors="lime",
+                linewidths=0.9,
+                label="final NV$^{-}$",
+            )
+
+            ax.scatter(
+                x[~final_majority_nvm],
+                y[~final_majority_nvm],
+                s=marker_size,
+                facecolors="none",
+                edgecolors="red",
+                linewidths=0.9,
+                label="final NV$^{0}$",
+            )
+
+            ax.legend(fontsize=8, loc="upper right")
+            ax.set_axis_off()
+
+            cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            cbar.set_label("photons")
+
+            ax.set_title(
+                f"Final-check image\n"
+                f"{num_final_majority_nvm}/{num_nvs} majority NV$^-$",
+                fontsize=13,
+            )
+
+        else:
+            ax.text(
+                0.5,
+                0.5,
+                "No img_arrays found",
+                ha="center",
+                va="center",
+                fontsize=12,
+            )
+            ax.set_axis_off()
+
+        # --------------------------------------------------------------
+        # Right: count summary
+        # --------------------------------------------------------------
+        ax = axes[1]
+
+        labels = [
+            "Previous\nNV$^-$",
+            "Final\nNV$^-$",
+            # "Retained\nNV$^-$",
+        ]
+
+        values = [
+            num_previous_majority_nvm,
+            num_final_majority_nvm,
+            # num_retained_majority_nvm,
+        ]
+
+        ax.bar(labels, values)
+        ax.set_ylim(0, num_nvs * 1.05)
+        ax.set_ylabel("Number of NVs")
+        ax.set_title("Majority charge-state count", fontsize=13)
+        ax.grid(True, axis="y", alpha=0.3)
+
+        for i, val in enumerate(values):
+            ax.text(
+                i,
+                val + max(1, 0.02 * num_nvs),
+                str(int(val)),
+                ha="center",
+                va="bottom",
+                fontsize=11,
+            )
+
+        txt = (
+            f"P(final NV$^-$ | previous NV$^-$)\n"
+            f"= {majority_retention_frac:.3f}"
+            if np.isfinite(majority_retention_frac)
+            else "Retention undefined"
+        )
+
+        kpl.anchored_text(
+            ax,
+            txt,
+            kpl.Loc.LOWER_CENTER,
+            size=kpl.Size.SMALL,
+        )
+
+        fig.suptitle(
+            "Final check: DMD pass-all, no extra charge prep",
+            fontsize=14,
+        )
+
+        if save_fig:
+            timestamp = raw_data.get("timestamp", dm.get_time_stamp())
+            fig_path = dm.get_file_path(
+                __file__,
+                timestamp,
+                f"final-check-combined-plot-{mode}",
+            )
+            dm.save_figure(fig, fig_path)
+            print("Saved final-check combined plot:", fig_path)
+
+    raw_data["final_check_charge_summary"] = summary
+
+    return summary, fig
 
 def _rep_timing_array(raw_data):
     records = raw_data.get("rep_timing_records", None)
@@ -962,12 +1491,7 @@ def save_blink_gif(
     return gif_path
 
 
-from pathlib import Path
-from matplotlib.animation import FuncAnimation, PillowWriter
 from scipy.ndimage import gaussian_filter
-import numpy as np
-import matplotlib.pyplot as plt
-
 
 def save_blink_gif(
     raw_data,
@@ -1419,6 +1943,91 @@ def save_cumulative_initialized_movie(
 
     return gif_path
 
+
+def plot_feedback_profile_summary(raw_data):
+    records = raw_data.get("feedback_profile_records", None)
+
+    if records is None or len(records) == 0:
+        print("No feedback_profile_records found.")
+        return None
+
+    normal_records = [
+        rec for rec in records
+        if rec.get("phase") in ["normal_feedback", "rep0_start"]
+    ]
+
+    if len(normal_records) == 0:
+        print("No normal feedback records found.")
+        return None
+
+    reps = np.asarray([rec["rep_ind"] for rec in normal_records], dtype=int)
+
+    classify_s = np.asarray(
+        [rec.get("classify_s", np.nan) for rec in normal_records],
+        dtype=float,
+    )
+    dmd_s = np.asarray(
+        [rec.get("dmd_s", np.nan) for rec in normal_records],
+        dtype=float,
+    )
+    opx_s = np.asarray(
+        [rec.get("opx_s", np.nan) for rec in normal_records],
+        dtype=float,
+    )
+    total_s = np.asarray(
+        [rec.get("total_callback_s", np.nan) for rec in normal_records],
+        dtype=float,
+    )
+    confirmed = np.asarray(
+        [
+            np.nan if rec.get("confirmed") is None else rec.get("confirmed")
+            for rec in normal_records
+        ],
+        dtype=float,
+    )
+
+    unique_reps = np.unique(reps)
+
+    mean_classify = []
+    mean_dmd = []
+    mean_opx = []
+    mean_total = []
+    mean_confirmed = []
+
+    for rep in unique_reps:
+        use = reps == rep
+        mean_classify.append(np.nanmean(classify_s[use]))
+        mean_dmd.append(np.nanmean(dmd_s[use]))
+        mean_opx.append(np.nanmean(opx_s[use]))
+        mean_total.append(np.nanmean(total_s[use]))
+        mean_confirmed.append(np.nanmean(confirmed[use]))
+
+    mean_classify = np.asarray(mean_classify)
+    mean_dmd = np.asarray(mean_dmd)
+    mean_opx = np.asarray(mean_opx)
+    mean_total = np.asarray(mean_total)
+    mean_confirmed = np.asarray(mean_confirmed)
+
+    fig, axes = plt.subplots(2, 1, figsize=(8, 7), sharex=True)
+
+    axes[0].plot(unique_reps, mean_classify, "o-", label="classify")
+    axes[0].plot(unique_reps, mean_dmd, "o-", label="DMD update")
+    axes[0].plot(unique_reps, mean_opx, "o-", label="OPX stream")
+    axes[0].plot(unique_reps, mean_total, "o-", label="total callback")
+
+    axes[0].set_ylabel("Time per callback (s)")
+    axes[0].grid(True, alpha=0.3)
+    axes[0].legend(fontsize=8)
+
+    axes[1].plot(unique_reps, mean_confirmed, "o-")
+    axes[1].set_xlabel("Rep index")
+    axes[1].set_ylabel("Mean confirmed NVs")
+    axes[1].grid(True, alpha=0.3)
+
+    fig.suptitle("Feedback-loop profiling", fontsize=14)
+    plt.tight_layout()
+
+    return fig
 # =============================================================================
 # Main routine
 # =============================================================================
@@ -1436,12 +2045,13 @@ def main(
     save_images_avg_reps=False,
     save_data=True,
     save_fig=True,
-    save_image_frames=True,
+    save_image_frames=False,
     save_movie=True,
     reset_dmd_on_exit=True,
     verbose=True,
     take_final_check_image=True,
     track_rep_timing=True,
+    profile_feedback=True,
 ):
     """
     Run conditional charge initialization in one of three modes.
@@ -1494,6 +2104,9 @@ def main(
     print("num_reps total:", num_reps_total)
     print("take_final_check_image:", take_final_check_image)
     print("final_check_rep_ind:", final_check_rep_ind)
+    
+    feedback_profile_records = [] if profile_feedback else None
+    rep_timing_records = []
 
     if mode == "old":
         charge_prep_fn = base_routine.charge_prep_no_verification_skip_first_rep
@@ -1517,9 +2130,8 @@ def main(
             use_dmd=True,
             dmd_settle_s=dmd_settle_s,
             verbose=verbose,
+            profile_records=feedback_profile_records,
         )
-
-    rep_timing_records = []
 
     if take_final_check_image:
         charge_prep_fn = make_final_check_charge_prep_fn(
@@ -1531,6 +2143,7 @@ def main(
             dmd_plane=dmd_plane,
             dmd_settle_s=dmd_settle_s,
             verbose=verbose,
+            profile_records=feedback_profile_records,
         )
 
     if track_rep_timing:
@@ -1573,6 +2186,7 @@ def main(
         )
 
     try:
+        t_experiment0 = time.perf_counter()
         raw_data = base_routine.main(
             nv_run_list,
             num_steps,
@@ -1585,6 +2199,9 @@ def main(
             num_exps=1,
             uwave_ind_list=[],
         )
+
+        t_experiment1 = time.perf_counter()
+        experiment_wall_s = float(t_experiment1 - t_experiment0)
 
     finally:
         if reset_dmd_on_exit and mode.startswith("dmd"):
@@ -1615,85 +2232,93 @@ def main(
         if final_check_rep_ind is None
         else int(final_check_rep_ind),
         "rep_timing_records": rep_timing_records,
+        "feedback_profile_records": feedback_profile_records,
+        "experiment_wall_s": experiment_wall_s,
     }
 
+
+    # Save full raw_data including nv_list and images.
+    timestamp = raw_data["timestamp"]
+    repr_nv_sig = widefield.get_repr_nv_sig(nv_run_list)
+    repr_nv_name = repr_nv_sig.name
+
+    file_path = dm.get_file_path(
+        __file__,
+        timestamp,
+        f"{repr_nv_name}-{mode}",
+    )
+
+    keys_to_compress = ["counts", "thresholds", "dmd_indices"]
+    if save_images and "img_arrays" in raw_data:
+        keys_to_compress.append("img_arrays")
+
+    dm.save_raw_data(
+        raw_data,
+        file_path,
+        keys_to_compress=keys_to_compress,
+    )
+
+    print("Saved raw data:", file_path)
+    
     try:
         fig = process_and_plot(raw_data, mode=mode)
     except Exception:
         print(traceback.format_exc())
         fig = None
 
-    if save_data:
-        timestamp = raw_data["timestamp"]
-        repr_nv_sig = widefield.get_repr_nv_sig(nv_run_list)
-        repr_nv_name = repr_nv_sig.name
+    if save_fig:
+        try:
+            fig_timing = plot_rep_timing_summary(raw_data)
+            if fig_timing is not None:
+                dm.save_figure(fig_timing, _append_to_file_path(file_path, "rep-timing"))
+                print("Saved rep timing plot:", f"{file_path}-rep-timing")
+        except Exception:
+            print("Could not save rep timing plot:")
+            print(traceback.format_exc())
+            
+        try:
+            fig_profile = plot_feedback_profile_summary(raw_data)
+            if fig_profile is not None:
+                dm.save_figure(fig_profile, _append_to_file_path(file_path, "rep-timing"))
+                print("Saved feedback profile plot:", f"{file_path}-feedback-profile")
+        except Exception:
+            print("Could not save feedback profile plot:")
+            print(traceback.format_exc())
 
-        file_path = dm.get_file_path(
-            __file__,
-            timestamp,
-            f"{repr_nv_name}-{mode}",
-        )
 
-        # Save full raw_data including nv_list and images.
-        # If this becomes too large, set save_images=False or save fewer runs.
-        keys_to_compress = ["counts", "thresholds", "dmd_indices"]
-        if save_images and "img_arrays" in raw_data:
-            keys_to_compress.append("img_arrays")
+        try:
+            fig_final = plot_final_check_image(raw_data)
+            if fig_final is not None:
+                dm.save_figure(fig_final, _append_to_file_path(file_path, "final-check-image"))
+                print("Saved final-check image:", f"{file_path}-final-check-image")
+        except Exception:
+            print("Could not save final-check image:")
+            print(traceback.format_exc())
 
-        dm.save_raw_data(
-            raw_data,
-            file_path,
-            keys_to_compress=keys_to_compress,
-        )
+    # if save_images and save_image_frames:
+    #     try:
+    #         save_avg_rep_images(
+    #             raw_data,
+    #             file_path,
+    #             reps_to_save=list(range(min(num_reps, 10))),
+    #             clim=None,
+    #         )
+    #     except Exception:
+    #         print("Could not save avg rep images:")
+    #         print(traceback.format_exc())
 
-        print("Saved raw data:", file_path)
-
-        if save_fig and fig is not None:
-            dm.save_figure(fig, file_path)
-
-        if save_fig:
-            try:
-                fig_timing = plot_rep_timing_summary(raw_data)
-                if fig_timing is not None:
-                    dm.save_figure(fig_timing, _append_to_file_path(file_path, "rep-timing"))
-                    print("Saved rep timing plot:", f"{file_path}-rep-timing")
-            except Exception:
-                print("Could not save rep timing plot:")
-                print(traceback.format_exc())
-
-            try:
-                fig_final = plot_final_check_image(raw_data)
-                if fig_final is not None:
-                    dm.save_figure(fig_final, _append_to_file_path(file_path, "final-check-image"))
-                    print("Saved final-check image:", f"{file_path}-final-check-image")
-            except Exception:
-                print("Could not save final-check image:")
-                print(traceback.format_exc())
-
-        if save_images and save_image_frames:
-            try:
-                save_avg_rep_images(
-                    raw_data,
-                    file_path,
-                    reps_to_save=list(range(min(num_reps, 10))),
-                    clim=None,
-                )
-            except Exception:
-                print("Could not save avg rep images:")
-                print(traceback.format_exc())
-
-        if save_images and save_movie:
-            try:
-                save_blink_gif(
-                    raw_data,
-                    file_path,
-                    max_reps=min(num_reps, 20),
-                    clim=None,
-                    interval_ms=250,
-                )
-            except Exception:
-                print("Could not save blink GIF:")
-                print(traceback.format_exc())
+    if save_images and save_movie:
+        try:
+            save_blink_gif(
+                raw_data,
+                file_path,
+                max_reps=min(num_reps, 20),
+                clim=None,
+                interval_ms=250,
+            )
+        except Exception:
+            print("Could not save blink GIF:")
+            print(traceback.format_exc())
 
     tb.reset_cfm()
 
@@ -1703,7 +2328,6 @@ def main(
 # =============================================================================
 # Convenience comparison runner
 # =============================================================================
-
 def run_old_and_dmd_compare(
     nv_list,
     num_reps=20,
@@ -1760,16 +2384,30 @@ if __name__ == "__main__":
 
     # Example plotting existing file:
     raw_data = dm.get_raw_data(
-        # file_stem="2026_06_23-18_41_07-qnami-nv0_2026_02_20-dmd_block_confirmed", 
-        # file_stem="2026_06_23-19_23_49-qnami-nv0_2026_02_20-old", 
-        # file_stem="2026_06_23-21_03_10-qnami-nv0_2026_02_20-dmd_block_confirmed", 
-        # file_stem="2026_06_23-21_23_53-qnami-nv0_2026_02_20-dmd_block_confirmed", 
-        # file_stem="2026_06_23-21_58_45-qnami-nv0_2026_02_20-dmd_block_confirmed", 
-        file_stem="2026_07_10-11_41_33-qnami-nv0_2026_02_20-dmd_block_confirmed", 
+        file_stem="2026_07_14-10_44_37-qnami-nv0_2026_02_20-dmd_block_confirmed", 
         load_npz=True)
-    
+
     timestamp = raw_data["timestamp"]
-    file_path = dm.get_file_path(__file__,timestamp,"movie")
+    file_path = dm.get_file_path(__file__, timestamp, "movie")
+    
+    summary, fig = analyze_and_plot_final_check(
+        raw_data,
+        mode=raw_data.get("mode", "dmd_block_confirmed"),
+        img_coords=None,
+        clim=None,
+        marker_size=16,
+        majority_threshold=0.5,
+        save_data=False,
+        save_fig=True,
+    )
+    
+    # fig_timing = plot_rep_timing_summary(raw_data)
+    # file_path = dm.get_file_path(__file__, timestamp, "rep-timing")
+    # dm.save_figure(fig_timing, _append_to_file_path(file_path, "rep-timing"))
+    # feedback_profile = plot_feedback_profile_summary(raw_data)
+    # file_path = dm.get_file_path(__file__, timestamp, "feedback-profile")
+    # dm.save_figure(feedback_profile, _append_to_file_path(file_path, "feedback-profile"))
+    kpl.show(block=True)
     
     # save_blink_gif(
     # raw_data,
@@ -1806,17 +2444,17 @@ if __name__ == "__main__":
     #     interval_ms=10,
     # )
     
-    save_cumulative_initialized_movie(
-        raw_data,
-        file_path,
-        mode=raw_data.get("mode", "dmd_block_confirmed"),
-        max_reps=100,
-        patch_radius=2,
-        clim=None,
-        interval_ms=500,
-        probability_weight=True,
-        bright_gain=1.0,
-    )
+    # save_cumulative_initialized_movie(
+    #     raw_data,
+    #     file_path,
+    #     mode=raw_data.get("mode", "dmd_block_confirmed"),
+    #     max_reps=100,
+    #     patch_radius=2,
+    #     clim=None,
+    #     interval_ms=500,
+    #     probability_weight=True,
+    #     bright_gain=1.0,
+    # )
 
     # fig = process_and_plot(raw_data, mode=raw_data.get("mode", "old"), save_fig=True)
     kpl.show(block=True)

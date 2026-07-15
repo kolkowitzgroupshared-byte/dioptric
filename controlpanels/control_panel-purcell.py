@@ -278,7 +278,7 @@ def do_adaptive_charge_initialization(nv_list):
         num_runs=4,
         mode="dmd_block_confirmed",
         dmd_indices=None,      # full nv_list, DMD index = nv_list index
-        dmd_radius_px=8,
+        dmd_radius_px=5,
         dmd_plane=230,
         confirm_margin_counts=1.0,
         save_images=True,
@@ -289,17 +289,6 @@ def do_adaptive_charge_initialization(nv_list):
         save_movie=True,
     )
     
-    
-    # adaptive_charge_initialization.run_old_and_dmd_compare(
-    #     nv_list,
-    #     num_reps=10,
-    #     num_runs=4,
-    #     dmd_indices=None,
-    #     dmd_radius_px=8,
-    #     dmd_plane=230,
-    #     confirm_margin_counts=1.0,
-    #     save_images=True,
-    # )
     
 def unique_keep_order(vals):
     out = []
@@ -1794,10 +1783,10 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.743, 98.174],
-    #     [73.723, 115.464],
-    #     [100.718, 68.902],
-    #     [126.943, 127.763],
+    #     [97.738, 98.195],
+    #     [73.72, 115.458],
+    #     [100.717, 68.912],
+    #     [126.958, 127.767],
     # ]
     # red_coords_list = [
     #     [66.979, 67.769],
@@ -1811,14 +1800,20 @@ if __name__ == "__main__":
         # file_stem="2026_07_09-21_39_43-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
         # file_stem="2026_07_10-12_52_52-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
         # file_stem="2026_07_10-17_01_26-single_step_charge_hist_single_cpu_2026_07_10-16_57_47-qnami-nv0_2026_02_20", ##814NVs
-        file_stem="2026_07_10-17_25_18-single_step_charge_hist_single_cpu_2026_07_10-16_57_47-qnami-nv0_2026_02_20", ##814NVs
+        # file_stem="2026_07_10-17_25_18-single_step_charge_hist_single_cpu_2026_07_10-16_57_47-qnami-nv0_2026_02_20", ##814NVs
+        # file_stem="2026_07_13-15_34_49-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
+        # file_stem="2026_07_13-16_02_12-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
+        # file_stem="2026_07_13-17_11_02-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
+        # file_stem= "2026_07_13-22_24_18-single_step_charge_hist_single_cpu_2026_07_13-17_00_15-qnami-nv0_2026_02_20",
+        file_stem = "2026_07_14-10_39_06-single_step_charge_hist_single_cpu_2026_07_13-17_00_15-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
     # sys.exit()
     # analysis = analysis_data["charge_hist_multinv_binomial"]
-    analysis = analysis_data["single_step_charge_histogram"]
     # threshold_list = analysis["threshold_any"]
+    
+    analysis = analysis_data["single_step_charge_histogram"]
     threshold_list = analysis["threshold"]
     # Convert None/bad values to np.nan
     threshold_arr = np.asarray(
@@ -2035,7 +2030,7 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        # do_charge_state_histograms(nv_list)
+        do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_dmd_crosstalk_matrix(
@@ -2052,7 +2047,7 @@ if __name__ == "__main__":
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
         # do_optimize_readout_amp(nv_list)
-        do_optimize_readout_amp_repeated_readout(nv_list)
+        # do_optimize_readout_amp_repeated_readout(nv_list)
         # do_optimize_pol_duration(nv_list)
     
         # do_optimize_readout_duration(nv_list)
