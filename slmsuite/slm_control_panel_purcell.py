@@ -362,13 +362,15 @@ data_spot_weight = dm.get_raw_data(
     # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
     # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
     file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
+    # file_stem= "2026_07_11-14_54_21-repeated_readout_survival_with_slm_weights_2026_07_11-04_37_50-qnami-nv0_2026_02_20"
 )
 # spot_weights = data_spot_weight["optimal_weights"]
+# spot_weights = data_spot_weight["slm_mean_norm_weight_clipped"]
 # # spot_weights = np.squeeze(spot_weights)
-
+# sys.exit()
 
 spot_weights = curve_extreme_weights_simple(
-        spot_weights, scaling_factor=1.0
+        spot_weights, scaling_factor=0.8
     )
 spot_weights = np.array(spot_weights)
 
@@ -385,6 +387,7 @@ thorcam_coords_xy = thorcam_coords.T                  # shape: (2, N)
 print("nuvu_pixel_coords shape:", nuvu_pixel_coords.shape)
 print("thorcam_coords shape:", thorcam_coords_xy.shape)
 print("spot_weights shape:", spot_weights.shape)
+print("spot weight min/max:", np.nanmin(spot_weights), np.nanmax(spot_weights))
 
 # # Match lengths safely
 # num = min(len(nuvu_pixel_coords), len(spot_weights))
@@ -392,7 +395,6 @@ print("spot_weights shape:", spot_weights.shape)
 # spot_weights = spot_weights[:num]
 
 # print("Using NVs:", num)
-# print("spot weight min/max:", np.nanmin(spot_weights), np.nanmax(spot_weights))
 
 # # ----------------------------
 # # Plot spot weights on ThorCam
@@ -428,7 +430,7 @@ def compute_and_write_nvs_phase():
         shape=(4096, 2048),
         spot_vectors=thorcam_coords_xy,
         basis="ij",
-        # spot_amp=spot_weights,
+        spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally

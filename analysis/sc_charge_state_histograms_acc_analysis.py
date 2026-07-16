@@ -1358,16 +1358,15 @@ if __name__ == "__main__":
     # =============================================================================
 
     # FILE_ID = "2026_07_10-12_06_57-qnami-nv0_2026_02_20"
-    FILE_ID = "2026_07_10-16_57_47-qnami-nv0_2026_02_20", ## 814 working NVs 200ms readout
+    # FILE_ID = "2026_07_10-16_57_47-qnami-nv0_2026_02_20", ## 814 working NVs 200ms readout
     # FILE_ID = "2026_07_13-17_00_15-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
-    FILE_ID = "2026_07_14-13_06_11-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
-    FILE_ID = "2026_07_15-13_03_24-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
+    # FILE_ID = "2026_07_14-13_06_11-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
+    # FILE_ID = "2026_07_15-16_51_54-qnami-nv0_2026_02_20", ## 631 working NVs 100ms readout
+    FILE_ID = "2026_07_15-19_42_19-qnami-nv0_2026_02_20", ## 631 working NVs 100ms readout
 
+    SAVED_ANALYSIS_FILE_ID = "2026_07_15-19_48_48-single_step_charge_hist_single_cpu_2026_07_15-19_42_19-qnami-nv0_2026_02_20"
  
-
-    SAVED_ANALYSIS_FILE_ID = "2026_07_15-15_17_51-single_step_charge_hist_single_cpu_2026_07_15-13_03_24-qnami-nv0_2026_02_20"
-
-    RUN_NEW_PROCESSING = False
+    RUN_NEW_PROCESSING =False
 
     MODEL_KIND = "single"
     BACKEND = "cpu"
@@ -1486,24 +1485,24 @@ if __name__ == "__main__":
     # Plot example histograms
     # =============================================================================
 
-    if DO_PLOT_EXAMPLE_HISTS:
-        plot_example_histograms(
-            raw_data,
-            inds_to_plot,
-            density=True,
-        )
+    # if DO_PLOT_EXAMPLE_HISTS:
+    #     plot_example_histograms(
+    #         raw_data,
+    #         inds_to_plot,
+    #         density=True,
+    #     )
 
     # =============================================================================
     # Save selected histograms
     # =============================================================================
 
-    if DO_SAVE_SELECTED_HISTS:
-        save_selected_single_step_histograms(
-            raw_data,
-            inds_to_plot,
-            label=f"best-{SORT_KEY}-single-step",
-            density=True,
-            close_figs=True,
-        )
+    # if DO_SAVE_SELECTED_HISTS:
+    #     save_selected_single_step_histograms(
+    #         raw_data,
+    #         inds_to_plot,
+    #         label=f"best-{SORT_KEY}-single-step",
+    #         density=True,
+    #         close_figs=True,
+    #     )
 
     kpl.show(block=True)
