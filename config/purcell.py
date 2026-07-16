@@ -150,7 +150,8 @@ config |= {
     "SpatialCalibrations": {
         "active_nv_coords_path": (
             # "slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz"
-            "slmsuite/nv_blob_detection/nv_blob_814nvs_reordered_inside_dmd.npz"
+            # "slmsuite/nv_blob_detection/nv_blob_814nvs_reordered_inside_dmd.npz"
+            "slmsuite/nv_blob_detection/nv_blob_631nvs_reordered_inside_dmd.npz"
         ),
         "slm_fourier_calib_path": (
             "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00015.h5"
@@ -1045,7 +1046,8 @@ opx_config = {
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.35},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3513},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.2923},
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.2923},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.2623},
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other
