@@ -1765,7 +1765,8 @@ if __name__ == "__main__":
         # file_stem="2026_06_23-21_03_10-qnami-nv0_2026_02_20-dmd_block_confirmed", 
         # file_stem="2026_06_23-21_23_53-qnami-nv0_2026_02_20-dmd_block_confirmed", 
         # file_stem="2026_06_23-21_58_45-qnami-nv0_2026_02_20-dmd_block_confirmed", 
-        file_stem="2026_07_10-11_41_33-qnami-nv0_2026_02_20-dmd_block_confirmed", 
+        # file_stem="2026_07_10-11_41_33-qnami-nv0_2026_02_20-dmd_block_confirmed", 
+        file_stem="2026_07_10-11_41_33-qnami-nv0_2026_02_20-dmd_block_confirmed",
         load_npz=True)
     
     timestamp = raw_data["timestamp"]

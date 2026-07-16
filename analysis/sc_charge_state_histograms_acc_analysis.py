@@ -1361,8 +1361,12 @@ if __name__ == "__main__":
     FILE_ID = "2026_07_10-16_57_47-qnami-nv0_2026_02_20", ## 814 working NVs 200ms readout
     # FILE_ID = "2026_07_13-17_00_15-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
     FILE_ID = "2026_07_14-13_06_11-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
+    FILE_ID = "2026_07_15-13_03_24-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
 
  
+
+    SAVED_ANALYSIS_FILE_ID = "2026_07_15-15_17_51-single_step_charge_hist_single_cpu_2026_07_15-13_03_24-qnami-nv0_2026_02_20"
+
     RUN_NEW_PROCESSING = False
 
     MODEL_KIND = "single"
@@ -1474,9 +1478,9 @@ if __name__ == "__main__":
     print(best_inds)
 
     # Use best indices by default.
-    inds_to_plot = best_inds
+    # inds_to_plot = best_inds
     # Or use manual examples:
-    # inds_to_plot = EXAMPLE_INDS
+    inds_to_plot = EXAMPLE_INDS
 
     # =============================================================================
     # Plot example histograms
