@@ -28,6 +28,7 @@ from majorroutines.widefield import (
     charge_correlation,
     charge_state_conditional_init,
     charge_state_histograms,
+    charge_state_particle_memory,
     charge_state_histograms_images,
     correlation_test,
     crosstalk_check,
@@ -178,14 +179,14 @@ def do_optimize_readout_duration(nv_list):
 
 
 def do_optimize_readout_amp(nv_list):
-    num_steps = 24
-    # num_steps = 18
+    # num_steps = 24
+    num_steps = 18
     # num_reps = 150
     # num_runs = 5
     num_reps = 10
-    num_runs = 400
-    min_amp = 0.5
-    max_amp = 1.5
+    num_runs = 200
+    min_amp = 0.7
+    max_amp = 1.3
     return optimize_charge_state_histograms.optimize_readout_amp(
         nv_list, num_steps, num_reps, num_runs, min_amp, max_amp
     )
@@ -288,7 +289,61 @@ def do_adaptive_charge_initialization(nv_list):
         save_image_frames=True,
         save_movie=True,
     )
-    
+
+
+
+def do_charge_state_particle_memory(nv_list):
+    charge_state_particle_memory.main(
+    nv_list,
+    # Includes rep 0 ionization and subsequent adaptive attempts.
+    num_init_reps=11,
+    # Independent prepare-wait-read experiments.
+    num_runs=150,
+
+    # Begin with five minutes.
+    dark_wait_s=300,
+    # dark_wait_values_s=[
+    #     0,
+    #     10,
+    #     30,
+    #     60,
+    #     180,
+    #     300,
+    #     600,
+    #     1800,
+    # ],
+
+    mode="dmd_block_confirmed",
+
+    dmd_indices=None,
+    dmd_radius_px=5,
+    dmd_plane=230,
+
+    # Used only to confidently stop further initialization attempts.
+    confirm_margin_counts=1.0,
+
+    # Strongly recommended for particle detection.
+    take_initial_check=True,
+
+    # Black DMD during the exposure interval.
+    block_all_during_wait=True,
+
+    # Metadata describing this condition.
+    exposure_label="source_off",
+
+    # Require counts to be clearly away from the threshold.
+    initial_event_margin_counts=1.0,
+    final_event_margin_counts=1.0,
+
+    # Set after checking camera-space NV spacing.
+    cluster_radius_px=None,
+    min_cluster_size=2,
+
+    save_images=True,
+    save_data=True,
+    save_fig=True,
+    verbose=True,
+    )
     
 def unique_keep_order(vals):
     out = []
@@ -1805,7 +1860,8 @@ if __name__ == "__main__":
         # file_stem="2026_07_13-16_02_12-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
         # file_stem="2026_07_13-17_11_02-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
         # file_stem= "2026_07_13-22_24_18-single_step_charge_hist_single_cpu_2026_07_13-17_00_15-qnami-nv0_2026_02_20",
-        file_stem = "2026_07_14-10_39_06-single_step_charge_hist_single_cpu_2026_07_13-17_00_15-qnami-nv0_2026_02_20",
+        # file_stem = "2026_07_14-10_39_06-single_step_charge_hist_single_cpu_2026_07_13-17_00_15-qnami-nv0_2026_02_20",
+        file_stem = "2026_07_15-19_48_48-single_step_charge_hist_single_cpu_2026_07_15-19_42_19-qnami-nv0_2026_02_20", 
         load_npz=True,
     )
     # print (analysis_data.keys())
@@ -1972,7 +2028,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)     
+        do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list: 
@@ -2030,9 +2086,11 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        do_charge_state_histograms(nv_list)
+        # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
+        do_charge_state_particle_memory(nv_list)
+        
         # do_dmd_crosstalk_matrix(
         #     nv_list_all=nv_list,
         #     num_sources=200,

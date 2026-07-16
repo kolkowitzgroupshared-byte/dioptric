@@ -387,6 +387,7 @@ thorcam_coords_xy = thorcam_coords.T                  # shape: (2, N)
 print("nuvu_pixel_coords shape:", nuvu_pixel_coords.shape)
 print("thorcam_coords shape:", thorcam_coords_xy.shape)
 print("spot_weights shape:", spot_weights.shape)
+print("spot weight min/max:", np.nanmin(spot_weights), np.nanmax(spot_weights))
 
 # # Match lengths safely
 # num = min(len(nuvu_pixel_coords), len(spot_weights))
@@ -394,7 +395,6 @@ print("spot_weights shape:", spot_weights.shape)
 # spot_weights = spot_weights[:num]
 
 # print("Using NVs:", num)
-# print("spot weight min/max:", np.nanmin(spot_weights), np.nanmax(spot_weights))
 
 # # ----------------------------
 # # Plot spot weights on ThorCam
@@ -430,7 +430,7 @@ def compute_and_write_nvs_phase():
         shape=(4096, 2048),
         spot_vectors=thorcam_coords_xy,
         basis="ij",
-        # spot_amp=spot_weights,
+        spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally

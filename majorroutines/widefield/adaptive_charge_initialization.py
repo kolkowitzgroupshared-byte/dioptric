@@ -2384,7 +2384,7 @@ if __name__ == "__main__":
 
     # Example plotting existing file:
     raw_data = dm.get_raw_data(
-        file_stem="2026_07_14-10_44_37-qnami-nv0_2026_02_20-dmd_block_confirmed", 
+        file_stem="2026_07_15-19_52_41-qnami-nv0_2026_02_20-dmd_block_confirmed", 
         load_npz=True)
 
     timestamp = raw_data["timestamp"]
@@ -2401,12 +2401,12 @@ if __name__ == "__main__":
         save_fig=True,
     )
     
-    # fig_timing = plot_rep_timing_summary(raw_data)
-    # file_path = dm.get_file_path(__file__, timestamp, "rep-timing")
-    # dm.save_figure(fig_timing, _append_to_file_path(file_path, "rep-timing"))
-    # feedback_profile = plot_feedback_profile_summary(raw_data)
-    # file_path = dm.get_file_path(__file__, timestamp, "feedback-profile")
-    # dm.save_figure(feedback_profile, _append_to_file_path(file_path, "feedback-profile"))
+    fig_timing = plot_rep_timing_summary(raw_data)
+    file_path = dm.get_file_path(__file__, timestamp, "rep-timing")
+    dm.save_figure(fig_timing, _append_to_file_path(file_path, "rep-timing"))
+    feedback_profile = plot_feedback_profile_summary(raw_data)
+    file_path = dm.get_file_path(__file__, timestamp, "feedback-profile")
+    dm.save_figure(feedback_profile, _append_to_file_path(file_path, "feedback-profile"))
     kpl.show(block=True)
     
     # save_blink_gif(
