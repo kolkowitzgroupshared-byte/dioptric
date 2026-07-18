@@ -1790,7 +1790,11 @@ if __name__ == "__main__":
     # Set this True to run the expensive CPU/joblib fitting again.
     run_new_analysis = True
 
-    file_id = "2026_07_11-04_37_50-qnami-nv0_2026_02_20"
+    # file_id = "2026_07_11-04_37_50-qnami-nv0_2026_02_20"
+    file_id = "2026_07_14-20_28_11-qnami-nv0_2026_02_20"
+
+
+
     processed_file = "2026_07_14-16_52_29-repeated_readout_slm_processed_2026_07_11-04_37_50-qnami-nv0_2026_02_20"
 
     raw_data = load_raw(file_id)
