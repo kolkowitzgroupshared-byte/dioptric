@@ -370,7 +370,7 @@ data_spot_weight = dm.get_raw_data(
 # sys.exit()
 
 spot_weights = curve_extreme_weights_simple(
-        spot_weights, scaling_factor=0.8
+        spot_weights, scaling_factor=0.6
     )
 spot_weights = np.array(spot_weights)
 
