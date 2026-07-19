@@ -276,7 +276,7 @@ def do_charge_state_conditional_init(nv_list):
 def do_adaptive_charge_initialization(nv_list):
     adaptive_charge_initialization.main(
         nv_list,
-        num_reps=6,
+        num_reps=10,
         num_runs=4,
         mode="dmd_block_confirmed",
         dmd_indices=None,      # full nv_list, DMD index = nv_list index
@@ -1846,10 +1846,10 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.738, 98.195],
-    #     [73.72, 115.458],
-    #     [100.717, 68.912],
-    #     [126.958, 127.767],
+    #     [97.742, 98.169],
+    #     [73.706, 115.454],
+    #     [100.724, 68.888],
+    #     [126.95, 127.752],
     # ]
     # red_coords_list = [
     #     [66.979, 67.769],
@@ -1982,7 +1982,7 @@ if __name__ == "__main__":
             pulse_amps={
                 VirtualLaserKey.SCC: scc_amp_list[ind],
                 VirtualLaserKey.ION: scc_amp_list[ind],
-                VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
+                # VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
             },
         )
         nv_list.append(nv_sig)
