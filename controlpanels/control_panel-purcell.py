@@ -280,7 +280,7 @@ def do_adaptive_charge_initialization(nv_list):
         num_runs=4,
         mode="dmd_block_confirmed",
         dmd_indices=None,      # full nv_list, DMD index = nv_list index
-        dmd_radius_px=5,
+        dmd_radius_px=8,
         dmd_plane=230,
         confirm_margin_counts=0.0,
         save_images=True,
@@ -299,7 +299,7 @@ def do_charge_state_particle_memory(nv_list):
     # Includes rep 0 ionization and subsequent adaptive attempts.
     num_init_reps=11,
     # Independent prepare-wait-read experiments.
-    num_runs=150,
+    num_runs=100,
 
     # Begin with five minutes.
     dark_wait_s=300,
@@ -307,7 +307,7 @@ def do_charge_state_particle_memory(nv_list):
     mode="dmd_block_confirmed",
 
     dmd_indices=None,
-    dmd_radius_px=5,
+    dmd_radius_px=8,
     dmd_plane=230,
 
     # Used only to confidently stop further initialization attempts.
@@ -341,9 +341,9 @@ def do_charge_state_measurement_backaction(nv_list):
     charge_state_measurement_backaction.main(
     nv_list,
     num_init_reps=10,
-    num_delayed_readouts=1,
-    readout_interval_s=300,
-    num_runs=100,
+    num_delayed_readouts=100,
+    readout_interval_s=1,
+    num_runs=1,
     confirm_margin_counts=1.0,
     initial_analysis_margin_counts=1.0,
     final_analysis_margin_counts=1.0,
@@ -1870,7 +1870,8 @@ if __name__ == "__main__":
         # file_stem= "2026_07_13-22_24_18-single_step_charge_hist_single_cpu_2026_07_13-17_00_15-qnami-nv0_2026_02_20",
         # file_stem = "2026_07_14-10_39_06-single_step_charge_hist_single_cpu_2026_07_13-17_00_15-qnami-nv0_2026_02_20",
         # file_stem = "2026_07_15-19_48_48-single_step_charge_hist_single_cpu_2026_07_15-19_42_19-qnami-nv0_2026_02_20", 
-        file_stem = "2026_07_16-22_53_11-single_step_charge_hist_single_cpu_2026_07_16-22_48_08-qnami-nv0_2026_02_20", 
+        # file_stem = "2026_07_16-22_53_11-single_step_charge_hist_single_cpu_2026_07_16-22_48_08-qnami-nv0_2026_02_20", 
+        file_stem = "2026_07_19-00_47_30-single_step_charge_hist_single_cpu_2026_07_19-00_17_00-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
@@ -2095,10 +2096,10 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        do_charge_state_histograms(nv_list)
+        # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
-        # do_charge_state_particle_memory(nv_list)
+        do_charge_state_particle_memory(nv_list)
         # do_charge_state_measurement_backaction(nv_list)
         
         # do_dmd_crosstalk_matrix(
