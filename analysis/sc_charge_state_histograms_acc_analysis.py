@@ -1364,8 +1364,11 @@ if __name__ == "__main__":
     # FILE_ID = "2026_07_16-22_48_08-qnami-nv0_2026_02_20", ## 631 working NVs 100ms readout
     # FILE_ID = "2026_07_17-19_02_51-qnami-nv0_2026_02_20", ## 631 working NVs 100ms readout
     # FILE_ID = "2026_07_17-22_35_56-qnami-nv0_2026_02_20", ## 631 working NVs 100ms readout
-    FILE_ID = "2026_07_19-00_17_00-qnami-nv0_2026_02_20", ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_07_19-00_17_00-qnami-nv0_2026_02_20", ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_07_20-16_19_40-qnami-nv0_2026_02_20", ## 631 working NVs 1000ms readout
+    FILE_ID = "2026_07_20-17_04_32-qnami-nv0_2026_02_20", ## 631 working NVs 1000ms readout
 
+    
     SAVED_ANALYSIS_FILE_ID = "2026_07_15-19_48_48-single_step_charge_hist_single_cpu_2026_07_15-19_42_19-qnami-nv0_2026_02_20"
  
     RUN_NEW_PROCESSING =True

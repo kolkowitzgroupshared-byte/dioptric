@@ -2446,6 +2446,10 @@ if __name__ == "__main__":
         "qnami-nv0_2026_02_20-"
         "particle-memory-source_off-wait-300s"
     )
+        
+    file_stem = (
+        "2026_07_19-09_54_11-qnami-nv0_2026_02_20-particle-memory-source_off-wait-300s"
+    )
 
     raw_data = dm.get_raw_data(
         file_stem=file_stem,
@@ -2627,7 +2631,7 @@ if __name__ == "__main__":
         analysis,
     )
     
-    for run_ind in [0, 56, 80, 97, 135]:
+    for run_ind in [0, 56, 80, 97]:
         plot_particle_event_map(
             raw_data,
             analysis,

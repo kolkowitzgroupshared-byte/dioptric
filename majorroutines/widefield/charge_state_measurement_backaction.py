@@ -33,7 +33,7 @@ Created July 2026.
 """
 
 from __future__ import annotations
-
+import sys
 import time
 import traceback
 from pathlib import Path
@@ -2200,6 +2200,24 @@ def main(
 
 if __name__ == "__main__":
     kpl.init_kplotlib()
+    file_stem_1_s = (
+        "2026_07_19-01_09_03-qnami-nv0_2026_02_20-measurement-backaction-interval-1s-readouts-100"
+    )
+
+    raw_data= dm.get_raw_data(
+        file_stem_1_s,
+        load_npz=True,
+    )
+    analysis = analyze_measurement_backaction(
+        raw_data,
+        initial_margin_counts=1.0,
+        final_margin_counts=1.0,
+    )
+    
+    fig = plot_measurement_backaction_summary(raw_data, analysis)
+    kpl.show(block=True)
+    sys.exit()
+
 
     file_stem_1_s = (
         "2026_07_17-13_56_56-"
