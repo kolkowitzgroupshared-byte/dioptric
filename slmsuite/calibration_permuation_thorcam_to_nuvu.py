@@ -69,12 +69,11 @@ sets.append({
         [580.09618943,  605.0],
         [710.0,        380.0],
     ], dtype=np.float32),
-    "nuvu": np.array([[76.379, 54.428], [126.399, 320.062], [329.873, 146.403]], dtype=np.float32),
+    "nuvu": np.array([[76.607, 54.164], [126.23, 319.52], [329.99, 145.841]], dtype=np.float32),
     })
 # =============================================================================
 # Combine all points
 # =============================================================================
-
 cal_coords_thorcam_slm = np.vstack([s["thorcam"] for s in sets]).astype(np.float32)
 cal_coords_nuvu = np.vstack([s["nuvu"] for s in sets]).astype(np.float32)
 

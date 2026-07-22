@@ -154,6 +154,90 @@ def _dmd_block_confirmed(
 
     return confirmed_dmd_indices
 
+def _dmd_gate_minimal_indices(
+    confirmed_mask,
+    dmd_indices,
+    dmd=None,
+    dmd_radius_px=8,
+    dmd_plane=230,
+    use_dmd=True,
+    dmd_settle_s=0.001,
+    verbose=False,
+):
+    """
+    Fast hybrid DMD gating.
+
+    Goal:
+        confirmed NVs should be blocked
+        active/unconfirmed NVs should be passed
+
+    Two equivalent ways:
+
+        A) white/pass background + black/block confirmed disks
+           draw num_confirmed disks
+
+        B) black/block background + white/pass active disks
+           draw num_active disks
+
+    This function chooses the smaller one.
+    """
+
+    confirmed_mask = np.asarray(confirmed_mask, dtype=bool)
+    dmd_indices = np.asarray(dmd_indices, dtype=int)
+
+    active_mask = ~confirmed_mask
+
+    confirmed_dmd_indices = dmd_indices[confirmed_mask].astype(int).tolist()
+    active_dmd_indices = dmd_indices[active_mask].astype(int).tolist()
+
+    num_confirmed = len(confirmed_dmd_indices)
+    num_active = len(active_dmd_indices)
+
+    if not use_dmd:
+        return {
+            "method": "none",
+            "num_confirmed": num_confirmed,
+            "num_active": num_active,
+            "num_drawn": 0,
+        }
+
+    if dmd is None:
+        dmd = tb.get_server_dmd()
+
+    if num_confirmed <= num_active:
+        # White/pass background, black/block confirmed NVs.
+        method = "block_confirmed"
+        dmd.block_loaded_indices(
+            json.dumps(confirmed_dmd_indices),
+            int(dmd_radius_px),
+            int(dmd_plane),
+        )
+        num_drawn = num_confirmed
+
+    else:
+        # Black/block background, white/pass active NVs.
+        method = "pass_active"
+        dmd.pass_loaded_indices(
+            json.dumps(active_dmd_indices),
+            int(dmd_radius_px),
+            int(dmd_plane),
+        )
+        num_drawn = num_active
+
+    time.sleep(dmd_settle_s)
+
+    if verbose:
+        print(
+            f"DMD hybrid gate: method={method}, "
+            f"confirmed={num_confirmed}, active={num_active}, drawn={num_drawn}"
+        )
+
+    return {
+        "method": method,
+        "num_confirmed": num_confirmed,
+        "num_active": num_active,
+        "num_drawn": num_drawn,
+    }
 
 def _dmd_pass_all_block_none(
     dmd=None,
@@ -186,7 +270,6 @@ def _dmd_pass_all_block_none(
 # =============================================================================
 # Charge-prep functions
 # =============================================================================
-
 def make_dmd_block_confirmed_charge_prep_fn(
     num_nvs,
     dmd_indices=None,
@@ -195,19 +278,8 @@ def make_dmd_block_confirmed_charge_prep_fn(
     use_dmd=True,
     dmd_settle_s=0.001,
     verbose=True,
+    profile_records=None,
 ):
-    """
-    Custom charge_prep_fn compatible with base_routine.main.
-
-    Same idea as old conditional init:
-        rep 0: no charge prep, only the sequence's rep0 behavior
-        rep > 0: send _cache_target_list to OPX
-
-    Difference:
-        keeps persistent confirmed_nvm mask.
-        once NV is confirmed NV-, DMD blocks it and OPX stops targeting it.
-    """
-
     dmd_indices = _prepare_dmd_indices(num_nvs, dmd_indices)
     pulse_gen = tb.get_server_pulse_gen()
     dmd = tb.get_server_dmd() if use_dmd else None
@@ -218,13 +290,20 @@ def make_dmd_block_confirmed_charge_prep_fn(
 
     def update_dmd_if_needed(confirmed_mask, force=False):
         confirmed_mask = np.asarray(confirmed_mask, dtype=bool)
+        num_blocked = int(np.sum(confirmed_mask))
 
         if (
             not force
             and last_confirmed_mask["mask"] is not None
             and np.array_equal(confirmed_mask, last_confirmed_mask["mask"])
         ):
-            return
+            return {
+                "dmd_changed": False,
+                "dmd_s": 0.0,
+                "num_blocked": num_blocked,
+            }
+
+        t0 = time.perf_counter()
 
         _dmd_block_confirmed(
             confirmed_mask,
@@ -237,30 +316,66 @@ def make_dmd_block_confirmed_charge_prep_fn(
             verbose=verbose,
         )
 
+        t1 = time.perf_counter()
+
         last_confirmed_mask["mask"] = confirmed_mask.copy()
+
+        return {
+            "dmd_changed": True,
+            "dmd_s": float(t1 - t0),
+            "num_blocked": num_blocked,
+        }
 
     def charge_prep_fn(rep_ind, nv_list, initial_states_list=None):
         nonlocal confirmed_nvm
 
-        # Start of each run.
+        t_total0 = time.perf_counter()
+
+        # --------------------------------------------------------------
+        # Start of each run
+        # --------------------------------------------------------------
         if rep_ind == 0:
             run_counter["run_ind"] += 1
             confirmed_nvm[:] = False
             last_confirmed_mask["mask"] = None
 
-            # DMD pass all / block no NV sites.
-            update_dmd_if_needed(confirmed_nvm, force=True)
+            dmd_info = update_dmd_if_needed(confirmed_nvm, force=True)
+
+            t_total1 = time.perf_counter()
+
+            if profile_records is not None:
+                profile_records.append(
+                    {
+                        "mode": "dmd_block_confirmed",
+                        "run_ind": int(run_counter["run_ind"]),
+                        "rep_ind": int(rep_ind),
+                        "phase": "rep0_start",
+                        "newly_confirmed": 0,
+                        "confirmed": 0,
+                        "active": int(num_nvs),
+                        "classify_s": 0.0,
+                        "dmd_s": dmd_info["dmd_s"],
+                        "dmd_changed": bool(dmd_info["dmd_changed"]),
+                        "opx_s": 0.0,
+                        "total_callback_s": float(t_total1 - t_total0),
+                    }
+                )
 
             if verbose:
                 print(
                     f"[DMD block confirmed] run {run_counter['run_ind']}, "
-                    f"rep {rep_ind}: start run, no NVs blocked"
+                    f"rep {rep_ind}: start, "
+                    f"dmd={dmd_info['dmd_s']:.3f}s, "
+                    f"total={t_total1 - t_total0:.3f}s"
                 )
 
-            # Match old skip-first-rep behavior: no target list on rep 0.
             return
 
-        # Update confirmation from previous readout.
+        # --------------------------------------------------------------
+        # Classify previous rep
+        # --------------------------------------------------------------
+        t_class0 = time.perf_counter()
+
         if initial_states_list is not None:
             states = np.asarray(initial_states_list, dtype=bool)
             active_prev = ~confirmed_nvm
@@ -271,14 +386,47 @@ def make_dmd_block_confirmed_charge_prep_fn(
 
         active_mask = ~confirmed_nvm
 
-        # DMD blocks confirmed NVs.
-        update_dmd_if_needed(confirmed_nvm, force=False)
+        t_class1 = time.perf_counter()
 
-        # OPX targets only unconfirmed NVs.
+        # --------------------------------------------------------------
+        # DMD update
+        # --------------------------------------------------------------
+        dmd_info = update_dmd_if_needed(confirmed_nvm, force=False)
+
+        # --------------------------------------------------------------
+        # OPX stream update
+        # --------------------------------------------------------------
+        t_opx0 = time.perf_counter()
+
         pulse_gen.insert_input_stream(
             "_cache_target_list",
             active_mask.astype(bool).tolist(),
         )
+
+        t_opx1 = time.perf_counter()
+        t_total1 = time.perf_counter()
+
+        classify_s = float(t_class1 - t_class0)
+        opx_s = float(t_opx1 - t_opx0)
+        total_s = float(t_total1 - t_total0)
+
+        if profile_records is not None:
+            profile_records.append(
+                {
+                    "mode": "dmd_block_confirmed",
+                    "run_ind": int(run_counter["run_ind"]),
+                    "rep_ind": int(rep_ind),
+                    "phase": "normal_feedback",
+                    "newly_confirmed": int(np.sum(newly_confirmed)),
+                    "confirmed": int(np.sum(confirmed_nvm)),
+                    "active": int(np.sum(active_mask)),
+                    "classify_s": classify_s,
+                    "dmd_s": dmd_info["dmd_s"],
+                    "dmd_changed": bool(dmd_info["dmd_changed"]),
+                    "opx_s": opx_s,
+                    "total_callback_s": total_s,
+                }
+            )
 
         if verbose:
             print(
@@ -286,11 +434,14 @@ def make_dmd_block_confirmed_charge_prep_fn(
                 f"rep {rep_ind}: "
                 f"new={int(np.sum(newly_confirmed))}, "
                 f"confirmed={int(np.sum(confirmed_nvm))}/{num_nvs}, "
-                f"active={int(np.sum(active_mask))}/{num_nvs}"
+                f"active={int(np.sum(active_mask))}/{num_nvs}, "
+                f"classify={classify_s:.3f}s, "
+                f"dmd={dmd_info['dmd_s']:.3f}s, "
+                f"opx={opx_s:.3f}s, "
+                f"total={total_s:.3f}s"
             )
 
     return charge_prep_fn
-
 
 def make_dmd_all_on_charge_prep_fn(
     num_nvs,
@@ -361,21 +512,18 @@ def make_final_check_charge_prep_fn(
     dmd_plane=230,
     dmd_settle_s=0.001,
     verbose=True,
+    profile_records=None,
 ):
-    """
-    Intercept the final extra rep.
-
-    For the final-check rep:
-        - no charge prep
-        - all NVs are removed from OPX target list
-        - DMD is pass-all/block-none so previously known NVs can be imaged
-    """
-
     pulse_gen = tb.get_server_pulse_gen()
     dmd = tb.get_server_dmd() if mode.startswith("dmd") else None
 
     def wrapped_charge_prep_fn(rep_ind, nv_list, initial_states_list=None):
         if rep_ind == final_check_rep_ind:
+            t_total0 = time.perf_counter()
+
+            # DMD pass-all
+            t_dmd0 = time.perf_counter()
+
             if mode.startswith("dmd"):
                 _dmd_pass_all_block_none(
                     dmd=dmd,
@@ -385,16 +533,47 @@ def make_final_check_charge_prep_fn(
                     dmd_settle_s=dmd_settle_s,
                 )
 
-            # Important: prevent charge prep on final-check image.
+            t_dmd1 = time.perf_counter()
+
+            # OPX target list all false
+            t_opx0 = time.perf_counter()
+
             pulse_gen.insert_input_stream(
                 "_cache_target_list",
                 np.zeros(num_nvs, dtype=bool).tolist(),
             )
 
+            t_opx1 = time.perf_counter()
+            t_total1 = time.perf_counter()
+
+            dmd_s = float(t_dmd1 - t_dmd0)
+            opx_s = float(t_opx1 - t_opx0)
+            total_s = float(t_total1 - t_total0)
+
+            if profile_records is not None:
+                profile_records.append(
+                    {
+                        "mode": mode,
+                        "run_ind": None,
+                        "rep_ind": int(rep_ind),
+                        "phase": "final_check",
+                        "newly_confirmed": 0,
+                        "confirmed": None,
+                        "active": 0,
+                        "classify_s": 0.0,
+                        "dmd_s": dmd_s,
+                        "dmd_changed": True,
+                        "opx_s": opx_s,
+                        "total_callback_s": total_s,
+                    }
+                )
+
             if verbose:
                 print(
                     f"[final check] rep {rep_ind}: "
-                    "DMD pass-all, OPX target list all False"
+                    f"dmd_pass_all={dmd_s:.3f}s, "
+                    f"opx_all_false={opx_s:.3f}s, "
+                    f"total={total_s:.3f}s"
                 )
 
             return
@@ -402,7 +581,6 @@ def make_final_check_charge_prep_fn(
         return base_charge_prep_fn(rep_ind, nv_list, initial_states_list)
 
     return wrapped_charge_prep_fn
-
 
 def make_timed_charge_prep_fn(
     base_charge_prep_fn,
@@ -538,7 +716,7 @@ def reconstruct_confirmed_history(raw_data, mode="old"):
     }
 
 
-def process_and_plot(raw_data, mode=None, mean_val=None, save_fig=False):
+def process_and_plot(raw_data, mode=None, mean_val=None, save_fig=True):
     if mode is None:
         mode = raw_data.get("mode", "old")
 
@@ -719,6 +897,1107 @@ def plot_final_check_image(
     ax.set_axis_off()
 
     return fig
+
+
+def analyze_and_plot_final_check(
+    raw_data,
+    mode=None,
+    img_coords=None,
+    clim=None,
+    marker_size=18,
+    min_loss_runs=None,
+    borderline_window_counts=5.0,
+    save_data=True,
+    save_fig=True,
+):
+    """
+    Analyze the independent final-check image after adaptive initialization.
+
+    Definitions
+    -----------
+    Previous confirmed state:
+        Persistent adaptive feedback state. An NV is True if it crossed the
+        feedback threshold during any adaptive attempt.
+
+    Final state:
+        Classified independently in each run using the ORIGINAL regular
+        per-NV threshold:
+
+            final count > regular threshold  -> NV-
+            final count <= regular threshold -> NV0
+
+    Charge loss in one run:
+        previously confirmed NV- AND final-check NV0
+
+    Repeated charge loss:
+        charge loss in at least ``min_loss_runs`` runs.
+
+    By default, ``min_loss_runs`` is a strict majority:
+
+        4 runs -> at least 3 runs
+        3 runs -> at least 2 runs
+        2 runs -> both runs
+
+    Plot colors
+    -----------
+    Green:
+        Retained NV- in at least ``min_loss_runs`` runs.
+
+    Red:
+        Previously confirmed NV- but final NV0 in at least
+        ``min_loss_runs`` runs.
+
+    Gold:
+        Mixed behavior; neither repeatedly retained nor repeatedly lost.
+
+    Gray:
+        All NV locations shown as background markers.
+    """
+
+    # ==================================================================
+    # Basic information
+    # ==================================================================
+
+    if mode is None:
+        mode = raw_data.get(
+            "mode",
+            "dmd_block_confirmed",
+        )
+
+    final_rep_ind = raw_data.get(
+        "final_check_rep_ind",
+        None,
+    )
+
+    if final_rep_ind is None:
+        raise ValueError(
+            "No final_check_rep_ind found in raw_data."
+        )
+
+    final_rep_ind = int(final_rep_ind)
+
+    nv_list = raw_data["nv_list"]
+    num_nvs = len(nv_list)
+
+    counts = np.asarray(
+        raw_data["counts"],
+        dtype=float,
+    )
+
+    if counts.ndim != 5:
+        raise ValueError(
+            "Expected counts shape "
+            "[exp, nv, run, step, rep], "
+            f"got {counts.shape}."
+        )
+
+    if counts.shape[1] != num_nvs:
+        raise ValueError(
+            f"counts contains {counts.shape[1]} NVs, "
+            f"but nv_list contains {num_nvs}."
+        )
+
+    if not (
+        0 <= final_rep_ind < counts.shape[-1]
+    ):
+        raise IndexError(
+            f"final_check_rep_ind={final_rep_ind} "
+            f"is outside the available rep range "
+            f"[0, {counts.shape[-1] - 1}]."
+        )
+
+    # ==================================================================
+    # Recover regular and feedback thresholds
+    # ==================================================================
+
+    confirm_margin = float(
+        raw_data.get(
+            "confirm_margin_counts",
+            0.0,
+        )
+    )
+
+    # Preferred format for future datasets.
+    if "analysis_thresholds" in raw_data:
+        regular_thresholds = np.asarray(
+            raw_data["analysis_thresholds"],
+            dtype=float,
+        )
+
+    # In this adaptive script, raw_data["thresholds"] contains
+    # the feedback threshold:
+    #
+    # regular threshold + confirm_margin_counts
+    elif "thresholds" in raw_data:
+        saved_feedback_thresholds = np.asarray(
+            raw_data["thresholds"],
+            dtype=float,
+        )
+
+        regular_thresholds = (
+            saved_feedback_thresholds
+            - confirm_margin
+        )
+
+    else:
+        # raw_data["nv_list"] was generated from the copied run list,
+        # so its thresholds also include the confirmation margin.
+        regular_thresholds = (
+            _get_thresholds(nv_list)
+            - confirm_margin
+        )
+
+    if regular_thresholds.shape != (num_nvs,):
+        raise ValueError(
+            "Regular threshold shape mismatch: "
+            f"expected {(num_nvs,)}, "
+            f"got {regular_thresholds.shape}."
+        )
+
+    # ==================================================================
+    # Final-check state using regular thresholds
+    # ==================================================================
+
+    # counts shape:
+    # [exp, nv, run, step, rep]
+    #
+    # final_counts shape:
+    # [nv, run]
+    final_counts = counts[
+        0,
+        :,
+        :,
+        0,
+        final_rep_ind,
+    ]
+
+    num_runs = final_counts.shape[1]
+
+    if min_loss_runs is None:
+        # Strict majority.
+        min_loss_runs = num_runs // 2 + 1
+
+    min_loss_runs = int(min_loss_runs)
+
+    if not (1 <= min_loss_runs <= num_runs):
+        raise ValueError(
+            f"min_loss_runs must be between 1 and {num_runs}; "
+            f"got {min_loss_runs}."
+        )
+
+    threshold_2d = regular_thresholds[:, None]
+
+    # Difference from regular threshold.
+    #
+    # Positive -> above threshold -> NV-
+    # Negative -> below threshold -> NV0
+    final_delta_from_threshold = (
+        final_counts - threshold_2d
+    )
+
+    final_state = (
+        final_counts > threshold_2d
+    )
+
+    # ==================================================================
+    # Previous persistent confirmation state
+    # ==================================================================
+
+    feedback = reconstruct_confirmed_history(
+        raw_data,
+        mode=mode,
+    )
+
+    previous_state = np.asarray(
+        feedback["confirmed_history"],
+        dtype=bool,
+    )[:, :, -1]
+
+    if previous_state.shape != final_state.shape:
+        raise ValueError(
+            "Previous and final state shape mismatch: "
+            f"{previous_state.shape} versus "
+            f"{final_state.shape}."
+        )
+
+    feedback_thresholds = np.asarray(
+        feedback["thresholds"],
+        dtype=float,
+    )
+
+    # ==================================================================
+    # True transition masks for each run
+    # ==================================================================
+
+    retained_mask = (
+        previous_state
+        & final_state
+    )
+
+    lost_mask = (
+        previous_state
+        & (~final_state)
+    )
+
+    gained_mask = (
+        (~previous_state)
+        & final_state
+    )
+
+    stayed_unconfirmed_mask = (
+        (~previous_state)
+        & (~final_state)
+    )
+
+    # Lost measurements near the threshold may be classification noise.
+    borderline_window_counts = abs(
+        float(borderline_window_counts)
+    )
+
+    borderline_lost_mask = (
+        lost_mask
+        & (
+            final_delta_from_threshold
+            >= -borderline_window_counts
+        )
+    )
+
+    clear_lost_mask = (
+        lost_mask
+        & (~borderline_lost_mask)
+    )
+
+    # ==================================================================
+    # Per-run statistics
+    # ==================================================================
+
+    previous_nvm_by_run = np.sum(
+        previous_state,
+        axis=0,
+    )
+
+    final_nvm_by_run = np.sum(
+        final_state,
+        axis=0,
+    )
+
+    retained_nvm_by_run = np.sum(
+        retained_mask,
+        axis=0,
+    )
+
+    lost_nvm_by_run = np.sum(
+        lost_mask,
+        axis=0,
+    )
+
+    borderline_lost_by_run = np.sum(
+        borderline_lost_mask,
+        axis=0,
+    )
+
+    clear_lost_by_run = np.sum(
+        clear_lost_mask,
+        axis=0,
+    )
+
+    new_nvm_by_run = np.sum(
+        gained_mask,
+        axis=0,
+    )
+
+    unconfirmed_by_run = np.sum(
+        stayed_unconfirmed_mask,
+        axis=0,
+    )
+
+    previous_frac_by_run = (
+        previous_nvm_by_run / num_nvs
+    )
+
+    final_frac_by_run = (
+        final_nvm_by_run / num_nvs
+    )
+
+    retention_frac_by_run = np.full(
+        num_runs,
+        np.nan,
+        dtype=float,
+    )
+
+    loss_frac_by_run = np.full(
+        num_runs,
+        np.nan,
+        dtype=float,
+    )
+
+    good_previous = previous_nvm_by_run > 0
+
+    retention_frac_by_run[good_previous] = (
+        retained_nvm_by_run[good_previous]
+        / previous_nvm_by_run[good_previous]
+    )
+
+    loss_frac_by_run[good_previous] = (
+        lost_nvm_by_run[good_previous]
+        / previous_nvm_by_run[good_previous]
+    )
+
+    # ==================================================================
+    # Per-NV repeated behavior
+    # ==================================================================
+
+    confirmed_count_by_nv = np.sum(
+        previous_state,
+        axis=1,
+    )
+
+    retained_count_by_nv = np.sum(
+        retained_mask,
+        axis=1,
+    )
+
+    loss_count_by_nv = np.sum(
+        lost_mask,
+        axis=1,
+    )
+
+    borderline_loss_count_by_nv = np.sum(
+        borderline_lost_mask,
+        axis=1,
+    )
+
+    clear_loss_count_by_nv = np.sum(
+        clear_lost_mask,
+        axis=1,
+    )
+
+    gained_count_by_nv = np.sum(
+        gained_mask,
+        axis=1,
+    )
+
+    loss_probability_by_nv = np.full(
+        num_nvs,
+        np.nan,
+        dtype=float,
+    )
+
+    eligible_nv_mask = (
+        confirmed_count_by_nv > 0
+    )
+
+    loss_probability_by_nv[
+        eligible_nv_mask
+    ] = (
+        loss_count_by_nv[eligible_nv_mask]
+        / confirmed_count_by_nv[eligible_nv_mask]
+    )
+
+    # Repeated transitions.
+    repeatedly_lost_mask = (
+        loss_count_by_nv >= min_loss_runs
+    )
+
+    repeatedly_retained_mask = (
+        retained_count_by_nv >= min_loss_runs
+    )
+
+    # Mixed behavior among NVs that were confirmed in at least one run.
+    mixed_behavior_mask = (
+        eligible_nv_mask
+        & (~repeatedly_lost_mask)
+        & (~repeatedly_retained_mask)
+    )
+
+    # Repeatedly lost, but the losses are predominantly close
+    # to threshold.
+    repeatedly_borderline_mask = (
+        repeatedly_lost_mask
+        & (
+            clear_loss_count_by_nv
+            < min_loss_runs
+        )
+    )
+
+    repeatedly_clear_lost_mask = (
+        clear_loss_count_by_nv
+        >= min_loss_runs
+    )
+
+    # ==================================================================
+    # Index lists
+    # ==================================================================
+
+    lost_nv_inds_by_run = [
+        np.where(
+            lost_mask[:, run_ind]
+        )[0].astype(int).tolist()
+        for run_ind in range(num_runs)
+    ]
+
+    borderline_lost_inds_by_run = [
+        np.where(
+            borderline_lost_mask[:, run_ind]
+        )[0].astype(int).tolist()
+        for run_ind in range(num_runs)
+    ]
+
+    clear_lost_inds_by_run = [
+        np.where(
+            clear_lost_mask[:, run_ind]
+        )[0].astype(int).tolist()
+        for run_ind in range(num_runs)
+    ]
+
+    repeatedly_lost_inds = np.where(
+        repeatedly_lost_mask
+    )[0].astype(int).tolist()
+
+    repeatedly_clear_lost_inds = np.where(
+        repeatedly_clear_lost_mask
+    )[0].astype(int).tolist()
+
+    repeatedly_borderline_inds = np.where(
+        repeatedly_borderline_mask
+    )[0].astype(int).tolist()
+
+    lost_all_runs_inds = np.where(
+        loss_count_by_nv == num_runs
+    )[0].astype(int).tolist()
+
+    # Lost on every run in which the NV was previously confirmed.
+    lost_every_confirmed_trial_inds = np.where(
+        eligible_nv_mask
+        & (
+            loss_count_by_nv
+            == confirmed_count_by_nv
+        )
+    )[0].astype(int).tolist()
+
+    # ==================================================================
+    # Means
+    # ==================================================================
+
+    mean_previous_nvm = float(
+        np.mean(previous_nvm_by_run)
+    )
+
+    mean_final_nvm = float(
+        np.mean(final_nvm_by_run)
+    )
+
+    mean_retained_nvm = float(
+        np.mean(retained_nvm_by_run)
+    )
+
+    mean_lost_nvm = float(
+        np.mean(lost_nvm_by_run)
+    )
+
+    mean_borderline_lost = float(
+        np.mean(borderline_lost_by_run)
+    )
+
+    mean_clear_lost = float(
+        np.mean(clear_lost_by_run)
+    )
+
+    mean_new_nvm = float(
+        np.mean(new_nvm_by_run)
+    )
+
+    mean_previous_frac = float(
+        np.mean(previous_frac_by_run)
+    )
+
+    mean_final_frac = float(
+        np.mean(final_frac_by_run)
+    )
+
+    mean_retention_frac = float(
+        np.nanmean(retention_frac_by_run)
+    )
+
+    mean_loss_frac = float(
+        np.nanmean(loss_frac_by_run)
+    )
+
+    # ==================================================================
+    # Summary dictionary
+    # ==================================================================
+
+    summary = {
+        "analysis_type": (
+            "adaptive_final_check_transition_analysis"
+        ),
+        "mode": mode,
+        "num_nvs": int(num_nvs),
+        "num_runs": int(num_runs),
+        "final_check_rep_ind": int(final_rep_ind),
+
+        "confirm_margin_counts": confirm_margin,
+        "min_loss_runs": int(min_loss_runs),
+        "borderline_window_counts": float(
+            borderline_window_counts
+        ),
+
+        "regular_thresholds": (
+            regular_thresholds.tolist()
+        ),
+        "feedback_thresholds": (
+            feedback_thresholds.tolist()
+        ),
+
+        "final_counts": final_counts.tolist(),
+        "final_delta_from_threshold": (
+            final_delta_from_threshold.tolist()
+        ),
+
+        "previous_confirmed_mask": (
+            previous_state.tolist()
+        ),
+        "final_nvm_mask": final_state.tolist(),
+        "retained_mask": retained_mask.tolist(),
+        "lost_mask": lost_mask.tolist(),
+        "borderline_lost_mask": (
+            borderline_lost_mask.tolist()
+        ),
+        "clear_lost_mask": (
+            clear_lost_mask.tolist()
+        ),
+        "gained_mask": gained_mask.tolist(),
+        "stayed_unconfirmed_mask": (
+            stayed_unconfirmed_mask.tolist()
+        ),
+
+        # Per-run values
+        "previous_nvm_by_run": (
+            previous_nvm_by_run.tolist()
+        ),
+        "final_nvm_by_run": (
+            final_nvm_by_run.tolist()
+        ),
+        "retained_nvm_by_run": (
+            retained_nvm_by_run.tolist()
+        ),
+        "lost_nvm_by_run": (
+            lost_nvm_by_run.tolist()
+        ),
+        "borderline_lost_by_run": (
+            borderline_lost_by_run.tolist()
+        ),
+        "clear_lost_by_run": (
+            clear_lost_by_run.tolist()
+        ),
+        "new_nvm_by_run": (
+            new_nvm_by_run.tolist()
+        ),
+        "unconfirmed_by_run": (
+            unconfirmed_by_run.tolist()
+        ),
+        "previous_frac_by_run": (
+            previous_frac_by_run.tolist()
+        ),
+        "final_frac_by_run": (
+            final_frac_by_run.tolist()
+        ),
+        "retention_frac_by_run": (
+            retention_frac_by_run.tolist()
+        ),
+        "loss_frac_by_run": (
+            loss_frac_by_run.tolist()
+        ),
+
+        # Per-NV values
+        "confirmed_count_by_nv": (
+            confirmed_count_by_nv.tolist()
+        ),
+        "retained_count_by_nv": (
+            retained_count_by_nv.tolist()
+        ),
+        "loss_count_by_nv": (
+            loss_count_by_nv.tolist()
+        ),
+        "borderline_loss_count_by_nv": (
+            borderline_loss_count_by_nv.tolist()
+        ),
+        "clear_loss_count_by_nv": (
+            clear_loss_count_by_nv.tolist()
+        ),
+        "gained_count_by_nv": (
+            gained_count_by_nv.tolist()
+        ),
+        "loss_probability_by_nv": (
+            loss_probability_by_nv.tolist()
+        ),
+
+        "repeatedly_lost_mask": (
+            repeatedly_lost_mask.tolist()
+        ),
+        "repeatedly_retained_mask": (
+            repeatedly_retained_mask.tolist()
+        ),
+        "mixed_behavior_mask": (
+            mixed_behavior_mask.tolist()
+        ),
+        "repeatedly_clear_lost_mask": (
+            repeatedly_clear_lost_mask.tolist()
+        ),
+        "repeatedly_borderline_mask": (
+            repeatedly_borderline_mask.tolist()
+        ),
+
+        # Index lists
+        "lost_nv_inds_by_run": (
+            lost_nv_inds_by_run
+        ),
+        "borderline_lost_inds_by_run": (
+            borderline_lost_inds_by_run
+        ),
+        "clear_lost_inds_by_run": (
+            clear_lost_inds_by_run
+        ),
+        "repeatedly_lost_inds": (
+            repeatedly_lost_inds
+        ),
+        "repeatedly_clear_lost_inds": (
+            repeatedly_clear_lost_inds
+        ),
+        "repeatedly_borderline_inds": (
+            repeatedly_borderline_inds
+        ),
+        "lost_all_runs_inds": (
+            lost_all_runs_inds
+        ),
+        "lost_every_confirmed_trial_inds": (
+            lost_every_confirmed_trial_inds
+        ),
+
+        # Mean values
+        "mean_previous_nvm": mean_previous_nvm,
+        "mean_final_nvm": mean_final_nvm,
+        "mean_retained_nvm": mean_retained_nvm,
+        "mean_lost_nvm": mean_lost_nvm,
+        "mean_borderline_lost": (
+            mean_borderline_lost
+        ),
+        "mean_clear_lost": mean_clear_lost,
+        "mean_new_nvm": mean_new_nvm,
+        "mean_previous_frac": (
+            mean_previous_frac
+        ),
+        "mean_final_frac": mean_final_frac,
+        "mean_retention_frac": (
+            mean_retention_frac
+        ),
+        "mean_loss_frac": mean_loss_frac,
+    }
+
+    # ==================================================================
+    # Console output
+    # ==================================================================
+
+    print(
+        "\n=== Adaptive final-check transition analysis ==="
+    )
+    print("mode:", mode)
+    print("final-check rep:", final_rep_ind)
+    print("number of NVs:", num_nvs)
+    print("number of runs:", num_runs)
+    print("confirmation margin:", confirm_margin)
+
+    print(
+        "regular threshold range:",
+        float(np.nanmin(regular_thresholds)),
+        "to",
+        float(np.nanmax(regular_thresholds)),
+    )
+
+    print(
+        "feedback threshold range:",
+        float(np.nanmin(feedback_thresholds)),
+        "to",
+        float(np.nanmax(feedback_thresholds)),
+    )
+
+    print(
+        f"\nRepeated loss criterion: "
+        f"lost in at least {min_loss_runs}/{num_runs} runs"
+    )
+
+    print(
+        "Borderline loss window:",
+        f"within {borderline_window_counts:g} counts "
+        "below threshold",
+    )
+
+    print("\nPer-run results:")
+
+    for run_ind in range(num_runs):
+        print(
+            f"Run {run_ind}: "
+            f"previous confirmed={previous_nvm_by_run[run_ind]}, "
+            f"retained={retained_nvm_by_run[run_ind]}, "
+            f"lost={lost_nvm_by_run[run_ind]} "
+            f"(clear={clear_lost_by_run[run_ind]}, "
+            f"borderline={borderline_lost_by_run[run_ind]}), "
+            f"new={new_nvm_by_run[run_ind]}, "
+            f"final NV-={final_nvm_by_run[run_ind]}, "
+            f"retention={retention_frac_by_run[run_ind]:.3f}"
+        )
+
+    print("\nMean over runs:")
+    print(
+        "previously confirmed NV-:",
+        mean_previous_nvm,
+    )
+    print(
+        "retained NV-:",
+        mean_retained_nvm,
+    )
+    print(
+        "lost NV- -> NV0:",
+        mean_lost_nvm,
+    )
+    print(
+        "clear losses:",
+        mean_clear_lost,
+    )
+    print(
+        "borderline losses:",
+        mean_borderline_lost,
+    )
+    print(
+        "new final NV-:",
+        mean_new_nvm,
+    )
+    print(
+        "final NV-:",
+        mean_final_nvm,
+    )
+    print(
+        "mean retention:",
+        mean_retention_frac,
+    )
+
+    print("\nRepeated per-NV results:")
+    print(
+        f"Lost in at least {min_loss_runs}/{num_runs} runs "
+        f"({len(repeatedly_lost_inds)} NVs):"
+    )
+    print(repeatedly_lost_inds)
+
+    print(
+        f"\nClearly lost in at least "
+        f"{min_loss_runs}/{num_runs} runs "
+        f"({len(repeatedly_clear_lost_inds)} NVs):"
+    )
+    print(repeatedly_clear_lost_inds)
+
+    print(
+        "\nRepeatedly lost but potentially threshold-borderline "
+        f"({len(repeatedly_borderline_inds)} NVs):"
+    )
+    print(repeatedly_borderline_inds)
+
+    print(
+        f"\nLost in all {num_runs} runs "
+        f"({len(lost_all_runs_inds)} NVs):"
+    )
+    print(lost_all_runs_inds)
+
+    # ==================================================================
+    # Save summary
+    # ==================================================================
+
+    if save_data:
+        timestamp = raw_data.get(
+            "timestamp",
+            dm.get_time_stamp(),
+        )
+
+        save_path = dm.get_file_path(
+            __file__,
+            timestamp,
+            f"final-check-transition-summary-{mode}",
+        )
+
+        dm.save_raw_data(
+            summary,
+            save_path,
+        )
+
+        print(
+            "Saved final-check transition summary:",
+            save_path,
+        )
+
+    # ==================================================================
+    # Plot
+    # ==================================================================
+
+    fig = None
+
+    if save_fig or "img_arrays" in raw_data:
+        fig, axes = plt.subplots(
+            1,
+            2,
+            figsize=(13, 5.5),
+        )
+
+        # --------------------------------------------------------------
+        # Left: averaged final-check image
+        # --------------------------------------------------------------
+
+        ax_img = axes[0]
+
+        if "img_arrays" in raw_data:
+            img_arrays = np.asarray(
+                raw_data["img_arrays"],
+                dtype=float,
+            )
+
+            # [run, y, x]
+            final_imgs = img_arrays[
+                0,
+                :,
+                0,
+                final_rep_ind,
+                :,
+                :,
+            ]
+
+            avg_final_img = np.nanmean(
+                final_imgs,
+                axis=0,
+            )
+
+            if clim is None:
+                clim_use = (
+                    float(
+                        np.nanpercentile(
+                            avg_final_img,
+                            50,
+                        )
+                    ),
+                    float(
+                        np.nanpercentile(
+                            avg_final_img,
+                            99.8,
+                        )
+                    ),
+                )
+            else:
+                clim_use = clim
+
+            im = ax_img.imshow(
+                avg_final_img,
+                origin="upper",
+                vmin=clim_use[0],
+                vmax=clim_use[1],
+            )
+
+            coords_xy = _coerce_img_coords(
+                nv_list,
+                img_coords=img_coords,
+            )
+
+            x = coords_xy[:, 0]
+            y = coords_xy[:, 1]
+
+            # All NV positions in gray.
+            ax_img.scatter(
+                x,
+                y,
+                s=marker_size * 0.65,
+                facecolors="none",
+                edgecolors=kpl.KplColors.GRAY,
+                linewidths=0.5,
+                label="all NVs",
+            )
+
+            # Repeatedly retained.
+            ax_img.scatter(
+                x[repeatedly_retained_mask],
+                y[repeatedly_retained_mask],
+                s=marker_size,
+                facecolors="none",
+                edgecolors=kpl.KplColors.GREEN,
+                linewidths=0.9,
+                label=(
+                    f"retained in "
+                    f"$\\geq${min_loss_runs}/{num_runs}"
+                ),
+            )
+
+            # Mixed behavior.
+            ax_img.scatter(
+                x[mixed_behavior_mask],
+                y[mixed_behavior_mask],
+                s=marker_size * 1.1,
+                facecolors="none",
+                edgecolors="gold",
+                linewidths=1.0,
+                label="mixed behavior",
+            )
+
+            # Repeated true transition.
+            ax_img.scatter(
+                x[repeatedly_lost_mask],
+                y[repeatedly_lost_mask],
+                s=marker_size * 1.45,
+                facecolors="none",
+                edgecolors=kpl.KplColors.RED,
+                linewidths=1.4,
+                label=(
+                    f"lost in "
+                    f"$\\geq${min_loss_runs}/{num_runs}"
+                ),
+            )
+
+            cbar = fig.colorbar(
+                im,
+                ax=ax_img,
+                fraction=0.046,
+                pad=0.04,
+            )
+            cbar.set_label("photons")
+
+            ax_img.legend(
+                fontsize=8,
+                loc="upper right",
+            )
+
+            ax_img.set_title(
+                "Average final-check image\n"
+                f"red = confirmed NV$^-$ $\\rightarrow$ NV$^0$ "
+                f"in $\\geq${min_loss_runs}/{num_runs} runs",
+                fontsize=12,
+            )
+
+            ax_img.set_axis_off()
+
+        else:
+            ax_img.text(
+                0.5,
+                0.5,
+                "No img_arrays found",
+                ha="center",
+                va="center",
+                fontsize=12,
+            )
+            ax_img.set_axis_off()
+
+        # --------------------------------------------------------------
+        # Right: per-run transition summary
+        # --------------------------------------------------------------
+
+        ax_summary = axes[1]
+
+        run_inds = np.arange(num_runs)
+
+        # Previous confirmed population is partitioned into
+        # retained + lost.
+        ax_summary.bar(
+            run_inds,
+            retained_nvm_by_run,
+            alpha=0.5,
+            color=kpl.KplColors.GREEN,
+            label="retained previous NV$^-$",
+        )
+
+        ax_summary.bar(
+            run_inds,
+            lost_nvm_by_run,\
+            bottom=retained_nvm_by_run,
+            alpha=0.5,
+            color=kpl.KplColors.RED,
+            label="lost NV$^- \\rightarrow$ NV$^0$",
+        )
+
+        # Total final NV- includes retained plus newly appearing NV-.
+        ax_summary.plot(
+            run_inds,
+            final_nvm_by_run,
+            "o--",
+            color=kpl.KplColors.BLUE,
+            linewidth=1.5,
+            label="total final NV$^-$",
+        )
+
+        ax_summary.set_xlabel("Run index")
+        ax_summary.set_ylabel("Number of NVs")
+        ax_summary.set_xticks(run_inds)
+        ax_summary.set_ylim(
+            0,
+            num_nvs * 1.05,
+        )
+        ax_summary.grid(
+            True,
+            axis="y",
+            alpha=0.3,
+        )
+        ax_summary.legend(
+            fontsize=8,
+            loc="lower left",
+        )
+
+        ax_summary.set_title(
+            "Per-run final-check transitions",
+            fontsize=12,
+        )
+
+        summary_text = (
+            f"Mean retention = "
+            f"{mean_retention_frac:.3f}\n"
+            f"Mean lost/run = "
+            f"{mean_lost_nvm:.1f}\n"
+            f"Repeatedly lost = "
+            f"{len(repeatedly_lost_inds)}\n"
+            # f"Clearly repeated loss = "
+            # f"{len(repeatedly_clear_lost_inds)}"
+        )
+
+        kpl.anchored_text(
+            ax_summary,
+            summary_text,
+            kpl.Loc.LOWER_RIGHT,
+            size=kpl.Size.SMALL,
+        )
+
+        fig.suptitle(
+            "Adaptive initialization: independent final verification",
+            fontsize=14,
+        )
+        
+        if save_fig:
+            timestamp = raw_data.get(
+                "timestamp",
+                dm.get_time_stamp(),
+            )
+
+            fig_path = dm.get_file_path(
+                __file__,
+                timestamp,
+                f"final-check-transition-plot-{mode}",
+            )
+
+            dm.save_figure(
+                fig,
+                fig_path,
+            )
+
+            print(
+                "Saved final-check transition plot:",
+                fig_path,
+            )
+
+    raw_data[
+        "final_check_charge_summary"
+    ] = summary
+
+    return summary, fig
 
 def _rep_timing_array(raw_data):
     records = raw_data.get("rep_timing_records", None)
@@ -962,12 +2241,7 @@ def save_blink_gif(
     return gif_path
 
 
-from pathlib import Path
-from matplotlib.animation import FuncAnimation, PillowWriter
 from scipy.ndimage import gaussian_filter
-import numpy as np
-import matplotlib.pyplot as plt
-
 
 def save_blink_gif(
     raw_data,
@@ -1419,6 +2693,91 @@ def save_cumulative_initialized_movie(
 
     return gif_path
 
+
+def plot_feedback_profile_summary(raw_data):
+    records = raw_data.get("feedback_profile_records", None)
+
+    if records is None or len(records) == 0:
+        print("No feedback_profile_records found.")
+        return None
+
+    normal_records = [
+        rec for rec in records
+        if rec.get("phase") in ["normal_feedback", "rep0_start"]
+    ]
+
+    if len(normal_records) == 0:
+        print("No normal feedback records found.")
+        return None
+
+    reps = np.asarray([rec["rep_ind"] for rec in normal_records], dtype=int)
+
+    classify_s = np.asarray(
+        [rec.get("classify_s", np.nan) for rec in normal_records],
+        dtype=float,
+    )
+    dmd_s = np.asarray(
+        [rec.get("dmd_s", np.nan) for rec in normal_records],
+        dtype=float,
+    )
+    opx_s = np.asarray(
+        [rec.get("opx_s", np.nan) for rec in normal_records],
+        dtype=float,
+    )
+    total_s = np.asarray(
+        [rec.get("total_callback_s", np.nan) for rec in normal_records],
+        dtype=float,
+    )
+    confirmed = np.asarray(
+        [
+            np.nan if rec.get("confirmed") is None else rec.get("confirmed")
+            for rec in normal_records
+        ],
+        dtype=float,
+    )
+
+    unique_reps = np.unique(reps)
+
+    mean_classify = []
+    mean_dmd = []
+    mean_opx = []
+    mean_total = []
+    mean_confirmed = []
+
+    for rep in unique_reps:
+        use = reps == rep
+        mean_classify.append(np.nanmean(classify_s[use]))
+        mean_dmd.append(np.nanmean(dmd_s[use]))
+        mean_opx.append(np.nanmean(opx_s[use]))
+        mean_total.append(np.nanmean(total_s[use]))
+        mean_confirmed.append(np.nanmean(confirmed[use]))
+
+    mean_classify = np.asarray(mean_classify)
+    mean_dmd = np.asarray(mean_dmd)
+    mean_opx = np.asarray(mean_opx)
+    mean_total = np.asarray(mean_total)
+    mean_confirmed = np.asarray(mean_confirmed)
+
+    fig, axes = plt.subplots(2, 1, figsize=(8, 7), sharex=True)
+
+    axes[0].plot(unique_reps, mean_classify, "o-", label="classify")
+    axes[0].plot(unique_reps, mean_dmd, "o-", label="DMD update")
+    axes[0].plot(unique_reps, mean_opx, "o-", label="OPX stream")
+    axes[0].plot(unique_reps, mean_total, "o-", label="total callback")
+
+    axes[0].set_ylabel("Time per callback (s)")
+    axes[0].grid(True, alpha=0.3)
+    axes[0].legend(fontsize=8)
+
+    axes[1].plot(unique_reps, mean_confirmed, "o-")
+    axes[1].set_xlabel("Rep index")
+    axes[1].set_ylabel("Mean confirmed NVs")
+    axes[1].grid(True, alpha=0.3)
+
+    fig.suptitle("Feedback-loop profiling", fontsize=14)
+    plt.tight_layout()
+
+    return fig
 # =============================================================================
 # Main routine
 # =============================================================================
@@ -1436,12 +2795,13 @@ def main(
     save_images_avg_reps=False,
     save_data=True,
     save_fig=True,
-    save_image_frames=True,
+    save_image_frames=False,
     save_movie=True,
     reset_dmd_on_exit=True,
     verbose=True,
     take_final_check_image=True,
     track_rep_timing=True,
+    profile_feedback=True,
 ):
     """
     Run conditional charge initialization in one of three modes.
@@ -1494,6 +2854,9 @@ def main(
     print("num_reps total:", num_reps_total)
     print("take_final_check_image:", take_final_check_image)
     print("final_check_rep_ind:", final_check_rep_ind)
+    
+    feedback_profile_records = [] if profile_feedback else None
+    rep_timing_records = []
 
     if mode == "old":
         charge_prep_fn = base_routine.charge_prep_no_verification_skip_first_rep
@@ -1517,9 +2880,8 @@ def main(
             use_dmd=True,
             dmd_settle_s=dmd_settle_s,
             verbose=verbose,
+            profile_records=feedback_profile_records,
         )
-
-    rep_timing_records = []
 
     if take_final_check_image:
         charge_prep_fn = make_final_check_charge_prep_fn(
@@ -1531,6 +2893,7 @@ def main(
             dmd_plane=dmd_plane,
             dmd_settle_s=dmd_settle_s,
             verbose=verbose,
+            profile_records=feedback_profile_records,
         )
 
     if track_rep_timing:
@@ -1573,6 +2936,7 @@ def main(
         )
 
     try:
+        t_experiment0 = time.perf_counter()
         raw_data = base_routine.main(
             nv_run_list,
             num_steps,
@@ -1585,6 +2949,9 @@ def main(
             num_exps=1,
             uwave_ind_list=[],
         )
+
+        t_experiment1 = time.perf_counter()
+        experiment_wall_s = float(t_experiment1 - t_experiment0)
 
     finally:
         if reset_dmd_on_exit and mode.startswith("dmd"):
@@ -1615,85 +2982,93 @@ def main(
         if final_check_rep_ind is None
         else int(final_check_rep_ind),
         "rep_timing_records": rep_timing_records,
+        "feedback_profile_records": feedback_profile_records,
+        "experiment_wall_s": experiment_wall_s,
     }
 
+
+    # Save full raw_data including nv_list and images.
+    timestamp = raw_data["timestamp"]
+    repr_nv_sig = widefield.get_repr_nv_sig(nv_run_list)
+    repr_nv_name = repr_nv_sig.name
+
+    file_path = dm.get_file_path(
+        __file__,
+        timestamp,
+        f"{repr_nv_name}-{mode}",
+    )
+
+    keys_to_compress = ["counts", "thresholds", "dmd_indices"]
+    if save_images and "img_arrays" in raw_data:
+        keys_to_compress.append("img_arrays")
+
+    dm.save_raw_data(
+        raw_data,
+        file_path,
+        keys_to_compress=keys_to_compress,
+    )
+
+    print("Saved raw data:", file_path)
+    
     try:
         fig = process_and_plot(raw_data, mode=mode)
     except Exception:
         print(traceback.format_exc())
         fig = None
 
-    if save_data:
-        timestamp = raw_data["timestamp"]
-        repr_nv_sig = widefield.get_repr_nv_sig(nv_run_list)
-        repr_nv_name = repr_nv_sig.name
+    if save_fig:
+        try:
+            fig_timing = plot_rep_timing_summary(raw_data)
+            if fig_timing is not None:
+                dm.save_figure(fig_timing, _append_to_file_path(file_path, "rep-timing"))
+                print("Saved rep timing plot:", f"{file_path}-rep-timing")
+        except Exception:
+            print("Could not save rep timing plot:")
+            print(traceback.format_exc())
+            
+        try:
+            fig_profile = plot_feedback_profile_summary(raw_data)
+            if fig_profile is not None:
+                dm.save_figure(fig_profile, _append_to_file_path(file_path, "rep-timing"))
+                print("Saved feedback profile plot:", f"{file_path}-feedback-profile")
+        except Exception:
+            print("Could not save feedback profile plot:")
+            print(traceback.format_exc())
 
-        file_path = dm.get_file_path(
-            __file__,
-            timestamp,
-            f"{repr_nv_name}-{mode}",
-        )
 
-        # Save full raw_data including nv_list and images.
-        # If this becomes too large, set save_images=False or save fewer runs.
-        keys_to_compress = ["counts", "thresholds", "dmd_indices"]
-        if save_images and "img_arrays" in raw_data:
-            keys_to_compress.append("img_arrays")
+        try:
+            fig_final = plot_final_check_image(raw_data)
+            if fig_final is not None:
+                dm.save_figure(fig_final, _append_to_file_path(file_path, "final-check-image"))
+                print("Saved final-check image:", f"{file_path}-final-check-image")
+        except Exception:
+            print("Could not save final-check image:")
+            print(traceback.format_exc())
 
-        dm.save_raw_data(
-            raw_data,
-            file_path,
-            keys_to_compress=keys_to_compress,
-        )
+    # if save_images and save_image_frames:
+    #     try:
+    #         save_avg_rep_images(
+    #             raw_data,
+    #             file_path,
+    #             reps_to_save=list(range(min(num_reps, 10))),
+    #             clim=None,
+    #         )
+    #     except Exception:
+    #         print("Could not save avg rep images:")
+    #         print(traceback.format_exc())
 
-        print("Saved raw data:", file_path)
-
-        if save_fig and fig is not None:
-            dm.save_figure(fig, file_path)
-
-        if save_fig:
-            try:
-                fig_timing = plot_rep_timing_summary(raw_data)
-                if fig_timing is not None:
-                    dm.save_figure(fig_timing, _append_to_file_path(file_path, "rep-timing"))
-                    print("Saved rep timing plot:", f"{file_path}-rep-timing")
-            except Exception:
-                print("Could not save rep timing plot:")
-                print(traceback.format_exc())
-
-            try:
-                fig_final = plot_final_check_image(raw_data)
-                if fig_final is not None:
-                    dm.save_figure(fig_final, _append_to_file_path(file_path, "final-check-image"))
-                    print("Saved final-check image:", f"{file_path}-final-check-image")
-            except Exception:
-                print("Could not save final-check image:")
-                print(traceback.format_exc())
-
-        if save_images and save_image_frames:
-            try:
-                save_avg_rep_images(
-                    raw_data,
-                    file_path,
-                    reps_to_save=list(range(min(num_reps, 10))),
-                    clim=None,
-                )
-            except Exception:
-                print("Could not save avg rep images:")
-                print(traceback.format_exc())
-
-        if save_images and save_movie:
-            try:
-                save_blink_gif(
-                    raw_data,
-                    file_path,
-                    max_reps=min(num_reps, 20),
-                    clim=None,
-                    interval_ms=250,
-                )
-            except Exception:
-                print("Could not save blink GIF:")
-                print(traceback.format_exc())
+    if save_images and save_movie:
+        try:
+            save_blink_gif(
+                raw_data,
+                file_path,
+                max_reps=min(num_reps, 20),
+                clim=None,
+                interval_ms=250,
+            )
+        except Exception:
+            print("Could not save blink GIF:")
+            print(traceback.format_exc())
 
     tb.reset_cfm()
 
@@ -1703,7 +3078,6 @@ def main(
 # =============================================================================
 # Convenience comparison runner
 # =============================================================================
-
 def run_old_and_dmd_compare(
     nv_list,
     num_reps=20,
@@ -1755,21 +3129,747 @@ def run_old_and_dmd_compare(
     return raw_old, raw_dmd
 
 
+
+def get_final_check_charge_change_indices(
+    raw_data,
+    mode=None,
+    print_details=True,
+):
+    """
+    Compare the cumulative adaptive-confirmation state with the independent
+    final-check image.
+
+    Regular per-NV thresholds are used for the final image:
+
+        count > threshold  -> NV-
+        count <= threshold -> NV0
+
+    Returns
+    -------
+    result : dict
+
+        lost_nv_inds_by_run:
+            Previously confirmed NV-, final-check NV0.
+
+        retained_nv_inds_by_run:
+            Previously confirmed NV-, final-check NV-.
+
+        gained_nv_inds_by_run:
+            Not previously confirmed, final-check NV-.
+
+        final_nv0_inds_by_run:
+            Every NV classified NV0 in the final image.
+
+        lost_details_by_run:
+            Counts and thresholds for each lost NV.
+    """
+
+    if mode is None:
+        mode = raw_data.get("mode", "dmd_block_confirmed")
+
+    nv_list = raw_data["nv_list"]
+    num_nvs = len(nv_list)
+
+    # --------------------------------------------------------------
+    # Regular calibrated thresholds.
+    # Do not add confirm_margin_counts here.
+    # --------------------------------------------------------------
+    thresholds = np.asarray(
+        [float(nv.threshold) for nv in nv_list],
+        dtype=float,
+    )
+
+    final_rep_ind = raw_data.get("final_check_rep_ind", None)
+    if final_rep_ind is None:
+        raise ValueError(
+            "raw_data has no final_check_rep_ind. "
+            "The measurement must include take_final_check_image=True."
+        )
+
+    final_rep_ind = int(final_rep_ind)
+
+    counts_all = np.asarray(raw_data["counts"], dtype=float)
+
+    if counts_all.ndim != 5:
+        raise ValueError(
+            "Expected counts shape [exp, nv, run, step, rep], "
+            f"got {counts_all.shape}."
+        )
+
+    # [nv, run]
+    final_counts = counts_all[
+        0,
+        :,
+        :,
+        0,
+        final_rep_ind,
+    ]
+
+    num_runs = final_counts.shape[1]
+
+    # --------------------------------------------------------------
+    # Final image classification using regular threshold.
+    # --------------------------------------------------------------
+    final_nvm = final_counts > thresholds[:, None]
+    final_nv0 = ~final_nvm
+
+    # --------------------------------------------------------------
+    # Reconstruct persistent/ever-confirmed adaptive state.
+    #
+    # This uses the same logic as your existing adaptive analysis:
+    # once an NV is confirmed, it remains confirmed.
+    # --------------------------------------------------------------
+    feedback = reconstruct_confirmed_history(
+        raw_data,
+        mode=mode,
+    )
+
+    confirmed_history = np.asarray(
+        feedback["confirmed_history"],
+        dtype=bool,
+    )
+
+    # Last adaptive repetition only, before the extra final check.
+    previous_confirmed = confirmed_history[:, :, -1]
+
+    if previous_confirmed.shape != final_nvm.shape:
+        raise ValueError(
+            "Previous/final state shape mismatch: "
+            f"{previous_confirmed.shape} versus {final_nvm.shape}."
+        )
+
+    # --------------------------------------------------------------
+    # Transition masks
+    # --------------------------------------------------------------
+    lost_mask = previous_confirmed & final_nv0
+    retained_mask = previous_confirmed & final_nvm
+    gained_mask = (~previous_confirmed) & final_nvm
+    stayed_unconfirmed_mask = (~previous_confirmed) & final_nv0
+
+    lost_nv_inds_by_run = []
+    retained_nv_inds_by_run = []
+    gained_nv_inds_by_run = []
+    final_nv0_inds_by_run = []
+    lost_details_by_run = []
+
+    for run_ind in range(num_runs):
+        lost_inds = np.where(lost_mask[:, run_ind])[0].astype(int)
+        retained_inds = np.where(retained_mask[:, run_ind])[0].astype(int)
+        gained_inds = np.where(gained_mask[:, run_ind])[0].astype(int)
+        final_nv0_inds = np.where(final_nv0[:, run_ind])[0].astype(int)
+
+        lost_nv_inds_by_run.append(lost_inds.tolist())
+        retained_nv_inds_by_run.append(retained_inds.tolist())
+        gained_nv_inds_by_run.append(gained_inds.tolist())
+        final_nv0_inds_by_run.append(final_nv0_inds.tolist())
+
+        run_details = []
+
+        for nv_ind in lost_inds:
+            run_details.append(
+                {
+                    "nv_ind": int(nv_ind),
+                    "threshold": float(thresholds[nv_ind]),
+                    "final_count": float(
+                        final_counts[nv_ind, run_ind]
+                    ),
+                    "count_below_threshold": float(
+                        thresholds[nv_ind]
+                        - final_counts[nv_ind, run_ind]
+                    ),
+                }
+            )
+
+        lost_details_by_run.append(run_details)
+
+    previous_confirmed_by_run = np.sum(
+        previous_confirmed,
+        axis=0,
+    )
+    final_nvm_by_run = np.sum(final_nvm, axis=0)
+    lost_by_run = np.sum(lost_mask, axis=0)
+    retained_by_run = np.sum(retained_mask, axis=0)
+    gained_by_run = np.sum(gained_mask, axis=0)
+
+    result = {
+        "mode": mode,
+        "num_nvs": int(num_nvs),
+        "num_runs": int(num_runs),
+        "final_check_rep_ind": int(final_rep_ind),
+
+        "thresholds": thresholds,
+        "final_counts": final_counts,
+
+        "previous_confirmed_mask": previous_confirmed,
+        "final_nvm_mask": final_nvm,
+        "final_nv0_mask": final_nv0,
+
+        "lost_mask": lost_mask,
+        "retained_mask": retained_mask,
+        "gained_mask": gained_mask,
+        "stayed_unconfirmed_mask": stayed_unconfirmed_mask,
+
+        "lost_nv_inds_by_run": lost_nv_inds_by_run,
+        "retained_nv_inds_by_run": retained_nv_inds_by_run,
+        "gained_nv_inds_by_run": gained_nv_inds_by_run,
+        "final_nv0_inds_by_run": final_nv0_inds_by_run,
+        "lost_details_by_run": lost_details_by_run,
+
+        "previous_confirmed_by_run": previous_confirmed_by_run,
+        "final_nvm_by_run": final_nvm_by_run,
+        "lost_by_run": lost_by_run,
+        "retained_by_run": retained_by_run,
+        "gained_by_run": gained_by_run,
+    }
+
+    if print_details:
+        print("\n=== Final-check charge-state changes ===")
+        print("Regular per-NV thresholds used.")
+        print("Final-check rep:", final_rep_ind)
+
+        for run_ind in range(num_runs):
+            print("\n" + "-" * 60)
+            print(f"Run {run_ind}")
+            print(
+                "Previously confirmed NV-:",
+                int(previous_confirmed_by_run[run_ind]),
+            )
+            print(
+                "Final-check NV-:",
+                int(final_nvm_by_run[run_ind]),
+            )
+            print(
+                "Retained confirmed NV-:",
+                int(retained_by_run[run_ind]),
+            )
+            print(
+                "Lost NV- -> NV0:",
+                int(lost_by_run[run_ind]),
+            )
+            print(
+                "New/unconfirmed -> final NV-:",
+                int(gained_by_run[run_ind]),
+            )
+            print(
+                "Lost NV indices:",
+                lost_nv_inds_by_run[run_ind],
+            )
+
+    return result
+
+def plot_lost_charge_heatmap(change_result):
+    """
+    Rows = run index
+    Columns = NV index
+
+    White/low = retained or not previously confirmed
+    Red/high = previously confirmed NV- but final-check NV0
+    """
+
+    lost_mask = np.asarray(
+        change_result["lost_mask"],
+        dtype=bool,
+    )  # [nv, run]
+
+    # Convert to [run, nv] for plotting.
+    lost_map = lost_mask.T.astype(float)
+
+    num_runs, num_nvs = lost_map.shape
+
+    fig, ax = plt.subplots(figsize=(14, 4.5))
+
+    im = ax.imshow(
+        lost_map,
+        aspect="auto",
+        interpolation="nearest",
+        origin="lower",
+        cmap="Reds",
+        vmin=0,
+        vmax=1,
+    )
+
+    ax.set_xlabel("NV index")
+    ax.set_ylabel("Run index")
+    ax.set_title("NVs that lost charge at final check")
+
+    ax.set_yticks(np.arange(num_runs))
+    ax.set_yticklabels(np.arange(num_runs))
+
+    cbar = fig.colorbar(im, ax=ax)
+    cbar.set_ticks([0, 1])
+    cbar.set_ticklabels(["Not lost", "NV$^- \\rightarrow$ NV$^0$"])
+
+    return fig
+
+
+def plot_loss_count_by_nv(change_result):
+    """
+    Plot how many runs each NV lost its charge state.
+    """
+
+    lost_mask = np.asarray(
+        change_result["lost_mask"],
+        dtype=bool,
+    )  # [nv, run]
+
+    loss_count_by_nv = np.sum(lost_mask, axis=1)
+    num_runs = lost_mask.shape[1]
+
+    nv_inds = np.arange(loss_count_by_nv.size)
+
+    fig, ax = plt.subplots(figsize=(14, 5))
+
+    ax.bar(
+        nv_inds,
+        loss_count_by_nv,
+        color=kpl.KplColors.RED,
+        width=1.0,
+    )
+
+    ax.set_xlabel("NV index")
+    ax.set_ylabel("Number of runs lost")
+    ax.set_title(
+        f"Final-check charge loss frequency across {num_runs} runs"
+    )
+
+    ax.set_ylim(0, num_runs + 0.25)
+    ax.set_yticks(np.arange(num_runs + 1))
+    ax.grid(True, axis="y", alpha=0.3)
+
+    return fig
+
+
+def print_ranked_lost_nvs(change_result):
+    lost_mask = np.asarray(
+        change_result["lost_mask"],
+        dtype=bool,
+    )
+
+    loss_count_by_nv = np.sum(lost_mask, axis=1)
+    num_runs = lost_mask.shape[1]
+
+    ranked_inds = np.argsort(loss_count_by_nv)[::-1]
+
+    print("\n=== Ranked unstable NVs ===")
+
+    for nv_ind in ranked_inds:
+        count = int(loss_count_by_nv[nv_ind])
+
+        if count == 0:
+            break
+
+        lost_runs = np.where(
+            lost_mask[nv_ind]
+        )[0].astype(int).tolist()
+
+        print(
+            f"NV {nv_ind}: lost {count}/{num_runs} runs, "
+            f"runs={lost_runs}"
+        )
+
+    # --------------------------------------------------------------
+    # Selected NV index lists
+    # --------------------------------------------------------------
+
+    # Lost in at least 2 runs.
+    lost_at_least_2_inds = np.where(
+        loss_count_by_nv >= 2
+    )[0].astype(int).tolist()
+
+    # Lost in at least 3 runs.
+    lost_at_least_3_inds = np.where(
+        loss_count_by_nv >= 3
+    )[0].astype(int).tolist()
+
+    # Lost in exactly 2 runs.
+    lost_exactly_2_inds = np.where(
+        loss_count_by_nv == 2
+    )[0].astype(int).tolist()
+
+    # Lost in exactly 3 runs.
+    lost_exactly_3_inds = np.where(
+        loss_count_by_nv == 3
+    )[0].astype(int).tolist()
+
+    # Lost in every run.
+    lost_every_run_inds = np.where(
+        loss_count_by_nv == num_runs
+    )[0].astype(int).tolist()
+
+    print("\n=== NV index lists ===")
+
+    print(
+        f"Lost in at least 2 runs "
+        f"({len(lost_at_least_2_inds)} NVs):"
+    )
+    print(lost_at_least_2_inds)
+
+    print(
+        f"\nLost in at least 3 runs "
+        f"({len(lost_at_least_3_inds)} NVs):"
+    )
+    print(lost_at_least_3_inds)
+
+    print(
+        f"\nLost in exactly 2 runs "
+        f"({len(lost_exactly_2_inds)} NVs):"
+    )
+    print(lost_exactly_2_inds)
+
+    print(
+        f"\nLost in exactly 3 runs "
+        f"({len(lost_exactly_3_inds)} NVs):"
+    )
+    print(lost_exactly_3_inds)
+
+    print(
+        f"\nLost in every run "
+        f"({len(lost_every_run_inds)} NVs):"
+    )
+    print(lost_every_run_inds)
+
+    return {
+        "loss_count_by_nv": loss_count_by_nv,
+        "lost_at_least_2_inds": lost_at_least_2_inds,
+        "lost_at_least_3_inds": lost_at_least_3_inds,
+        "lost_exactly_2_inds": lost_exactly_2_inds,
+        "lost_exactly_3_inds": lost_exactly_3_inds,
+        "lost_every_run_inds": lost_every_run_inds,
+    }
+
+
+def plot_repeatedly_lost_heatmap(
+    change_result,
+    min_loss_count=2,
+):
+    lost_mask = np.asarray(
+        change_result["lost_mask"],
+        dtype=bool,
+    )  # [nv, run]
+
+    loss_count = np.sum(lost_mask, axis=1)
+
+    selected_inds = np.where(
+        loss_count >= int(min_loss_count)
+    )[0]
+
+    if selected_inds.size == 0:
+        print("No NVs satisfy the requested minimum loss count.")
+        return None
+
+    selected_map = lost_mask[selected_inds].T.astype(float)
+
+    num_runs = selected_map.shape[0]
+
+    fig_width = max(8, 0.25 * selected_inds.size)
+    fig, ax = plt.subplots(figsize=(fig_width, 4.5))
+
+    im = ax.imshow(
+        selected_map,
+        aspect="auto",
+        interpolation="nearest",
+        origin="lower",
+        cmap="Reds",
+        vmin=0,
+        vmax=1,
+    )
+
+    ax.set_xlabel("NV index")
+    ax.set_ylabel("Run index")
+    ax.set_title(
+        f"NVs lost in at least {min_loss_count} of {num_runs} runs"
+    )
+
+    ax.set_xticks(np.arange(selected_inds.size))
+    ax.set_xticklabels(
+        selected_inds,
+        rotation=90,
+        fontsize=8,
+    )
+
+    ax.set_yticks(np.arange(num_runs))
+    ax.set_yticklabels(np.arange(num_runs))
+
+    cbar = fig.colorbar(im, ax=ax)
+    cbar.set_ticks([0, 1])
+    cbar.set_ticklabels(["Retained", "Lost"])
+
+    return fig
+
+
+def plot_loss_probability_spatial(
+    raw_data,
+    change_result,
+    img_coords=None,
+    marker_size=45,
+):
+    lost_mask = np.asarray(
+        change_result["lost_mask"],
+        dtype=bool,
+    )
+
+    loss_probability = np.mean(lost_mask, axis=1)
+
+    coords_xy = _coerce_img_coords(
+        raw_data["nv_list"],
+        img_coords=img_coords,
+    )
+
+    fig, ax = plt.subplots(figsize=(7.5, 6.5))
+
+    sc = ax.scatter(
+        coords_xy[:, 0],
+        coords_xy[:, 1],
+        c=loss_probability,
+        s=marker_size,
+        cmap="Reds",
+        vmin=0,
+        vmax=1,
+        edgecolors=kpl.KplColors.GRAY,
+        linewidths=0.4,
+    )
+
+    cbar = fig.colorbar(sc, ax=ax)
+    cbar.set_label(
+        "Fraction of runs with NV$^- \\rightarrow$ NV$^0$"
+    )
+
+    ax.set_xlabel("Camera x pixel")
+    ax.set_ylabel("Camera y pixel")
+    ax.set_title("Spatial distribution of final-check charge loss")
+    ax.invert_yaxis()
+    ax.set_aspect("equal")
+    ax.grid(True, alpha=0.2)
+
+    return fig
+
+def print_selected_nv_final_counts(
+    raw_data,
+    nv_inds=(8, 303, 364, 422, 463, 536),
+):
+    """
+    Print the regular threshold and final-check count across all runs
+    for selected NVs.
+
+    Counts shape:
+        counts[exp, nv, run, step, rep]
+
+    Returns
+    -------
+    result : dict
+        Contains thresholds, final counts, states, and count-threshold
+        differences for the selected NVs.
+    """
+
+    nv_inds = np.asarray(nv_inds, dtype=int)
+
+    counts = np.asarray(
+        raw_data["counts"],
+        dtype=float,
+    )
+
+    if counts.ndim != 5:
+        raise ValueError(
+            "Expected counts[exp, nv, run, step, rep], "
+            f"got shape {counts.shape}."
+        )
+
+    final_rep_ind = raw_data.get(
+        "final_check_rep_ind",
+        None,
+    )
+
+    if final_rep_ind is None:
+        raise ValueError(
+            "No final_check_rep_ind found in raw_data."
+        )
+
+    final_rep_ind = int(final_rep_ind)
+
+    # --------------------------------------------------------------
+    # The saved thresholds include confirm_margin_counts.
+    # Recover the original regular per-NV thresholds.
+    # --------------------------------------------------------------
+    feedback_thresholds = np.asarray(
+        raw_data["thresholds"],
+        dtype=float,
+    )
+
+    confirm_margin = float(
+        raw_data.get("confirm_margin_counts", 0.0)
+    )
+
+    regular_thresholds = (
+        feedback_thresholds - confirm_margin
+    )
+
+    num_nvs = counts.shape[1]
+    num_runs = counts.shape[2]
+
+    if np.any(nv_inds < 0) or np.any(nv_inds >= num_nvs):
+        raise IndexError(
+            f"NV indices must lie between 0 and {num_nvs - 1}."
+        )
+
+    # [selected_nv, run]
+    final_counts = counts[
+        0,
+        nv_inds,
+        :,
+        0,
+        final_rep_ind,
+    ]
+
+    selected_regular_thresholds = regular_thresholds[
+        nv_inds
+    ]
+
+    selected_feedback_thresholds = feedback_thresholds[
+        nv_inds
+    ]
+
+    # [selected_nv, run]
+    final_nvm = (
+        final_counts
+        > selected_regular_thresholds[:, None]
+    )
+
+    delta_from_threshold = (
+        final_counts
+        - selected_regular_thresholds[:, None]
+    )
+
+    print("\n=== Selected NV final-check counts ===")
+    print("Final-check rep:", final_rep_ind)
+    print("Number of runs:", num_runs)
+    print("Confirmation margin:", confirm_margin)
+    print(
+        "Classification: count > regular threshold -> NV-"
+    )
+
+    for local_ind, nv_ind in enumerate(nv_inds):
+        regular_threshold = float(
+            selected_regular_thresholds[local_ind]
+        )
+
+        feedback_threshold = float(
+            selected_feedback_thresholds[local_ind]
+        )
+
+        print("\n" + "=" * 72)
+        print(f"NV {nv_ind}")
+        print(
+            f"Regular threshold:  {regular_threshold:.3f}"
+        )
+        print(
+            f"Feedback threshold: {feedback_threshold:.3f}"
+        )
+
+        for run_ind in range(num_runs):
+            count = float(
+                final_counts[local_ind, run_ind]
+            )
+
+            delta = float(
+                delta_from_threshold[
+                    local_ind,
+                    run_ind,
+                ]
+            )
+
+            state = (
+                "NV-"
+                if final_nvm[local_ind, run_ind]
+                else "NV0"
+            )
+
+            print(
+                f"Run {run_ind}: "
+                f"final count = {count:8.3f}, "
+                f"count - threshold = {delta:+8.3f}, "
+                f"state = {state}"
+            )
+
+        print(
+            "Mean final count: "
+            f"{np.mean(final_counts[local_ind]):.3f}"
+        )
+
+        print(
+            "Final NV- runs: "
+            f"{int(np.sum(final_nvm[local_ind]))}"
+            f"/{num_runs}"
+        )
+
+    result = {
+        "nv_inds": nv_inds.tolist(),
+        "final_check_rep_ind": final_rep_ind,
+        "confirm_margin_counts": confirm_margin,
+        "regular_thresholds": (
+            selected_regular_thresholds.tolist()
+        ),
+        "feedback_thresholds": (
+            selected_feedback_thresholds.tolist()
+        ),
+        "final_counts": final_counts.tolist(),
+        "delta_from_regular_threshold": (
+            delta_from_threshold.tolist()
+        ),
+        "final_nvm_mask": final_nvm.tolist(),
+    }
+
+    return result
+
 if __name__ == "__main__":
     kpl.init_kplotlib()
 
     # Example plotting existing file:
     raw_data = dm.get_raw_data(
-        # file_stem="2026_06_23-18_41_07-qnami-nv0_2026_02_20-dmd_block_confirmed", 
-        # file_stem="2026_06_23-19_23_49-qnami-nv0_2026_02_20-old", 
-        # file_stem="2026_06_23-21_03_10-qnami-nv0_2026_02_20-dmd_block_confirmed", 
-        # file_stem="2026_06_23-21_23_53-qnami-nv0_2026_02_20-dmd_block_confirmed", 
-        # file_stem="2026_06_23-21_58_45-qnami-nv0_2026_02_20-dmd_block_confirmed", 
-        file_stem="2026_07_10-11_41_33-qnami-nv0_2026_02_20-dmd_block_confirmed", 
+        file_stem="2026_07_19-01_02_13-qnami-nv0_2026_02_20-dmd_block_confirmed", 
         load_npz=True)
-    
+
     timestamp = raw_data["timestamp"]
-    file_path = dm.get_file_path(__file__,timestamp,"movie")
+    file_path = dm.get_file_path(__file__, timestamp, "movie")
+    
+    change_result =  get_final_check_charge_change_indices(
+    raw_data,
+    mode="dmd_block_confirmed",
+    )
+    plot_lost_charge_heatmap(change_result)
+    plot_loss_count_by_nv(change_result)
+    print_ranked_lost_nvs(change_result)
+    plot_repeatedly_lost_heatmap(change_result, min_loss_count=4)
+    plot_loss_probability_spatial(raw_data, change_result)
+    selected_nv_result = print_selected_nv_final_counts(
+    raw_data, nv_inds=[8, 303, 364, 422, 463, 536])
+    
+    summary, fig = analyze_and_plot_final_check(
+        raw_data,
+        mode=raw_data.get(
+            "mode",
+            "dmd_block_confirmed",
+        ),
+        img_coords=None,
+        clim=None,
+        marker_size=16,
+
+        # For four runs, red means lost in at least three runs.
+        min_loss_runs=3,
+
+        # Separately flag losses within five counts of threshold.
+        borderline_window_counts=5.0,
+
+        save_data=False,
+        save_fig=True,
+    )
+    
+    # fig_timing = plot_rep_timing_summary(raw_data)
+    # file_path = dm.get_file_path(__file__, timestamp, "rep-timing")
+    # dm.save_figure(fig_timing, _append_to_file_path(file_path, "rep-timing"))
+    # feedback_profile = plot_feedback_profile_summary(raw_data)
+    # file_path = dm.get_file_path(__file__, timestamp, "feedback-profile")
+    # dm.save_figure(feedback_profile, _append_to_file_path(file_path, "feedback-profile"))
+    kpl.show(block=True)
     
     # save_blink_gif(
     # raw_data,
@@ -1806,17 +3906,17 @@ if __name__ == "__main__":
     #     interval_ms=10,
     # )
     
-    save_cumulative_initialized_movie(
-        raw_data,
-        file_path,
-        mode=raw_data.get("mode", "dmd_block_confirmed"),
-        max_reps=100,
-        patch_radius=2,
-        clim=None,
-        interval_ms=500,
-        probability_weight=True,
-        bright_gain=1.0,
-    )
+    # save_cumulative_initialized_movie(
+    #     raw_data,
+    #     file_path,
+    #     mode=raw_data.get("mode", "dmd_block_confirmed"),
+    #     max_reps=100,
+    #     patch_radius=2,
+    #     clim=None,
+    #     interval_ms=500,
+    #     probability_weight=True,
+    #     bright_gain=1.0,
+    # )
 
     # fig = process_and_plot(raw_data, mode=raw_data.get("mode", "old"), save_fig=True)
     kpl.show(block=True)

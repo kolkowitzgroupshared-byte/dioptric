@@ -252,9 +252,15 @@ class DmdDlp6500(LabradServer):
 
     def _blank_mask(self, value):
         return np.full((DMD_HEIGHT, DMD_WIDTH), value, dtype=np.uint8)
-
+    
+    
     def _apply_disks(self, mask, coords, radius_px, value):
         """
+        Fast disk drawing.
+
+        Instead of computing distance over the full DMD for every disk,
+        only compute a small local patch around each disk.
+
         coords should be Nx2 DMD coordinates [x, y].
         """
         if coords is None:
@@ -266,12 +272,27 @@ class DmdDlp6500(LabradServer):
             return mask
 
         coords = coords.reshape(-1, 2)
-        yy, xx = np.ogrid[:DMD_HEIGHT, :DMD_WIDTH]
         radius_px = int(radius_px)
+        r2 = radius_px ** 2
 
         for x, y in coords:
-            rr2 = (xx - float(x)) ** 2 + (yy - float(y)) ** 2
-            mask[rr2 <= radius_px**2] = value
+            x = int(round(float(x)))
+            y = int(round(float(y)))
+
+            x0 = max(0, x - radius_px)
+            x1 = min(DMD_WIDTH, x + radius_px + 1)
+            y0 = max(0, y - radius_px)
+            y1 = min(DMD_HEIGHT, y + radius_px + 1)
+
+            if x0 >= x1 or y0 >= y1:
+                continue
+
+            yy, xx = np.ogrid[y0:y1, x0:x1]
+            disk = (xx - x) ** 2 + (yy - y) ** 2 <= r2
+
+            mask_patch = mask[y0:y1, x0:x1]
+            mask_patch[disk] = value
+            mask[y0:y1, x0:x1] = mask_patch
 
         return mask
 

@@ -42,12 +42,12 @@ calibration_coords_pixel = [
     [17.982, 41.943],
 ]
 calibration_coords_green = [
-    [73.723, 115.464],
-    [100.718, 68.902],
-    [126.943, 127.763],
+    [73.706, 115.454],
+    [100.724, 68.888],
+    [126.95, 127.752],
 ]
 calibration_coords_red = [
-    [47.257, 81.346],
+     [47.257, 81.346],
     [69.608, 43.988],
     [90.646, 92.468],
 ]
@@ -150,7 +150,8 @@ config |= {
     "SpatialCalibrations": {
         "active_nv_coords_path": (
             # "slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz"
-            "slmsuite/nv_blob_detection/nv_blob_814nvs_reordered_inside_dmd.npz"
+            # "slmsuite/nv_blob_detection/nv_blob_814nvs_reordered_inside_dmd.npz"
+            "slmsuite/nv_blob_detection/nv_blob_631nvs_reordered_inside_dmd.npz"
         ),
         "slm_fourier_calib_path": (
             "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00015.h5"
@@ -303,7 +304,9 @@ config |= {
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 1e6},
             VirtualLaserKey.WIDEFIELD_CHARGE_READOUT: {
                 "physical_name": yellow_laser,
-                "duration": 100e6,
+                "duration": 1e9,
+                # "duration": 500e6,
+                # "duration": 100e6,
                 # "duration": 50e6,
                 # "duration": 24e6,  # for red calibration
             },
@@ -1034,7 +1037,7 @@ opx_config = {
         # Green AOD
         "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
         # "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
-        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
+        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.08},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.15},
@@ -1043,9 +1046,12 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.35},
+        "yellow_imaging": {"type": "constant", "sample": 0.25},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3513},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.27},
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.2923},
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.2623},
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.2133},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.2033},
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other

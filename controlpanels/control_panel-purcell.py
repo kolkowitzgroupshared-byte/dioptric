@@ -28,6 +28,8 @@ from majorroutines.widefield import (
     charge_correlation,
     charge_state_conditional_init,
     charge_state_histograms,
+    charge_state_measurement_backaction,
+    charge_state_particle_memory,
     charge_state_histograms_images,
     correlation_test,
     crosstalk_check,
@@ -178,14 +180,14 @@ def do_optimize_readout_duration(nv_list):
 
 
 def do_optimize_readout_amp(nv_list):
-    num_steps = 24
-    # num_steps = 18
+    # num_steps = 24
+    num_steps = 18
     # num_reps = 150
     # num_runs = 5
     num_reps = 10
-    num_runs = 400
-    min_amp = 0.5
-    max_amp = 1.5
+    num_runs = 200
+    min_amp = 0.7
+    max_amp = 1.3
     return optimize_charge_state_histograms.optimize_readout_amp(
         nv_list, num_steps, num_reps, num_runs, min_amp, max_amp
     )
@@ -280,7 +282,7 @@ def do_adaptive_charge_initialization(nv_list):
         dmd_indices=None,      # full nv_list, DMD index = nv_list index
         dmd_radius_px=8,
         dmd_plane=230,
-        confirm_margin_counts=1.0,
+        confirm_margin_counts=0.0,
         save_images=True,
         save_images_avg_reps=False,
         save_data=True,
@@ -288,19 +290,69 @@ def do_adaptive_charge_initialization(nv_list):
         save_image_frames=True,
         save_movie=True,
     )
+
+
+
+def do_charge_state_particle_memory(nv_list):
+    charge_state_particle_memory.main(
+    nv_list,
+    # Includes rep 0 ionization and subsequent adaptive attempts.
+    num_init_reps=11,
+    # Independent prepare-wait-read experiments.
+    num_runs=100,
+
+    # Begin with five minutes.
+    dark_wait_s=300,
+
+    mode="dmd_block_confirmed",
+
+    dmd_indices=None,
+    dmd_radius_px=8,
+    dmd_plane=230,
+
+    # Used only to confidently stop further initialization attempts.
+    confirm_margin_counts=1.0,
+
+    # Strongly recommended for particle detection.
+    take_initial_check=True,
+
+    # Black DMD during the exposure interval.
+    block_all_during_wait=True,
+
+    # Metadata describing this condition.
+    exposure_label="source_off",
+
+    # Require counts to be clearly away from the threshold.
+    initial_event_margin_counts=1.0,
+    final_event_margin_counts=1.0,
+
+    # Set after checking camera-space NV spacing.
+    cluster_radius_px=None,
+    min_cluster_size=2,
+
+    save_images=True,
+    save_data=True,
+    save_fig=True,
+    verbose=True,
+    )
     
     
-    # adaptive_charge_initialization.run_old_and_dmd_compare(
-    #     nv_list,
-    #     num_reps=10,
-    #     num_runs=4,
-    #     dmd_indices=None,
-    #     dmd_radius_px=8,
-    #     dmd_plane=230,
-    #     confirm_margin_counts=1.0,
-    #     save_images=True,
-    # )
-    
+def do_charge_state_measurement_backaction(nv_list):
+    charge_state_measurement_backaction.main(
+    nv_list,
+    num_init_reps=10,
+    num_delayed_readouts=100,
+    readout_interval_s=1,
+    num_runs=1,
+    confirm_margin_counts=1.0,
+    initial_analysis_margin_counts=1.0,
+    final_analysis_margin_counts=1.0,
+    block_all_during_wait=True,
+    save_images=True,
+    save_data=True,
+    save_fig=True,
+    )
+
 def unique_keep_order(vals):
     out = []
     for val in vals:
@@ -1794,10 +1846,10 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.743, 98.174],
-    #     [73.723, 115.464],
-    #     [100.718, 68.902],
-    #     [126.943, 127.763],
+    #     [97.742, 98.169],
+    #     [73.706, 115.454],
+    #     [100.724, 68.888],
+    #     [126.95, 127.752],
     # ]
     # red_coords_list = [
     #     [66.979, 67.769],
@@ -1811,14 +1863,24 @@ if __name__ == "__main__":
         # file_stem="2026_07_09-21_39_43-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
         # file_stem="2026_07_10-12_52_52-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
         # file_stem="2026_07_10-17_01_26-single_step_charge_hist_single_cpu_2026_07_10-16_57_47-qnami-nv0_2026_02_20", ##814NVs
-        file_stem="2026_07_10-17_25_18-single_step_charge_hist_single_cpu_2026_07_10-16_57_47-qnami-nv0_2026_02_20", ##814NVs
+        # file_stem="2026_07_10-17_25_18-single_step_charge_hist_single_cpu_2026_07_10-16_57_47-qnami-nv0_2026_02_20", ##814NVs
+        # file_stem="2026_07_13-15_34_49-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
+        # file_stem="2026_07_13-16_02_12-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
+        # file_stem="2026_07_13-17_11_02-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
+        # file_stem= "2026_07_13-22_24_18-single_step_charge_hist_single_cpu_2026_07_13-17_00_15-qnami-nv0_2026_02_20",
+        # file_stem = "2026_07_14-10_39_06-single_step_charge_hist_single_cpu_2026_07_13-17_00_15-qnami-nv0_2026_02_20",
+        # file_stem = "2026_07_15-19_48_48-single_step_charge_hist_single_cpu_2026_07_15-19_42_19-qnami-nv0_2026_02_20", 
+        # file_stem = "2026_07_16-22_53_11-single_step_charge_hist_single_cpu_2026_07_16-22_48_08-qnami-nv0_2026_02_20", 
+        # file_stem = "2026_07_19-00_47_30-single_step_charge_hist_single_cpu_2026_07_19-00_17_00-qnami-nv0_2026_02_20",
+        file_stem = "2026_07_20-17_07_53-single_step_charge_hist_single_cpu_2026_07_20-17_04_32-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
     # sys.exit()
     # analysis = analysis_data["charge_hist_multinv_binomial"]
-    analysis = analysis_data["single_step_charge_histogram"]
     # threshold_list = analysis["threshold_any"]
+    
+    analysis = analysis_data["single_step_charge_histogram"]
     threshold_list = analysis["threshold"]
     # Convert None/bad values to np.nan
     threshold_arr = np.asarray(
@@ -1922,7 +1984,7 @@ if __name__ == "__main__":
             pulse_amps={
                 VirtualLaserKey.SCC: scc_amp_list[ind],
                 VirtualLaserKey.ION: scc_amp_list[ind],
-                VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
+                # VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
             },
         )
         nv_list.append(nv_sig)
@@ -2038,6 +2100,9 @@ if __name__ == "__main__":
         # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
+        # do_charge_state_particle_memory(nv_list)
+        do_charge_state_measurement_backaction(nv_list)
+        
         # do_dmd_crosstalk_matrix(
         #     nv_list_all=nv_list,
         #     num_sources=200,
@@ -2052,7 +2117,7 @@ if __name__ == "__main__":
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
         # do_optimize_readout_amp(nv_list)
-        do_optimize_readout_amp_repeated_readout(nv_list)
+        # do_optimize_readout_amp_repeated_readout(nv_list)
         # do_optimize_pol_duration(nv_list)
     
         # do_optimize_readout_duration(nv_list)

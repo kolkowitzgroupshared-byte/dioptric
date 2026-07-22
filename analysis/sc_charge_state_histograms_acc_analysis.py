@@ -1356,14 +1356,22 @@ if __name__ == "__main__":
     # =============================================================================
     # User settings
     # =============================================================================
-
     # FILE_ID = "2026_07_10-12_06_57-qnami-nv0_2026_02_20"
-    FILE_ID = "2026_07_10-16_57_47-qnami-nv0_2026_02_20", ## 814 working NVs 200ms readout
+    # FILE_ID = "2026_07_10-16_57_47-qnami-nv0_2026_02_20", ## 814 working NVs 200ms readout
     # FILE_ID = "2026_07_13-17_00_15-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
-    FILE_ID = "2026_07_14-13_06_11-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
+    # FILE_ID = "2026_07_14-13_06_11-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
+    # FILE_ID = "2026_07_15-16_51_54-qnami-nv0_2026_02_20", ## 631 working NVs 100ms readout
+    # FILE_ID = "2026_07_16-22_48_08-qnami-nv0_2026_02_20", ## 631 working NVs 100ms readout
+    # FILE_ID = "2026_07_17-19_02_51-qnami-nv0_2026_02_20", ## 631 working NVs 100ms readout
+    # FILE_ID = "2026_07_17-22_35_56-qnami-nv0_2026_02_20", ## 631 working NVs 100ms readout
+    # FILE_ID = "2026_07_19-00_17_00-qnami-nv0_2026_02_20", ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_07_20-16_19_40-qnami-nv0_2026_02_20", ## 631 working NVs 1000ms readout
+    FILE_ID = "2026_07_20-17_04_32-qnami-nv0_2026_02_20", ## 631 working NVs 1000ms readout
 
+    
+    SAVED_ANALYSIS_FILE_ID = "2026_07_15-19_48_48-single_step_charge_hist_single_cpu_2026_07_15-19_42_19-qnami-nv0_2026_02_20"
  
-    RUN_NEW_PROCESSING = False
+    RUN_NEW_PROCESSING =True
 
     MODEL_KIND = "single"
     BACKEND = "cpu"
@@ -1399,12 +1407,13 @@ if __name__ == "__main__":
     # SORT_KEY = "red_chi_sq"
 
     # Manual examples if desired.
-    EXAMPLE_INDS = [0, 1, 2, 3, 10, 50, 100, 200, 300, 400, 500, 600, 700, 800]
+    EXAMPLE_INDS = [0, 1, 2, 3, 10, 50,  100, 200, 300, 400, 500, 600, 700, 800]
 
+    # EXAMPLE_INDS =[8, 303, 364, 422, 463, 536]    #Lost in every run
+    # EXAMPLE_INDS = [13, 25, 37, 51, 69, 87, 99, 149, 181, 222, 248, 249, 294, 323, 332, 340, 413, 459, 460, 480, 491, 510, 619] 
     # =============================================================================
     # Load original raw data
     # =============================================================================
-
     raw_data = dm.get_raw_data(
         file_stem=FILE_ID,
         load_npz=True,
@@ -1415,7 +1424,6 @@ if __name__ == "__main__":
     # =============================================================================
     # Either run new processing or load saved analysis
     # =============================================================================
-
     if RUN_NEW_PROCESSING:
         analysis = process_single_step_charge_histograms(
             raw_data,
@@ -1431,7 +1439,6 @@ if __name__ == "__main__":
             bic_extra_nv_penalty=BIC_EXTRA_NV_PENALTY,
             save_analysis=SAVE_ANALYSIS,
         )
-
     else:
         analysis, analysis_data = load_saved_single_step_analysis(
             raw_data,
@@ -1441,13 +1448,11 @@ if __name__ == "__main__":
     # =============================================================================
     # Print summary
     # =============================================================================
-
     print_single_step_saved_summary(raw_data)
 
     # =============================================================================
     # Plot summary
     # =============================================================================
-
     if DO_PLOT_SUMMARY:
         plot_prep_vs_readout_single_step(
             raw_data,
@@ -1463,25 +1468,23 @@ if __name__ == "__main__":
     # =============================================================================
     # Choose examples from saved analysis
     # =============================================================================
+    # best_inds = get_best_single_step_inds(
+    #     raw_data,
+    #     num_examples=NUM_EXAMPLES,
+    #     sort_key=SORT_KEY,
+    # )
 
-    best_inds = get_best_single_step_inds(
-        raw_data,
-        num_examples=NUM_EXAMPLES,
-        sort_key=SORT_KEY,
-    )
-
-    print(f"\nBest examples by {SORT_KEY}:")
-    print(best_inds)
+    # print(f"\nBest examples by {SORT_KEY}:")
+    # print(best_inds)
 
     # Use best indices by default.
-    inds_to_plot = best_inds
+    # inds_to_plot = best_inds
     # Or use manual examples:
-    # inds_to_plot = EXAMPLE_INDS
+    inds_to_plot = EXAMPLE_INDS
 
     # =============================================================================
     # Plot example histograms
     # =============================================================================
-
     if DO_PLOT_EXAMPLE_HISTS:
         plot_example_histograms(
             raw_data,
@@ -1493,13 +1496,13 @@ if __name__ == "__main__":
     # Save selected histograms
     # =============================================================================
 
-    if DO_SAVE_SELECTED_HISTS:
-        save_selected_single_step_histograms(
-            raw_data,
-            inds_to_plot,
-            label=f"best-{SORT_KEY}-single-step",
-            density=True,
-            close_figs=True,
-        )
+    # if DO_SAVE_SELECTED_HISTS:
+    #     save_selected_single_step_histograms(
+    #         raw_data,
+    #         inds_to_plot,
+    #         label=f"best-{SORT_KEY}-single-step",
+    #         density=True,
+    #         close_figs=True,
+    #     )
 
     kpl.show(block=True)

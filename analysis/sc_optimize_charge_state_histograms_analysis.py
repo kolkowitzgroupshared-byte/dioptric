@@ -288,7 +288,7 @@ def process_and_plot(
     ]["sample"]
 
     counts = np.asarray(raw_data["counts"])
-    ref_exp_ind = 1
+    ref_exp_ind = 2
 
     condensed_counts = np.empty((num_nvs, num_steps), dtype=object)
 
@@ -1156,6 +1156,9 @@ if __name__ == "__main__":
     file_id = "2026_06_24-23_33_18-qnami-nv0_2026_02_20" ## pol amp
     file_id = "2026_06_26-21_58_16-qnami-nv0_2026_02_20" ## readout amp
     file_id = "2026_07_08-22_48_57-qnami-nv0_2026_02_20" ## readout amp
+    file_id = "2026_07_08-22_48_57-qnami-nv0_2026_02_20" ## readout amp
+    file_id = "2026_07_08-22_48_57-qnami-nv0_2026_02_20" ## readout amp
+    file_id = "2026_07_14-20_28_11-qnami-nv0_2026_02_20" ## readout amp two readout
     
     if run_new_processing:
         raw_data = dm.get_raw_data(
@@ -1179,16 +1182,17 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # Option B: load processed data and recompute optima.
     # -------------------------------------------------------------------------
-    analyzed_file_id = "2026_06_26-01_41_43-optimization_processed_full_raw_data"
-    analyzed_file_id = "2026_06_30-18_16_28-optimization_processed_full_2026_06_24-23_33_18-qnami-nv0_2026_02_20"
-    analyzed_file_id = "2026_07_09-13_04_44-optimization_processed_full_2026_07_08-22_48_57-qnami-nv0_2026_02_20"
-    
+    # analyzed_file_id = "2026_06_26-01_41_43-optimization_processed_full_raw_data"
+    # analyzed_file_id = "2026_06_30-18_16_28-optimization_processed_full_2026_06_24-23_33_18-qnami-nv0_2026_02_20"
+    # analyzed_file_id = "2026_07_09-13_04_44-optimization_processed_full_2026_07_08-22_48_57-qnami-nv0_2026_02_20"
+    analyzed_file_id = "2026_07_15-16_13_25-optimization_processed_full_2026_07_14-20_28_11-qnami-nv0_2026_02_20"
+    "2026_07_10-11_41_33-qnami-nv0_2026_02_20-dmd_block_confirmed"
     analyzed = dm.get_raw_data(
         file_stem=analyzed_file_id,
         load_npz=True,
     )
 
-    new_weights = (1, 1, 1)
+    new_weights = (0, 1, 1)
 
     print("GPU available:", GPU_AVAILABLE)
 
@@ -1230,7 +1234,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # Plot only selected NVs. Do not plot all 1176 with block=True.
     # -------------------------------------------------------------------------
-    inspect_nv_inds = [0, 1, 2, 3, 10, 50, 100, 500, 1100]
+    inspect_nv_inds = [0, 1, 2, 3, 10, 50, 100, 500, 800]
     for nv_ind in inspect_nv_inds:
         if nv_ind >= int(analyzed["num_nvs"]):
             continue
