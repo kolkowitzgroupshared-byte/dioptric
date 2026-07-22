@@ -37,8 +37,6 @@ daq.write(f"SENS:TEMP:TC:RJUN:RSEL INT, (@{channel})")
 daq.write(f"SENS:TEMP:ODET ON, (@{channel})")
 
 
-print("1")
-
 # --- Take a reading ---
 daq.write(f"ROUT:CLOS (@{channel})")  # create scan list with this channel
 print("2")
