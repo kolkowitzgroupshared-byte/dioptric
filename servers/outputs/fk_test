@@ -1,0 +1,49 @@
+# just loop appeared if entered one line at a time to terminal
+# figure appeared when hitting run button
+# list resources did not do anything
+# write to a file gfg worked! made a txt file under utils
+#    read printed to terminal
+
+import pyvisa
+
+rm = pyvisa.ResourceManager()
+resources = rm.list_resources("TCPIP?*::INSTR")
+print(resources)
+
+# # visa_address = config["DeviceIDs"][f"{self.name}_visa"]
+# # self.multimeter = rm.open_resource(visa_address)
+# #   aaaaaaah
+# # print(rm.list_resources())
+
+# # print(self.multimeter.query("*IDN?"))
+
+# # self.multimeter.close()
+
+# # def config_channel(self, channel):
+# #     mlt = self.multimeter
+# #     mlt.write(":FUNC 'TEMP', (@{})".format(channel))
+# #     mlt.write(":SENS:TEMP:TRAN TCouple, (@{})".format(channel))
+# #     mlt.write(":SENS:TEMP:TCouple:TYPE K, (@{})".format(channel))
+# #     mlt.write(":SENS:TEMP:TCouple:RJUNction:RSELect INTernal, (@{})".format(channel))
+# #     mlt.write(":SENS:TEMP:ODETector ON, (@{})".format(channel))
+# #     mlt.write(":ROUT:CLOS (@{})".format(channel))
+
+# # def read_temp(self, channel):
+# #     return float(self.multimeter.query(":READ? (@{})".format(channel)))
+
+# # def read_repeat(self, channel):
+# #     self.config_channel(channel)
+
+# #     with open("temp_readings.csv", "a") as f:
+# #         while True:
+# #             user_input = input("Press Enter to read temperature or type 'exit' to quit: ")
+# #             if user_input.lower() == "exit":
+# #                 print("Exiting temperature reading loop.")
+# #                 break
+# #             temp = self.read_temperature(channel)
+# #             timestamp = time.strftime("%Y-%m-%d %H:%M:%S")  # 2026-07-21 9:44:30
+# #             f.write(f"{timestamp},{temp}\n")
+# #             print(f"Time: {timestamp}, Temp: {temp:.2f}°C")
+# #             time.sleep(1)  # wait for 1 second before the next reading
+
+# # ----------------------------------------------------
