@@ -845,7 +845,6 @@ def plot_particle_summary(
         f"dark wait = {analysis['dark_wait_s']:.3g} s",
         fontsize=14,
     )
-    fig.tight_layout()
     return fig
 
 
@@ -1018,7 +1017,7 @@ def main(
     confirm_margin_counts: float = 1.0,
     take_initial_check: bool = True,
     block_all_during_wait: bool = True,
-    exposure_label: str = "source_off",
+    exposure_label: str = "No soruce",
     exposure_start_fn: Optional[Callable[[], None]] = None,
     exposure_stop_fn: Optional[Callable[[], None]] = None,
     wait_status_interval_s: float = 60.0,
@@ -1322,23 +1321,1378 @@ def run_dark_wait_sweep(
     return outputs
 
 
+def _benjamini_hochberg(p_values: np.ndarray) -> np.ndarray:
+    """
+    Benjamini-Hochberg false-discovery-rate correction.
+    """
+
+    p_values = np.asarray(p_values, dtype=float)
+    num_tests = p_values.size
+
+    order = np.argsort(p_values)
+    ranked_p = p_values[order]
+
+    ranked_q = (
+        ranked_p
+        * num_tests
+        / np.arange(1, num_tests + 1)
+    )
+
+    # Enforce monotonic corrected p-values.
+    ranked_q = np.minimum.accumulate(
+        ranked_q[::-1]
+    )[::-1]
+
+    ranked_q = np.clip(
+        ranked_q,
+        0.0,
+        1.0,
+    )
+
+    q_values = np.empty_like(ranked_q)
+    q_values[order] = ranked_q
+
+    return q_values
+
+
+def analyze_and_plot_spatial_correlations(
+    raw_data: Dict[str, Any],
+    analysis: Dict[str, Any],
+    coords_xy: np.ndarray,
+    cluster_radius_px: float,
+    num_permutations: int = 2000,
+    random_seed: int = 12345,
+    significance_level: float = 0.05,
+    min_pair_repeats: int = 2,
+    max_pairs_to_plot: int = 30,
+):
+    """
+    Analyze and visualize spatial correlations between NV- -> NV0 events.
+
+    The null model preserves, for each run:
+
+        - the number of eligible NVs;
+        - the number of candidate events.
+
+    Candidate identities are randomized among eligible NVs.
+
+    Returns
+    -------
+    result : dict
+        Numerical spatial-correlation analysis.
+
+    figures : list
+        Aggregated Matplotlib figures.
+    """
+
+    coords_xy = np.asarray(
+        coords_xy,
+        dtype=float,
+    )
+
+    candidate_mask = np.asarray(
+        analysis["candidate_nvm_to_nv0_mask"],
+        dtype=bool,
+    )
+
+    eligible_mask = np.asarray(
+        analysis["initial_nvm_mask"],
+        dtype=bool,
+    )
+
+    num_nvs, num_runs = candidate_mask.shape
+
+    if coords_xy.shape != (num_nvs, 2):
+        raise ValueError(
+            f"coords_xy must have shape {(num_nvs, 2)}; "
+            f"got {coords_xy.shape}."
+        )
+
+    cluster_radius_px = float(
+        cluster_radius_px
+    )
+
+    num_permutations = int(
+        num_permutations
+    )
+
+    rng = np.random.default_rng(
+        random_seed
+    )
+
+    # ==============================================================
+    # Fixed geometry
+    # ==============================================================
+
+    displacement = (
+        coords_xy[:, None, :]
+        - coords_xy[None, :, :]
+    )
+
+    distance_matrix = np.sqrt(
+        np.sum(
+            displacement**2,
+            axis=2,
+        )
+    )
+
+    neighbor_matrix = (
+        distance_matrix
+        <= cluster_radius_px
+    )
+
+    np.fill_diagonal(
+        neighbor_matrix,
+        False,
+    )
+
+    def count_close_pairs(nv_inds):
+        nv_inds = np.asarray(
+            nv_inds,
+            dtype=int,
+        )
+
+        if nv_inds.size < 2:
+            return 0
+
+        local_neighbors = neighbor_matrix[
+            np.ix_(nv_inds, nv_inds)
+        ]
+
+        return int(
+            np.sum(
+                np.triu(
+                    local_neighbors,
+                    k=1,
+                )
+            )
+        )
+
+    # ==============================================================
+    # Output arrays
+    # ==============================================================
+
+    runs = np.arange(num_runs)
+
+    num_candidates_by_run = np.sum(
+        candidate_mask,
+        axis=0,
+    )
+
+    num_eligible_by_run = np.sum(
+        eligible_mask,
+        axis=0,
+    )
+
+    observed_close_pairs = np.zeros(
+        num_runs,
+        dtype=int,
+    )
+
+    expected_close_pairs = np.full(
+        num_runs,
+        np.nan,
+        dtype=float,
+    )
+
+    std_close_pairs = np.full(
+        num_runs,
+        np.nan,
+        dtype=float,
+    )
+
+    pair_p_values = np.ones(
+        num_runs,
+        dtype=float,
+    )
+
+    observed_max_cluster = np.zeros(
+        num_runs,
+        dtype=int,
+    )
+
+    expected_max_cluster = np.full(
+        num_runs,
+        np.nan,
+        dtype=float,
+    )
+
+    cluster_p_values = np.ones(
+        num_runs,
+        dtype=float,
+    )
+
+    pair_z_scores = np.full(
+        num_runs,
+        np.nan,
+        dtype=float,
+    )
+
+    null_close_pairs_all = np.zeros(
+        (num_runs, num_permutations),
+        dtype=np.int16,
+    )
+
+    null_max_cluster_all = np.zeros(
+        (num_runs, num_permutations),
+        dtype=np.int16,
+    )
+
+    pair_event_count = np.zeros(
+        (num_nvs, num_nvs),
+        dtype=np.int16,
+    )
+
+    cluster_participation_count_by_nv = np.zeros(
+        num_nvs,
+        dtype=int,
+    )
+
+    # Null distribution of total close pairs across all runs.
+    global_null_close_pairs = np.zeros(
+        num_permutations,
+        dtype=int,
+    )
+
+    global_observed_close_pairs = 0
+
+    # ==============================================================
+    # Per-run randomization tests
+    # ==============================================================
+
+    for run_ind in range(num_runs):
+        candidate_inds = np.where(
+            candidate_mask[:, run_ind]
+        )[0].astype(int)
+
+        eligible_inds = np.where(
+            eligible_mask[:, run_ind]
+        )[0].astype(int)
+
+        num_candidates = len(
+            candidate_inds
+        )
+
+        observed_close_pairs[
+            run_ind
+        ] = count_close_pairs(
+            candidate_inds
+        )
+
+        global_observed_close_pairs += (
+            observed_close_pairs[run_ind]
+        )
+
+        observed_components = (
+            _connected_components_within_radius(
+                candidate_inds,
+                coords_xy,
+                radius=cluster_radius_px,
+            )
+        )
+
+        observed_max_cluster[
+            run_ind
+        ] = max(
+            (
+                len(component)
+                for component
+                in observed_components
+            ),
+            default=0,
+        )
+
+        # Record candidate NVs belonging to multi-NV components.
+        for component in observed_components:
+            if len(component) >= 2:
+                cluster_participation_count_by_nv[
+                    np.asarray(
+                        component,
+                        dtype=int,
+                    )
+                ] += 1
+
+        # Record nearby candidate-pair recurrence.
+        if num_candidates >= 2:
+            local_neighbors = neighbor_matrix[
+                np.ix_(
+                    candidate_inds,
+                    candidate_inds,
+                )
+            ]
+
+            row_local, col_local = np.where(
+                np.triu(
+                    local_neighbors,
+                    k=1,
+                )
+            )
+
+            for local_ind_1, local_ind_2 in zip(
+                row_local,
+                col_local,
+            ):
+                nv_ind_1 = int(
+                    candidate_inds[local_ind_1]
+                )
+                nv_ind_2 = int(
+                    candidate_inds[local_ind_2]
+                )
+
+                pair_event_count[
+                    nv_ind_1,
+                    nv_ind_2,
+                ] += 1
+
+                pair_event_count[
+                    nv_ind_2,
+                    nv_ind_1,
+                ] += 1
+
+        if (
+            num_candidates < 2
+            or len(eligible_inds) < num_candidates
+        ):
+            continue
+
+        for permutation_ind in range(
+            num_permutations
+        ):
+            random_inds = rng.choice(
+                eligible_inds,
+                size=num_candidates,
+                replace=False,
+            )
+
+            random_close_pairs = (
+                count_close_pairs(
+                    random_inds
+                )
+            )
+
+            null_close_pairs_all[
+                run_ind,
+                permutation_ind,
+            ] = random_close_pairs
+
+            random_components = (
+                _connected_components_within_radius(
+                    random_inds,
+                    coords_xy,
+                    radius=cluster_radius_px,
+                )
+            )
+
+            random_max_cluster = max(
+                (
+                    len(component)
+                    for component
+                    in random_components
+                ),
+                default=0,
+            )
+
+            null_max_cluster_all[
+                run_ind,
+                permutation_ind,
+            ] = random_max_cluster
+
+        null_close_pairs = (
+            null_close_pairs_all[run_ind]
+        )
+
+        null_max_clusters = (
+            null_max_cluster_all[run_ind]
+        )
+
+        global_null_close_pairs += (
+            null_close_pairs.astype(int)
+        )
+
+        expected_close_pairs[
+            run_ind
+        ] = float(
+            np.mean(null_close_pairs)
+        )
+
+        std_close_pairs[
+            run_ind
+        ] = float(
+            np.std(null_close_pairs)
+        )
+
+        expected_max_cluster[
+            run_ind
+        ] = float(
+            np.mean(null_max_clusters)
+        )
+
+        pair_p_values[
+            run_ind
+        ] = (
+            1
+            + np.sum(
+                null_close_pairs
+                >= observed_close_pairs[run_ind]
+            )
+        ) / (
+            num_permutations + 1
+        )
+
+        cluster_p_values[
+            run_ind
+        ] = (
+            1
+            + np.sum(
+                null_max_clusters
+                >= observed_max_cluster[run_ind]
+            )
+        ) / (
+            num_permutations + 1
+        )
+
+        if std_close_pairs[run_ind] > 0:
+            pair_z_scores[
+                run_ind
+            ] = (
+                observed_close_pairs[run_ind]
+                - expected_close_pairs[run_ind]
+            ) / std_close_pairs[run_ind]
+
+    # ==============================================================
+    # Multiple testing and global test
+    # ==============================================================
+
+    pair_q_values = _benjamini_hochberg(
+        pair_p_values
+    )
+
+    cluster_q_values = _benjamini_hochberg(
+        cluster_p_values
+    )
+
+    global_pair_p_value = (
+        1
+        + np.sum(
+            global_null_close_pairs
+            >= global_observed_close_pairs
+        )
+    ) / (
+        num_permutations + 1
+    )
+
+    nominal_significant_runs = np.where(
+        pair_p_values < significance_level
+    )[0].astype(int)
+
+    fdr_significant_runs = np.where(
+        pair_q_values < significance_level
+    )[0].astype(int)
+
+    # ==============================================================
+    # Per-NV spatial statistics
+    # ==============================================================
+
+    event_count_by_nv = np.sum(
+        candidate_mask,
+        axis=1,
+    )
+
+    eligible_count_by_nv = np.sum(
+        eligible_mask,
+        axis=1,
+    )
+
+    event_probability_by_nv = np.full(
+        num_nvs,
+        np.nan,
+        dtype=float,
+    )
+
+    good_nv = eligible_count_by_nv > 0
+
+    event_probability_by_nv[
+        good_nv
+    ] = (
+        event_count_by_nv[good_nv]
+        / eligible_count_by_nv[good_nv]
+    )
+
+    cluster_probability_by_nv = np.zeros(
+        num_nvs,
+        dtype=float,
+    )
+
+    cluster_probability_by_nv[
+        good_nv
+    ] = (
+        cluster_participation_count_by_nv[good_nv]
+        / eligible_count_by_nv[good_nv]
+    )
+
+    # ==============================================================
+    # Ranked repeated nearby pairs
+    # ==============================================================
+
+    upper_pair_rows, upper_pair_cols = np.where(
+        np.triu(
+            pair_event_count,
+            k=1,
+        )
+        >= int(min_pair_repeats)
+    )
+
+    repeated_pair_records = []
+
+    for nv_ind_1, nv_ind_2 in zip(
+        upper_pair_rows,
+        upper_pair_cols,
+    ):
+        count = int(
+            pair_event_count[
+                nv_ind_1,
+                nv_ind_2,
+            ]
+        )
+
+        distance = float(
+            distance_matrix[
+                nv_ind_1,
+                nv_ind_2,
+            ]
+        )
+
+        repeated_pair_records.append(
+            {
+                "nv_ind_1": int(nv_ind_1),
+                "nv_ind_2": int(nv_ind_2),
+                "count": count,
+                "distance_px": distance,
+            }
+        )
+
+    repeated_pair_records.sort(
+        key=lambda record: record["count"],
+        reverse=True,
+    )
+
+    # ==============================================================
+    # Print numerical summary
+    # ==============================================================
+
+    print("\n" + "=" * 78)
+    print("AGGREGATED SPATIAL-CORRELATION ANALYSIS")
+    print("=" * 78)
+
+    print("number of runs:", num_runs)
+    print("cluster radius (px):", cluster_radius_px)
+    print(
+        "observed total close pairs:",
+        global_observed_close_pairs,
+    )
+    print(
+        "random expected total close pairs:",
+        f"{np.mean(global_null_close_pairs):.2f} "
+        f"+/- {np.std(global_null_close_pairs):.2f}",
+    )
+    print(
+        "global close-pair p-value:",
+        f"{global_pair_p_value:.5f}",
+    )
+
+    print(
+        "\nNominal p < 0.05 runs "
+        f"({len(nominal_significant_runs)}):"
+    )
+    print(
+        nominal_significant_runs.tolist()
+    )
+
+    print(
+        "\nFDR-corrected q < 0.05 runs "
+        f"({len(fdr_significant_runs)}):"
+    )
+    print(
+        fdr_significant_runs.tolist()
+    )
+
+    print(
+        "\nTop repeated nearby pairs:"
+    )
+
+    for record in repeated_pair_records[:20]:
+        print(
+            f"NVs ({record['nv_ind_1']}, "
+            f"{record['nv_ind_2']}): "
+            f"{record['count']}/{num_runs} runs, "
+            f"distance={record['distance_px']:.2f} px"
+        )
+
+    # ==============================================================
+    # Figure 1: run-level overview
+    # ==============================================================
+
+    fig_runs, axes = plt.subplots(
+        3,
+        1,
+        figsize=(11, 9),
+        sharex=True,
+    )
+
+    axes[0].plot(
+        runs,
+        num_candidates_by_run,
+        "o-",
+        markersize=3,
+        linewidth=1,
+        color=kpl.KplColors.RED,
+        label="candidate events",
+    )
+
+    axes[0].set_ylabel("Candidates")
+    axes[0].legend(fontsize=8)
+    axes[0].grid(True, alpha=0.25)
+
+    axes[1].plot(
+        runs,
+        observed_close_pairs,
+        "o",
+        markersize=4,
+        color=kpl.KplColors.RED,
+        label="observed close pairs",
+    )
+
+    axes[1].plot(
+        runs,
+        expected_close_pairs,
+        "-",
+        linewidth=1.5,
+        color=kpl.KplColors.BLUE,
+        label="random expectation",
+    )
+
+    axes[1].fill_between(
+        runs,
+        expected_close_pairs
+        - std_close_pairs,
+        expected_close_pairs
+        + std_close_pairs,
+        color=kpl.KplColors.BLUE,
+        alpha=0.18,
+        label="random $\\pm 1\\sigma$",
+    )
+
+    axes[1].scatter(
+        nominal_significant_runs,
+        observed_close_pairs[
+            nominal_significant_runs
+        ],
+        s=55,
+        facecolors="none",
+        edgecolors="orange",
+        linewidths=1.4,
+        label="nominal $p<0.05$",
+    )
+
+    if fdr_significant_runs.size > 0:
+        axes[1].scatter(
+            fdr_significant_runs,
+            observed_close_pairs[
+                fdr_significant_runs
+            ],
+            s=75,
+            marker="*",
+            color=kpl.KplColors.RED,
+            label="FDR $q<0.05$",
+        )
+
+    axes[1].set_ylabel("Nearby pairs")
+    axes[1].legend(fontsize=8)
+    axes[1].grid(True, alpha=0.25)
+
+    axes[2].semilogy(
+        runs,
+        pair_p_values,
+        "o",
+        markersize=4,
+        color=kpl.KplColors.BLUE,
+        label="per-run p-value",
+    )
+
+    axes[2].semilogy(
+        runs,
+        pair_q_values,
+        ".",
+        markersize=4,
+        color=kpl.KplColors.RED,
+        alpha=0.65,
+        label="FDR q-value",
+    )
+
+    axes[2].axhline(
+        significance_level,
+        linestyle="--",
+        linewidth=1.2,
+        color=kpl.KplColors.GRAY,
+        label=f"{significance_level:g}",
+    )
+
+    axes[2].set_xlabel("Run index")
+    axes[2].set_ylabel("p or q value")
+    axes[2].set_ylim(
+        max(
+            1.0 / (num_permutations + 1),
+            1e-4,
+        ),
+        1.05,
+    )
+    axes[2].legend(fontsize=8)
+    axes[2].grid(True, alpha=0.25)
+
+    fig_runs.suptitle(
+        "Run-by-run spatial-correlation analysis\n"
+        f"global close-pair p = {global_pair_p_value:.4g}",
+        fontsize=14,
+    )
+
+    fig_runs.tight_layout(
+        rect=[0, 0, 1, 0.94]
+    )
+
+    # ==============================================================
+    # Figure 2: spatial event-frequency map
+    # ==============================================================
+
+    fig_spatial, ax = plt.subplots(
+        figsize=(8, 7),
+    )
+
+    sc = ax.scatter(
+        coords_xy[:, 0],
+        coords_xy[:, 1],
+        c=event_probability_by_nv,
+        s=42,
+        cmap="magma",
+        vmin=0.0,
+        vmax=max(
+            0.05,
+            float(
+                np.nanpercentile(
+                    event_probability_by_nv,
+                    98,
+                )
+            ),
+        ),
+        edgecolors="none",
+    )
+
+    cluster_nv_mask = (
+        cluster_participation_count_by_nv > 0
+    )
+
+    ax.scatter(
+        coords_xy[
+            cluster_nv_mask,
+            0,
+        ],
+        coords_xy[
+            cluster_nv_mask,
+            1,
+        ],
+        s=78,
+        facecolors="none",
+        edgecolors=kpl.KplColors.RED,
+        linewidths=1.1,
+        label="participated in nearby-pair event",
+    )
+
+    cbar = fig_spatial.colorbar(
+        sc,
+        ax=ax,
+    )
+
+    cbar.set_label(
+        "Candidate probability per eligible run"
+    )
+
+    ax.set_xlabel("Camera x pixel")
+    ax.set_ylabel("Camera y pixel")
+    ax.set_title(
+        "Spatial distribution of NV$^- \\rightarrow$ NV$^0$ events"
+    )
+    ax.invert_yaxis()
+    ax.set_aspect("equal")
+    ax.legend(
+        fontsize=8,
+        loc="upper right",
+    )
+    ax.grid(True, alpha=0.15)
+
+    # ==============================================================
+    # Figure 3: repeated nearby-pair network
+    # ==============================================================
+
+    fig_pairs, ax = plt.subplots(
+        figsize=(8, 7),
+    )
+
+    ax.scatter(
+        coords_xy[:, 0],
+        coords_xy[:, 1],
+        s=15,
+        color=kpl.KplColors.GRAY,
+        alpha=0.35,
+    )
+
+    pair_records_to_plot = repeated_pair_records[
+        :int(max_pairs_to_plot)
+    ]
+
+    if pair_records_to_plot:
+        max_pair_count = max(
+            record["count"]
+            for record
+            in pair_records_to_plot
+        )
+
+        for record in pair_records_to_plot:
+            nv_ind_1 = record["nv_ind_1"]
+            nv_ind_2 = record["nv_ind_2"]
+            count = record["count"]
+
+            xy_1 = coords_xy[nv_ind_1]
+            xy_2 = coords_xy[nv_ind_2]
+
+            linewidth = (
+                0.7
+                + 3.0
+                * count
+                / max_pair_count
+            )
+
+            ax.plot(
+                [xy_1[0], xy_2[0]],
+                [xy_1[1], xy_2[1]],
+                color=kpl.KplColors.RED,
+                alpha=0.35
+                + 0.55
+                * count
+                / max_pair_count,
+                linewidth=linewidth,
+            )
+
+        pair_nv_inds = sorted(
+            {
+                record["nv_ind_1"]
+                for record
+                in pair_records_to_plot
+            }
+            | {
+                record["nv_ind_2"]
+                for record
+                in pair_records_to_plot
+            }
+        )
+
+        pair_nv_inds = np.asarray(
+            pair_nv_inds,
+            dtype=int,
+        )
+
+        ax.scatter(
+            coords_xy[pair_nv_inds, 0],
+            coords_xy[pair_nv_inds, 1],
+            s=55,
+            facecolors="none",
+            edgecolors=kpl.KplColors.RED,
+            linewidths=1.2,
+        )
+
+    else:
+        ax.text(
+            0.5,
+            0.5,
+            f"No nearby pair repeated in "
+            f"{min_pair_repeats} or more runs",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+        )
+
+    ax.set_xlabel("Camera x pixel")
+    ax.set_ylabel("Camera y pixel")
+    ax.set_title(
+        f"Repeated nearby candidate pairs\n"
+        f"minimum recurrence = {min_pair_repeats} runs"
+    )
+    ax.invert_yaxis()
+    ax.set_aspect("equal")
+    ax.grid(True, alpha=0.15)
+
+    # ==============================================================
+    # Figure 4: p-value diagnostics and strongest run
+    # ==============================================================
+
+    fig_pvalues, axes = plt.subplots(
+        1,
+        2,
+        figsize=(12, 4.8),
+    )
+
+    bins = np.linspace(
+        0.0,
+        1.0,
+        11,
+    )
+
+    axes[0].hist(
+        pair_p_values,
+        bins=bins,
+        alpha=0.45,
+        edgecolor=kpl.KplColors.BLUE,
+        color=kpl.KplColors.BLUE,
+    )
+
+    expected_per_bin = (
+        num_runs
+        / (len(bins) - 1)
+    )
+
+    axes[0].axhline(
+        expected_per_bin,
+        linestyle="--",
+        color=kpl.KplColors.GRAY,
+        linewidth=1.2,
+        label="uniform-null expectation",
+    )
+
+    axes[0].set_xlabel("Per-run close-pair p-value")
+    axes[0].set_ylabel("Number of runs")
+    axes[0].set_title("P-value distribution")
+    axes[0].legend(fontsize=8)
+    axes[0].grid(True, alpha=0.2)
+
+    strongest_run = int(
+        np.argmin(pair_p_values)
+    )
+
+    strongest_null = (
+        null_close_pairs_all[
+            strongest_run
+        ]
+    )
+
+    hist_min = int(
+        min(
+            np.min(strongest_null),
+            observed_close_pairs[
+                strongest_run
+            ],
+        )
+    )
+
+    hist_max = int(
+        max(
+            np.max(strongest_null),
+            observed_close_pairs[
+                strongest_run
+            ],
+        )
+    )
+
+    strongest_bins = np.arange(
+        hist_min - 0.5,
+        hist_max + 1.5,
+        1.0,
+    )
+
+    axes[1].hist(
+        strongest_null,
+        bins=strongest_bins,
+        alpha=0.45,
+        color=kpl.KplColors.BLUE,
+        edgecolor=kpl.KplColors.BLUE,
+        label="randomized runs",
+    )
+
+    axes[1].axvline(
+        observed_close_pairs[
+            strongest_run
+        ],
+        color=kpl.KplColors.RED,
+        linewidth=2,
+        label=(
+            f"observed = "
+            f"{observed_close_pairs[strongest_run]}"
+        ),
+    )
+
+    axes[1].set_xlabel("Number of nearby pairs")
+    axes[1].set_ylabel("Randomizations")
+    axes[1].set_title(
+        f"Most anomalous run: {strongest_run}\n"
+        f"p={pair_p_values[strongest_run]:.4g}, "
+        f"q={pair_q_values[strongest_run]:.4g}"
+    )
+    axes[1].legend(fontsize=8)
+    axes[1].grid(True, alpha=0.2)
+
+    # ==============================================================
+    # Return results
+    # ==============================================================
+
+    result = {
+        "cluster_radius_px": (
+            cluster_radius_px
+        ),
+        "num_permutations": (
+            num_permutations
+        ),
+        "num_candidates_by_run": (
+            num_candidates_by_run.tolist()
+        ),
+        "num_eligible_by_run": (
+            num_eligible_by_run.tolist()
+        ),
+        "observed_close_pairs": (
+            observed_close_pairs.tolist()
+        ),
+        "expected_close_pairs": (
+            expected_close_pairs.tolist()
+        ),
+        "std_close_pairs": (
+            std_close_pairs.tolist()
+        ),
+        "pair_p_values": (
+            pair_p_values.tolist()
+        ),
+        "pair_q_values": (
+            pair_q_values.tolist()
+        ),
+        "pair_z_scores": (
+            pair_z_scores.tolist()
+        ),
+        "observed_max_cluster": (
+            observed_max_cluster.tolist()
+        ),
+        "expected_max_cluster": (
+            expected_max_cluster.tolist()
+        ),
+        "cluster_p_values": (
+            cluster_p_values.tolist()
+        ),
+        "cluster_q_values": (
+            cluster_q_values.tolist()
+        ),
+        "global_observed_close_pairs": int(
+            global_observed_close_pairs
+        ),
+        "global_expected_close_pairs": float(
+            np.mean(
+                global_null_close_pairs
+            )
+        ),
+        "global_std_close_pairs": float(
+            np.std(
+                global_null_close_pairs
+            )
+        ),
+        "global_pair_p_value": float(
+            global_pair_p_value
+        ),
+        "nominal_significant_runs": (
+            nominal_significant_runs.tolist()
+        ),
+        "fdr_significant_runs": (
+            fdr_significant_runs.tolist()
+        ),
+        "event_count_by_nv": (
+            event_count_by_nv.tolist()
+        ),
+        "event_probability_by_nv": (
+            event_probability_by_nv.tolist()
+        ),
+        "cluster_participation_count_by_nv": (
+            cluster_participation_count_by_nv.tolist()
+        ),
+        "cluster_probability_by_nv": (
+            cluster_probability_by_nv.tolist()
+        ),
+        "repeated_pair_records": (
+            repeated_pair_records
+        ),
+        "strongest_run": strongest_run,
+    }
+
+    figures = [
+        fig_runs,
+        fig_spatial,
+        fig_pairs,
+        fig_pvalues,
+    ]
+
+    return result, figures
+
 if __name__ == "__main__":
     kpl.init_kplotlib()
 
-    print(
-        "Import this module from your control panel and call main(nv_list, ...).\n"
-        "Example:\n\n"
-        "    raw_data = main(\n"
-        "        nv_list,\n"
-        "        num_init_reps=10,\n"
-        "        num_runs=20,\n"
-        "        dark_wait_s=300,\n"
-        "        exposure_label='source_off',\n"
-        "        take_initial_check=True,\n"
-        "        confirm_margin_counts=1.0,\n"
-        "        initial_event_margin_counts=2.0,\n"
-        "        final_event_margin_counts=2.0,\n"
-        "        cluster_radius_px=6.0,\n"
-        "        save_images=True,\n"
-        "    )"
+    # ------------------------------------------------------------------
+    # Load saved dataset
+    # ------------------------------------------------------------------
+    save_fig = False
+    
+    file_stem = (
+        "2026_07_16-13_18_15-"
+        "qnami-nv0_2026_02_20-"
+        "particle-memory-source_off-wait-300s"
     )
+        
+    file_stem = (
+        # "2026_07_19-09_54_11-qnami-nv0_2026_02_20-particle-memory-source_off-wait-300s"
+    "2026_07_19-09_54_11-qnami-nv0_2026_02_20-particle-memory-source_off-wait-300s"
+    
+    )
+
+    raw_data = dm.get_raw_data(
+        file_stem=file_stem,
+        load_npz=True,
+    )
+
+    print("\nLoaded dataset:")
+    print(file_stem)
+    print(
+        "counts shape:",
+        np.asarray(raw_data["counts"]).shape,
+    )
+    print(
+        "dark wait:",
+        raw_data.get("dark_wait_s"),
+    )
+    print(
+        "exposure label:",
+        raw_data.get("exposure_label"),
+    )
+    print(
+        "initial-state rep:",
+        raw_data.get("initial_state_rep_ind"),
+    )
+    print(
+        "final-readout rep:",
+        raw_data.get("final_readout_rep_ind"),
+    )
+
+    # ------------------------------------------------------------------
+    # Recover saved analysis settings
+    # ------------------------------------------------------------------
+    saved_analysis = raw_data.get(
+        "particle_analysis",
+        {},
+    )
+
+    initial_margin_counts = float(
+        saved_analysis.get(
+            "initial_margin_counts",
+            1.0,
+        )
+    )
+
+    final_margin_counts = float(
+        saved_analysis.get(
+            "final_margin_counts",
+            1.0,
+        )
+    )
+
+    min_cluster_size = int(
+        saved_analysis.get(
+            "min_cluster_size",
+            2,
+        )
+    )
+
+    # ------------------------------------------------------------------
+    # Recover image coordinates
+    # ------------------------------------------------------------------
+    saved_coords = saved_analysis.get(
+        "coords_xy",
+        None,
+    )
+
+    if saved_coords is not None:
+        coords_xy = np.asarray(
+            saved_coords,
+            dtype=float,
+        )
+    else:
+        coords_xy = _coerce_img_coords(
+            raw_data["nv_list"],
+            img_coords=None,
+        )
+
+    if coords_xy is None:
+        raise ValueError(
+            "Could not recover NV image coordinates."
+        )
+
+    print(
+        "coordinates shape:",
+        coords_xy.shape,
+    )
+
+    # ------------------------------------------------------------------
+    # Choose cluster radius
+    # ------------------------------------------------------------------
+    saved_cluster_radius = saved_analysis.get(
+        "cluster_radius_px",
+        None,
+    )
+
+    if saved_cluster_radius is not None:
+        cluster_radius_px = float(
+            saved_cluster_radius
+        )
+    else:
+        displacement = (
+            coords_xy[:, None, :]
+            - coords_xy[None, :, :]
+        )
+
+        distance_matrix = np.sqrt(
+            np.sum(
+                displacement**2,
+                axis=2,
+            )
+        )
+
+        np.fill_diagonal(
+            distance_matrix,
+            np.inf,
+        )
+
+        nearest_neighbor_distance = np.min(
+            distance_matrix,
+            axis=1,
+        )
+
+        median_nn_px = float(
+            np.nanmedian(
+                nearest_neighbor_distance
+            )
+        )
+
+        # Nearest-neighbor clustering radius.
+        cluster_radius_px = (
+            1.25 * median_nn_px
+        )
+
+        print(
+            "median nearest-neighbor spacing:",
+            median_nn_px,
+            "px",
+        )
+
+    print("\nReanalysis settings:")
+    print(
+        "initial margin:",
+        initial_margin_counts,
+    )
+    print(
+        "final margin:",
+        final_margin_counts,
+    )
+    print(
+        "cluster radius:",
+        cluster_radius_px,
+        "px",
+    )
+    print(
+        "minimum cluster size:",
+        min_cluster_size,
+    )
+
+    # ------------------------------------------------------------------
+    # Re-run charge-memory classification
+    # ------------------------------------------------------------------
+    analysis = analyze_particle_charge_memory(
+        raw_data,
+        initial_margin_counts=initial_margin_counts,
+        final_margin_counts=final_margin_counts,
+        cluster_radius_px=cluster_radius_px,
+        min_cluster_size=min_cluster_size,
+        img_coords=coords_xy,
+    )
+
+    raw_data["particle_analysis"] = analysis
+    fig_summary = plot_particle_summary(
+        raw_data,
+        analysis,
+    )
+
+    fig_probability = plot_event_probability_by_nv(
+        raw_data,
+        analysis,
+    )
+    
+    for run_ind in [0, 56, 80, 97]:
+        plot_particle_event_map(
+            raw_data,
+            analysis,
+            run_ind=run_ind,
+        )
+
+    plt.show(block=True)
+    # ------------------------------------------------------------------
+    # Aggregated correlation analysis and visualization
+    # ------------------------------------------------------------------
+    spatial_result, spatial_figures = (
+        analyze_and_plot_spatial_correlations(
+            raw_data=raw_data,
+            analysis=analysis,
+            coords_xy=coords_xy,
+            cluster_radius_px=cluster_radius_px,
+            num_permutations=2000,
+            random_seed=12345,
+            significance_level=0.05,
+            min_pair_repeats=2,
+            max_pairs_to_plot=30,
+        )
+    )
+
+    raw_data[
+        "spatial_correlation_analysis"
+    ] = spatial_result
+    
+    if save_fig: 
+        timestamp = raw_data.get(
+            "timestamp",
+            dm.get_time_stamp(),
+        )
+
+        plot_names = [
+            "spatial-run-summary",
+            "spatial-event-frequency",
+            "repeated-nearby-pairs",
+            "spatial-pvalue-diagnostics",
+        ]
+
+        for fig, plot_name in zip(
+            spatial_figures,
+            plot_names,
+        ):
+            fig_path = dm.get_file_path(
+                __file__,
+                timestamp,
+                plot_name,
+            )
+
+            dm.save_figure(
+                fig,
+                fig_path,
+            )
+
+            print(
+                "Saved:",
+                fig_path,
+            )
+
+    plt.show(block=True)

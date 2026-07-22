@@ -1407,15 +1407,15 @@ if __name__ == "__main__":
 
     # To reprocess the new compressed DMD raw .npz, set this to the .npz path.
     LOAD_NPZ_PATH = None
-    # main(
-    #     load_file_id=LOAD_FILE_ID,
-    #     load_npz_path=LOAD_NPZ_PATH,
-    #     reuse_zero_order=False,
-    #     force_zero_order=True,
-    #     use_yellow=True,
-    #     yellow_channel=7,
-    #     yellow_amp=0.045,
-    # )
+    main(
+        load_file_id=LOAD_FILE_ID,
+        load_npz_path=LOAD_NPZ_PATH,
+        reuse_zero_order=False,
+        force_zero_order=True,
+        use_yellow=True,
+        yellow_channel=7,
+        yellow_amp=0.045,
+    )
     # take a quick image
     # do_thorcam_hardware_roi_with_yellow(
     # label="full-image-test",
