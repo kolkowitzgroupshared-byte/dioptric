@@ -1,0 +1,124 @@
+"""
+Input to read temp measurements from Keithley DAQ6510 multimeter
+
+Created July 14th, 2026
+
+@author: fkovisto
+
+#node info in matt cambria's vers?
+"""
+
+import pyvisa as visa
+
+# connect to multimeter
+rm = visa.ResourceManager()
+daq = rm.open_resource("TCPIP::192.168.0.126::inst0::INSTR")
+daq.timeout = 10000  # ms
+
+channel = 101
+
+# configure
+
+daq.write("*RST")
+
+# Set function to temperature on the channel
+daq.write(f'SENS:FUNC "TEMP", (@{channel})')
+
+# transducer type
+daq.write(f"SENS:TEMP:TRAN TC, (@{channel})")
+
+# thermocouple type
+daq.write(f"SENS:TEMP:TC:TYPE K, (@{channel})")
+
+# refrence temp
+daq.write(f"SENS:TEMP:TC:RJUN:RSEL INT, (@{channel})")
+
+# tell detection on your channel's leads to be on
+daq.write(f"SENS:TEMP:ODET ON, (@{channel})")
+
+
+print("1")
+
+# --- Take a reading ---
+daq.write(f"ROUT:CLOS (@{channel})")  # create scan list with this channel
+print("2")
+reading = daq.query(f"READ? (@{channel})")
+
+print("3")
+print(f"Temperature: {reading.strip()} °C")
+print("4")
+
+daq.close()
+
+
+# ------------------------------------------------
+
+# import logging
+# import socket
+# import time
+# # from typing import Literal
+
+# from gevent import config
+# import pyvisa as visa
+# from labrad.server import LabradServer, setting
+# from twisted.internet.defer import ensureDeferred
+
+# from utils import common
+# from utils import tool_belt as tb
+
+
+# class MultimeterKeitDaq6510(LabradServer):
+#     name = "multimeter_KEIT_daq6510"
+#     pc_name = socket.gethostname()
+
+#     def initServer(self):
+#         tb.configure_logging(self)
+#         config = common.get_config_dict()
+
+#         resource_manager = visa.ResourceManager()
+#         visa_address = config["DeviceIDs"][f"{self.name}_visa"]
+#         # logging.info(visa_address)
+#         self.multimeter = resource_manager.open_resource(visa_address)
+#         self.multimeter.read_termination = "\n"
+#         self.multimeter.write_termination = "\n"
+#         self.multimeter.write("*RST")
+#         logging.info("Init complete")
+
+
+#     def read_temperature(self, channel):
+#         multimeter = self.multimeter
+#         multimeter.write("*RST")
+#         multimeter.write(":FUNCtion 'TEMPerature', (@{})".format(channel))
+#         multimeter.write(":SENSe:TEMPerature:TRANsducer TCouple, (@{})".format(channel))
+#         multimeter.write(":SENSe:TEMPerature:TCouple:TYPE K,(@{})".format(channel))
+#         multimeter.write(":SENSe:TEMPerature:TCouple:RJUNction:RSELect INTernal,(@{})".format(channel))
+#         multimeter.write(":SENSe:TEMPerature:ODETector ON,(@{})".format(channel))
+#         multimeter.write(":ROUT:CLOS (@{})".format(channel))
+#         output = float(multimeter.query(":READ?".format(channel)))
+#         return output
+
+
+# __server__ = MultimeterKeitDaq6510()
+
+# if __name__ == "__main__":
+#     from labrad import util
+
+#     util.runServer(__server__)
+
+# # aparently printing from a class is weird?
+# mlt = MultimeterKeitDaq6510()
+# mlt.initServer()
+
+# with open("temp_readings.csv", "a") as f:
+#     while True:
+#         user_input = input("Press Enter to read temperature or type 'exit' to quit: ")
+#         if user_input.lower() == 'exit':
+#             print("Exiting temperature reading loop.")
+#             break
+#         temp = mlt.read_temperature(101)
+#         timestamp = time.strftime("%Y-%m-%d %H:%M:%S") #2026-07-21 9:44:30
+#         f.write(f"{timestamp},{temp}\n")
+#         print(f"Time: {timestamp}, Temp: {temp:.2f}°C")
+#         time.sleep(1)  # wait for 1 second before the next reading
+
+# ----------------------------------------------------
