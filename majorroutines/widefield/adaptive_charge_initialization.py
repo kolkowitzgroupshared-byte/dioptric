@@ -2384,7 +2384,7 @@ if __name__ == "__main__":
 
     # Example plotting existing file:
     raw_data = dm.get_raw_data(
-        file_stem="2026_07_15-19_52_41-qnami-nv0_2026_02_20-dmd_block_confirmed", 
+        file_stem="2026_07_10-11_41_33-qnami-nv0_2026_02_20-dmd_block_confirmed", 
         load_npz=True)
 
     timestamp = raw_data["timestamp"]
