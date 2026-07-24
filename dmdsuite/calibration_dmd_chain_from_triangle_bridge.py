@@ -63,7 +63,7 @@ BRIDGE_TRIANGLE_THORCAM_SLM = np.array(
 )
 
 BRIDGE_TRIANGLE_NUVU = np.array(
-    [[76.607, 54.164], [126.23, 319.52], [329.99, 145.841]], dtype=np.float32,
+    [[76.471, 54.302], [126.203, 319.574], [329.873, 145.898]], dtype=np.float32,
 )
 
 

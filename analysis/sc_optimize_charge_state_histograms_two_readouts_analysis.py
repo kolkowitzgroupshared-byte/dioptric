@@ -38,6 +38,7 @@ from __future__ import annotations
 
 # Keep every worker single-threaded. This avoids CPU oversubscription when using joblib.
 import os
+import copy
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
@@ -73,7 +74,28 @@ from utils import kplotlib as kpl
 
 @dataclass
 class OptimizationConfig:
-    """Threshold criteria and score weights for selecting the best readout step."""
+    """
+    Criteria and score weights for selecting the best readout step.
+
+    selection_mode
+    --------------
+    "threshold_then_score"
+        Choose the lowest allowed step satisfying every threshold. If no step
+        passes, choose the maximum combined score.
+
+    "lowest_passing"
+        Choose the lowest allowed step satisfying every threshold. Return no
+        optimum if no step passes.
+
+    "max_score"
+        Ignore the pass/fail thresholds when choosing the optimum and select
+        the maximum combined score directly.
+
+    skip_first_steps
+    ----------------
+    Exclude the first N sweep points from both threshold and score selection.
+    This reproduces the useful behavior of the older optimization script.
+    """
 
     min_readout1_fidelity: float = 0.88
     min_readout2_fidelity: float = 0.88
@@ -86,6 +108,8 @@ class OptimizationConfig:
     # Must have exactly four entries.
     score_weights: Tuple[float, float, float, float] = (0.35, 0.40, 0.15, 0.10)
 
+    selection_mode: str = "threshold_then_score"
+    skip_first_steps: int = 0
     prob_dist_name: str = "COMPOUND_POISSON"
 
 
@@ -638,6 +662,15 @@ def compute_score(
     return np.where(bad, np.nan, score)
 
 
+def _allowed_step_mask(num_steps: int, config: OptimizationConfig) -> np.ndarray:
+    """Return the steps permitted by ``skip_first_steps``."""
+
+    skip = max(0, int(config.skip_first_steps))
+    allowed = np.ones(int(num_steps), dtype=bool)
+    allowed[: min(skip, int(num_steps))] = False
+    return allowed
+
+
 def choose_lowest_step_passing_criteria(
     readout1_fidelity: np.ndarray,
     readout2_fidelity: np.ndarray,
@@ -646,26 +679,37 @@ def choose_lowest_step_passing_criteria(
     ref_nv0_survival: np.ndarray,
     config: OptimizationConfig,
 ) -> Tuple[Optional[int], str]:
+    r1 = np.asarray(readout1_fidelity, dtype=float)
+    r2 = np.asarray(readout2_fidelity, dtype=float)
+    same = np.asarray(ref_same_state_survival, dtype=float)
+    nvm = np.asarray(ref_nvm_survival, dtype=float)
+    nv0 = np.asarray(ref_nv0_survival, dtype=float)
+
+    if not (r1.shape == r2.shape == same.shape == nvm.shape == nv0.shape):
+        raise ValueError("All optimization metric arrays must have the same shape.")
+
     good = (
-        np.isfinite(readout1_fidelity)
-        & np.isfinite(readout2_fidelity)
-        & np.isfinite(ref_same_state_survival)
-        & np.isfinite(ref_nvm_survival)
-        & (readout1_fidelity >= config.min_readout1_fidelity)
-        & (readout2_fidelity >= config.min_readout2_fidelity)
-        & (ref_same_state_survival >= config.min_ref_same_state_survival)
-        & (ref_nvm_survival >= config.min_ref_nvm_survival)
+        _allowed_step_mask(r1.size, config)
+        & np.isfinite(r1)
+        & np.isfinite(r2)
+        & np.isfinite(same)
+        & np.isfinite(nvm)
+        & (r1 >= config.min_readout1_fidelity)
+        & (r2 >= config.min_readout2_fidelity)
+        & (same >= config.min_ref_same_state_survival)
+        & (nvm >= config.min_ref_nvm_survival)
     )
 
     if config.min_ref_nv0_survival is not None:
         good = (
             good
-            & np.isfinite(ref_nv0_survival)
-            & (ref_nv0_survival >= float(config.min_ref_nv0_survival))
+            & np.isfinite(nv0)
+            & (nv0 >= float(config.min_ref_nv0_survival))
         )
 
     if np.any(good):
-        return int(np.where(good)[0][0]), "lowest step satisfying thresholds"
+        return int(np.flatnonzero(good)[0]), "lowest step satisfying thresholds"
+
     return None, "thresholds not all satisfied"
 
 
@@ -680,6 +724,17 @@ def choose_optimal_step(
     goodness2_of_fit: np.ndarray,
     config: OptimizationConfig,
 ) -> Tuple[Optional[int], str, np.ndarray]:
+    """
+    Choose one sweep step using the configured threshold/score strategy.
+    """
+
+    mode = str(config.selection_mode).strip().lower()
+    valid_modes = {"threshold_then_score", "lowest_passing", "max_score"}
+    if mode not in valid_modes:
+        raise ValueError(
+            f"selection_mode must be one of {sorted(valid_modes)}; got {mode!r}."
+        )
+
     score = compute_score(
         readout1_fidelity,
         readout2_fidelity,
@@ -692,7 +747,11 @@ def choose_optimal_step(
         score_weights=config.score_weights,
     )
 
-    step_ind, reason = choose_lowest_step_passing_criteria(
+    # Excluded steps are never allowed to win the score.
+    score = np.asarray(score, dtype=float)
+    score[~_allowed_step_mask(score.size, config)] = np.nan
+
+    passing_ind, passing_reason = choose_lowest_step_passing_criteria(
         readout1_fidelity,
         readout2_fidelity,
         ref_same_state_survival,
@@ -700,14 +759,21 @@ def choose_optimal_step(
         ref_nv0_survival,
         config,
     )
-    if step_ind is not None:
-        return step_ind, reason, score
+
+    if mode in {"threshold_then_score", "lowest_passing"} and passing_ind is not None:
+        return passing_ind, passing_reason, score
+
+    if mode == "lowest_passing":
+        return None, passing_reason, score
 
     if not np.any(np.isfinite(score)):
         return None, "no finite score", score
 
-    return int(np.nanargmax(score)), "fallback max score", score
+    best_ind = int(np.nanargmax(score))
+    if mode == "max_score":
+        return best_ind, "maximum combined score", score
 
+    return best_ind, "fallback maximum combined score", score
 
 def compute_per_nv_optima(
     arrays: Dict[str, np.ndarray],
@@ -801,6 +867,445 @@ def compute_per_nv_optima(
         "optimal_step_raw_vals": optimal_step_raw_vals,
         "score_arr": score_arr,
     }
+
+
+
+# =============================================================================
+# Fast re-optimization from saved processed data
+# =============================================================================
+
+
+SLM_RESULT_KEYS = (
+    "slm_config",
+    "slm_selected_inds",
+    "slm_num_selected",
+    "slm_target_power_uW",
+    "slm_total_target_power_uW",
+    "slm_total_target_power_mW",
+    "slm_mean_target_power_uW",
+    "slm_median_target_power_uW",
+    "slm_effective_aom_power_uW",
+    "slm_effective_aom_voltage",
+    "slm_effective_step_value",
+    "slm_mean_norm_intensity_weight",
+    "slm_mean_norm_intensity_weight_clipped",
+    "slm_amplitude_weight",
+    "slm_power_fraction",
+    "optimal_weights_aligned",
+    "optimal_weights_clipped_aligned",
+    "aom_voltage_for_slm",
+)
+
+
+def _axis_info_from_processed(results: Dict[str, Any]) -> Dict[str, Any]:
+    """Reconstruct the axis/calibration dictionary from processed results."""
+
+    yellow_amp = results.get("yellow_charge_readout_amp", np.nan)
+    yellow_amp = np.nan if yellow_amp is None else float(yellow_amp)
+
+    return {
+        "step_vals_raw": np.asarray(results["step_vals_raw"], dtype=float),
+        "step_vals": np.asarray(results["step_vals"], dtype=float),
+        "x_label": str(results["x_label"]),
+        "is_readout_power_sweep": bool(
+            results.get("is_readout_power_sweep", False)
+        ),
+        "power_fit_a": float(results["power_fit_a"]),
+        "power_fit_b": float(results["power_fit_b"]),
+        "power_fit_c": float(results["power_fit_c"]),
+        "yellow_charge_readout_amp": yellow_amp,
+    }
+
+
+def _metric_arrays_from_processed(
+    results: Dict[str, Any],
+) -> Dict[str, np.ndarray]:
+    """Load the metric arrays needed to recompute optima."""
+
+    required = (
+        "readout1_fidelity_arr",
+        "readout2_fidelity_arr",
+        "ref_same_state_survival_arr",
+        "ref_nvm_survival_arr",
+        "ref_nv0_survival_arr",
+        "goodness1_of_fit_arr",
+        "goodness2_of_fit_arr",
+    )
+    missing = [key for key in required if key not in results]
+    if missing:
+        raise KeyError(
+            "Processed data are missing arrays required for re-optimization: "
+            + ", ".join(missing)
+        )
+
+    arrays: Dict[str, np.ndarray] = {}
+    for key in FLOAT_METRICS:
+        arr_key = f"{key}_arr"
+        if arr_key in results:
+            arrays[arr_key] = np.asarray(results[arr_key], dtype=float)
+
+    for key in INT_METRICS:
+        arr_key = f"{key}_arr"
+        if arr_key in results:
+            arrays[arr_key] = np.asarray(results[arr_key], dtype=int)
+
+    for key in BOOL_METRICS:
+        arr_key = f"{key}_arr"
+        if arr_key in results:
+            arrays[arr_key] = np.asarray(results[arr_key], dtype=bool)
+
+    # compute_per_nv_optima only requires the floating-point arrays listed
+    # above, but retaining the others makes this helper useful elsewhere.
+    return arrays
+
+
+def _recompute_population_medians(
+    arrays: Dict[str, np.ndarray],
+) -> Dict[str, np.ndarray]:
+    """Recompute population medians from the saved per-NV metric arrays."""
+
+    mapping = {
+        "readout1_fidelity": "readout1_fidelity_arr",
+        "readout2_fidelity": "readout2_fidelity_arr",
+        "prep1_fidelity": "prep1_fidelity_arr",
+        "prep2_fidelity": "prep2_fidelity_arr",
+        "goodness1_of_fit": "goodness1_of_fit_arr",
+        "goodness2_of_fit": "goodness2_of_fit_arr",
+        "ref_same_state_survival": "ref_same_state_survival_arr",
+        "ref_nvm_survival": "ref_nvm_survival_arr",
+        "ref_nv0_survival": "ref_nv0_survival_arr",
+        "ref_nvm_to_nv0_prob": "ref_nvm_to_nv0_prob_arr",
+        "mean_ion_r1": "mean_ion_r1_arr",
+        "mean_ion_r2": "mean_ion_r2_arr",
+        "mean_ref_r1": "mean_ref_r1_arr",
+        "mean_ref_r2": "mean_ref_r2_arr",
+    }
+
+    medians: Dict[str, np.ndarray] = {}
+    for output_key, array_key in mapping.items():
+        if array_key in arrays:
+            medians[output_key] = nanmedian_axis0(arrays[array_key])
+    return medians
+
+
+def resolve_manual_step_index(
+    results: Dict[str, Any],
+    step_ind: Optional[int] = None,
+    step_val: Optional[float] = None,
+) -> int:
+    """
+    Resolve a manual choice to a valid step index.
+
+    Supply exactly one of ``step_ind`` or ``step_val``. A physical step value
+    is mapped to the closest sampled sweep point.
+    """
+
+    if (step_ind is None) == (step_val is None):
+        raise ValueError("Supply exactly one of step_ind or step_val.")
+
+    step_vals = np.asarray(results["step_vals"], dtype=float)
+    if step_ind is not None:
+        resolved = int(step_ind)
+        if not 0 <= resolved < step_vals.size:
+            raise IndexError(
+                f"step_ind={resolved} is outside [0, {step_vals.size - 1}]."
+            )
+        return resolved
+
+    value = float(step_val)
+    finite = np.isfinite(step_vals)
+    if not np.any(finite):
+        raise ValueError("No finite processed step values are available.")
+    finite_inds = np.flatnonzero(finite)
+    return int(finite_inds[np.argmin(np.abs(step_vals[finite] - value))])
+
+
+def _optimal_value_record(
+    results: Dict[str, Any],
+    arrays: Dict[str, np.ndarray],
+    score_arr: np.ndarray,
+    nv_ind: int,
+    step_ind: int,
+    reason: str,
+) -> Dict[str, Any]:
+    """Build one per-NV optimum record at an explicitly selected step."""
+
+    axis_info = _axis_info_from_processed(results)
+    step_vals = np.asarray(results["step_vals"], dtype=float)
+    step_vals_raw = np.asarray(results["step_vals_raw"], dtype=float)
+    step_val = float(step_vals[step_ind])
+
+    aom_voltage = (
+        aom_voltage_from_power_uW(step_val, axis_info)
+        if bool(axis_info.get("is_readout_power_sweep", False))
+        else np.nan
+    )
+    opx_step_value = (
+        opx_step_from_power_uW(step_val, axis_info)
+        if bool(axis_info.get("is_readout_power_sweep", False))
+        else np.nan
+    )
+
+    return {
+        "nv_ind": int(nv_ind),
+        "optimal_step_ind": int(step_ind),
+        "optimal_step_val": step_val,
+        "optimal_step_raw_val": float(step_vals_raw[step_ind]),
+        "reason": str(reason),
+        "score": metric_at(score_arr, nv_ind, step_ind),
+        "readout1_fidelity": metric_at(
+            arrays["readout1_fidelity_arr"], nv_ind, step_ind
+        ),
+        "readout2_fidelity": metric_at(
+            arrays["readout2_fidelity_arr"], nv_ind, step_ind
+        ),
+        "ref_same_state_survival": metric_at(
+            arrays["ref_same_state_survival_arr"], nv_ind, step_ind
+        ),
+        "ref_nvm_survival": metric_at(
+            arrays["ref_nvm_survival_arr"], nv_ind, step_ind
+        ),
+        "ref_nv0_survival": metric_at(
+            arrays["ref_nv0_survival_arr"], nv_ind, step_ind
+        ),
+        "aom_voltage": aom_voltage,
+        "opx_step_value": opx_step_value,
+    }
+
+
+def apply_manual_step_overrides(
+    results: Dict[str, Any],
+    manual_step_inds: Optional[Dict[int, int]] = None,
+    manual_step_vals: Optional[Dict[int, float]] = None,
+) -> Dict[str, Any]:
+    """
+    Override automatic per-NV optima before calculating SLM weights.
+
+    Examples
+    --------
+    manual_step_inds = {8: 12, 303: 15}
+        Use exact sweep indices.
+
+    manual_step_vals = {8: 7.5, 303: 9.0}
+        Use the nearest sampled physical step values in ``results["step_vals"]``.
+    """
+
+    manual_step_inds = {} if manual_step_inds is None else dict(manual_step_inds)
+    manual_step_vals = {} if manual_step_vals is None else dict(manual_step_vals)
+
+    overlap = set(manual_step_inds) & set(manual_step_vals)
+    if overlap:
+        raise ValueError(
+            "The same NV cannot be specified in both manual dictionaries: "
+            f"{sorted(overlap)}"
+        )
+
+    if not manual_step_inds and not manual_step_vals:
+        results["manual_step_overrides"] = {}
+        return results
+
+    arrays = _metric_arrays_from_processed(results)
+    score_arr = np.asarray(results["per_nv_score_arr"], dtype=float)
+    step_inds = np.asarray(results["per_nv_optimal_step_inds"], dtype=int)
+    step_vals = np.asarray(results["per_nv_optimal_step_vals"], dtype=float)
+    step_raw_vals = np.asarray(
+        results["per_nv_optimal_step_raw_vals"], dtype=float
+    )
+    records = list(results["per_nv_optimal_values"])
+    num_nvs = int(results["num_nvs"])
+
+    applied: Dict[str, Dict[str, Any]] = {}
+
+    choices: Dict[int, Tuple[Optional[int], Optional[float]]] = {}
+    choices.update({int(nv): (int(ind), None) for nv, ind in manual_step_inds.items()})
+    choices.update({int(nv): (None, float(val)) for nv, val in manual_step_vals.items()})
+
+    for nv_ind, (step_ind_input, step_val_input) in choices.items():
+        if not 0 <= nv_ind < num_nvs:
+            raise IndexError(f"Manual NV index {nv_ind} is outside [0, {num_nvs - 1}].")
+
+        resolved = resolve_manual_step_index(
+            results,
+            step_ind=step_ind_input,
+            step_val=step_val_input,
+        )
+        record = _optimal_value_record(
+            results,
+            arrays,
+            score_arr,
+            nv_ind=nv_ind,
+            step_ind=resolved,
+            reason="manual override",
+        )
+
+        records[nv_ind] = make_json_safe(record)
+        step_inds[nv_ind] = resolved
+        step_vals[nv_ind] = record["optimal_step_val"]
+        step_raw_vals[nv_ind] = record["optimal_step_raw_val"]
+
+        applied[str(nv_ind)] = {
+            "requested_step_ind": step_ind_input,
+            "requested_step_val": step_val_input,
+            "resolved_step_ind": resolved,
+            "resolved_step_val": record["optimal_step_val"],
+        }
+
+    results["per_nv_optimal_values"] = records
+    results["per_nv_optimal_step_inds"] = step_inds.tolist()
+    results["per_nv_optimal_step_vals"] = step_vals.tolist()
+    results["per_nv_optimal_step_raw_vals"] = step_raw_vals.tolist()
+    results["manual_step_overrides"] = applied
+    return results
+
+
+def reoptimize_processed_results(
+    processed_results: Dict[str, Any],
+    opt_config: OptimizationConfig,
+    slm_config: Optional[SlmWeightConfig] = SlmWeightConfig(),
+    slm_selected_inds: Optional[Sequence[int]] = None,
+    manual_step_inds: Optional[Dict[int, int]] = None,
+    manual_step_vals: Optional[Dict[int, float]] = None,
+) -> Dict[str, Any]:
+    """
+    Recompute population/per-NV optima and SLM weights without refitting.
+
+    This function only uses the metric arrays already saved in the processed
+    file. It is therefore fast enough for interactively changing thresholds,
+    score weights, selection mode, skipped sweep points, clipping, and manual
+    per-NV overrides.
+    """
+
+    results = copy.deepcopy(processed_results)
+    arrays = _metric_arrays_from_processed(results)
+    axis_info = _axis_info_from_processed(results)
+    step_vals = np.asarray(results["step_vals"], dtype=float)
+    medians = _recompute_population_medians(arrays)
+
+    needed_medians = (
+        "readout1_fidelity",
+        "readout2_fidelity",
+        "ref_same_state_survival",
+        "ref_nvm_survival",
+        "ref_nv0_survival",
+        "goodness1_of_fit",
+        "goodness2_of_fit",
+    )
+    missing = [key for key in needed_medians if key not in medians]
+    if missing:
+        raise KeyError(
+            "Cannot recompute the population optimum; missing median arrays: "
+            + ", ".join(missing)
+        )
+
+    population_step_ind, population_reason, population_score = choose_optimal_step(
+        step_vals,
+        medians["readout1_fidelity"],
+        medians["readout2_fidelity"],
+        medians["ref_same_state_survival"],
+        medians["ref_nvm_survival"],
+        medians["ref_nv0_survival"],
+        medians["goodness1_of_fit"],
+        medians["goodness2_of_fit"],
+        opt_config,
+    )
+
+    per_nv = compute_per_nv_optima(arrays, step_vals, axis_info, opt_config)
+
+    if population_step_ind is None:
+        population_step_val = np.nan
+        population_step_raw_val = np.nan
+        population_aom_voltage = np.nan
+        population_opx_step = np.nan
+    else:
+        population_step_ind = int(population_step_ind)
+        population_step_val = float(step_vals[population_step_ind])
+        population_step_raw_val = float(
+            np.asarray(results["step_vals_raw"], dtype=float)[population_step_ind]
+        )
+        population_aom_voltage = (
+            aom_voltage_from_power_uW(population_step_val, axis_info)
+            if bool(axis_info.get("is_readout_power_sweep", False))
+            else np.nan
+        )
+        population_opx_step = (
+            opx_step_from_power_uW(population_step_val, axis_info)
+            if bool(axis_info.get("is_readout_power_sweep", False))
+            else np.nan
+        )
+
+    results.update(
+        {
+            "analysis_type": "reoptimized_repeated_readout_slm",
+            "optimization_config": asdict(opt_config),
+            "population_optimal_step_ind": population_step_ind,
+            "population_optimal_step_val": population_step_val,
+            "population_optimal_step_raw_val": population_step_raw_val,
+            "population_aom_voltage": population_aom_voltage,
+            "population_opx_step_value": population_opx_step,
+            "population_optimal_reason": population_reason,
+            "population_score": population_score.tolist(),
+            "per_nv_optimal_values": make_json_safe(per_nv["optimal_values"]),
+            "per_nv_optimal_step_inds": per_nv["optimal_step_inds"].tolist(),
+            "per_nv_optimal_step_vals": per_nv["optimal_step_vals"].tolist(),
+            "per_nv_optimal_step_raw_vals": per_nv[
+                "optimal_step_raw_vals"
+            ].tolist(),
+            "per_nv_score_arr": per_nv["score_arr"].tolist(),
+            "median": {key: val.tolist() for key, val in medians.items()},
+        }
+    )
+
+    # Apply explicit human choices after automatic optimization so the final
+    # SLM weights reflect those manual choices.
+    results = apply_manual_step_overrides(
+        results,
+        manual_step_inds=manual_step_inds,
+        manual_step_vals=manual_step_vals,
+    )
+
+    # Never retain stale weights from the configuration stored in the file.
+    for key in SLM_RESULT_KEYS:
+        results.pop(key, None)
+
+    if slm_config is not None and bool(results["is_readout_power_sweep"]):
+        results = add_slm_weights(
+            results,
+            selected_inds=slm_selected_inds,
+            config=slm_config,
+        )
+
+    print("\n=== Fast re-optimization from processed data ===")
+    print("selection mode:", opt_config.selection_mode)
+    print("skip first steps:", int(opt_config.skip_first_steps))
+    print("score weights:", tuple(opt_config.score_weights))
+    print("population optimum:", results["population_optimal_step_val"])
+    print("population reason:", results["population_optimal_reason"])
+    print("manual overrides:", len(results.get("manual_step_overrides", {})))
+    return results
+
+
+def compare_optimization_configs(
+    processed_results: Dict[str, Any],
+    named_configs: Dict[str, OptimizationConfig],
+    slm_config: Optional[SlmWeightConfig] = SlmWeightConfig(),
+    slm_selected_inds: Optional[Sequence[int]] = None,
+) -> Dict[str, Dict[str, Any]]:
+    """Re-optimize the same processed arrays under several named settings."""
+
+    if not named_configs:
+        raise ValueError("named_configs cannot be empty.")
+
+    out: Dict[str, Dict[str, Any]] = {}
+    for name, config in named_configs.items():
+        print(f"\n### Re-optimizing configuration: {name} ###")
+        out[str(name)] = reoptimize_processed_results(
+            processed_results,
+            opt_config=config,
+            slm_config=slm_config,
+            slm_selected_inds=slm_selected_inds,
+        )
+    return out
+
 
 
 # =============================================================================
@@ -1699,7 +2204,7 @@ def plot_two_readout_histograms_at_optimum(
                 label=f"R1 threshold={threshold:.1f}",
             )
 
-        plot_fit_components(ax, combined, panel["fit_params"], prob_dist, density=density)
+        plot_fit_components(ax, ref, panel["fit_params"], prob_dist, density=density)
 
         ax.text(
             0.98,
@@ -1754,6 +2259,446 @@ def plot_representative_histograms(
     return figs
 
 
+
+def plot_optimization_config_comparison(
+    config_results: Dict[str, Dict[str, Any]],
+) -> plt.Figure:
+    """
+    Compare how optimization settings change selected powers and SLM weights.
+
+    The top row summarizes each configuration. The lower row overlays the
+    per-NV optimum and clipped SLM-weight distributions.
+    """
+
+    if not config_results:
+        raise ValueError("config_results cannot be empty.")
+
+    names = list(config_results)
+    x_pos = np.arange(len(names), dtype=float)
+
+    population_vals = []
+    median_per_nv = []
+    threshold_fraction = []
+    valid_fraction = []
+
+    for name in names:
+        results = config_results[name]
+        population_vals.append(
+            float(results.get("population_optimal_step_val", np.nan))
+        )
+
+        per_nv_steps = np.asarray(
+            results["per_nv_optimal_step_vals"], dtype=float
+        )
+        median_per_nv.append(
+            float(np.nanmedian(per_nv_steps))
+            if np.any(np.isfinite(per_nv_steps))
+            else np.nan
+        )
+        valid_fraction.append(
+            float(np.mean(np.isfinite(per_nv_steps)))
+            if per_nv_steps.size
+            else np.nan
+        )
+
+        reasons = [
+            str(item.get("reason", ""))
+            for item in results["per_nv_optimal_values"]
+        ]
+        threshold_fraction.append(
+            float(
+                np.mean(
+                    [
+                        reason == "lowest step satisfying thresholds"
+                        for reason in reasons
+                    ]
+                )
+            )
+            if reasons
+            else np.nan
+        )
+
+    fig, axes = plt.subplots(2, 2, figsize=(13.5, 9.0))
+
+    axes[0, 0].plot(
+        x_pos,
+        population_vals,
+        "o-",
+        label="Population optimum",
+    )
+    axes[0, 0].plot(
+        x_pos,
+        median_per_nv,
+        "s--",
+        label="Median per-NV optimum",
+    )
+    axes[0, 0].set_xticks(x_pos, names, rotation=20, ha="right")
+    axes[0, 0].set_ylabel(
+        next(iter(config_results.values()))["x_label"]
+    )
+    axes[0, 0].set_title("Selected readout setting")
+    axes[0, 0].grid(True, alpha=0.3)
+    axes[0, 0].legend(fontsize=9)
+
+    width = 0.38
+    axes[0, 1].bar(
+        x_pos - width / 2,
+        100.0 * np.asarray(threshold_fraction),
+        width,
+        label="Threshold-selected",
+    )
+    axes[0, 1].bar(
+        x_pos + width / 2,
+        100.0 * np.asarray(valid_fraction),
+        width,
+        label="Valid optimum",
+    )
+    axes[0, 1].set_xticks(x_pos, names, rotation=20, ha="right")
+    axes[0, 1].set_ylabel("NVs (%)")
+    axes[0, 1].set_ylim(0.0, 105.0)
+    axes[0, 1].set_title("Selection coverage")
+    axes[0, 1].grid(True, axis="y", alpha=0.3)
+    axes[0, 1].legend(fontsize=9)
+
+    all_step_values = np.concatenate(
+        [
+            np.asarray(results["per_nv_optimal_step_vals"], dtype=float)
+            for results in config_results.values()
+        ]
+    )
+    finite_steps = all_step_values[np.isfinite(all_step_values)]
+    bins_step = (
+        np.histogram_bin_edges(
+            finite_steps,
+            bins=min(40, max(8, int(np.sqrt(finite_steps.size)))),
+        )
+        if finite_steps.size
+        else 10
+    )
+
+    for name, results in config_results.items():
+        vals = np.asarray(
+            results["per_nv_optimal_step_vals"], dtype=float
+        )
+        vals = vals[np.isfinite(vals)]
+        if vals.size:
+            axes[1, 0].hist(
+                vals,
+                bins=bins_step,
+                histtype="step",
+                linewidth=2.0,
+                label=name,
+            )
+    axes[1, 0].set_xlabel(
+        next(iter(config_results.values()))["x_label"]
+    )
+    axes[1, 0].set_ylabel("Number of NVs")
+    axes[1, 0].set_title("Per-NV optimal-setting distribution")
+    axes[1, 0].grid(True, alpha=0.3)
+    axes[1, 0].legend(fontsize=9)
+
+    weight_sets = []
+    for results in config_results.values():
+        if "slm_mean_norm_intensity_weight_clipped" not in results:
+            continue
+        selected = np.asarray(results["slm_selected_inds"], dtype=int)
+        vals = np.asarray(
+            results["slm_mean_norm_intensity_weight_clipped"],
+            dtype=float,
+        )[selected]
+        vals = vals[np.isfinite(vals)]
+        if vals.size:
+            weight_sets.append(vals)
+
+    if weight_sets:
+        all_weights = np.concatenate(weight_sets)
+        bins_weight = np.histogram_bin_edges(
+            all_weights,
+            bins=min(40, max(8, int(np.sqrt(all_weights.size)))),
+        )
+        for name, results in config_results.items():
+            if "slm_mean_norm_intensity_weight_clipped" not in results:
+                continue
+            selected = np.asarray(results["slm_selected_inds"], dtype=int)
+            vals = np.asarray(
+                results["slm_mean_norm_intensity_weight_clipped"],
+                dtype=float,
+            )[selected]
+            vals = vals[np.isfinite(vals)]
+            if vals.size:
+                axes[1, 1].hist(
+                    vals,
+                    bins=bins_weight,
+                    histtype="step",
+                    linewidth=2.0,
+                    label=name,
+                )
+        axes[1, 1].axvline(
+            1.0,
+            linestyle="--",
+            linewidth=1.5,
+            label="Mean-normalized weight",
+        )
+        axes[1, 1].legend(fontsize=9)
+
+    axes[1, 1].set_xlabel("Clipped SLM intensity weight")
+    axes[1, 1].set_ylabel("Number of NVs")
+    axes[1, 1].set_title("Final SLM-weight distribution")
+    axes[1, 1].grid(True, alpha=0.3)
+
+    fig.suptitle(
+        "Sensitivity of optimal SLM settings to optimization parameters",
+        fontsize=15,
+    )
+    fig.tight_layout()
+    return fig
+
+
+def _plot_reference_fit_histogram_panel(
+    ax: plt.Axes,
+    raw_data: Dict[str, Any],
+    results: Dict[str, Any],
+    nv_ind: int,
+    step_ind: int,
+    readout_number: int,
+    row_label: str,
+    density: bool,
+    bins: str | int,
+) -> None:
+    """
+    Plot one R1/R2 reference histogram and its saved reference-only fit.
+
+    The ionized branch is included as a lightly shaded diagnostic, but the
+    fitted components are evaluated against the reference histogram because
+    process_one_nv_step() fitted the reference branch alone.
+    """
+
+    if readout_number not in (1, 2):
+        raise ValueError("readout_number must be 1 or 2.")
+
+    counts_all = np.asarray(raw_data["counts"], dtype=float)
+    ion_exp = 0 if readout_number == 1 else 1
+    ref_exp = 2 if readout_number == 1 else 3
+    fit_key = "fit1_params_arr" if readout_number == 1 else "fit2_params_arr"
+    fidelity_key = (
+        "readout1_fidelity_arr"
+        if readout_number == 1
+        else "readout2_fidelity_arr"
+    )
+    gof_key = (
+        "goodness1_of_fit_arr"
+        if readout_number == 1
+        else "goodness2_of_fit_arr"
+    )
+
+    ion = finite_flatten(counts_all[ion_exp, nv_ind, :, step_ind, :])
+    ref = finite_flatten(counts_all[ref_exp, nv_ind, :, step_ind, :])
+    combined = np.concatenate([ion, ref])
+    hist_bins = (
+        np.histogram_bin_edges(combined, bins=bins)
+        if combined.size
+        else bins
+    )
+
+    _kpl_histogram(
+        ax,
+        ion,
+        density=density,
+        color=kpl.KplColors.RED,
+        label="Ionized branch",
+        bins=hist_bins,
+        alpha=0.25,
+    )
+    _kpl_histogram(
+        ax,
+        ref,
+        density=density,
+        color=kpl.KplColors.GREEN,
+        label="Reference branch",
+        bins=hist_bins,
+        alpha=0.55,
+    )
+
+    threshold = float(
+        np.asarray(results["threshold_r1_arr"], dtype=float)[nv_ind, step_ind]
+    )
+    if np.isfinite(threshold):
+        ax.axvline(
+            threshold,
+            color=kpl.KplColors.GRAY,
+            linestyle="--",
+            linewidth=2.0,
+            label=f"R1 threshold={threshold:.1f}",
+        )
+
+    fit_params = results[fit_key][nv_ind][step_ind]
+    prob_dist = ProbDist[
+        results.get("prob_dist_name", "COMPOUND_POISSON")
+    ]
+    plot_fit_components(
+        ax,
+        ref,
+        fit_params,
+        prob_dist,
+        density=density,
+    )
+
+    fidelity = float(
+        np.asarray(results[fidelity_key], dtype=float)[nv_ind, step_ind]
+    )
+    gof = float(
+        np.asarray(results[gof_key], dtype=float)[nv_ind, step_ind]
+    )
+    step_val = float(
+        np.asarray(results["step_vals"], dtype=float)[step_ind]
+    )
+
+    ax.text(
+        0.98,
+        0.72,
+        fit_param_text(fit_params, prob_dist, red_chi_sq=gof),
+        transform=ax.transAxes,
+        ha="right",
+        va="top",
+        fontsize=8.5,
+        bbox={
+            "boxstyle": "round",
+            "facecolor": "white",
+            "alpha": 0.85,
+        },
+    )
+    ax.set_xlabel("Integrated counts")
+    ax.set_ylabel("Probability density" if density else "Occurrences")
+    ax.set_title(
+        f"{row_label}, readout {readout_number}\n"
+        f"step {step_ind}, {results['x_label']}={step_val:.4g}, "
+        f"fidelity={fidelity:.3f}",
+        fontsize=11,
+    )
+    _style_axis(ax, legend=True, legend_fontsize=7.5)
+
+
+def plot_auto_vs_manual_optimal_histograms(
+    raw_data: Dict[str, Any],
+    automatic_results: Dict[str, Any],
+    nv_ind: int,
+    manual_step_ind: Optional[int] = None,
+    manual_step_val: Optional[float] = None,
+    density: bool = True,
+    bins: str | int = "auto",
+) -> plt.Figure:
+    """
+    Compare the automatically selected and manually selected histograms.
+
+    Top row: automatic optimum for the chosen NV.
+    Bottom row: manual step supplied by index or nearest physical value.
+    Columns: readout 1 and readout 2.
+    """
+
+    nv_ind = int(nv_ind)
+    automatic_step_ind = int(
+        automatic_results["per_nv_optimal_step_inds"][nv_ind]
+    )
+    if automatic_step_ind < 0:
+        raise ValueError(f"NV {nv_ind} has no automatic optimum.")
+
+    manual_resolved_ind = resolve_manual_step_index(
+        automatic_results,
+        step_ind=manual_step_ind,
+        step_val=manual_step_val,
+    )
+
+    fig, axes = plt.subplots(
+        2,
+        2,
+        figsize=(13.5, 9.0),
+        sharex="col",
+        sharey="row",
+    )
+
+    for col, readout_number in enumerate((1, 2)):
+        _plot_reference_fit_histogram_panel(
+            axes[0, col],
+            raw_data,
+            automatic_results,
+            nv_ind=nv_ind,
+            step_ind=automatic_step_ind,
+            readout_number=readout_number,
+            row_label="Automatic optimum",
+            density=density,
+            bins=bins,
+        )
+        _plot_reference_fit_histogram_panel(
+            axes[1, col],
+            raw_data,
+            automatic_results,
+            nv_ind=nv_ind,
+            step_ind=manual_resolved_ind,
+            readout_number=readout_number,
+            row_label="Manual choice",
+            density=density,
+            bins=bins,
+        )
+
+    step_vals = np.asarray(automatic_results["step_vals"], dtype=float)
+    fig.suptitle(
+        f"NV {nv_ind}: automatic versus manual histogram selection\n"
+        f"automatic step {automatic_step_ind} "
+        f"({step_vals[automatic_step_ind]:.4g}); "
+        f"manual step {manual_resolved_ind} "
+        f"({step_vals[manual_resolved_ind]:.4g})",
+        fontsize=14,
+    )
+    fig.tight_layout()
+    return fig
+
+
+def plot_manual_override_histograms(
+    raw_data: Dict[str, Any],
+    automatic_results: Dict[str, Any],
+    manual_step_inds: Optional[Dict[int, int]] = None,
+    manual_step_vals: Optional[Dict[int, float]] = None,
+    density: bool = True,
+) -> List[plt.Figure]:
+    """Create automatic-versus-manual histogram figures for all overrides."""
+
+    manual_step_inds = {} if manual_step_inds is None else dict(manual_step_inds)
+    manual_step_vals = {} if manual_step_vals is None else dict(manual_step_vals)
+
+    overlap = set(manual_step_inds) & set(manual_step_vals)
+    if overlap:
+        raise ValueError(
+            "Duplicate manual NVs in index/value dictionaries: "
+            f"{sorted(overlap)}"
+        )
+
+    figures: List[plt.Figure] = []
+    for nv_ind, step_ind in manual_step_inds.items():
+        figures.append(
+            plot_auto_vs_manual_optimal_histograms(
+                raw_data,
+                automatic_results,
+                nv_ind=int(nv_ind),
+                manual_step_ind=int(step_ind),
+                density=density,
+            )
+        )
+
+    for nv_ind, step_val in manual_step_vals.items():
+        figures.append(
+            plot_auto_vs_manual_optimal_histograms(
+                raw_data,
+                automatic_results,
+                nv_ind=int(nv_ind),
+                manual_step_val=float(step_val),
+                density=density,
+            )
+        )
+
+    return figures
+
+
+
 # =============================================================================
 # Convenience loader / saver helpers
 # =============================================================================
@@ -1790,6 +2735,11 @@ if __name__ == "__main__":
     # Set this True to run the expensive CPU/joblib fitting again.
     run_new_analysis = False
 
+    # False: load the saved processed fit arrays and re-optimize quickly.
+    # True: rerun all CPU/joblib histogram fits from the raw data.
+    RUN_NEW_ANALYSIS = False
+
+    # Raw data are still loaded when plotting histograms.
     # file_id = "2026_07_11-04_37_50-qnami-nv0_2026_02_20"
     file_id = "2026_07_14-20_28_11-qnami-nv0_2026_02_20"
 
@@ -1799,58 +2749,193 @@ if __name__ == "__main__":
     processed_file = "2026_07_18-11_47_06-repeated_readout_slm_processed_2026_07_18-11_10_09-qnami-nv0_2026_02_20"
     raw_data = load_raw(file_id)
 
-    if run_new_analysis:
+    # -------------------------------------------------------------------------
+    # Try several optimization strategies on the same processed fit arrays.
+    #
+    # Important:
+    #   In "threshold_then_score" mode, score weights only matter when no step
+    #   passes every threshold. Use "max_score" to directly study sensitivity
+    #   to score weights.
+    # -------------------------------------------------------------------------
+    OPTIMIZATION_CONFIGS = {
+        "threshold_balanced": OptimizationConfig(
+            min_readout1_fidelity=0.88,
+            min_readout2_fidelity=0.88,
+            min_ref_same_state_survival=0.96,
+            min_ref_nvm_survival=0.97,
+            min_ref_nv0_survival=None,
+            score_weights=(0.35, 0.40, 0.15, 0.10),
+            selection_mode="threshold_then_score",
+            skip_first_steps=2,
+            prob_dist_name="COMPOUND_POISSON",
+        ),
+        "score_survival_focused": OptimizationConfig(
+            min_readout1_fidelity=0.88,
+            min_readout2_fidelity=0.88,
+            min_ref_same_state_survival=0.96,
+            min_ref_nvm_survival=0.97,
+            min_ref_nv0_survival=None,
+            score_weights=(0.20, 0.60, 0.10, 0.10),
+            selection_mode="max_score",
+            skip_first_steps=2,
+            prob_dist_name="COMPOUND_POISSON",
+        ),
+        "score_fidelity_focused": OptimizationConfig(
+            min_readout1_fidelity=0.88,
+            min_readout2_fidelity=0.88,
+            min_ref_same_state_survival=0.96,
+            min_ref_nvm_survival=0.97,
+            min_ref_nv0_survival=None,
+            score_weights=(0.60, 0.20, 0.10, 0.10),
+            selection_mode="max_score",
+            skip_first_steps=2,
+            prob_dist_name="COMPOUND_POISSON",
+        ),
+    }
+
+    ACTIVE_CONFIG_NAME = "score_survival_focused"
+
+    # Final SLM-weight handling.
+    SLM_CONFIG = SlmWeightConfig(
+        slm_efficiency=1.0,
+        invalid_fill=0.0,
+        clip_min=0.0,
+        clip_max=2.0,
+        renormalize_after_clip=True,
+    )
+
+    # None means every NV with a finite positive selected target power.
+    # Example: SLM_SELECTED_INDS = [0, 1, 2, 8, 10, 303]
+    SLM_SELECTED_INDS = None
+
+    # -------------------------------------------------------------------------
+    # Optional manual per-NV optimum overrides.
+    #
+    # These choices replace the automatic optimum before final SLM weights are
+    # calculated. Use exact sampled index OR nearest physical step value.
+    #
+    # Examples:
+    # MANUAL_STEP_INDS = {8: 12, 303: 15}
+    # MANUAL_STEP_VALS = {364: 7.5, 422: 9.0}
+    # -------------------------------------------------------------------------
+    MANUAL_STEP_INDS: Dict[int, int] = {}
+    MANUAL_STEP_VALS: Dict[int, float] = {}
+
+    # Plot automatic-versus-manual R1/R2 histograms for every override above.
+    PLOT_MANUAL_HISTOGRAMS = True
+
+    # Additional automatic histogram diagnostics.
+    PLOT_REPRESENTATIVE_HISTOGRAMS = False
+
+    # Save the re-optimized result dictionary as a new processed file.
+    SAVE_REOPTIMIZED_RESULTS = True
+    # =========================================================================
+    # LOAD / PROCESS
+    # =========================================================================
+
+    raw_data = load_raw(file_id)
+    active_config = OPTIMIZATION_CONFIGS[ACTIVE_CONFIG_NAME]
+
+    if RUN_NEW_ANALYSIS:
         results = process_repeated_readout_slm(
             raw_data,
-            do_plot=True,
+            do_plot=False,
             save_data=True,
             n_jobs=12,
             joblib_verbose=10,
-            opt_config=OptimizationConfig(
-                min_readout1_fidelity=0.88,
-                min_readout2_fidelity=0.88,
-                min_ref_same_state_survival=0.96,
-                min_ref_nvm_survival=0.97,
-                min_ref_nv0_survival=None,
-                score_weights=(0.35, 0.40, 0.15, 0.10),
-                prob_dist_name="COMPOUND_POISSON",
-            ),
-            slm_config=SlmWeightConfig(
-                slm_efficiency=1.0,
-                invalid_fill=0.0,
-                clip_min=0.25,
-                clip_max=1.75,
-                renormalize_after_clip=True,
-            ),
-            # None = use all valid NVs. Or pass your final good-NV indices.
-            slm_selected_inds=None,
+            opt_config=active_config,
+            slm_config=SLM_CONFIG,
+            slm_selected_inds=SLM_SELECTED_INDS,
         )
+        automatic_results = copy.deepcopy(results)
+        config_results = {ACTIVE_CONFIG_NAME: results}
+
     else:
-        results = load_processed(processed_file)
-        # If the old processed file does not already contain SLM weights, add them.
-        if "slm_mean_norm_intensity_weight_clipped" not in results:
-            results = add_slm_weights(
-                results,
-                selected_inds=None,
-                config=SlmWeightConfig(
-                    slm_efficiency=1.0,
-                    invalid_fill=0.0,
-                    clip_min=0.25,
-                    clip_max=1.75,
-                    renormalize_after_clip=True,
-                ),
-            )
-            save_results_again(results, prefix="repeated_readout_slm_with_weights")
+        processed_results = load_processed(processed_file)
 
-        plot_summary(results)
-        plot_all_nv_scatters(results)
-        plot_per_nv_optimal_step_distribution(results)
-        plot_optimum_metric_scatter(results)
-        if "slm_mean_norm_intensity_weight_clipped" in results:
-            plot_slm_weight_distribution(results)
+        # Compare several parameter choices without repeating histogram fits.
+        config_results = compare_optimization_configs(
+            processed_results,
+            named_configs=OPTIMIZATION_CONFIGS,
+            slm_config=SLM_CONFIG,
+            slm_selected_inds=SLM_SELECTED_INDS,
+        )
+        plot_optimization_config_comparison(config_results)
 
-    # Best histogram view for two-readout data:
-    # representative NVs at their own selected optimum.
-    plot_representative_histograms(raw_data, results, density=True, use_population_step=False)
+        # Keep the automatic active result for auto-versus-manual histograms.
+        automatic_results = config_results[ACTIVE_CONFIG_NAME]
+
+        # Recompute the active configuration and then apply any manual choices.
+        results = reoptimize_processed_results(
+            processed_results,
+            opt_config=active_config,
+            slm_config=SLM_CONFIG,
+            slm_selected_inds=SLM_SELECTED_INDS,
+            manual_step_inds=MANUAL_STEP_INDS,
+            manual_step_vals=MANUAL_STEP_VALS,
+        )
+
+    # =========================================================================
+    # DIAGNOSTIC PLOTS
+    # =========================================================================
+    plot_summary(results)
+    plot_all_nv_scatters(results)
+    plot_per_nv_optimal_step_distribution(results)
+    plot_optimum_metric_scatter(results)
+
+    if "slm_mean_norm_intensity_weight_clipped" in results:
+        plot_slm_weight_distribution(results)
+
+    if PLOT_MANUAL_HISTOGRAMS and (
+        MANUAL_STEP_INDS or MANUAL_STEP_VALS
+    ):
+        plot_manual_override_histograms(
+            raw_data,
+            automatic_results,
+            manual_step_inds=MANUAL_STEP_INDS,
+            manual_step_vals=MANUAL_STEP_VALS,
+            density=True,
+        )
+
+    if PLOT_REPRESENTATIVE_HISTOGRAMS:
+        plot_representative_histograms(
+            raw_data,
+            results,
+            density=True,
+            use_population_step=False,
+        )
+
+    if SAVE_REOPTIMIZED_RESULTS:
+        save_results_again(
+            results,
+            prefix=(
+                "reoptimized_slm_"
+                + ACTIVE_CONFIG_NAME
+            ),
+        )
+
+    # Final values intended for the SLM/AOM implementation.
+    if "slm_mean_norm_intensity_weight_clipped" in results:
+        print("\n=== FINAL VALUES TO USE ===")
+        print(
+            "effective AOM power (uW):",
+            results["slm_effective_aom_power_uW"],
+        )
+        print(
+            "effective AOM voltage:",
+            results["slm_effective_aom_voltage"],
+        )
+        print(
+            "effective OPX step value:",
+            results["slm_effective_step_value"],
+        )
+        print(
+            "SLM intensity weights key:",
+            "slm_mean_norm_intensity_weight_clipped",
+        )
+        print(
+            "SLM field-amplitude weights key:",
+            "slm_amplitude_weight",
+        )
 
     plt.show(block=True)

@@ -1366,12 +1366,14 @@ if __name__ == "__main__":
     # FILE_ID = "2026_07_17-22_35_56-qnami-nv0_2026_02_20", ## 631 working NVs 100ms readout
     # FILE_ID = "2026_07_19-00_17_00-qnami-nv0_2026_02_20", ## 631 working NVs 500ms readout
     # FILE_ID = "2026_07_20-16_19_40-qnami-nv0_2026_02_20", ## 631 working NVs 1000ms readout
-    FILE_ID = "2026_07_20-17_04_32-qnami-nv0_2026_02_20", ## 631 working NVs 1000ms readout
-
+    # FILE_ID = "2026_07_20-17_04_32-qnami-nv0_2026_02_20", ## 631 working NVs 1000ms readout
+    # FILE_ID = "2026_07_21-15_39_42-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    FILE_ID = "2026_07_21-16_08_28-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
     
-    SAVED_ANALYSIS_FILE_ID = "2026_07_15-19_48_48-single_step_charge_hist_single_cpu_2026_07_15-19_42_19-qnami-nv0_2026_02_20"
+    # SAVED_ANALYSIS_FILE_ID = "2026_07_15-19_48_48-single_step_charge_hist_single_cpu_2026_07_15-19_42_19-qnami-nv0_2026_02_20"
+    SAVED_ANALYSIS_FILE_ID = "2026_07_21-16_11_27-single_step_charge_hist_single_cpu_2026_07_21-16_08_28-qnami-nv0_2026_02_20"
  
-    RUN_NEW_PROCESSING =True
+    RUN_NEW_PROCESSING =False
 
     MODEL_KIND = "single"
     BACKEND = "cpu"
@@ -1407,7 +1409,7 @@ if __name__ == "__main__":
     # SORT_KEY = "red_chi_sq"
 
     # Manual examples if desired.
-    EXAMPLE_INDS = [0, 1, 2, 3, 10, 50,  100, 200, 300, 400, 500, 600, 700, 800]
+    EXAMPLE_INDS = [0, 1, 2, 3, 10, 50,  100, 200, 300, 400, 500, 600]
 
     # EXAMPLE_INDS =[8, 303, 364, 422, 463, 536]    #Lost in every run
     # EXAMPLE_INDS = [13, 25, 37, 51, 69, 87, 99, 149, 181, 222, 248, 249, 294, 323, 332, 340, 413, 459, 460, 480, 491, 510, 619] 
