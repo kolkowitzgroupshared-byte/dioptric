@@ -34,6 +34,7 @@ import serial
 from labrad.server import LabradServer, setting
 from twisted.internet.defer import ensureDeferred
 
+
 class TempMonitorKeitDaq6510(LabradServer):
     name = "temp_monitor_KEIT_daq6510"
     pc_name = socket.gethostname()
@@ -80,6 +81,7 @@ class TempMonitorKeitDaq6510(LabradServer):
     #             # print(f"Time: {timestamp}, Temp: {float_temp}°C")
     #             time.sleep(300)  # wait for 5 mins before the next reading
     #     self.close()
+
 
 __server__ = TempMonitorKeitDaq6510()
 
