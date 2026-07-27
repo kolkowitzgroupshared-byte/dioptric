@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-s
 """
-Config file for the PC cryo
+Config file for the SrC laptop
 
-Created Oct 7th, 2025
-@author: chemistatcode
-@author: sbchand
-@author: ericvin
+Created July 14th, 2026
+@author: fkovisto
 """
 
 from pathlib import Path
@@ -72,7 +70,7 @@ config |= {
         "pulse_gen_SWAB_82_ip_1": "192.168.0.111",
         "pulse_gen_SWAB_82_ip_2": "192.168.0.160",
         "rotation_stage_THOR_ell18k_com": "COM8",
-        "multimeter_KEIT_daq6510_visa": "TCPIP::192.168.0.126::inst0::INSTR",
+        "temp_monitor_KEIT_daq6510_visa": "TCPIP::192.168.0.126::inst0::INSTR",
         "sig_gen_BERK_bnc835_visa": "TCPIP::128.104.ramp_to_zero_duration.114::inst0::INSTR",
         "sig_gen_STAN_sg394_visa": "TCPIP::192.168.0.120::inst0::INSTR",
         "sig_gen_STAN_sg394_2_visa": "TCPIP::192.168.0.121::inst0::INSTR",

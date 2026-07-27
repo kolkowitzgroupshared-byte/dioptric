@@ -1,0 +1,95 @@
+"""
+Input to read temp measurements from Keithley DAQ6510 multimeter
+
+Created July 14th, 2026
+
+@author: fkovisto
+
+### BEGIN NODE INFO
+[info]
+name = temp_monitor_KEIT_daq6510
+version = 1.0
+description = Virtual LabRAD server to monitor an experiment's temperature.
+
+[startup]
+cmdline = %PYTHON% %FILE%
+timeout = 20
+
+[shutdown]
+message = 987654321
+timeout = 5
+### END NODE INFO
+"""
+
+import pyvisa as visa
+import time
+
+import socket
+from config import SrC
+from utils import common
+from utils import tool_belt as tb
+import logging
+
+import serial
+from labrad.server import LabradServer, setting
+from twisted.internet.defer import ensureDeferred
+
+
+class TempMonitorKeitDaq6510(LabradServer):
+    name = "temp_monitor_KEIT_daq6510"
+    pc_name = socket.gethostname()
+
+    def initServer(self):
+        tb.configure_logging(self)
+        config = common.get_config_dict()
+
+        rm = visa.ResourceManager()
+        visa_address = config["DeviceIDs"][f"{self.name}_visa"]
+
+        self.daq = rm.open_resource(visa_address)
+        self.daq.read_termination = "\n"
+        self.daq.write_termination = "\n"
+
+        self.daq.write("*RST")
+        print(self.daq.query("*IDN?"))
+        logging.info("Init complete")
+
+    def channel_config(self, channel):
+        daq = self.daq
+        daq.write("*RST")
+        daq.write(f'SENS:FUNC "TEMP", (@{channel})')
+        daq.write(f"SENS:TEMP:TRAN TC, (@{channel})")
+        daq.write(f"SENS:TEMP:TC:TYPE K, (@{channel})")
+        daq.write(f"SENS:TEMP:TC:RJUN:RSEL INT, (@{channel})")
+        daq.write(f"SENS:TEMP:ODET ON, (@{channel})")
+        daq.write(f"ROUT:CLOS (@{channel})")
+
+    def read_temp(self):
+        return self.daq.query("READ?")
+
+    # @setting(0, channel="i")
+    # def continuous_temp(self, channel):
+    #     self.channel_config(channel)
+    #     with open("temp_readings.csv", "a") as file:
+    #         while True:
+    #             # ctrl + c to exit
+    #             temp = self.read_temp(101)
+    #             float_temp = float(temp)
+    #             timestamp = time.strftime("%Y-%m-%d %H:%M:%S")  # ex. 2026-07-21 9:44:30
+    #             file.write(f"{timestamp}\t{float_temp}\n\n")
+    #             file.flush()  # writes to file immediately
+    #             # print(f"Time: {timestamp}, Temp: {float_temp}°C")
+    #             time.sleep(300)  # wait for 5 mins before the next reading
+    #     self.close()
+
+
+__server__ = TempMonitorKeitDaq6510()
+
+if __name__ == "__main__":
+    from labrad import util
+
+    util.runServer(__server__)
+
+# daq = MultimeterKeitDaq6510()
+# daq.initServer()
+# daq.read_repeat(101) # change to temperature probe connected channel 101-120
