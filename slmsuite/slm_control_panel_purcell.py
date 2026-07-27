@@ -363,7 +363,8 @@ data_spot_weight = dm.get_raw_data(
     # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
     # file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
     # file_stem= "2026_07_11-14_54_21-repeated_readout_survival_with_slm_weights_2026_07_11-04_37_50-qnami-nv0_2026_02_20"
-    file_stem="2026_07_18-23_11_48-reoptimized_slm_score_survival_focused_2026_07_18-11_10_09-qnami-nv0_2026_02_20"
+    # file_stem="2026_07_18-23_11_48-reoptimized_slm_score_survival_focused_2026_07_18-11_10_09-qnami-nv0_2026_02_20"
+    file_stem="2026_07_22-15_53_45-reoptimized_slm_score_survival_focused_2026_07_22-04_39_34-qnami-nv0_2026_02_20"
 )
 # spot_weights = data_spot_weight["optimal_weights"]
 spot_weights  = data_spot_weight["slm_amplitude_weight"]
@@ -371,9 +372,9 @@ spot_weights  = data_spot_weight["slm_amplitude_weight"]
 # # spot_weights = np.squeeze(spot_weights)
 # sys.exit()
 
-# spot_weights = curve_extreme_weights_simple(
-#         spot_weights, scaling_factor=0.6
-#     )
+spot_weights = curve_extreme_weights_simple(
+        spot_weights, scaling_factor=1.5
+    )
 spot_weights = np.array(spot_weights)
 
 # If weights are 2D, choose one row/column as needed.
@@ -432,7 +433,7 @@ def compute_and_write_nvs_phase():
         shape=(4096, 2048),
         spot_vectors=thorcam_coords_xy,
         basis="ij",
-        # spot_amp=spot_weights,
+        spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally

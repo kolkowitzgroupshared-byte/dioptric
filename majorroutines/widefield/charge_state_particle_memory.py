@@ -27,7 +27,7 @@ Created July 2026.
 """
 
 from __future__ import annotations
-
+import sys
 import copy
 import json
 import time
@@ -45,6 +45,8 @@ from utils import tool_belt as tb
 from utils import widefield
 from utils.constants import VirtualLaserKey
 
+import csv
+from scipy.optimize import curve_fit
 
 # =============================================================================
 # Basic helpers
@@ -2433,9 +2435,1397 @@ def analyze_and_plot_spatial_correlations(
 
     return result, figures
 
+#########################
+"""
+Compare adaptive particle-memory datasets acquired at different dark wait times.
+
+The zero-wait dataset is used as the measurement/readout baseline.  The code
+reports both the raw NV- retention and the additional dark-time survival
+relative to that baseline:
+
+    dark_survival(t) = retention(t) / retention(0)
+
+The normalized dark survival is fit to
+
+    D(t) = D_inf + (1 - D_inf) exp(-t / tau_dark)
+
+This separation assumes that the zero-wait loss and dark-time loss combine
+multiplicatively.
+"""
+
+def _mean_and_sem(values: np.ndarray) -> Tuple[float, float]:
+    values = np.asarray(values, dtype=float)
+    values = values[np.isfinite(values)]
+    if values.size == 0:
+        return np.nan, np.nan
+    mean = float(np.mean(values))
+    if values.size == 1:
+        return mean, 0.0
+    sem = float(np.std(values, ddof=1) / np.sqrt(values.size))
+    return mean, sem
+
+
+def _pooled_fraction(numerator: np.ndarray, denominator: np.ndarray) -> float:
+    numerator = np.asarray(numerator, dtype=float)
+    denominator = np.asarray(denominator, dtype=float)
+    good = np.isfinite(numerator) & np.isfinite(denominator) & (denominator > 0)
+    if not np.any(good):
+        return np.nan
+    total_denominator = float(np.sum(denominator[good]))
+    if total_denominator <= 0:
+        return np.nan
+    return float(np.sum(numerator[good]) / total_denominator)
+
+
+def _dark_survival_model(wait_s, plateau, tau_s):
+    """D(t) = D_inf + (1-D_inf) exp(-t/tau)."""
+    wait_s = np.asarray(wait_s, dtype=float)
+    return plateau + (1.0 - plateau) * np.exp(-wait_s / tau_s)
+
+
+def _fit_dark_survival(
+    wait_s: np.ndarray,
+    dark_survival: np.ndarray,
+    dark_survival_sem: Optional[np.ndarray] = None,
+) -> Dict[str, Any]:
+    wait_s = np.asarray(wait_s, dtype=float)
+    dark_survival = np.asarray(dark_survival, dtype=float)
+
+    valid = np.isfinite(wait_s) & np.isfinite(dark_survival) & (wait_s >= 0)
+    x = wait_s[valid]
+    y = dark_survival[valid]
+
+    if x.size < 4 or np.unique(x).size < 4:
+        return {
+            "success": False,
+            "error": "At least four distinct wait times are required.",
+        }
+
+    sigma = None
+    if dark_survival_sem is not None:
+        sem = np.asarray(dark_survival_sem, dtype=float)[valid]
+        positive = np.isfinite(sem) & (sem > 0)
+        if np.any(positive):
+            replacement = float(np.nanmedian(sem[positive]))
+            sigma = np.where(positive, sem, replacement)
+
+    positive_x = x[x > 0]
+    tau_guess = float(np.median(positive_x)) if positive_x.size else 60.0
+    plateau_guess = float(np.clip(np.nanmin(y), 0.0, 0.99))
+
+    popt, pcov = curve_fit(
+        _dark_survival_model,
+        x,
+        y,
+        p0=(plateau_guess, tau_guess),
+        bounds=([0.0, 1e-9], [1.0, np.inf]),
+        sigma=sigma,
+        absolute_sigma=sigma is not None,
+        maxfev=50000,
+    )
+
+    plateau, tau_s = map(float, popt)
+    stderr = np.sqrt(np.clip(np.diag(pcov), 0.0, np.inf))
+    plateau_stderr, tau_s_stderr = map(float, stderr)
+
+    fitted = _dark_survival_model(x, plateau, tau_s)
+    residuals = y - fitted
+    ss_res = float(np.sum(residuals**2))
+    ss_tot = float(np.sum((y - np.mean(y)) ** 2))
+    r_squared = float(1.0 - ss_res / ss_tot) if ss_tot > 0 else np.nan
+
+    max_wait_s = float(np.max(x))
+    min_positive_wait_s = float(np.min(x[x > 0]))
+
+    dense_positive_x = np.geomspace(
+        max(0.1, min_positive_wait_s / 20),
+        max_wait_s,
+        500,
+    )
+
+    dense_x = np.concatenate(
+        [
+            [0.0],
+            dense_positive_x,
+        ]
+    )
+
+    dense_y = _dark_survival_model(
+        dense_x,
+        plateau,
+        tau_s,
+    )
+
+    return {
+        "success": True,
+        "model": "D_inf + (1-D_inf) exp(-t/tau_dark)",
+        "plateau": plateau,
+        "plateau_stderr": plateau_stderr,
+        "tau_dark_s": tau_s,
+        "tau_dark_s_stderr": tau_s_stderr,
+        "tau_dark_min": tau_s / 60.0,
+        "tau_dark_min_stderr": tau_s_stderr / 60.0,
+        "r_squared": r_squared,
+        "fit_x_s": dense_x.tolist(),
+        "fit_y": dense_y.tolist(),
+    }
+
+
+def load_wait_sweep(
+    file_stems: Sequence[str],
+    recompute_analysis: bool = False,
+    initial_margin_counts: float = 1.0,
+    final_margin_counts: float = 1.0,
+    cluster_radius_px: Optional[float] = None,
+    min_cluster_size: int = 2,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Load each raw dataset and return raw data plus particle analyses."""
+
+    raw_datasets: List[Dict[str, Any]] = []
+    analyses: List[Dict[str, Any]] = []
+
+    for file_stem in file_stems:
+        print("\nLoading:", file_stem)
+        raw_data = dm.get_raw_data(
+            file_stem=file_stem,
+            load_npz=True,
+        )
+
+        analysis = raw_data.get("particle_analysis")
+        if analysis is None or recompute_analysis:
+            analysis = analyze_particle_charge_memory(
+                raw_data,
+                initial_margin_counts=initial_margin_counts,
+                final_margin_counts=final_margin_counts,
+                cluster_radius_px=cluster_radius_px,
+                min_cluster_size=min_cluster_size,
+            )
+            raw_data["particle_analysis"] = analysis
+
+        raw_datasets.append(raw_data)
+        analyses.append(analysis)
+
+    order = np.argsort(
+        [float(analysis["dark_wait_s"]) for analysis in analyses]
+    )
+    raw_datasets = [raw_datasets[ind] for ind in order]
+    analyses = [analyses[ind] for ind in order]
+    return raw_datasets, analyses
+
+
+def summarize_wait_sweep(
+    analyses: Sequence[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Combine run-level statistics across independently saved wait datasets."""
+
+    if not analyses:
+        raise ValueError("No analyses were supplied.")
+
+    rows: List[Dict[str, Any]] = []
+
+    for analysis in analyses:
+        wait_s = float(analysis["dark_wait_s"])
+        num_nvs = int(analysis["num_nvs"])
+
+        initial = np.asarray(analysis["num_initial_nvm_by_run"], dtype=float)
+        final = np.asarray(analysis["num_final_nvm_by_run"], dtype=float)
+        retained = np.asarray(analysis["num_retained_by_run"], dtype=float)
+        candidates = np.asarray(analysis["num_candidates_by_run"], dtype=float)
+        ambiguous = np.asarray(analysis["num_ambiguous_by_run"], dtype=float)
+        retention_by_run = np.asarray(analysis["retention_by_run"], dtype=float)
+        event_by_run = np.asarray(analysis["event_fraction_by_run"], dtype=float)
+
+        retention_mean, retention_sem = _mean_and_sem(retention_by_run)
+        event_mean, event_sem = _mean_and_sem(event_by_run)
+
+        ambiguous_by_run = np.full(initial.shape, np.nan, dtype=float)
+        good = initial > 0
+        ambiguous_by_run[good] = ambiguous[good] / initial[good]
+        ambiguous_mean, ambiguous_sem = _mean_and_sem(ambiguous_by_run)
+
+        rows.append(
+            {
+                "dark_wait_s": wait_s,
+                "dark_wait_min": wait_s / 60.0,
+                "num_nvs": num_nvs,
+                "num_runs": int(analysis["num_runs"]),
+                "mean_initial_nvm": float(np.mean(initial)),
+                "mean_final_nvm": float(np.mean(final)),
+                "initial_nvm_fraction": float(np.mean(initial) / num_nvs),
+                "final_nvm_fraction": float(np.mean(final) / num_nvs),
+                "retention_mean_by_run": retention_mean,
+                "retention_sem_by_run": retention_sem,
+                "retention_pooled": _pooled_fraction(retained, initial),
+                "event_fraction_mean_by_run": event_mean,
+                "event_fraction_sem_by_run": event_sem,
+                "event_fraction_pooled": _pooled_fraction(candidates, initial),
+                "ambiguous_fraction_mean_by_run": ambiguous_mean,
+                "ambiguous_fraction_sem_by_run": ambiguous_sem,
+                "ambiguous_fraction_pooled": _pooled_fraction(ambiguous, initial),
+                "mean_candidates_per_run": float(np.mean(candidates)),
+                "mean_ambiguous_per_run": float(np.mean(ambiguous)),
+            }
+        )
+
+    rows.sort(key=lambda row: row["dark_wait_s"])
+
+    wait_s = np.asarray([row["dark_wait_s"] for row in rows], dtype=float)
+    retention = np.asarray([row["retention_pooled"] for row in rows], dtype=float)
+    retention_sem = np.asarray(
+        [row["retention_sem_by_run"] for row in rows],
+        dtype=float,
+    )
+
+    zero_inds = np.where(np.isclose(wait_s, 0.0))[0]
+    if zero_inds.size == 0:
+        raise ValueError(
+            "A zero-wait dataset is required to separate the readout baseline."
+        )
+
+    zero_ind = int(zero_inds[0])
+    baseline_retention = float(retention[zero_ind])
+    baseline_sem = float(retention_sem[zero_ind])
+
+    if not np.isfinite(baseline_retention) or baseline_retention <= 0:
+        raise ValueError("The zero-wait retention is invalid.")
+
+    dark_survival = retention / baseline_retention
+    additional_dark_loss = 1.0 - dark_survival
+
+    # Approximate independent-error propagation for the normalized quantity.
+    dark_survival_sem = np.full_like(dark_survival, np.nan)
+    for ind, (value, value_sem) in enumerate(zip(retention, retention_sem)):
+        if not np.isfinite(value) or value <= 0:
+            continue
+        relative_variance = 0.0
+        if np.isfinite(value_sem):
+            relative_variance += (value_sem / value) ** 2
+        if np.isfinite(baseline_sem):
+            relative_variance += (baseline_sem / baseline_retention) ** 2
+        dark_survival_sem[ind] = dark_survival[ind] * np.sqrt(relative_variance)
+
+    # The zero-wait ratio is exactly one by definition.
+    dark_survival[zero_ind] = 1.0
+    dark_survival_sem[zero_ind] = 0.0
+    additional_dark_loss[zero_ind] = 0.0
+
+    fit = _fit_dark_survival(
+        wait_s,
+        dark_survival,
+        dark_survival_sem=dark_survival_sem,
+    )
+
+    for ind, row in enumerate(rows):
+        row["dark_survival_relative_to_zero"] = float(dark_survival[ind])
+        row["dark_survival_sem"] = float(dark_survival_sem[ind])
+        row["additional_dark_loss"] = float(additional_dark_loss[ind])
+
+    return {
+        "analysis_type": "particle_memory_dark_wait_sweep",
+        "rows": rows,
+        "wait_s": wait_s.tolist(),
+        "zero_wait_retention": baseline_retention,
+        "zero_wait_retention_sem": baseline_sem,
+        "dark_survival": dark_survival.tolist(),
+        "dark_survival_sem": dark_survival_sem.tolist(),
+        "additional_dark_loss": additional_dark_loss.tolist(),
+        "fit": fit,
+        "interpretation_note": (
+            "The zero-wait retention contains immediate/readout-induced loss. "
+            "Dark survival divides each retention value by the zero-wait "
+            "retention and therefore estimates additional wait-dependent loss "
+            "under a multiplicative-baseline assumption."
+        ),
+    }
+
+
+def _set_wait_axis(
+    ax,
+    wait_s: np.ndarray,
+    linthresh_s: float = 10.0,
+):
+    """
+    Log-like time axis that retains the zero-wait point.
+    """
+
+    wait_s = np.asarray(wait_s, dtype=float)
+
+    ax.set_xscale(
+        "symlog",
+        linthresh=linthresh_s,
+        linscale=1.0,
+        base=10,
+    )
+
+    ax.set_xticks(wait_s)
+
+    tick_labels = []
+    for value in wait_s:
+        if value == 0:
+            label = "0"
+        elif value < 60:
+            label = f"{value:g} s"
+        else:
+            label = f"{value / 60:g} min"
+
+        tick_labels.append(label)
+
+    ax.set_xticklabels(
+        tick_labels,
+        rotation=30,
+        ha="right",
+    )
+
+    max_wait = float(np.nanmax(wait_s))
+
+    ax.set_xlim(
+        -0.5 * linthresh_s,
+        max_wait * 1.15,
+    )
+
+    ax.grid(
+        True,
+        which="both",
+        alpha=0.25,
+    )
+
+
+def _set_zoomed_fraction_ylim(
+    ax,
+    values: np.ndarray,
+    errors: np.ndarray | None = None,
+    lower_limit: float = 0.0,
+    upper_limit: float = 1.02,
+    minimum_span: float = 0.05,
+    padding_fraction: float = 0.20,
+):
+    """
+    Set a linear but zoomed y-range for fractions close to one.
+    """
+
+    values = np.asarray(values, dtype=float)
+    good = np.isfinite(values)
+
+    if not np.any(good):
+        ax.set_ylim(lower_limit, upper_limit)
+        return
+
+    if errors is None:
+        low_values = values[good]
+        high_values = values[good]
+    else:
+        errors = np.asarray(errors, dtype=float)
+
+        if errors.shape != values.shape:
+            raise ValueError(
+                "errors and values must have matching shapes."
+            )
+
+        finite_errors = np.where(
+            np.isfinite(errors),
+            errors,
+            0.0,
+        )
+
+        low_values = (
+            values[good]
+            - finite_errors[good]
+        )
+        high_values = (
+            values[good]
+            + finite_errors[good]
+        )
+
+    data_min = float(np.nanmin(low_values))
+    data_max = float(np.nanmax(high_values))
+
+    span = max(
+        data_max - data_min,
+        float(minimum_span),
+    )
+
+    padding = float(padding_fraction) * span
+
+    y_min = max(
+        float(lower_limit),
+        data_min - padding,
+    )
+    y_max = min(
+        float(upper_limit),
+        data_max + padding,
+    )
+
+    if y_max - y_min < minimum_span:
+        center = 0.5 * (y_min + y_max)
+        y_min = max(
+            lower_limit,
+            center - minimum_span / 2,
+        )
+        y_max = min(
+            upper_limit,
+            center + minimum_span / 2,
+        )
+
+    ax.set_ylim(y_min, y_max)
+
+
+def plot_wait_sweep_summary(
+    summary: Dict[str, Any],
+    zoom_retention_axes: bool = True,
+):
+    """
+    Create the main four-panel dark-wait comparison figure.
+
+    Axis choices
+    ------------
+    x-axis:
+        Symmetric logarithmic scale. This preserves the 0 s point while
+        spreading out 10, 30, 60, 180, 300, and 600 s.
+
+    y-axis:
+        Linear for all panels because retention and survival are bounded
+        fractions and may include values near zero.
+    """
+
+    rows = summary["rows"]
+
+    wait_s = np.asarray(
+        summary["wait_s"],
+        dtype=float,
+    )
+
+    retention = np.asarray(
+        [
+            row["retention_pooled"]
+            for row in rows
+        ],
+        dtype=float,
+    )
+
+    retention_sem = np.asarray(
+        [
+            row["retention_sem_by_run"]
+            for row in rows
+        ],
+        dtype=float,
+    )
+
+    dark_survival = np.asarray(
+        summary["dark_survival"],
+        dtype=float,
+    )
+
+    dark_survival_sem = np.asarray(
+        summary["dark_survival_sem"],
+        dtype=float,
+    )
+
+    event_fraction = np.asarray(
+        [
+            row["event_fraction_pooled"]
+            for row in rows
+        ],
+        dtype=float,
+    )
+
+    event_sem = np.asarray(
+        [
+            row["event_fraction_sem_by_run"]
+            for row in rows
+        ],
+        dtype=float,
+    )
+
+    ambiguous_fraction = np.asarray(
+        [
+            row["ambiguous_fraction_pooled"]
+            for row in rows
+        ],
+        dtype=float,
+    )
+
+    ambiguous_sem = np.asarray(
+        [
+            row["ambiguous_fraction_sem_by_run"]
+            for row in rows
+        ],
+        dtype=float,
+    )
+
+    initial_fraction = np.asarray(
+        [
+            row["initial_nvm_fraction"]
+            for row in rows
+        ],
+        dtype=float,
+    )
+
+    final_fraction = np.asarray(
+        [
+            row["final_nvm_fraction"]
+            for row in rows
+        ],
+        dtype=float,
+    )
+
+    # Sort everything by wait time for safe plotting.
+    sort_inds = np.argsort(wait_s)
+
+    wait_s = wait_s[sort_inds]
+    retention = retention[sort_inds]
+    retention_sem = retention_sem[sort_inds]
+    dark_survival = dark_survival[sort_inds]
+    dark_survival_sem = dark_survival_sem[sort_inds]
+    event_fraction = event_fraction[sort_inds]
+    event_sem = event_sem[sort_inds]
+    ambiguous_fraction = ambiguous_fraction[sort_inds]
+    ambiguous_sem = ambiguous_sem[sort_inds]
+    initial_fraction = initial_fraction[sort_inds]
+    final_fraction = final_fraction[sort_inds]
+
+    fig, axes = plt.subplots(
+        2,
+        2,
+        figsize=(12, 8.5),
+    )
+
+    # ==============================================================
+    # Panel 1: measured retention
+    # ==============================================================
+
+    ax = axes[0, 0]
+
+    ax.errorbar(
+        wait_s,
+        retention,
+        yerr=retention_sem,
+        fmt="o-",
+        linewidth=1.7,
+        markersize=6,
+        capsize=3,
+        color=kpl.KplColors.BLUE,
+        label="Measured NV$^-$ retention",
+    )
+
+    zero_wait_retention = float(
+        summary["zero_wait_retention"]
+    )
+
+    ax.axhline(
+        zero_wait_retention,
+        linestyle="--",
+        linewidth=1.4,
+        color=kpl.KplColors.GRAY,
+        label=(
+            f"0 s baseline = "
+            f"{zero_wait_retention:.3f}"
+        ),
+    )
+
+    ax.set_ylabel(
+        "Retention after final readout"
+    )
+
+    ax.set_title(
+        "Measured retention versus dark wait"
+    )
+
+    ax.legend(
+        fontsize=8,
+    )
+
+    if zoom_retention_axes:
+        _set_zoomed_fraction_ylim(
+            ax,
+            retention,
+            retention_sem,
+            lower_limit=0.0,
+            upper_limit=1.02,
+            minimum_span=0.05,
+        )
+    else:
+        ax.set_ylim(
+            0.0,
+            1.02,
+        )
+
+    # ==============================================================
+    # Panel 2: baseline-normalized dark survival
+    # ==============================================================
+
+    ax = axes[0, 1]
+
+    ax.errorbar(
+        wait_s,
+        dark_survival,
+        yerr=dark_survival_sem,
+        fmt="o",
+        markersize=6,
+        capsize=3,
+        color=kpl.KplColors.GREEN,
+        label="Retention / 0 s retention",
+    )
+
+    ax.axhline(
+        1.0,
+        linestyle="--",
+        linewidth=1.2,
+        color=kpl.KplColors.GRAY,
+        label="No additional dark loss",
+    )
+
+    fit = summary.get(
+        "fit",
+        {},
+    )
+
+    if fit.get("success", False):
+        fit_x_s = np.asarray(
+            fit["fit_x_s"],
+            dtype=float,
+        )
+
+        fit_y = np.asarray(
+            fit["fit_y"],
+            dtype=float,
+        )
+
+        fit_sort_inds = np.argsort(
+            fit_x_s
+        )
+
+        ax.plot(
+            fit_x_s[fit_sort_inds],
+            fit_y[fit_sort_inds],
+            "-",
+            linewidth=2,
+            color=kpl.KplColors.GREEN,
+            label=(
+                f"$\\tau_{{dark}}$ = "
+                f"{fit['tau_dark_min']:.2g} ± "
+                f"{fit['tau_dark_min_stderr']:.1g} min\n"
+                f"$D_\\infty$ = "
+                f"{fit['plateau']:.3f}"
+            ),
+        )
+
+    ax.set_ylabel(
+        "Dark survival relative to 0 s"
+    )
+    
+
+    ax.set_title(
+        "Additional dark-time evolution"
+    )
+
+    ax.legend(
+        fontsize=8,
+    )
+
+    if zoom_retention_axes:
+        combined_values = dark_survival.copy()
+        combined_errors = dark_survival_sem.copy()
+
+        if fit.get("success", False):
+            combined_values = np.concatenate(
+                [
+                    combined_values,
+                    np.asarray(
+                        fit["fit_y"],
+                        dtype=float,
+                    ),
+                ]
+            )
+
+            combined_errors = np.concatenate(
+                [
+                    combined_errors,
+                    np.zeros(
+                        len(fit["fit_y"]),
+                        dtype=float,
+                    ),
+                ]
+            )
+
+        _set_zoomed_fraction_ylim(
+            ax,
+            combined_values,
+            combined_errors,
+            lower_limit=0.0,
+            upper_limit=1.08,
+            minimum_span=0.05,
+        )
+    else:
+        ax.set_ylim(
+            0.0,
+            1.08,
+        )
+
+    # ==============================================================
+    # Panel 3: confident and ambiguous loss
+    # ==============================================================
+
+    ax = axes[1, 0]
+
+    ax.errorbar(
+        wait_s,
+        event_fraction,
+        yerr=event_sem,
+        fmt="o-",
+        linewidth=1.7,
+        markersize=6,
+        capsize=3,
+        color=kpl.KplColors.RED,
+        label=(
+            "Confident NV$^- \\rightarrow$ NV$^0$"
+        ),
+    )
+
+    ax.errorbar(
+        wait_s,
+        ambiguous_fraction,
+        yerr=ambiguous_sem,
+        fmt="o-",
+        linewidth=1.7,
+        markersize=6,
+        capsize=3,
+        color=kpl.KplColors.GRAY,
+        label="Ambiguous final state",
+    )
+
+    ax.set_xlabel(
+        "Dark wait (s)"
+    )
+
+    ax.set_ylabel(
+        "Fraction of initially verified NV$^-$"
+    )
+
+    ax.set_ylim(
+        bottom=0.0,
+    )
+
+    ax.set_title(
+        "Loss classification versus wait"
+    )
+
+    ax.legend(
+        fontsize=8,
+    )
+
+    # ==============================================================
+    # Panel 4: preparation and final populations
+    # ==============================================================
+
+    ax = axes[1, 1]
+
+    ax.plot(
+        wait_s,
+        initial_fraction,
+        "o-",
+        linewidth=1.7,
+        markersize=6,
+        color=kpl.KplColors.GREEN,
+        label="Initial verified NV$^-$ / all NVs",
+    )
+
+    ax.plot(
+        wait_s,
+        final_fraction,
+        "o-",
+        linewidth=1.7,
+        markersize=6,
+        color=kpl.KplColors.BLUE,
+        label="Final NV$^-$ / all NVs",
+    )
+
+    ax.set_xlabel(
+        "Dark wait (s)"
+    )
+
+    ax.set_ylabel(
+        "Fraction of tracked NVs"
+    )
+
+    ax.set_title(
+        "Preparation and final populations"
+    )
+
+    ax.legend(
+        fontsize=8,
+    )
+
+    if zoom_retention_axes:
+        population_values = np.concatenate(
+            [
+                initial_fraction,
+                final_fraction,
+            ]
+        )
+
+        _set_zoomed_fraction_ylim(
+            ax,
+            population_values,
+            errors=None,
+            lower_limit=0.0,
+            upper_limit=1.02,
+            minimum_span=0.08,
+        )
+    else:
+        ax.set_ylim(
+            0.0,
+            1.02,
+        )
+
+    # ==============================================================
+    # Shared x-axis formatting
+    # ==============================================================
+
+    for ax in axes.flat:
+        _set_wait_axis(
+            ax,
+            wait_s,
+            linthresh_s=10.0,
+        )
+
+    fig.suptitle(
+        "Adaptive charge memory versus dark wait\n"
+        "The 0 s data provide the measurement-loss baseline",
+        fontsize=15,
+    )
+
+    fig.tight_layout(
+        rect=[0, 0, 1, 0.94],
+    )
+
+    return fig
+
+def print_wait_sweep_table(summary: Dict[str, Any]) -> None:
+    print("\n" + "=" * 96)
+    print("DARK-WAIT SWEEP SUMMARY")
+    print("=" * 96)
+    print(
+        f"{'wait(s)':>8}  {'runs':>5}  {'initial':>9}  {'retention':>10}  "
+        f"{'event':>9}  {'ambig.':>9}  {'dark surv.':>11}  {'dark loss':>10}"
+    )
+
+    for row in summary["rows"]:
+        print(
+            f"{row['dark_wait_s']:8.0f}  "
+            f"{row['num_runs']:5d}  "
+            f"{row['initial_nvm_fraction']:9.4f}  "
+            f"{row['retention_pooled']:10.4f}  "
+            f"{row['event_fraction_pooled']:9.4f}  "
+            f"{row['ambiguous_fraction_pooled']:9.4f}  "
+            f"{row['dark_survival_relative_to_zero']:11.4f}  "
+            f"{row['additional_dark_loss']:10.4f}"
+        )
+
+    fit = summary.get("fit", {})
+    if fit.get("success", False):
+        print("\nFit to normalized dark survival:")
+        print(
+            f"tau_dark = {fit['tau_dark_s']:.3g} ± "
+            f"{fit['tau_dark_s_stderr']:.2g} s "
+            f"({fit['tau_dark_min']:.3g} ± "
+            f"{fit['tau_dark_min_stderr']:.2g} min)"
+        )
+        print(
+            f"D_inf = {fit['plateau']:.4f} ± "
+            f"{fit['plateau_stderr']:.2g}; R² = {fit['r_squared']:.4f}"
+        )
+    else:
+        print("\nFit unavailable:", fit.get("error", "unknown error"))
+
+
+def save_wait_sweep_csv(summary: Dict[str, Any], csv_path: Path) -> Path:
+    csv_path = Path(csv_path)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    rows = summary["rows"]
+    if not rows:
+        raise ValueError("No rows to save.")
+
+    with csv_path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+
+    print("Saved wait-sweep CSV:", csv_path)
+    return csv_path
+
+
+def run_particle_memory_dark_wait_comparison_analysis(
+    file_stems: Sequence[str] = None,
+    recompute_analysis: bool = False,
+    save_fig: bool = True,
+    save_csv: bool = True,
+):
+    raw_datasets, analyses = load_wait_sweep(
+        file_stems,
+        recompute_analysis=recompute_analysis,
+    )
+    summary = summarize_wait_sweep(analyses)
+    print_wait_sweep_table(summary)
+    # fig = plot_wait_sweep_summary(summary)
+    fig = plot_wait_sweep_summary(summary, zoom_retention_axes=True,)
+
+
+    timestamp = dm.get_time_stamp()
+    output_path = dm.get_file_path(
+        __file__,
+        timestamp,
+        "particle-memory-dark-wait-comparison",
+    )
+
+    if save_fig:
+        dm.save_figure(fig, output_path)
+        print("Saved wait-sweep figure:", output_path)
+
+    if save_csv:
+        # dm paths may have no extension; save a nearby explicit CSV.
+        csv_path = Path(str(output_path) + ".csv")
+        save_wait_sweep_csv(summary, csv_path)
+
+    return {
+        "raw_datasets": raw_datasets,
+        "analyses": analyses,
+        "summary": summary,
+        "fig": fig,
+    }
+
+from typing import Any, Dict, Optional, Sequence
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.colors import Normalize, TwoSlopeNorm
+
+
+def plot_nv_loss_row_by_row(
+    analyses: Sequence[Dict[str, Any]],
+    selected_waits_s: Optional[Sequence[float]] = None,
+    subtract_zero_wait: bool = False,
+    show_percent: bool = True,
+    percentile_limit: float = 99.0,
+):
+    """
+    Plot per-NV charge-loss probability as a wait-time × NV-index heat map.
+
+    Rows:
+        Dark-wait datasets.
+
+    Columns:
+        NV indices.
+
+    Color:
+        Probability of a confident NV- -> NV0 transition.
+
+    Parameters
+    ----------
+    analyses:
+        Sequence of particle_analysis dictionaries.
+
+    selected_waits_s:
+        Optional wait times to include, such as:
+            [0, 60, 300, 600, 1800]
+
+        None includes all wait times.
+
+    subtract_zero_wait:
+        False:
+            Plot the absolute loss probability.
+
+        True:
+            Plot excess loss relative to the 0 s dataset.
+
+    show_percent:
+        Show probability in percent instead of fractions.
+
+    percentile_limit:
+        Upper color limit percentile. This prevents a few unstable NVs
+        from making the rest of the heat map appear dark.
+    """
+
+    if not analyses:
+        raise ValueError("No analyses were supplied.")
+
+    analyses = sorted(
+        analyses,
+        key=lambda analysis: float(analysis["dark_wait_s"]),
+    )
+
+    # --------------------------------------------------------------
+    # Select requested wait times
+    # --------------------------------------------------------------
+
+    if selected_waits_s is not None:
+        selected_analyses = []
+
+        for requested_wait in selected_waits_s:
+            closest_analysis = min(
+                analyses,
+                key=lambda analysis: abs(
+                    float(analysis["dark_wait_s"])
+                    - float(requested_wait)
+                ),
+            )
+
+            if closest_analysis not in selected_analyses:
+                selected_analyses.append(closest_analysis)
+
+        analyses = sorted(
+            selected_analyses,
+            key=lambda analysis: float(analysis["dark_wait_s"]),
+        )
+
+    wait_s = np.asarray(
+        [
+            float(analysis["dark_wait_s"])
+            for analysis in analyses
+        ],
+        dtype=float,
+    )
+
+    probability_rows = []
+    eligible_rows = []
+    event_rows = []
+
+    reference_num_nvs = None
+
+    # --------------------------------------------------------------
+    # Calculate probability for each NV at each wait time
+    # --------------------------------------------------------------
+
+    for analysis in analyses:
+        initial_nvm_mask = np.asarray(
+            analysis["initial_nvm_mask"],
+            dtype=bool,
+        )
+
+        event_mask = np.asarray(
+            analysis["candidate_nvm_to_nv0_mask"],
+            dtype=bool,
+        )
+
+        if initial_nvm_mask.shape != event_mask.shape:
+            raise ValueError(
+                "initial_nvm_mask and candidate mask shapes differ."
+            )
+
+        num_nvs = initial_nvm_mask.shape[0]
+
+        if reference_num_nvs is None:
+            reference_num_nvs = num_nvs
+        elif num_nvs != reference_num_nvs:
+            raise ValueError(
+                "The datasets contain different numbers of NVs."
+            )
+
+        eligible_count = np.sum(
+            initial_nvm_mask,
+            axis=1,
+        ).astype(float)
+
+        event_count = np.sum(
+            event_mask,
+            axis=1,
+        ).astype(float)
+
+        probability = np.full(
+            num_nvs,
+            np.nan,
+            dtype=float,
+        )
+
+        good = eligible_count > 0
+
+        probability[good] = (
+            event_count[good]
+            / eligible_count[good]
+        )
+
+        probability_rows.append(probability)
+        eligible_rows.append(eligible_count)
+        event_rows.append(event_count)
+
+    probability_matrix = np.asarray(
+        probability_rows,
+        dtype=float,
+    )  # shape = [wait, NV]
+
+    eligible_matrix = np.asarray(
+        eligible_rows,
+        dtype=float,
+    )
+
+    event_matrix = np.asarray(
+        event_rows,
+        dtype=float,
+    )
+
+    # --------------------------------------------------------------
+    # Optional zero-wait subtraction
+    # --------------------------------------------------------------
+
+    if subtract_zero_wait:
+        zero_inds = np.where(
+            np.isclose(wait_s, 0.0)
+        )[0]
+
+        if zero_inds.size == 0:
+            raise ValueError(
+                "A 0 s dataset is required for baseline subtraction."
+            )
+
+        zero_probability = probability_matrix[
+            int(zero_inds[0])
+        ]
+
+        plot_matrix = (
+            probability_matrix
+            - zero_probability[None, :]
+        )
+
+        title = (
+            "Per-NV excess charge loss above the 0 s baseline"
+        )
+
+        colorbar_label = (
+            "Excess loss probability"
+        )
+    else:
+        plot_matrix = probability_matrix.copy()
+
+        title = (
+            "Per-NV charge loss at different dark waits"
+        )
+
+        colorbar_label = (
+            "NV$^- \\rightarrow$ NV$^0$ probability"
+        )
+
+    if show_percent:
+        plot_matrix = 100.0 * plot_matrix
+        colorbar_label += " (%)"
+
+    # Mask NVs that were never initially verified.
+    masked_matrix = np.ma.masked_invalid(
+        plot_matrix
+    )
+
+    finite_values = plot_matrix[
+        np.isfinite(plot_matrix)
+    ]
+
+    if finite_values.size == 0:
+        raise ValueError(
+            "No finite loss probabilities were found."
+        )
+
+    # --------------------------------------------------------------
+    # Color normalization
+    # --------------------------------------------------------------
+
+    if subtract_zero_wait:
+        color_limit = float(
+            np.nanpercentile(
+                np.abs(finite_values),
+                percentile_limit,
+            )
+        )
+
+        color_limit = max(
+            color_limit,
+            0.1 if show_percent else 0.001,
+        )
+
+        norm = TwoSlopeNorm(
+            vmin=-color_limit,
+            vcenter=0.0,
+            vmax=color_limit,
+        )
+
+        cmap = plt.get_cmap(
+            "coolwarm"
+        ).copy()
+
+    else:
+        color_limit = float(
+            np.nanpercentile(
+                finite_values,
+                percentile_limit,
+            )
+        )
+
+        color_limit = max(
+            color_limit,
+            0.1 if show_percent else 0.001,
+        )
+
+        norm = Normalize(
+            vmin=0.0,
+            vmax=color_limit,
+        )
+
+        cmap = plt.get_cmap(
+            "magma"
+        ).copy()
+
+    cmap.set_bad(
+        "lightgray"
+    )
+
+    # --------------------------------------------------------------
+    # Plot
+    # --------------------------------------------------------------
+
+    num_waits, num_nvs = plot_matrix.shape
+
+    fig_height = max(
+        4.0,
+        0.65 * num_waits + 2.0,
+    )
+
+    fig, ax = plt.subplots(
+        figsize=(15, fig_height),
+        constrained_layout=True,
+    )
+
+    image = ax.imshow(
+        masked_matrix,
+        aspect="auto",
+        interpolation="nearest",
+        cmap=cmap,
+        norm=norm,
+        origin="upper",
+    )
+
+    wait_labels = []
+
+    for current_wait_s in wait_s:
+        if np.isclose(current_wait_s, 0.0):
+            label = "0 s"
+        elif current_wait_s < 60:
+            label = f"{current_wait_s:g} s"
+        else:
+            label = f"{current_wait_s / 60:g} min"
+
+        wait_labels.append(label)
+
+    ax.set_yticks(
+        np.arange(num_waits)
+    )
+
+    ax.set_yticklabels(
+        wait_labels
+    )
+
+    ax.set_xlabel(
+        "NV index"
+    )
+
+    ax.set_ylabel(
+        "Dark wait"
+    )
+
+    ax.set_title(
+        title
+    )
+
+    # Horizontal lines make each time row easier to identify.
+    for boundary in (
+        np.arange(num_waits + 1) - 0.5
+    ):
+        ax.axhline(
+            boundary,
+            linewidth=0.5,
+            color="white",
+            alpha=0.35,
+        )
+
+    colorbar = fig.colorbar(
+        image,
+        ax=ax,
+        pad=0.015,
+    )
+
+    colorbar.set_label(
+        colorbar_label
+    )
+
+    return {
+        "wait_s": wait_s,
+        "probability_matrix": probability_matrix,
+        "plot_matrix": plot_matrix,
+        "eligible_matrix": eligible_matrix,
+        "event_matrix": event_matrix,
+    }, fig
+    
 if __name__ == "__main__":
     kpl.init_kplotlib()
+    
+    FILE_STEMS = [
+    "2026_07_23-01_05_24-qnami-nv0_2026_02_20-particle-memory-source_off_wait_0s-wait-0s",
+    "2026_07_23-01_48_56-qnami-nv0_2026_02_20-particle-memory-source_off_wait_10s-wait-10s",
+    # "2026_07_23-03_05_50-qnami-nv0_2026_02_20-particle-memory-source_off_wait_30s-wait-30s",
+    "2026_07_23-05_13_51-qnami-nv0_2026_02_20-particle-memory-source_off_wait_60s-wait-60s",
+    "2026_07_23-09_19_48-qnami-nv0_2026_02_20-particle-memory-source_off_wait_180s-wait-180s",
+    "2026_07_23-15_55_08-qnami-nv0_2026_02_20-particle-memory-source_off_wait_300s-wait-300s",
+    "2026_07_24-00_29_16-qnami-nv0_2026_02_20-particle-memory-source_off_wait_600s-wait-600s",
+    "2026_07_24-08_56_35-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1200s-wait-1200s",
+    ]
+    
+    FILE_STEMS = [
+    "2026_07_24-21_43_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_0s-wait-0s",
+    "2026_07_24-22_27_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_10s-wait-10s",
+    "2026_07_25-01_51_32-qnami-nv0_2026_02_20-particle-memory-source_off_wait_60s-wait-60s",
+    "2026_07_25-05_57_38-qnami-nv0_2026_02_20-particle-memory-source_off_wait_180s-wait-180s",
+    "2026_07_25-12_33_01-qnami-nv0_2026_02_20-particle-memory-source_off_wait_300s-wait-300s",
+    "2026_07_25-21_07_06-qnami-nv0_2026_02_20-particle-memory-source_off_wait_600s-wait-600s",
+    "2026_07_26-05_34_29-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1200s-wait-1200s",
+    "2026_07_26-18_11_11-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1800s-wait-1800s",
+    ]
+    
+    output = run_particle_memory_dark_wait_comparison_analysis(
+        file_stems=FILE_STEMS,
+        recompute_analysis=False,
+        save_fig=True,
+        save_csv=True,
+    )
+    analyses = output["analyses"]
+    row_result, fig_rows = plot_nv_loss_row_by_row(
+    analyses,
+    selected_waits_s=[
+        0,
+        10,
+        60,
+        180,
+        300,
+        600,
+        1200,
+        1800,
+    ],
+    subtract_zero_wait=False,
+    show_percent=True,
+    )
+    
+    excess_row_result, fig_excess_rows = plot_nv_loss_row_by_row(
+    analyses,
+    selected_waits_s=[
+        0,
+        10,
+        60,
+        180,
+        300,
+        600,
+        1200,
+        1800,
+    ],
+    subtract_zero_wait=True,
+    show_percent=True,
+    )
 
+    kpl.show(block=True)
+    sys.exit()
     # ------------------------------------------------------------------
     # Load saved dataset
     # ------------------------------------------------------------------
@@ -2452,6 +3842,7 @@ if __name__ == "__main__":
     "2026_07_19-09_54_11-qnami-nv0_2026_02_20-particle-memory-source_off-wait-300s"
     
     )
+
 
     raw_data = dm.get_raw_data(
         file_stem=file_stem,
