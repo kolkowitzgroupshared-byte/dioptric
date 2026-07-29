@@ -227,12 +227,14 @@ def main(
 
         slider_1.set_filter(slider_1_pos)
         slider_3.set_filter(slider_3_pos)
-    recovery_delay_ns_list = np.linspace(
-        int(min_recovery_delay_ns),
-        int(max_recovery_delay_ns),
+    min_ns = max(int(min_recovery_delay_ns), 1)  # logspace can't start at 0
+    max_ns = int(max_recovery_delay_ns)
+    recovery_delay_ns_list = np.logspace(
+        np.log10(min_ns),
+        np.log10(max_ns),
         int(num_steps),
     )
-    recovery_delay_ns_list = np.unique(np.rint(recovery_delay_ns_list).astype(int))
+    recovery_delay_ns_list = np.unique(np.rint(recovery_delay_ns_list).astype(np.int64))
 
     timestamp = dm.get_time_stamp()
 
@@ -248,12 +250,28 @@ def main(
     counter_server = tb.get_server_counter()
     tb.init_safe_stop()
 
+    counter_server.start_tag_stream()
+    channel_mapping = counter_server.get_channel_mapping()
+    counter_server.stop_tag_stream()
+    gate_open_channel = channel_mapping[1]
+    gate_close_channel = channel_mapping[2]
+
     # --- NEW PROGRESS TRACKING SETUP ---
     total_steps = num_runs * len(recovery_delay_ns_list)
     current_step = 0
     print("Starting experiment...")
 
+    if do_save:
+        file_path = dm.get_file_path(
+            __file__,
+            timestamp,
+            getattr(sample_sig, "name", "sample"),
+        )
+
+    runs_completed = 0
     start_time = time.time()
+    step_period_s = {}
+    n_steps = len(recovery_delay_ns_list)
 
     for run_ind in range(num_runs):
         if tb.safe_stop():
@@ -277,13 +295,14 @@ def main(
             if run_ind == 0 and step_ind == 0:
                 print(f"Sequence period: {ret_vals[0]} ns\n")
 
+            # Timeout must cover the full step: num_reps × period + 2 s overhead
+            period_s = ret_vals[0] / 1e9
+            step_period_s[step_ind] = period_s
+            step_timeout_s = max(period_s * num_reps + 2.0, 3.0)
+
             counter_server.start_tag_stream()
             try:
                 pulsegen_server.stream_start(int(num_reps))
-
-                channel_mapping = counter_server.get_channel_mapping()
-                gate_open_channel = channel_mapping[1]
-                gate_close_channel = channel_mapping[2]
 
                 current_tags = []
                 current_channels = []
@@ -302,7 +321,7 @@ def main(
                         break
 
                     # --- THE FAILSAFE: Prevent infinite loops ---
-                    if time.time() - timeout_start > 5.0:  # 5 second limit
+                    if time.time() - timeout_start > step_timeout_s:
                         print(
                             f"\nWarning: Hardware timeout! Expected {target_num_gates} gates, but tagger only saw {num_processed_gates}."
                         )
@@ -349,21 +368,44 @@ def main(
                 except Exception:
                     pass
 
-            # --- NEW CLEAN PROGRESS BAR & ETA ---
+            # --- PROGRESS BAR & ETA ---
             current_step += 1
-            elapsed = time.time() - start_time
-            time_per_step = elapsed / current_step
-            eta_seconds = time_per_step * (total_steps - current_step)
-
-            # Format ETA into mm:ss
-            mins, secs = divmod(int(eta_seconds), 60)
-            eta_str = f"{mins:02d}:{secs:02d}"
-
-            # \r forces the cursor to the start of the line, end="" prevents a new line, flush=True forces the terminal to update
+            est = lambda s: step_period_s.get(
+                s,
+                (2.0 * exc_ns + 2.0 * detect_ns + float(recovery_delay_ns_list[s]) + 2000.0) / 1e9,
+            )
+            remaining_this_run = sum(est(s) * num_reps for s in range(step_ind + 1, n_steps))
+            remaining_future = (num_runs - run_ind - 1) * sum(est(s) * num_reps for s in range(n_steps))
+            eta_seconds = remaining_this_run + remaining_future
+            eta_total = int(eta_seconds)
+            eta_h, eta_rem = divmod(eta_total, 3600)
+            eta_m, eta_s = divmod(eta_rem, 60)
+            eta_str = f"{eta_h}:{eta_m:02d}:{eta_s:02d}" if eta_h > 0 else f"{eta_m:02d}:{eta_s:02d}"
             print(
                 f"\rProgress: [{current_step}/{total_steps}] steps | ETA: {eta_str}   ",
                 end="",
                 flush=True,
+            )
+
+        runs_completed += 1
+        if do_save:
+            dm.save_raw_data(
+                {
+                    "timestamp": timestamp,
+                    "sample_name": getattr(sample_sig, "name", "sample"),
+                    "num_reps": int(num_reps),
+                    "num_runs": int(num_runs),
+                    "runs_completed": runs_completed,
+                    "exc_ns": int(exc_ns),
+                    "detect_ns": int(detect_ns),
+                    "num_bins": int(num_bins),
+                    "laser_vkey": str(laser_vkey),
+                    "laser_power": laser_power,
+                    "recovery_delay_ns_list": recovery_delay_ns_list.tolist(),
+                    "int_counts_1": int_counts_1.tolist(),
+                    "int_counts_2": int_counts_2.tolist(),
+                },
+                file_path,
             )
 
     # Print a new line at the very end so the final summary text doesn't overwrite our completed progress bar
@@ -412,6 +454,7 @@ def main(
 
     # --- Simplified Static Plotting at the End ---
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
+    ax1.set_xscale("log")
 
     ax1.errorbar(
         recovery_delay_ns_list,
@@ -435,8 +478,8 @@ def main(
 
     # Optional: Plot the recovery fit line if it succeeded
     if recovery_fit is not None:
-        xfine = np.linspace(
-            min(recovery_delay_ns_list), max(recovery_delay_ns_list), 200
+        xfine = np.logspace(
+            np.log10(min(recovery_delay_ns_list)), np.log10(max(recovery_delay_ns_list)), 200
         )
         ax2.plot(xfine, recovery_model(xfine, *recovery_fit["popt"]), "k--", alpha=0.5)
 
@@ -499,6 +542,7 @@ def main(
         "sample_name": getattr(sample_sig, "name", "sample"),
         "num_reps": int(num_reps),
         "num_runs": int(num_runs),
+        "runs_completed": runs_completed,
         "exc_ns": int(exc_ns),
         "detect_ns": int(detect_ns),
         "num_bins": int(num_bins),
@@ -510,14 +554,10 @@ def main(
     }
 
     if do_save:
-        file_path = dm.get_file_path(
-            __file__,
-            timestamp,
-            getattr(sample_sig, "name", "sample"),
-        )
         dm.save_raw_data(raw_data, file_path)
-        dm.save_raw_data(proc_data, file_path + "_proc")
-        fig.savefig(f"{file_path}.png", dpi=300, bbox_inches="tight")
+        dm.save_raw_data(proc_data, str(file_path) + "_proc")
+        dm.save_figure(fig, file_path)
+        fig.savefig(str(file_path.with_suffix(".png")), dpi=300, bbox_inches="tight")
 
         print(f"Saved data and plot to {file_path}")
     if proc_data["recovery_fit"] is not None:

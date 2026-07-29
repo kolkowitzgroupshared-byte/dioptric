@@ -50,9 +50,7 @@ def get_seq(pulse_streamer, config, args):
     meas_buffer = np.int64(1000)
     front_buffer = np.int64(laser_delay)
 
-    period = np.int64(
-        front_buffer + exc_ns + detect_ns + readout_delay_ns + meas_buffer
-    )
+    period = np.int64(front_buffer + exc_ns + detect_ns + meas_buffer)
 
     seq = Sequence()
 
@@ -66,26 +64,20 @@ def get_seq(pulse_streamer, config, args):
     # gate 0 -> readout 1
     # gate 1 -> readout 2
     apd_train = [
-        (int(front_buffer), HIGH),
-        # pulse 1
+        (int(front_buffer), LOW),
+        # detect while exciting
         (int(exc_ns), HIGH),
-        # readout delay
-        (int(readout_delay_ns), HIGH),
-        # readout 1
+        # one decay bin after laser off
         (int(detect_ns), HIGH),
-        # dark recovery
         (int(meas_buffer), LOW),
     ]
     seq.setDigital(do_apd_gate, apd_train)
 
-    # Laser ON only for excitation pulses
     laser_train = [
-        (int(front_buffer), HIGH),
-        # pulse 1
+        (int(front_buffer), LOW),
+        # laser on during excitation
         (int(exc_ns), HIGH),
-        # readout delay
-        (int(readout_delay_ns), LOW),
-        # # readout 1
+        # laser off for decay bin
         (int(detect_ns), LOW),
         (int(meas_buffer), LOW),
     ]

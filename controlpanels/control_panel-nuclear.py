@@ -170,33 +170,34 @@ def do_lifetime_caf_single_shot(th_sig):
     lifetime_caf_single_shot.main(
         nv_sig=th_sig,
         apd_indices=[0],
-        readout_times=[0, 200, 20000],  # delay, excitation, detection
-        filter_pos=[1, 3],
+        readout_times=[0, 1500, 2000],  # delay, excitation, detection
+        filter_pos=[3, 0],
         num_reps=200000,
-        num_runs=100,
+        num_runs=1000,
         num_bins=325,
-        sequence_file="lifetime_caf_single_on.py",
+        sequence_file="lifetime_caf_single_pulse.py",
         # lifetime_caf_single_pulse or lifetime_caf_single_on
-        # pulse = 0, 200, 325
-        # on = 0, 200, 20000
+        # pulse = 0, 1500, 2000
+        # on = 0, 19500, 20000
         laser_power=2,
     )
     return
 
 
 def do_lifetime_caf_recovery(th_sig):
+
     lifetime_caf_recovery.main(
         sample_sig=th_sig,
-        num_reps=200000,
-        num_runs=50,
-        min_recovery_delay_ns=50,
-        max_recovery_delay_ns=5000,
-        num_steps=10,
-        exc_ns=200,  # laser
-        detect_ns=325,  # read out
+        num_reps=10,
+        num_runs=100,
+        min_recovery_delay_ns=1000,
+        max_recovery_delay_ns=10000000000,
+        num_steps=8,
+        exc_ns=10000000,  # laser
+        detect_ns=50,  # read out
         seq_file="lifetime_caf_recovery.py",
-        num_bins=650,
-        filter_pos=[1, 3],
+        num_bins=10,  # not very necessary here
+        filter_pos=[3, 0],
         laser_power=0.003,
         laser_vkey="SPIN_READOUT",
         do_save=True,
@@ -542,6 +543,8 @@ def test_multimeter_avg():
 #     server_name = "tisapph_pump_COHE_verdi"
 #     pump = common.get_server_by_name(server_name)
 #     pump.
+
+
 def do_stationary_count(nv_sig, disable_opt=None):
     """
     A 1D scan which holds the galvo and piezo at a fixed position while collecting photon counts.
@@ -629,16 +632,17 @@ if __name__ == "__main__":
     th_sig.expected_counts = None  # raw counts, none when unknown
 
     try:
-        # do_move_slider(1,0)
-        do_pulse_streamer_constant(
-            digital_channels=(1,),
-            # run_while_active=do_two_slider_moves(),  # do_power_monitor
-        )
+        # do_move_slider(1, 0)
+        # do_pulse_streamer_constant(
+        # digital_channels=(1,),
+        # run_while_active=do_two_slider_moves(),  # do_power_monitor
+        # )
         # ^leave the comma at the end or it will complain
         # do_power_monitor()
         # do_stationary_count(th_sig, disable_opt=True)
         # do_lifetime_measurement(th_sig)
-        # do_lifetime_caf_single_shot(th_sig)
+        do_lifetime_caf_single_shot(th_sig)
+        # do_lifetime_caf_recovery(th_sig)
         # do_th_lifetime_measurement(th_sig)
         # do_awg_test()
         # do_resonance(th_sig)

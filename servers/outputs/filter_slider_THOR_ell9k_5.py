@@ -38,17 +38,10 @@ class FilterSliderThorEll9k(LabradServer):
     pc_name = socket.gethostname()
     port = "COM9"
     baudrate = 9600
+    reset_cfm_opt_out = True
 
     def initServer(self):
-        self.slider = serial.Serial(self.port, baudrate=self.baudrate)
-        time.sleep(0.1)
-        self.slider.flush()
-        time.sleep(0.1)
-        # Find the resonant frequencies of the motor
-        cmd = "0s1".encode()
-        self.slider.write(cmd)
-        time.sleep(0.1)
-        # Set up the mapping from filter position to move command
+        self._open_serial()
         self.move_commands = {
             0: "0ma00000000".encode(),
             1: "0ma00000020".encode(),
@@ -56,50 +49,47 @@ class FilterSliderThorEll9k(LabradServer):
             3: "0ma00000060".encode(),
         }
         logging.info("Init complete")
-        # port = "COM8"
-        # try:
-        #     logging.info("here")
-        #     self.slider = serial.Serial(
-        #         port,
-        #         9600,
-        #         # serial.EIGHTBITS,
-        #         # serial.PARITY_NONE,
-        #         # serial.STOPBITS_ONE,
-        #     )
-        # except Exception as e:
-        #     logging.debug(e)
-        #     del self.slider
 
-        # time.sleep(0.1)
-        # self.slider.flush()
-        # time.sleep(0.1)
-        # # Find the resonant frequencies of the motor
-        # cmd = "0s1".encode()
-        # self.slider.write(cmd)
-        # time.sleep(0.1)
-        # # Set up the mapping from filter position to move command
-        # self.move_commands = {
-        #     0: "0ma00000000".encode(),
-        #     1: "0ma00000020".encode(),
-        #     2: "0ma00000040".encode(),
-        #     3: "0ma00000060".encode(),
-        # }
-        # logging.info("Init complete")
+    def _open_serial(self):
+        try:
+            if hasattr(self, "slider") and self.slider.is_open:
+                self.slider.close()
+        except Exception:
+            pass
+        self.slider = serial.Serial(self.port, baudrate=self.baudrate, timeout=2.0)
+        time.sleep(0.1)
+        self.slider.flush()
+        self.slider.reset_input_buffer()
+        time.sleep(0.1)
+        self.slider.write("0s1".encode())
+        time.sleep(0.1)
 
     @setting(0, pos="i")
     def set_filter(self, c, pos):
         cmd = self.move_commands[pos]
-        # self.slider.write(cmd)
-        incomplete = True
-        while incomplete:
-            self.slider.write(cmd)
-            time.sleep(0.1)
-            res = self.slider.readline()
-            # The device returns a status message if it's not done moving. It
-            # returns the current position if it is done moving.
-            incomplete = "0GS" in res.decode()
-            # if incomplete:
-            #     logging.info("huh")
+        for attempt in range(3):
+            try:
+                self.slider.reset_input_buffer()
+                self.slider.write(cmd)
+                deadline = time.monotonic() + 15.0
+                while True:
+                    if time.monotonic() > deadline:
+                        raise RuntimeError(
+                            f"{self.name} timed out: slider did not reach position {pos} within 15s on {self.port}. "
+                            "Check that the slider is powered and not obstructed."
+                        )
+                    res = self.slider.readline()
+                    if not res:
+                        continue
+                    if "0GS" not in res.decode(errors="replace"):
+                        return
+            except serial.SerialException as e:
+                if attempt == 2:
+                    raise RuntimeError(
+                        f"{self.name} serial error on {self.port} after 3 attempts: {e}"
+                    ) from e
+                logging.warning(f"{self.name}: serial error, reconnecting (attempt {attempt + 1})...")
+                self._open_serial()
 
 
 # make a way to shut off serial connection when we choose to

@@ -84,7 +84,7 @@ def get_seq(pulse_streamer, config, args):
         (int(recovery_delay_ns), HIGH),
         (int(exc_ns), HIGH),
         # # readout 1
-        (int(detect_ns), HIGH),
+        (int(detect_ns), LOW),
         (int(meas_buffer), LOW),
     ]
     tb.process_laser_seq(seq, laser_vkey, laser_train)
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     cfg = common.get_config_dict()
 
     # args = [readout_delay_ns, exc_ns, detect_ns, laser_vkey, laser_power]
-    args = [54, 100, 15000, "SPIN_READOUT", None]
+    args = [54, 2000, 500, "SPIN_READOUT", None]
 
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])

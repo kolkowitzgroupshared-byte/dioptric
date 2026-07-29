@@ -33,6 +33,7 @@ def get_seq(pulse_streamer, config, args):
     recovery_delay_ns, exc_ns, detect_ns, laser_vkey_arg, laser_power = args
 
     recovery_delay_ns = _as_int64("recovery_delay_ns", recovery_delay_ns)
+    recovery_delay_ns = max(recovery_delay_ns, np.int64(1))  # pulse streamer min = 1 ns
     exc_ns = _as_int64("exc_ns", exc_ns)
     detect_ns = _as_int64("detect_ns", detect_ns)
     laser_vkey = _vkey_from_arg(laser_vkey_arg)
@@ -105,7 +106,7 @@ def get_seq(pulse_streamer, config, args):
     tb.process_laser_seq(seq, laser_vkey, laser_train)
 
     final = OutputState([], 0.0, 0.0)
-    return seq, final, [int(period)]
+    return seq, final, [float(period)]
 
 
 if __name__ == "__main__":
@@ -114,7 +115,7 @@ if __name__ == "__main__":
     cfg = common.get_config_dict()
 
     # args = [recovery_delay_ns, exc_ns, detect_ns, laser_buffer, laser_vkey, laser_power]
-    args = [5000, 1000, 3000, "SPIN_READOUT", None]
+    args = [1000, 1000, 1000, "SPIN_READOUT", None]
 
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])

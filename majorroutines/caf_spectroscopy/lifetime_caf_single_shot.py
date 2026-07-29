@@ -58,14 +58,16 @@ def main(
             readout_times[0]
         )  # readout_delay OR recovery_delay depending on sequence
         pulse_time = int(readout_times[1])  # exc_ns
-        readout_time = int(readout_times[2])  # detect_ns
+        readout_time = int(readout_times[2])  # detect_ns (decay bin after laser off)
     else:
         # Fallback if only 2 arguments are provided
         delay_ns = 0
         readout_time = int(readout_times[0])  # detect_ns
         pulse_time = int(readout_times[1])  # exc_ns
 
-    calc_readout_time = readout_time
+    calc_readout_time = (
+        pulse_time + readout_time
+    )  # gate is open for full exc + decay bin
 
     # Set the virtual laser key
     laser_vkey = "SPIN_READOUT"
@@ -112,13 +114,34 @@ def main(
     # Initialize a master array to hold our counts
     binned_samples = numpy.zeros(num_bins, dtype=numpy.int64)
 
+    file_path = dm.get_file_path(__file__, start_timestamp, repr_th_name)
+
+    static_data = {
+        "start_timestamp": start_timestamp,
+        "sequence_file": sequence_file,
+        "nv_sig": nv_sig,
+        "laser_power": laser_power,
+        "laser_vkey": laser_vkey,
+        "slider_1_pos": filter_pos[0],
+        "slider_3_pos": filter_pos[1],
+        "delay_ns": delay_ns,
+        "delay_ns-units": "ns",
+        "readout_time": readout_time,
+        "readout_time-units": "ns",
+        "pulse_time": pulse_time,
+        "pulse_time-units": "ns",
+        "calc_readout_time": calc_readout_time,
+        "calc_readout_time-units": "ns",
+        "num_reps": num_reps,
+        "num_runs": num_runs,
+        "num_bins": num_bins,
+    }
+
     for run_ind in range(num_runs):
         print(f" \nRun index: {run_ind}")
 
         if tool_belt.safe_stop():
             break
-
-        seq_args_string = tool_belt.encode_seq_args(seq_args)
 
         # -- THE NEW ACQUISITION FLOW --
 
@@ -141,52 +164,45 @@ def main(
         counter_server.stop_histogram()
 
         # Save the data incrementally
-        raw_data = {
-            "start_timestamp": start_timestamp,
-            "sequence_file": sequence_file,
-            "nv_sig": nv_sig,
-            "laser_power": laser_power,
-            "laser_vkey": laser_vkey,
-            "slider_1_pos": filter_pos[0],
-            "slider_3_pos": filter_pos[1],
-            "delay_ns": delay_ns,
-            "delay_ns-units": "ns",
-            "readout_time": readout_time,
-            "readout_time-units": "ns",
-            "pulse_time": pulse_time,
-            "pulse_time-units": "ns",
-            "calc_readout_time": calc_readout_time,
-            "calc_readout_time-units": "ns",
-            "num_reps": num_reps,
-            "num_runs": num_runs,
-            "run_ind": run_ind,
-            "num_bins": num_bins,
-            "binned_samples": binned_samples.tolist(),
-        }
-
-        file_path = dm.get_file_path(__file__, start_timestamp, repr_th_name)
-        dm.save_raw_data(raw_data, file_path)
+        dm.save_raw_data(
+            {
+                **static_data,
+                "run_ind": run_ind,
+                "binned_samples": binned_samples.tolist(),
+            },
+            file_path,
+        )
 
     tool_belt.reset_cfm()
+
+    runs_completed = run_ind + 1
 
     # Calculate bin properties for plotting
     bin_size_ns = calc_readout_time / num_bins
     bin_size_s = bin_size_ns / 1e9
-    binned_samples_kcps = binned_samples / bin_size_s / 1e3 / num_reps / num_runs
+    binned_samples_kcps = binned_samples / bin_size_s / 1e3 / num_reps / runs_completed
     bin_center_offset = bin_size_ns / 2
-    bin_centers_ns = numpy.linspace(0, readout_time, num_bins) + bin_center_offset
+    bin_centers_ns = numpy.arange(num_bins) * bin_size_ns + bin_center_offset
+
+    if calc_readout_time >= 1e9:
+        time_divisor, time_unit = 1e9, "s"
+    elif calc_readout_time >= 1e6:
+        time_divisor, time_unit = 1e6, "ms"
+    elif calc_readout_time >= 1e3:
+        time_divisor, time_unit = 1e3, "us"
+    else:
+        time_divisor, time_unit = 1, "ns"
 
     fig, ax = plt.subplots(1, 1, figsize=(10, 8.5))
     ax2 = ax.twinx()
-    ax.plot(numpy.array(bin_centers_ns) / 10**3, binned_samples_kcps, "r-")
-    ax2.plot(numpy.array(bin_centers_ns) / 10**3, binned_samples, "r-")
+    ax.plot(numpy.array(bin_centers_ns) / time_divisor, binned_samples_kcps, "r-")
+    ax2.plot(numpy.array(bin_centers_ns) / time_divisor, binned_samples, "r-")
 
-    ax.set_xlabel("X data")
     ax.set_ylabel("kcps", color="k")
     ax2.set_ylabel("Total Raw Counts", color="k")
 
     ax.set_title("Lifetime")
-    ax.set_xlabel("Time after illumination (us)")
+    ax.set_xlabel(f"Time after illumination ({time_unit})")
 
     fig.canvas.draw()
     fig.set_tight_layout(True)
@@ -216,6 +232,7 @@ def main(
         "num_bins": num_bins,
         "num_reps": num_reps,
         "num_runs": num_runs,
+        "runs_completed": runs_completed,
         "binned_samples": binned_samples.tolist(),
         "bin_centers": bin_centers_ns.tolist(),
     }
@@ -468,7 +485,7 @@ def lifetime_json_to_csv(
 
 #     bin_size_ns = calc_readout_time / num_bins
 #     bin_size_s = bin_size_ns / 1e9
-#     binned_samples_kcps = binned_samples / bin_size_s / 1e3 / num_reps / num_runs
+#     binned_samples_kcps = binned_samples / bin_size_s / 1e3 / num_reps / runs_completed
 #     bin_center_offset = bin_size_ns / 2
 #     bin_centers_ns = numpy.linspace(0, readout_time, num_bins) + bin_center_offset
 
