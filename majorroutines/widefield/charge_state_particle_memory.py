@@ -3760,19 +3760,642 @@ def plot_nv_loss_row_by_row(
         "event_matrix": event_matrix,
     }, fig
     
+
+from typing import Any, Dict
+
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.ndimage import gaussian_filter
+from scipy.stats import pearsonr, spearmanr
+
+
+def _correlation_summary(x, y):
+    """Return Pearson and Spearman correlations after removing invalid values."""
+
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+
+    good = np.isfinite(x) & np.isfinite(y)
+
+    if np.sum(good) < 4:
+        return {
+            "num_points": int(np.sum(good)),
+            "pearson_r": np.nan,
+            "pearson_p": np.nan,
+            "spearman_rho": np.nan,
+            "spearman_p": np.nan,
+        }
+
+    pearson_result = pearsonr(
+        x[good],
+        y[good],
+    )
+
+    spearman_result = spearmanr(
+        x[good],
+        y[good],
+    )
+
+    return {
+        "num_points": int(np.sum(good)),
+        "pearson_r": float(pearson_result.statistic),
+        "pearson_p": float(pearson_result.pvalue),
+        "spearman_rho": float(spearman_result.statistic),
+        "spearman_p": float(spearman_result.pvalue),
+    }
+
+
+def _prepare_image_for_registration(image):
+    """
+    Remove slowly varying camera background while preserving the NV pattern.
+    """
+
+    image = np.asarray(
+        image,
+        dtype=float,
+    )
+
+    image = np.nan_to_num(
+        image,
+        nan=float(np.nanmedian(image)),
+    )
+
+    # Mildly smooth shot noise.
+    smoothed = gaussian_filter(
+        image,
+        sigma=1.0,
+    )
+
+    # Remove broad illumination/background structure.
+    background = gaussian_filter(
+        image,
+        sigma=12.0,
+    )
+
+    processed = (
+        smoothed
+        - background
+    )
+
+    processed -= np.mean(
+        processed
+    )
+
+    # Reduce edge-related artifacts in Fourier registration.
+    y_window = np.hanning(
+        processed.shape[0]
+    )
+
+    x_window = np.hanning(
+        processed.shape[1]
+    )
+
+    processed *= (
+        y_window[:, None]
+        * x_window[None, :]
+    )
+
+    return processed
+
+
+def _register_image_pair(
+    reference_image,
+    moving_image,
+    upsample_factor=20,
+):
+    """
+    Determine the translation needed to align moving_image to reference_image.
+
+    Returns
+    -------
+    dx_px, dy_px, error
+    """
+
+    reference = _prepare_image_for_registration(
+        reference_image
+    )
+
+    moving = _prepare_image_for_registration(
+        moving_image
+    )
+
+    try:
+        from skimage.registration import phase_cross_correlation
+
+        shift_yx, error, _ = phase_cross_correlation(
+            reference,
+            moving,
+            upsample_factor=int(upsample_factor),
+            normalization="phase",
+        )
+
+        dy_px = float(
+            shift_yx[0]
+        )
+
+        dx_px = float(
+            shift_yx[1]
+        )
+
+        return dx_px, dy_px, float(error)
+
+    except ImportError:
+        # Integer-pixel fallback if scikit-image is unavailable.
+        reference_fft = np.fft.fft2(
+            reference
+        )
+
+        moving_fft = np.fft.fft2(
+            moving
+        )
+
+        cross_power = (
+            reference_fft
+            * np.conj(moving_fft)
+        )
+
+        cross_power /= np.maximum(
+            np.abs(cross_power),
+            1e-12,
+        )
+
+        correlation = np.fft.ifft2(
+            cross_power
+        )
+
+        peak = np.unravel_index(
+            np.argmax(
+                np.abs(correlation)
+            ),
+            correlation.shape,
+        )
+
+        shift_yx = np.asarray(
+            peak,
+            dtype=float,
+        )
+
+        shape = np.asarray(
+            reference.shape,
+            dtype=float,
+        )
+
+        midpoint = np.floor(
+            shape / 2
+        )
+
+        wrap = (
+            shift_yx > midpoint
+        )
+
+        shift_yx[wrap] -= shape[wrap]
+
+        dy_px = float(
+            shift_yx[0]
+        )
+
+        dx_px = float(
+            shift_yx[1]
+        )
+
+        return dx_px, dy_px, np.nan
+
+
+def analyze_drift_state_correlation(
+    raw_data: Dict[str, Any],
+    register_images: bool = True,
+    label_outliers: bool = True,
+):
+    """
+    Compare drift estimates with NV charge-state changes.
+
+    Tests
+    -----
+    1. Saved tracker-position change between consecutive runs.
+    2. Initial-to-final image displacement within each run.
+    """
+
+    analysis = raw_data[
+        "particle_analysis"
+    ]
+
+    event_fraction = np.asarray(
+        analysis["event_fraction_by_run"],
+        dtype=float,
+    )
+
+    candidate_count = np.asarray(
+        analysis["num_candidates_by_run"],
+        dtype=float,
+    )
+
+    retention = np.asarray(
+        analysis["retention_by_run"],
+        dtype=float,
+    )
+
+    num_runs = len(
+        event_fraction
+    )
+
+    run_inds = np.arange(
+        num_runs
+    )
+
+    # ==============================================================
+    # Saved pixel tracker values
+    # ==============================================================
+
+    tracker_xy = np.asarray(
+        raw_data["pixel_drifts"],
+        dtype=float,
+    )
+
+    if tracker_xy.shape != (num_runs, 2):
+        raise ValueError(
+            "Expected pixel_drifts shape "
+            f"{(num_runs, 2)}, received {tracker_xy.shape}."
+        )
+
+    tracker_relative_xy = (
+        tracker_xy
+        - tracker_xy[0]
+    )
+
+    tracker_step_xy = np.full_like(
+        tracker_xy,
+        np.nan,
+    )
+
+    tracker_step_xy[1:] = np.diff(
+        tracker_xy,
+        axis=0,
+    )
+
+    tracker_step_magnitude = np.sqrt(
+        np.sum(
+            tracker_step_xy**2,
+            axis=1,
+        )
+    )
+
+    tracker_correlation = _correlation_summary(
+        tracker_step_magnitude,
+        event_fraction,
+    )
+
+    # ==============================================================
+    # Direct initial-to-final image registration
+    # ==============================================================
+
+    image_dx_px = np.full(
+        num_runs,
+        np.nan,
+    )
+
+    image_dy_px = np.full(
+        num_runs,
+        np.nan,
+    )
+
+    image_registration_error = np.full(
+        num_runs,
+        np.nan,
+    )
+
+    if register_images:
+        if "img_arrays" not in raw_data:
+            raise ValueError(
+                "img_arrays are unavailable. Load the NPZ data using "
+                "dm.get_raw_data(..., load_npz=True)."
+            )
+
+        images = np.asarray(
+            raw_data["img_arrays"],
+            dtype=float,
+        )
+
+        # Expected shape:
+        # [experiment, run, step, repetition, y, x]
+        if images.ndim != 6:
+            raise ValueError(
+                "Expected img_arrays with six dimensions "
+                "[exp, run, step, rep, y, x]; "
+                f"received shape {images.shape}."
+            )
+
+        initial_rep = int(
+            analysis["initial_state_rep_ind"]
+        )
+
+        final_rep = int(
+            analysis["final_readout_rep_ind"]
+        )
+
+        for run_ind in range(
+            num_runs
+        ):
+            initial_image = images[
+                0,
+                run_ind,
+                0,
+                initial_rep,
+            ]
+
+            final_image = images[
+                0,
+                run_ind,
+                0,
+                final_rep,
+            ]
+
+            (
+                image_dx_px[run_ind],
+                image_dy_px[run_ind],
+                image_registration_error[run_ind],
+            ) = _register_image_pair(
+                initial_image,
+                final_image,
+                upsample_factor=20,
+            )
+
+    image_shift_magnitude = np.sqrt(
+        image_dx_px**2
+        + image_dy_px**2
+    )
+
+    image_correlation = _correlation_summary(
+        image_shift_magnitude,
+        event_fraction,
+    )
+
+    # ==============================================================
+    # Plot
+    # ==============================================================
+
+    fig, axes = plt.subplots(
+        2,
+        2,
+        figsize=(13, 9),
+        constrained_layout=True,
+    )
+
+    # --------------------------------------------------------------
+    # Saved tracker position
+    # --------------------------------------------------------------
+
+    ax = axes[0, 0]
+
+    ax.plot(
+        run_inds,
+        tracker_relative_xy[:, 0],
+        "o-",
+        label="Relative tracker x",
+    )
+
+    ax.plot(
+        run_inds,
+        tracker_relative_xy[:, 1],
+        "o-",
+        label="Relative tracker y",
+    )
+
+    ax.set_xlabel(
+        "Run index"
+    )
+
+    ax.set_ylabel(
+        "Recorded position relative to run 0 (px)"
+    )
+
+    ax.set_title(
+        "Saved pixel-tracking values"
+    )
+
+    ax.legend()
+    ax.grid(True, alpha=0.25)
+
+    # --------------------------------------------------------------
+    # Tracker jump and event fraction
+    # --------------------------------------------------------------
+
+    ax = axes[0, 1]
+
+    ax.plot(
+        run_inds,
+        tracker_step_magnitude,
+        "o-",
+        label="Tracker change",
+    )
+
+    ax.set_xlabel(
+        "Run index"
+    )
+
+    ax.set_ylabel(
+        "Change from previous run (px)"
+    )
+
+    ax_event = ax.twinx()
+
+    ax_event.plot(
+        run_inds,
+        100.0 * event_fraction,
+        "s--",
+        label="Transition fraction",
+    )
+
+    ax_event.set_ylabel(
+        "NV$^- \\rightarrow$ NV$^0$ fraction (%)"
+    )
+
+    ax.set_title(
+        "Tracker changes and charge-state loss"
+    )
+
+    ax.grid(True, alpha=0.25)
+
+    # --------------------------------------------------------------
+    # Direct image-registered drift
+    # --------------------------------------------------------------
+
+    ax = axes[1, 0]
+
+    ax.plot(
+        run_inds,
+        image_dx_px,
+        "o-",
+        label="Initial-to-final dx",
+    )
+
+    ax.plot(
+        run_inds,
+        image_dy_px,
+        "o-",
+        label="Initial-to-final dy",
+    )
+
+    ax.set_xlabel(
+        "Run index"
+    )
+
+    ax.set_ylabel(
+        "Image-registration shift (px)"
+    )
+
+    ax.set_title(
+        "Drift during each dark-wait interval"
+    )
+
+    ax.legend()
+    ax.grid(True, alpha=0.25)
+
+    # --------------------------------------------------------------
+    # Drift-event correlation
+    # --------------------------------------------------------------
+
+    ax = axes[1, 1]
+
+    ax.scatter(
+        image_shift_magnitude,
+        100.0 * event_fraction,
+        s=45,
+    )
+
+    if label_outliers:
+        for run_ind in range(
+            num_runs
+        ):
+            if (
+                np.isfinite(image_shift_magnitude[run_ind])
+                and (
+                    event_fraction[run_ind]
+                    > np.nanpercentile(event_fraction, 85)
+                    or image_shift_magnitude[run_ind]
+                    > np.nanpercentile(
+                        image_shift_magnitude,
+                        85,
+                    )
+                )
+            ):
+                ax.annotate(
+                    str(run_ind),
+                    (
+                        image_shift_magnitude[run_ind],
+                        100.0 * event_fraction[run_ind],
+                    ),
+                    xytext=(4, 4),
+                    textcoords="offset points",
+                )
+
+    ax.set_xlabel(
+        "Initial-to-final image shift magnitude (px)"
+    )
+
+    ax.set_ylabel(
+        "NV$^- \\rightarrow$ NV$^0$ fraction (%)"
+    )
+
+    ax.set_title(
+        "Does measured drift predict state changes?\n"
+        f"Spearman ρ = "
+        f"{image_correlation['spearman_rho']:.3f}, "
+        f"p = {image_correlation['spearman_p']:.3g}"
+    )
+
+    ax.grid(True, alpha=0.25)
+
+    fig.suptitle(
+        "Drift versus apparent NV charge-state transitions",
+        fontsize=15,
+    )
+
+    result = {
+        "run_inds": run_inds,
+        "event_fraction": event_fraction,
+        "candidate_count": candidate_count,
+        "retention": retention,
+
+        "tracker_xy": tracker_xy,
+        "tracker_relative_xy": tracker_relative_xy,
+        "tracker_step_xy": tracker_step_xy,
+        "tracker_step_magnitude_px": tracker_step_magnitude,
+        "tracker_event_correlation": tracker_correlation,
+
+        "image_dx_px": image_dx_px,
+        "image_dy_px": image_dy_px,
+        "image_shift_magnitude_px": image_shift_magnitude,
+        "image_registration_error": image_registration_error,
+        "image_event_correlation": image_correlation,
+    }
+
+    print("\nSaved tracker-change versus event fraction:")
+    print(tracker_correlation)
+
+    if register_images:
+        print("\nInitial-to-final image drift versus event fraction:")
+        print(image_correlation)
+
+    worst_event_run = int(
+        np.nanargmax(event_fraction)
+    )
+
+    print("\nLargest apparent-loss run:")
+    print("run:", worst_event_run)
+    print(
+        "event fraction:",
+        event_fraction[worst_event_run],
+    )
+    print(
+        "candidate count:",
+        candidate_count[worst_event_run],
+    )
+    print(
+        "retention:",
+        retention[worst_event_run],
+    )
+    print(
+        "tracker step:",
+        tracker_step_magnitude[worst_event_run],
+        "px",
+    )
+    print(
+        "initial-to-final image shift:",
+        image_shift_magnitude[worst_event_run],
+        "px",
+    )
+
+    return result, fig
+    
 if __name__ == "__main__":
     kpl.init_kplotlib()
     
-    FILE_STEMS = [
-    "2026_07_23-01_05_24-qnami-nv0_2026_02_20-particle-memory-source_off_wait_0s-wait-0s",
-    "2026_07_23-01_48_56-qnami-nv0_2026_02_20-particle-memory-source_off_wait_10s-wait-10s",
-    # "2026_07_23-03_05_50-qnami-nv0_2026_02_20-particle-memory-source_off_wait_30s-wait-30s",
-    "2026_07_23-05_13_51-qnami-nv0_2026_02_20-particle-memory-source_off_wait_60s-wait-60s",
-    "2026_07_23-09_19_48-qnami-nv0_2026_02_20-particle-memory-source_off_wait_180s-wait-180s",
-    "2026_07_23-15_55_08-qnami-nv0_2026_02_20-particle-memory-source_off_wait_300s-wait-300s",
-    "2026_07_24-00_29_16-qnami-nv0_2026_02_20-particle-memory-source_off_wait_600s-wait-600s",
-    "2026_07_24-08_56_35-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1200s-wait-1200s",
-    ]
+    file_stem = "2026_07_26-18_11_11-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1800s-wait-1800s"
+    raw_data = dm.get_raw_data(
+        file_stem=file_stem,
+        load_npz=True,
+    )
+
+    drift_result, fig_drift = (
+        analyze_drift_state_correlation(
+            raw_data,
+            register_images=True,
+        )
+    )
+
+    kpl.show(block=True)
+    sys.exit()
+    
+    # FILE_STEMS = [
+    # "2026_07_23-01_05_24-qnami-nv0_2026_02_20-particle-memory-source_off_wait_0s-wait-0s",
+    # "2026_07_23-01_48_56-qnami-nv0_2026_02_20-particle-memory-source_off_wait_10s-wait-10s",
+    # # "2026_07_23-03_05_50-qnami-nv0_2026_02_20-particle-memory-source_off_wait_30s-wait-30s",
+    # "2026_07_23-05_13_51-qnami-nv0_2026_02_20-particle-memory-source_off_wait_60s-wait-60s",
+    # "2026_07_23-09_19_48-qnami-nv0_2026_02_20-particle-memory-source_off_wait_180s-wait-180s",
+    # "2026_07_23-15_55_08-qnami-nv0_2026_02_20-particle-memory-source_off_wait_300s-wait-300s",
+    # "2026_07_24-00_29_16-qnami-nv0_2026_02_20-particle-memory-source_off_wait_600s-wait-600s",
+    # "2026_07_24-08_56_35-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1200s-wait-1200s",
+    # ]
     
     FILE_STEMS = [
     "2026_07_24-21_43_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_0s-wait-0s",
@@ -3783,6 +4406,7 @@ if __name__ == "__main__":
     "2026_07_25-21_07_06-qnami-nv0_2026_02_20-particle-memory-source_off_wait_600s-wait-600s",
     "2026_07_26-05_34_29-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1200s-wait-1200s",
     "2026_07_26-18_11_11-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1800s-wait-1800s",
+    "2026_07_27-19_18_59-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
     ]
     
     output = run_particle_memory_dark_wait_comparison_analysis(
@@ -3797,12 +4421,14 @@ if __name__ == "__main__":
     selected_waits_s=[
         0,
         10,
+        30,
         60,
         180,
         300,
         600,
         1200,
         1800,
+        3600,
     ],
     subtract_zero_wait=False,
     show_percent=True,
@@ -3813,12 +4439,14 @@ if __name__ == "__main__":
     selected_waits_s=[
         0,
         10,
+        30,
         60,
         180,
         300,
         600,
         1200,
         1800,
+        3600,
     ],
     subtract_zero_wait=True,
     show_percent=True,

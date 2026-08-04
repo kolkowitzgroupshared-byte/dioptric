@@ -279,8 +279,9 @@ def do_adaptive_charge_initialization(nv_list):
         num_reps=10,
         num_runs=4,
         mode="dmd_block_confirmed",
+        # mode="dmd_all_on",
         dmd_indices=None,      # full nv_list, DMD index = nv_list index
-        dmd_radius_px=8,
+        dmd_radius_px=10,
         dmd_plane=230,
         confirm_margin_counts=0.0,
         save_images=True,
@@ -532,8 +533,8 @@ def do_optimize_green(nv_sig):
 
 def do_optimize_red(nv_sig, ref_nv_sig):
     opti_coords = []
-    axes_list = [Axes.X, Axes.Y]
-    # axes_list = [Axes.Y, Axes.X]
+    # axes_list = [Axes.X, Axes.Y]
+    axes_list = [Axes.Y, Axes.X]
     # shuffle(axes_list)
     for ind in range(1):
         axes = axes_list[ind]
@@ -1841,7 +1842,7 @@ if __name__ == "__main__":
     date_str = "2026_02_20"
     sample_coords = [-1.20, -0.75]
     z_coord = -1.7
-    # z_coord = -4.2
+    # z_coord = -3.7
     
     config = common.get_config_dict()
     file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
@@ -1895,16 +1896,16 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.745, 98.153],
-    #     [73.729, 115.431],
-    #     [100.737, 68.879],
-    #     [126.982, 127.755],
+    #     [97.74, 98.166],
+    #     [73.715, 115.446],
+    #     [100.72, 68.894],
+    #     [126.953, 127.76],
     # ]
     # red_coords_list = [
-    #     [66.963, 67.767],
-    #     [47.236, 81.343],
-    #     [69.592, 43.985],
-    #     [90.641, 92.498],
+    #     [66.826, 67.772],
+    #     [47.273, 81.38],
+    #     [69.645, 44.033],
+    #     [90.325, 92.229],
     # ]
     
     analysis_data = dm.get_raw_data(
@@ -2035,7 +2036,7 @@ if __name__ == "__main__":
             pulse_amps={
                 VirtualLaserKey.SCC: scc_amp_list[ind],
                 VirtualLaserKey.ION: scc_amp_list[ind],
-                # VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
+                VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
             },
         )
         nv_list.append(nv_sig)
@@ -2148,11 +2149,11 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        # do_charge_state_histograms(nv_list)
+        do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
-        do_charge_state_particle_memory_wait_sweep(nv_list)
+        # do_charge_state_particle_memory_wait_sweep(nv_list)
         # do_charge_state_measurement_backaction(nv_list)
         
         # do_dmd_crosstalk_matrix(

@@ -42,14 +42,14 @@ calibration_coords_pixel = [
     [17.982, 41.943],
 ]
 calibration_coords_green = [
-    [73.706, 115.441],
-    [100.717, 68.88],
-    [126.987, 127.759],
+    [73.715, 115.446],
+    [100.72, 68.894],
+    [126.953, 127.76],
 ]
 calibration_coords_red = [
-    [47.236, 81.343],
-    [69.592, 43.985],
-    [90.641, 92.498],
+    [47.273, 81.38],
+    [69.645, 44.033],
+    [90.325, 92.229],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -1047,11 +1047,11 @@ opx_config = {
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.25},
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.3513},
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.3513},# 1176NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2923},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2623},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2133},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.1942},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.1942}, ## 631NVs
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other

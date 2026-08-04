@@ -447,59 +447,153 @@ def make_dmd_block_confirmed_charge_prep_fn(
 
 def make_dmd_all_on_charge_prep_fn(
     num_nvs,
+    dmd_indices=None,
     dmd_radius_px=8,
     dmd_plane=230,
     use_dmd=True,
     dmd_settle_s=0.001,
     verbose=True,
+    profile_records=None,
 ):
     """
-    DMD-control baseline.
+    Matched control for dmd_block_confirmed.
 
-    DMD is always pass-all / block-none.
-    OPX target list is exactly the old conditional method:
-        target NVs that were not NV- in previous readout.
+    Same persistent-confirmation and OPX target logic, but the DMD always
+    passes every loaded NV spot. Confirmed NVs are never blocked.
     """
+
+    dmd_indices = _prepare_dmd_indices(
+        num_nvs,
+        dmd_indices,
+    )
 
     pulse_gen = tb.get_server_pulse_gen()
     dmd = tb.get_server_dmd() if use_dmd else None
-    run_counter = {"run_ind": -1}
 
-    def charge_prep_fn(rep_ind, nv_list, initial_states_list=None):
+    confirmed_nvm = np.zeros(
+        num_nvs,
+        dtype=bool,
+    )
+
+    run_counter = {
+        "run_ind": -1,
+    }
+
+    def charge_prep_fn(
+        rep_ind,
+        nv_list,
+        initial_states_list=None,
+    ):
+        nonlocal confirmed_nvm
+
+        # --------------------------------------------------------------
+        # Start of run
+        # --------------------------------------------------------------
         if rep_ind == 0:
-            run_counter["run_ind"] += 1
+            if rep_ind == 0:
+                run_counter["run_ind"] += 1
+                confirmed_nvm[:] = False
 
-            _dmd_pass_all_block_none(
-                dmd=dmd,
-                dmd_radius_px=dmd_radius_px,
-                dmd_plane=dmd_plane,
-                use_dmd=use_dmd,
-                dmd_settle_s=dmd_settle_s,
-            )
+                # Full white/pass DMD background.
+                # No confirmed NVs are blocked.
+                _dmd_pass_all_block_none(
+                    dmd=dmd,
+                    dmd_radius_px=dmd_radius_px,
+                    dmd_plane=dmd_plane,
+                    use_dmd=use_dmd,
+                    dmd_settle_s=dmd_settle_s,
+                )
+
+            if profile_records is not None:
+                profile_records.append(
+                    {
+                        "mode": "dmd_all_on",
+                        "run_ind": int(
+                            run_counter["run_ind"]
+                        ),
+                        "rep_ind": int(rep_ind),
+                        "phase": "rep0_start",
+                        "newly_confirmed": 0,
+                        "confirmed": 0,
+                        "active": int(num_nvs),
+                        "dmd_changed": True,
+                    }
+                )
 
             if verbose:
                 print(
-                    f"[DMD all-on] run {run_counter['run_ind']}, "
-                    f"rep {rep_ind}: pass all, no charge prep"
+                    f"[DMD all-on persistent] "
+                    f"run {run_counter['run_ind']}, rep 0: "
+                    f"full pass background; no NVs blocked"
                 )
 
             return
 
+        # --------------------------------------------------------------
+        # Persistent confirmation: same as dmd_block_confirmed
+        # --------------------------------------------------------------
         if initial_states_list is not None:
-            states = np.asarray(initial_states_list, dtype=bool)
-            target_mask = ~states
+            states = np.asarray(
+                initial_states_list,
+                dtype=bool,
+            )
+
+            active_before = ~confirmed_nvm
+
+            newly_confirmed = (
+                active_before
+                & states
+            )
+
+            confirmed_nvm[
+                newly_confirmed
+            ] = True
+
         else:
-            target_mask = np.ones(num_nvs, dtype=bool)
+            newly_confirmed = np.zeros(
+                num_nvs,
+                dtype=bool,
+            )
+
+        # Only still-unconfirmed NVs receive charge polarization.
+        active_mask = ~confirmed_nvm
 
         pulse_gen.insert_input_stream(
             "_cache_target_list",
-            target_mask.astype(bool).tolist(),
+            active_mask.astype(bool).tolist(),
         )
+
+        if profile_records is not None:
+            profile_records.append(
+                {
+                    "mode": "dmd_all_on",
+                    "run_ind": int(
+                        run_counter["run_ind"]
+                    ),
+                    "rep_ind": int(rep_ind),
+                    "phase": "normal_feedback",
+                    "newly_confirmed": int(
+                        np.sum(newly_confirmed)
+                    ),
+                    "confirmed": int(
+                        np.sum(confirmed_nvm)
+                    ),
+                    "active": int(
+                        np.sum(active_mask)
+                    ),
+                    "dmd_changed": False,
+                }
+            )
 
         if verbose:
             print(
-                f"[DMD all-on] run {run_counter['run_ind']}, rep {rep_ind}: "
-                f"target={int(np.sum(target_mask))}/{num_nvs}"
+                f"[DMD all-on persistent] "
+                f"run {run_counter['run_ind']}, "
+                f"rep {rep_ind}: "
+                f"new={np.sum(newly_confirmed)}, "
+                f"confirmed={np.sum(confirmed_nvm)}/{num_nvs}, "
+                f"initialize={np.sum(active_mask)}/{num_nvs}, "
+                "DMD passes all spots"
             )
 
     return charge_prep_fn
@@ -673,12 +767,12 @@ def reconstruct_confirmed_history(raw_data, mode="old"):
     
     raw_states = counts > thresholds[:, None, None]
 
-    if mode in ["old", "dmd_all_on"]:
+    if mode == "old":
         confirmed_history = raw_states.copy()
         newly_confirmed_history = raw_states.copy()
         active_history = ~raw_states.copy()
 
-    elif mode == "dmd_block_confirmed":
+    elif mode in ["dmd_all_on", "dmd_block_confirmed"]:
         confirmed_history = np.zeros((num_nvs, num_runs, num_reps), dtype=bool)
         newly_confirmed_history = np.zeros((num_nvs, num_runs, num_reps), dtype=bool)
         active_history = np.zeros((num_nvs, num_runs, num_reps), dtype=bool)
@@ -2459,11 +2553,13 @@ def main(
     elif mode == "dmd_all_on":
         charge_prep_fn = make_dmd_all_on_charge_prep_fn(
             num_nvs=num_nvs,
+            dmd_indices=dmd_indices,
             dmd_radius_px=dmd_radius_px,
             dmd_plane=dmd_plane,
             use_dmd=True,
             dmd_settle_s=dmd_settle_s,
             verbose=verbose,
+            profile_records=feedback_profile_records,
         )
 
     elif mode == "dmd_block_confirmed":
@@ -2651,6 +2747,8 @@ def main(
     #     except Exception:
     #         print("Could not save avg rep images:")
     #         print(traceback.format_exc())
+    
+
 
     if save_images and save_movie:
         try:
@@ -2663,6 +2761,22 @@ def main(
         except Exception:
             print("Could not save blink GIF:")
             print(traceback.format_exc())
+            
+        try:   
+            analyze_and_plot_final_check(
+                raw_data,
+                mode=raw_data.get(
+                    "mode",
+                    "dmd_block_confirmed",
+                ),
+                borderline_window_counts=1.0,
+                save_data=False,
+                save_fig=True,
+            )
+        except Exception:
+            print("Could not save blink final check:")
+            print(traceback.format_exc())
+    
 
     tb.reset_cfm()
 
@@ -3421,7 +3535,9 @@ if __name__ == "__main__":
     raw_data = dm.get_raw_data(
         # file_stem="2026_07_19-01_02_13-qnami-nv0_2026_02_20-dmd_block_confirmed", 
         # file_stem = "2026_07_21-16_15_53-qnami-nv0_2026_02_20-dmd_block_confirmed",
-        file_stem = "2026_07_19-21_29_05-qnami-nv0_2026_02_20-dmd_block_confirmed",
+        # file_stem = "2026_07_19-21_29_05-qnami-nv0_2026_02_20-dmd_block_confirmed",
+        # file_stem = "2026_08_03-19_50_45-qnami-nv0_2026_02_20-dmd_all_on",
+        file_stem = "2026_08_04-11_58_06-qnami-nv0_2026_02_20-dmd_block_confirmed",
         load_npz=True)
 
     timestamp = raw_data["timestamp"]
@@ -3439,18 +3555,17 @@ if __name__ == "__main__":
     # selected_nv_result = print_selected_nv_final_counts(
     # raw_data, nv_inds=[8, 303, 364, 422, 463, 536])
     
-    # summary, fig = analyze_and_plot_final_check(
-    #     raw_data,
-    #     mode=raw_data.get(
-    #         "mode",
-    #         "dmd_block_confirmed",
-    #     ),
-    #     # Separately flag losses within five counts of threshold.
-    #     borderline_window_counts=1.0,
-
-    #     save_data=False,
-    #     save_fig=True,
-    # )
+    summary, fig = analyze_and_plot_final_check(
+        raw_data,
+        mode=raw_data.get(
+            "mode",
+            "dmd_block_confirmed",
+        ),
+        # Separately flag losses within five counts of threshold.
+        borderline_window_counts=1.0,
+        save_data=False,
+        save_fig=True,
+    )
     
     # fig_timing = plot_rep_timing_summary(raw_data)
     # file_path = dm.get_file_path(__file__, timestamp, "rep-timing")
@@ -3488,16 +3603,16 @@ if __name__ == "__main__":
     #     contrast_percentiles=(60, 99.8),
     #     )
     
-    save_non_cumulative_movie(
-        raw_data,
-        file_path,
-        max_reps=10,
-        interval_ms=1000,
-        subtract_background=True,
-        background_percentile=5,
-        bg_smooth_sigma=0.0,
-        contrast_percentiles=(85, 99.9),
-    )
+    # save_non_cumulative_movie(
+    #     raw_data,
+    #     file_path,
+    #     max_reps=10,
+    #     interval_ms=1000,
+    #     subtract_background=True,
+    #     background_percentile=5,
+    #     bg_smooth_sigma=0.0,
+    #     contrast_percentiles=(85, 99.9),
+    # )
     # save_blink_gif(
     #     raw_data,
     #     file_path,
