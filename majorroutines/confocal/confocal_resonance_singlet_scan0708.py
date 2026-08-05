@@ -33,8 +33,7 @@ from utils import kplotlib as kpl
 from utils import data_manager as dm
 from utils.constants import VirtualLaserKey
 import majorroutines.targeting as targeting
-from utils import positioning as pos
-from utils.constants import VirtualLaserKey, CoordsKey
+
 
 def _safe_ratio(num, den):
     num = np.asarray(num, dtype=float)
@@ -100,13 +99,6 @@ def _nanmean_ste(arr):
 
     return mean, ste
 
-def do_move_to_nv_plus_offset(nv_sig, coords_key, offset):
-    """Move the given positioner to nv_sig's tracked coords + (dx, dy)."""
-    positioner = pos.get_positioner_server(coords_key)
-    base_coords = list(nv_sig.coords[coords_key])
-    target_coords = [base_coords[0] + offset[0], base_coords[1] + offset[1]]
-    positioner.write_xy(target_coords)
-    return target_coords
 
 # def _build_live_figure():
 #     fig, axes = plt.subplots(5, 1, figsize=(8, 14), sharex=True)
@@ -197,30 +189,34 @@ def do_move_to_nv_plus_offset(nv_sig, coords_key, offset):
 #     plt.pause(0.01)
 
 def _build_live_figure():
-    fig, axes = plt.subplots(3, 1, figsize=(8, 10), sharex=True)
+    fig, axes = plt.subplots(2, 1, figsize=(8, 7), sharex=True)
 
-    ax_raw = axes[0]
-    ax_resp = axes[1]
-    ax_delta = axes[2]
+    ax_raw_off = axes[0]
+    ax_raw_on = axes[1]
 
-    ax_raw.set_title("Ti:sapph singlet scan")
-    ax_raw.set_ylabel("Raw counts")
-    ax_resp.set_ylabel("Ti:sapph-induced contrast")
-    ax_delta.set_ylabel("Δ contrast")
-    ax_delta.set_xlabel("Ti:sapph wavelength (nm)")
+    ax_raw_off.set_title("Ti:sapph singlet scan")
+    ax_raw_off.set_ylabel("Raw counts")
+    ax_raw_on.set_ylabel("Raw counts")
+    ax_raw_on.set_xlabel("Ti:sapph wavelength (nm)")
+
+    (line_ms0_off,) = ax_raw_off.plot([], [], "o-", label="ms=0, OFF")
+    (line_ms1_off,) = ax_raw_off.plot([], [], "o-", label="ms=±1, OFF")
+
+    (line_ms0_on,) = ax_raw_on.plot([], [], "o-", label="ms=0, ON")
+    (line_ms1_on,) = ax_raw_on.plot([], [], "o-", label="ms=±1, ON")
 
     for ax in axes:
         ax.grid(True, linestyle="--", alpha=0.5)
+        ax.legend()
 
-    # No line/errorbar artists are pre-created here since Matplotlib
-    # ErrorbarContainers can't be cheaply updated in place (the caps/bars
-    # aren't simple Line2D objects with set_data). Instead
-    # _update_live_figure() clears and redraws each axis per run, which is
-    # fine since this only happens once per run, not once per wavelength step.
-    handles = {}
+    handles = {
+        "line_ms0_off": line_ms0_off,
+        "line_ms1_off": line_ms1_off,
+        "line_ms0_on": line_ms0_on,
+        "line_ms1_on": line_ms1_on,
+    }
 
     return fig, axes, handles
-
 
 def _update_live_figure(
     wavelengths_nm,
@@ -230,66 +226,16 @@ def _update_live_figure(
     ms1_off_mean,
     ms0_on_mean,
     ms1_on_mean,
-    ms0_off_ste=None,
-    ms1_off_ste=None,
-    ms0_on_ste=None,
-    ms1_on_ste=None,
-    resp_ms0_mean=None,
-    resp_ms1_mean=None,
-    resp_ms0_ste=None,
-    resp_ms1_ste=None,
-    delta_resp_mean=None,
-    delta_resp_ste=None,
 ):
-    ax_raw, ax_resp, ax_delta = axes
+    handles["line_ms0_off"].set_data(wavelengths_nm, ms0_off_mean)
+    handles["line_ms1_off"].set_data(wavelengths_nm, ms1_off_mean)
 
-    ax_raw.clear()
-    ax_raw.errorbar(
-        wavelengths_nm, ms0_off_mean, yerr=ms0_off_ste,
-        fmt="o-", capsize=3, label="ms=0, OFF", color="tab:blue",
-    )
-    ax_raw.errorbar(
-        wavelengths_nm, ms1_off_mean, yerr=ms1_off_ste,
-        fmt="o-", capsize=3, label="ms=±1, OFF", color="tab:orange",
-    )
-    ax_raw.errorbar(
-        wavelengths_nm, ms0_on_mean, yerr=ms0_on_ste,
-        fmt="s--", capsize=3, label="ms=0, ON", color="tab:blue",
-    )
-    ax_raw.errorbar(
-        wavelengths_nm, ms1_on_mean, yerr=ms1_on_ste,
-        fmt="s--", capsize=3, label="ms=±1, ON", color="tab:orange",
-    )
-    ax_raw.set_title("Ti:sapph singlet scan")
-    ax_raw.set_ylabel("Raw counts")
-    ax_raw.grid(True, linestyle="--", alpha=0.5)
-    ax_raw.legend()
+    handles["line_ms0_on"].set_data(wavelengths_nm, ms0_on_mean)
+    handles["line_ms1_on"].set_data(wavelengths_nm, ms1_on_mean)
 
-    ax_resp.clear()
-    if resp_ms0_mean is not None:
-        ax_resp.errorbar(
-            wavelengths_nm, resp_ms0_mean, yerr=resp_ms0_ste,
-            fmt="o-", capsize=3, label="(ms0_on - ms0_off)/ms0_off",
-        )
-    if resp_ms1_mean is not None:
-        ax_resp.errorbar(
-            wavelengths_nm, resp_ms1_mean, yerr=resp_ms1_ste,
-            fmt="o-", capsize=3, label="(ms1_on - ms1_off)/ms1_off",
-        )
-    ax_resp.set_ylabel("Ti:sapph-induced contrast")
-    ax_resp.grid(True, linestyle="--", alpha=0.5)
-    ax_resp.legend()
-
-    ax_delta.clear()
-    if delta_resp_mean is not None:
-        ax_delta.errorbar(
-            wavelengths_nm, delta_resp_mean, yerr=delta_resp_ste,
-            fmt="o-", capsize=3, label="resp(ms±1) - resp(ms0)",
-        )
-    ax_delta.set_ylabel("Δ contrast")
-    ax_delta.set_xlabel("Ti:sapph wavelength (nm)")
-    ax_delta.grid(True, linestyle="--", alpha=0.5)
-    ax_delta.legend()
+    for ax in axes:
+        ax.relim()
+        ax.autoscale_view()
 
     plt.pause(0.01)
 
@@ -311,11 +257,7 @@ def main(
     track_every_n_steps=None,   # if set, re-track every N steps within a run
     do_plot=True,
     shuffle=True,
-    settle_s=0.3,
-    do_offset_control=False,          # NEW
-    control_offset=None,      # NEW — (dx, dy) in the positioner's native units
-    control_coords_key=None, 
-
+    settle_s=0.25,
 ):
     tb.reset_cfm()
     kpl.init_kplotlib()
@@ -446,10 +388,7 @@ def main(
 
             if optimize_between_runs:
                 targeting.compensate_for_drift(nv_sig, no_crash=True)
-            if do_offset_control:
-                 key = control_coords_key if control_coords_key is not None else CoordsKey.PIXEL
-                 target = do_move_to_nv_plus_offset(nv_sig, key, control_offset)
-                 print(f"  [offset control] parked off NV at {target} (offset={control_offset})")
+
             # Match the working resonance-style path:
             # load once per run, then reapply MW state each run
             pulsegen_server.stream_load(seq_file, seq_args_string)
@@ -489,11 +428,7 @@ def main(
                             pass
 
                         targeting.compensate_for_drift(nv_sig, no_crash=True)
-                          # --- offset control (NEW) ---
-                        if do_offset_control:
-                            key = control_coords_key if control_coords_key is not None else CoordsKey.PIXEL
-                            target = do_move_to_nv_plus_offset(nv_sig, key, control_offset)
-                            print(f"  [offset control] parked off NV at {target} (offset={control_offset})")
+
                         # Re-arm the sequence and MW exactly as at run start
                         pulsegen_server.stream_load(seq_file, seq_args_string)
                         sig_gen.set_amp(float(uwave_power_dbm))
@@ -550,10 +485,10 @@ def main(
                     pass
 
             if do_plot:
-                ms0_off_mean, ms0_off_ste = _nanmean_ste(ms0_off_counts[: run_ind + 1])
-                ms1_off_mean, ms1_off_ste = _nanmean_ste(ms1_off_counts[: run_ind + 1])
-                ms0_on_mean, ms0_on_ste = _nanmean_ste(ms0_on_counts[: run_ind + 1])
-                ms1_on_mean, ms1_on_ste = _nanmean_ste(ms1_on_counts[: run_ind + 1])
+                ms0_off_mean, _ = _nanmean_ste(ms0_off_counts[: run_ind + 1])
+                ms1_off_mean, _ = _nanmean_ste(ms1_off_counts[: run_ind + 1])
+                ms0_on_mean, _ = _nanmean_ste(ms0_on_counts[: run_ind + 1])
+                ms1_on_mean, _ = _nanmean_ste(ms1_on_counts[: run_ind + 1])
 
                 metrics_runs = _compute_all_metrics(
                     ms0_off_counts[: run_ind + 1],
@@ -564,9 +499,9 @@ def main(
 
                 spin_off_mean, _ = _nanmean_ste(metrics_runs["spin_contrast_off"])
                 spin_on_mean, _ = _nanmean_ste(metrics_runs["spin_contrast_on"])
-                resp_ms0_mean, resp_ms0_ste = _nanmean_ste(metrics_runs["ms0_response"])
-                resp_ms1_mean, resp_ms1_ste = _nanmean_ste(metrics_runs["ms1_response"])
-                delta_resp_mean, delta_resp_ste = _nanmean_ste(metrics_runs["delta_response"])
+                resp_ms0_mean, _ = _nanmean_ste(metrics_runs["ms0_response"])
+                resp_ms1_mean, _ = _nanmean_ste(metrics_runs["ms1_response"])
+                delta_resp_mean, _ = _nanmean_ste(metrics_runs["delta_response"])
                 delta_spin_mean, _ = _nanmean_ste(metrics_runs["delta_spin_contrast"])
 
                 _update_live_figure(
@@ -577,16 +512,6 @@ def main(
                     ms1_off_mean,
                     ms0_on_mean,
                     ms1_on_mean,
-                    ms0_off_ste=ms0_off_ste,
-                    ms1_off_ste=ms1_off_ste,
-                    ms0_on_ste=ms0_on_ste,
-                    ms1_on_ste=ms1_on_ste,
-                    resp_ms0_mean=resp_ms0_mean,
-                    resp_ms1_mean=resp_ms1_mean,
-                    resp_ms0_ste=resp_ms0_ste,
-                    resp_ms1_ste=resp_ms1_ste,
-                    delta_resp_mean=delta_resp_mean,
-                    delta_resp_ste=delta_resp_ste,
                 )
 
             # Per-run incremental save — wrapped so save failures never abort
@@ -633,61 +558,6 @@ def main(
     return raw_data
 
 
-def plot_live_style_from_loaded(raw_data):
-    """
-    Reproduces the exact 4-panel layout used by the live figure
-    (_build_live_figure / _update_live_figure) from a saved raw_data dict,
-    so the plot representation can be checked without running a live scan.
-
-    Usage:
-        data = dm.get_raw_data(file_stem="...")
-        fig = plot_live_style_from_loaded(data)
-        kpl.show(block=True)
-    """
-    wavelengths_nm = np.asarray(raw_data["wavelengths_nm"], dtype=float)
-
-    ms0_off_mean = np.asarray(raw_data["ms0_off_mean"], dtype=float)
-    ms0_off_ste = np.asarray(raw_data["ms0_off_ste"], dtype=float)
-    ms1_off_mean = np.asarray(raw_data["ms1_off_mean"], dtype=float)
-    ms1_off_ste = np.asarray(raw_data["ms1_off_ste"], dtype=float)
-
-    ms0_on_mean = np.asarray(raw_data["ms0_on_mean"], dtype=float)
-    ms0_on_ste = np.asarray(raw_data["ms0_on_ste"], dtype=float)
-    ms1_on_mean = np.asarray(raw_data["ms1_on_mean"], dtype=float)
-    ms1_on_ste = np.asarray(raw_data["ms1_on_ste"], dtype=float)
-
-    resp_ms0_mean = np.asarray(raw_data["contrast_ms0_mean"], dtype=float)
-    resp_ms0_ste = np.asarray(raw_data["contrast_ms0_ste"], dtype=float)
-    resp_ms1_mean = np.asarray(raw_data["contrast_ms1_mean"], dtype=float)
-    resp_ms1_ste = np.asarray(raw_data["contrast_ms1_ste"], dtype=float)
-
-    delta_resp_mean = np.asarray(raw_data["delta_contrast_mean"], dtype=float)
-    delta_resp_ste = np.asarray(raw_data["delta_contrast_ste"], dtype=float)
-
-    fig, axes, _ = _build_live_figure()
-    _update_live_figure(
-        wavelengths_nm,
-        axes,
-        {},
-        ms0_off_mean,
-        ms1_off_mean,
-        ms0_on_mean,
-        ms1_on_mean,
-        ms0_off_ste=ms0_off_ste,
-        ms1_off_ste=ms1_off_ste,
-        ms0_on_ste=ms0_on_ste,
-        ms1_on_ste=ms1_on_ste,
-        resp_ms0_mean=resp_ms0_mean,
-        resp_ms1_mean=resp_ms1_mean,
-        resp_ms0_ste=resp_ms0_ste,
-        resp_ms1_ste=resp_ms1_ste,
-        delta_resp_mean=delta_resp_mean,
-        delta_resp_ste=delta_resp_ste,
-    )
-    plt.tight_layout()
-    return fig
-
-
 def plot_raw_counts_from_loaded(raw_data):
     wavelengths_nm = np.asarray(raw_data["wavelengths_nm"], dtype=float)
 
@@ -699,16 +569,16 @@ def plot_raw_counts_from_loaded(raw_data):
     fig, axes = plt.subplots(2, 1, figsize=(7, 8), sharex=True)
 
     ax = axes[0]
-    ax.plot(wavelengths_nm, ms0_off_mean, "o-", label="ms=0, Ti:sapph OFF", color="tab:blue")
-    ax.plot(wavelengths_nm, ms1_off_mean, "o-", label="ms=±1, Ti:sapph OFF", color="tab:orange")
+    ax.plot(wavelengths_nm, ms0_off_mean, "o-", label="ms=0, Ti:sapph OFF")
+    ax.plot(wavelengths_nm, ms1_off_mean, "o-", label="ms=±1, Ti:sapph OFF")
     ax.set_ylabel("Raw counts")
     ax.set_title("Ti:sapph OFF")
     ax.grid(True, linestyle="--", alpha=0.5)
     ax.legend()
 
     ax = axes[1]
-    ax.plot(wavelengths_nm, ms0_on_mean, "o-", label="ms=0, Ti:sapph ON", color="tab:blue")
-    ax.plot(wavelengths_nm, ms1_on_mean, "o-", label="ms=±1, Ti:sapph ON", color="tab:orange")
+    ax.plot(wavelengths_nm, ms0_on_mean, "o-", label="ms=0, Ti:sapph ON")
+    ax.plot(wavelengths_nm, ms1_on_mean, "o-", label="ms=±1, Ti:sapph ON")
     ax.set_xlabel("Ti:sapph wavelength (nm)")
     ax.set_ylabel("Raw counts")
     ax.set_title("Ti:sapph ON")
@@ -1005,21 +875,17 @@ def combine_tisapph_raw_data(data1, data2):
 if __name__ == "__main__":
     kpl.init_kplotlib()
 
-    # Load a saved run and reproduce the exact 4-panel live-figure layout,
-    # for testing/inspecting the plot without running live hardware.
-    data = dm.get_raw_data(file_stem="2026_07_08-10_09_40-(Wu)", load_npz=True)
-    plot_live_style_from_loaded(data)
+    # Example:
+    data = dm.get_raw_data(file_stem="2026_04_03-05_20_17-(lovelace)", load_npz=True)
+    data = dm.get_raw_data(file_stem="2026_04_04-09_42_57-(lovelace)", load_npz=True)
+    plot_ms_contrast_from_loaded(data, use_tisapph_on=True)
 
-    # Other loaded-data views, for comparison:
-    # plot_raw_counts_from_loaded(data)
-    # plot_spin_contrast_from_loaded(data)
-    # plot_tisapph_response_from_loaded(data)
-    # plot_ms_contrast_from_loaded(data, use_tisapph_on=True)
-
-    # To combine two runs onto one wavelength grid first:
     # data1 = dm.get_raw_data(file_stem="2026_04_04-17_48_29-(lovelace)", load_npz=True)
     # data2 = dm.get_raw_data(file_stem="2026_04_04-16_53_01-(lovelace)", load_npz=True)
-    # combined_data = combine_tisapph_raw_data(data1, data2)
-    # plot_live_style_from_loaded(combined_data)
 
+    # combined_data = combine_tisapph_raw_data(data1, data2)
+
+    # plot_ms0_ms1_raw_from_loaded(combined_data)
     kpl.show(block=True)
+    # Replace this with your actual nv_sig object
+    # raise RuntimeError("Load or define nv_sig, then call main(...) manually.")
