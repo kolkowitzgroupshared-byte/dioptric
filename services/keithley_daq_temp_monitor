@@ -1,0 +1,51 @@
+"""
+Created on July 23rd, 2026
+
+@author: fkovisto
+
+"""
+from utils import common
+from utils import tool_belt as tb
+import time
+import os
+from dateutil import parser
+
+
+base_folder = "G:\\NV_lab_temp_logs"
+
+cxn = common.labrad_connect()
+opx = cxn.temp_monitor_KEIT_daq6510
+
+
+log_interval = 300 #seconds between samples
+channel = 101
+
+opx.channel_config(channel) #prob won't work so easy
+
+while True:
+
+    # organize data into monthly folders
+    month_str = time.strftime("%m%Y")
+    folder_path = os.path.join(base_folder, month_str)
+    os.makedirs(folder_path, exist_ok=True) # what is this line?
+
+    # get time stamp
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")  # ex. 2026-07-21 9:44:30
+
+    # read temp and turn to float
+    temp = opx.read_temp(channel)
+    float_temp = float(temp)
+    # print(f"Time: {timestamp}, Temp: {float_temp}°C")
+
+    # write time stamp, temp to csv
+    with open("temp_readings.csv", "a") as file:
+        file.write(f"{timestamp},\t{float_temp}\n\n")
+        file.flush()  # writes to file immediately
+
+    # wait for 5 minutes
+    time.sleep(log_interval)
+
+
+# daq = MultimeterKeitDaq6510()
+# daq.initServer()
+# daq.read_repeat(101) # change to temperature probe connected channel 101-120

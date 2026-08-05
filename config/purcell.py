@@ -37,19 +37,19 @@ red_laser_aod = "laser_COBO_638_aod"
 # calibration_coords_red = [[41.956, 88.653],[69.523, 40.383],[90.96, 93.205]]
 
 calibration_coords_pixel = [
-    [343.989, 57.989], 
-    [196.016, 359.035], 
-    [25.014, 50.068],
+    [319.015, 83.106], 
+    [192.998, 353.981], 
+    [17.982, 41.943],
 ]
 calibration_coords_green = [
-    [71.967, 124.546],
-    [102.219, 72.117],
-    [129.311, 129.235],
+    [73.715, 115.446],
+    [100.72, 68.894],
+    [126.953, 127.76],
 ]
 calibration_coords_red = [
-    [41.498, 82.808],
-    [68.574, 42.356],
-    [89.185, 91.264],
+    [47.273, 81.38],
+    [69.645, 44.033],
+    [90.325, 92.229],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -88,7 +88,7 @@ config |= {
     "apd_indices": [0],  # APD indices for the tagger
     "count_format": CountFormat.RAW,
     "collection_mode": CollectionMode.CAMERA,
-    "collection_mode_counter": CollectionMode.COUNTER,  # TODO: remove this line when set up in new computer
+    "collection_mode_counter": CollectionMode.COUNTER,
     # "charge_state_estimation_mode": ChargeStateEstimationMode.MLE,
     "charge_state_estimation_mode": ChargeStateEstimationMode.THRESHOLDING,
     "windows_repo_path": home / "GitHub/dioptric",
@@ -139,17 +139,19 @@ config |= {
         ),
         "dmd_DLP6500_device_id": 0,
         "dmd_DLP6500_init_state": "pass_zero_block",
-        "dmd_DLP6500_zero_radius_px": 30,
+        "dmd_DLP6500_zero_radius_px": 11,
         # Important: load final NV-chain file, not just triangle_affine_onpass.npz
         "dmd_DLP6500_init_calib_path": (
-            "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd_1277.npz"
+            "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd.npz"
         ),
     },
     
     ###
     "SpatialCalibrations": {
         "active_nv_coords_path": (
-            "slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz"
+            # "slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz"
+            # "slmsuite/nv_blob_detection/nv_blob_814nvs_reordered_inside_dmd.npz"
+            "slmsuite/nv_blob_detection/nv_blob_631nvs_reordered_inside_dmd.npz"
         ),
         "slm_fourier_calib_path": (
             "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00015.h5"
@@ -183,8 +185,8 @@ config |= {
                 "physical_name": "sig_gen_STAN_sg394_0",
                 "uwave_power": 11.0,
                 "frequency": 2.7752,
-                "rabi_period": 256,
-                "pi_pulse": 128,
+                "rabi_period": 192,
+                "pi_pulse": 96,
                 "pi_on_2_pulse": 64,
             },
             1: {
@@ -221,7 +223,7 @@ config |= {
         "readout_mode": 1,  # 16 for double horizontal readout rate (em mode)
         # "readout_mode": 6,  # Fast conventional
         # "roi": (122, 126, 250, 250),  # offsetX, offsetY, width, height
-        "roi": (60, 87, 375, 375),  # offsetX, offsetY, width, height
+        "roi": (55, 87, 375, 375),  # offsetX, offsetY, width, height
         # "roi": None,  # offsetX, offsetY, width, height
         "scale": 5 / 0.6,  # pixels / micron
     },
@@ -290,7 +292,8 @@ config |= {
             },
             VirtualLaserKey.WIDEFIELD_IMAGING: {
                 "physical_name": yellow_laser,
-                "duration": 60e6,
+                "duration": 100e6,
+                # "duration": 50e6,
                 # "duration": 24e6,
             },
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 10e3},
@@ -301,8 +304,10 @@ config |= {
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 1e6},
             VirtualLaserKey.WIDEFIELD_CHARGE_READOUT: {
                 "physical_name": yellow_laser,
-                # "duration": 60e6,
-                "duration": 50e6,
+                # "duration": 1e9,
+                "duration": 500e6,
+                # "duration": 100e6,
+                # "duration": 50e6,
                 # "duration": 24e6,  # for red calibration
             },
             # LaserKey.WIDEFIELD_CHARGE_READOUT: {"physical_name": yellow_laser, "duration": 100e6},
@@ -338,7 +343,7 @@ config |= {
                 "control_mode": PosControlMode.SEQUENCE,
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
-                "optimize_range": 1.6,
+                "optimize_range": 1.0,
                 "units": "MHz",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
                 "aod": True,
@@ -733,6 +738,9 @@ opx_config = {
             },
             "operations": {"on": "do_on", "off": "do_off"},
         },
+        # ---------------------------------------------------------------------
+        # Red / 638 AOD elements
+        # ---------------------------------------------------------------------
         "ao_laser_COBO_638_x": {
             "singleInput": {"port": ("con1", 2)},
             "intermediate_frequency": 75e6,
@@ -745,6 +753,21 @@ opx_config = {
                 "continue": "ao_off",
             },
         },
+
+        # New second red x tone for row-pair multiplexing
+        "ao_laser_COBO_638_x_2": {
+            "singleInput": {"port": ("con1", 2)},
+            "intermediate_frequency": 75e6,
+            "sticky": {"analog": True, "duration": ramp_to_zero_duration},
+            "operations": {
+                "aod_cw": "red_aod_cw-scc",
+                "aod_cw-opti": "red_aod_cw-opti",
+                "aod_cw-ion": "red_aod_cw-ion",
+                "aod_cw-scc": "red_aod_cw-scc",
+                "continue": "ao_off",
+            },
+        },
+
         "ao_laser_COBO_638_y": {
             "singleInput": {"port": ("con1", 6)},
             "intermediate_frequency": 75e6,
@@ -757,6 +780,10 @@ opx_config = {
                 "continue": "ao_off",
             },
         },
+
+        # ---------------------------------------------------------------------
+        # Green / 520 AOD elements
+        # ---------------------------------------------------------------------
         "ao_laser_INTE_520_x": {
             "singleInput": {"port": ("con1", 3)},
             "intermediate_frequency": 110e6,
@@ -771,6 +798,23 @@ opx_config = {
                 "continue": "ao_off",
             },
         },
+
+        # New second green x tone for row-pair multiplexing
+        "ao_laser_INTE_520_x_2": {
+            "singleInput": {"port": ("con1", 3)},
+            "intermediate_frequency": 110e6,
+            "sticky": {"analog": True, "duration": ramp_to_zero_duration},
+            "operations": {
+                "aod_cw": "green_aod_cw-charge_pol",
+                "aod_cw-opti": "green_aod_cw-opti",
+                "aod_cw-charge_pol": "green_aod_cw-charge_pol",
+                "aod_cw-spin_pol": "green_aod_cw-spin_pol",
+                "aod_cw-shelving": "green_aod_cw-shelving",
+                "aod_cw-scc": "green_aod_cw-scc",
+                "continue": "ao_off",
+            },
+        },
+
         "ao_laser_INTE_520_y": {
             "singleInput": {"port": ("con1", 4)},
             "intermediate_frequency": 110e6,
@@ -992,8 +1036,8 @@ opx_config = {
     "waveforms": {
         # Green AOD
         "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
-        # "green_aod_cw-opti": {"type": "constant", "sample": 0.11},
-        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.13},
+        # "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
+        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.08},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.15},
@@ -1002,10 +1046,12 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.40},
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.344}, #1460NVs
-        "yellow_charge_readout": {"type": "constant", "sample": 0.3614},
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.4014},
+        "yellow_imaging": {"type": "constant", "sample": 0.25},
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.3513},# 1176NVs
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.2923},
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.2623},
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.2133},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.1942}, ## 631NVs
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other

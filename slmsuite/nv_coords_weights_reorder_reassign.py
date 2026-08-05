@@ -11,6 +11,7 @@ from skimage.draw import disk
 # from tabulate import tabulate
 from utils import data_manager as dm
 from utils import kplotlib as kpl
+from utils import common
 
 from matplotlib.path import Path
 
@@ -204,17 +205,17 @@ def refine_coords_after_fitting(
         if amp <= min_amplitude or popt is None:
             continue
 
-        new_coords.append([fx, fy])
-        fitted_amplitudes.append(amp)
-        fitted_gaussian_weights.append(gwt)
-
+        new_coords.append([round(float(fx), 3), round(float(fy), 3)])
+        fitted_amplitudes.append(round(float(amp), 3))
+        fitted_gaussian_weights.append(round(float(gwt), 3))
+        
         if new_weights is not None:
             if replace_weights_with == "amplitude":
-                new_weights.append(float(amp))
+                new_weights.append(round(float(amp), 3))
             elif replace_weights_with == "gaussian_weight":
-                new_weights.append(float(gwt))
+                new_weights.append(round(float(gwt), 3))
             else:
-                new_weights.append(w)
+                new_weights.append(round(float(w), 3))
 
     return new_coords, new_weights, fitted_amplitudes, fitted_gaussian_weights
 
@@ -597,10 +598,6 @@ class ManualPolygonSelector:
             self.points.set_data([], [])
         self.ax.figure.canvas.draw_idle()
 
-
-import numpy as np
-
-
 def filter_and_rescale_coords_for_new_roi(
     nv_coordinates,
     spot_weights=None,
@@ -765,21 +762,28 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_03_25-17_02_10-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_07_15-13_03_24-qnami-nv0_2026_02_20", load_npz=True
     )
-    img_array = np.array(data["ref_img_array"])
     # img_array = data["img_array"]
-    nv_coordinates, spot_weights = load_nv_coords(
-        # file_path="slmsuite/nv_blob_detection/nv_blob_6837nvs.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_6904nvs.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_3986nvs_reordered.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_3554nvs_reordered.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_3366nvs_reordered.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_1487nvs_reordered.npz"
-        # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz"
-        file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz"
-    )
+    img_array = np.array(data["ref_img_array"])
+
+    # file_path="slmsuite/nv_blob_detection/nv_blob_6837nvs.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_6904nvs.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_3986nvs_reordered.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_3554nvs_reordered.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_3366nvs_reordered.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1487nvs_reordered.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1275nvs_reordered.npz",
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_1267nvs_reordered.npz"
+    config = common.get_config_dict()
+    file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
+    print(file_path)
+    nv_coordinates, spot_weights = load_nv_coords(file_path=file_path)
     
     # fitted_data = dm.get_raw_data(file_stem="2026_03_23-16_39_03-optimal_values_2026_03_22-21_49_52-qnami-nv0_2026_02_20")
     # saved_summary = dm.get_raw_data(file_stem="2026_03_26-18_13_04-recomputed_summary_w_1_2_1_2026_03_26-15_04_19-optimization_processed_full_raw_data")
@@ -878,7 +882,7 @@ if __name__ == "__main__":
     # filtered_reordered_coords, filtered_reordered_spot_weights = nv_coordinates, spot_weights 
     # # Filter and reorder NV coordinates based on reference NV
     sigma = 2.0
-    # reference_nv = [231.42, 235.968]
+    # reference_nv = [192.125, 203.896]
     # reference_nv_old = [231.42, 235.968]
     # reference_nv = remap_single_coord(reference_nv_old, old_roi, new_roi, rescale=False)
 
@@ -977,18 +981,6 @@ if __name__ == "__main__":
     # print("Filter:", filtered_reordered_counts)
     # print("Filtered and Reordered NV Coordinates:", filtered_reordered_coords)
     # print("Filtered and Reordered NV Coordinates:", integrated_intensities)
-
-    # -----------------------------
-    # Your usage pattern
-    # -----------------------------
-    filtered_reordered_coords_0 = [
-        coord for i, coord in enumerate(filtered_reordered_coords) if i not in indices_to_remove
-    ]
-    filtered_reordered_spot_weights_0 = [
-        w for i, w in enumerate(filtered_reordered_spot_weights) if i not in indices_to_remove
-    ]
-    filtered_reordered_coords = filtered_reordered_coords_0
-    filtered_reordered_spot_weights = filtered_reordered_spot_weights_0
     
     # refine coords after fitting; keep original weights
     # filtered_reordered_coords, filtered_reordered_spot_weights, fitted_amplitudes, fitted_gauss_w = (
@@ -996,7 +988,7 @@ if __name__ == "__main__":
     #         img_array,
     #         filtered_reordered_coords,
     #         filtered_reordered_spot_weights,
-    #         window_size=6,
+    #         window_size=1.0,
     #         min_amplitude=0.0,
     #         replace_weights_with="none",   # or "amplitude" or "gaussian_weight"
     #         normalize=False,              # keep amplitude in image units
@@ -1028,43 +1020,61 @@ if __name__ == "__main__":
     data = dm.get_raw_data(
         # file_stem="2026_03_25-16_28_08-charge_state_analysis_hist_data_raw_data", load_npz=True
         # file_stem="2026_03_25-18_15_53-charge_state_analysis_hist_data_raw_data", load_npz=True
-        file_stem="2026_03_26-20_09_33-charge_state_analysis_hist_data_raw_data", load_npz=True
+        file_stem= "2026_07_15-15_17_51-single_step_charge_hist_single_cpu_2026_07_15-13_03_24-qnami-nv0_2026_02_20",
+        load_npz=True,
     )
-    readout_fidelity_list = data["readout_fidelity_list"]
-    prep_fidelity_list = data["prep_fidelity_list"]
-    include_indices = [
-        i for i, val in enumerate(readout_fidelity_list)
-        if (val is None) or (isinstance(val, (int, float)) and not math.isnan(val) and val >= 0.7)
-    ]
+    print (data.keys())
+    fidelity_data = data["single_step_charge_histogram"]
+    readout_fidelity_list = fidelity_data["readout_fidelity"]
+    prep_fidelity_list = fidelity_data["prep_fidelity"]
     
+    # data_spot_weight = dm.get_raw_data(
+    # # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+    # # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+    # file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
+    # )
+    # spot_weights = np.asarray(data_spot_weight["optimal_weights"], dtype=float)
+    # spot_weights = np.squeeze(spot_weights)
+    
+    # analysis_data = dm.get_raw_data(
+    #     # file_stem="2026_06_15-01_24_30-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis",
+    #     load_npz=True,
+    # )
+    # analysis = analysis_data["charge_hist_multinv_binomial"]
+
+    # one_nv_inds = np.where(
+    #     np.asarray(analysis["ok"], dtype=bool)
+    #     & (np.rint(analysis["n_nvs_est"]).astype(int) == 1)
+    # )[0]
     # include_indices = [
-    #     i
-    #     for i, (v1, v2) in enumerate(zip(readout_fidelity_list, prep_fidelity_list))
-    #     if (v1 is not None and v2 is not None)
-    #     and all(isinstance(x, (int, float)) for x in (v1, v2))
-    #     and not (math.isnan(v1) or math.isnan(v2))
-    #     and v1 >= 0.7 and v2 >= 0.2
+    #     i for i, val in enumerate(readout_fidelity_list)
+    #     if (val is None) or (isinstance(val, (int, float)) and not math.isnan(val) and val >= 0.7)
     # ]
+    # include_indices = list(range(len(filtered_reordered_coords)))
+    # include_indices = one_nv_inds
+    include_indices = [
+        i
+        for i, (v1, v2) in enumerate(zip(readout_fidelity_list, prep_fidelity_list))
+        if (v1 is not None and v2 is not None)
+        and all(isinstance(x, (int, float)) for x in (v1, v2))
+        and not (math.isnan(v1) or math.isnan(v2))
+        and v1 >= 0.8 and v2 >= 0.6
+    ]
     # print(np.sort(list(include_indices)))
     filtered_reordered_coords = [filtered_reordered_coords[i] for i in include_indices]
-    updated_spot_weights = [spot_weights[i] for i in include_indices]
+    updated_spot_weights = [filtered_reordered_spot_weights[i] for i in include_indices]
+    # updated_spot_weights = spot_weights
 
     # filtered_pol_durs = [pol_duration_list[i] for i in include_indices]
     # filtered_scc_durs = [scc_duration_list[i] for i in include_indices]
 
-    aom_voltage = 0.3614
-    # a, b, c = [3.7e5, 6.97, 8e-14]
-    # a, b, c = 161266.751, 6.617, -19.492
+    aom_voltage = 0.2923
     a, b, c = 1.5133e04, 2.6976, -38.63  # UPDATED 2025-09-17
 
     total_power = a * (aom_voltage) ** b + c
     # print(total_power)
     normalized_spot_weigths = spot_weights / np.sum(spot_weights)
     nv_powers = total_power * normalized_spot_weigths
-    # print(nv_powers)
-    # print(nv_powers)
-    # calcualted_spot_weights = linear_weights(filtered_reordered_counts, alpha=0.3)
-    # updated_spot_weights = linear_weights(filtered_reordered_counts, alpha=0.6)
     nv_powers_filtered = np.array(
         [power for i, power in enumerate(nv_powers) if i in include_indices]
     )
@@ -1117,10 +1127,10 @@ if __name__ == "__main__":
     print("filtered_nv_power_len:", len(nv_powers_filtered))
     print("NV Index | Coords    |   previous weights")
     print("-" * 60)
-    # for idx, (coords, weight) in enumerate(
-    #     zip(filtered_reordered_coords, filtered_reordered_spot_weights)
-    # ):
-    #     print(f"{idx + 1:<8} | {coords} | {weight:.3f}")
+    for idx, (coords, weight) in enumerate(
+        zip(filtered_reordered_coords[:20], filtered_reordered_spot_weights[:20])
+    ):
+        print(f"{idx + 1:<8} | {coords} | {weight:.3f}")
 
     # print(adjusted_aom_voltage)
     
@@ -1144,11 +1154,11 @@ if __name__ == "__main__":
     # spot_weights = non_linear_weights(filtered_intensities, alpha=0.9)
     # filtered_reordered_spot_weights = filtered_reordered_spot_weights[:4094]
     # filtered_reordered_coords = filtered_reordered_coords[:4094]
-    # # Save the filtered results
+    # Save the filtered results
     # save_results(
     #     filtered_reordered_coords,
     #     filtered_reordered_spot_weights,
-    #     filename="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz",
+    #     filename="slmsuite/nv_blob_detection/nv_blob_631nvs_reordered_inside_dmd.npz",
     # )
 
     # # Plot the original image with circles around each NV

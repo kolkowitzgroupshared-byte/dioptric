@@ -248,24 +248,61 @@ def macro_spin_polarize(duration: int = None, amp: float = None):
     qua.wait(buffer, spin_pol_laser_el)
 
 
-def macro_ionize(ion_coords_list: list[list[float]], do_target_list: list[bool] = None):
-    """Apply an ionization pulse to each coordinate pair in the passed coords_list.
+# def macro_ionize(ion_coords_list: list[list[float]], do_target_list: list[bool] = None):
+#     """Apply an ionization pulse to each coordinate pair in the passed coords_list.
 
-    Parameters
-    ----------
-    ion_coords_list : list[list[float]]
-        List of coordinate pairs to target
-    do_target_list : list[bool], optional
-        List of whether to target an NV or not. Used to skip certain NVs.
-        Default value None targets all NVs
+#     Parameters
+#     ----------
+#     ion_coords_list : list[list[float]]
+#         List of coordinate pairs to target
+#     do_target_list : list[bool], optional
+#         List of whether to target an NV or not. Used to skip certain NVs.
+#         Default value None targets all NVs
+#     """
+#     ion_laser_name = tb.get_physical_laser_name(VirtualLaserKey.ION)
+#     ion_pulse_name = "ion"
+#     macro_run_aods([ion_laser_name], aod_suffices=[ion_pulse_name])
+#     _macro_pulse_series(
+#         ion_laser_name, ion_pulse_name, ion_coords_list, do_target_list=do_target_list
+#     )
+
+def macro_ionize(
+    ion_coords_list: list[list[float]],
+    ion_duration_list: list[int] = None,
+    ion_amp_list: list[float] = None,
+    ion_duration_override: int = None,
+    ion_amp_override: float = None,
+    aod_accees_time_override: int = None,
+    do_target_list: list[bool] = None,
+):
     """
+    Apply an ionization pulse to each coordinate pair.
+
+    ion_amp_list should contain QUA amplitude multipliers:
+        1.0 = config base amplitude
+        1.2 = 20% above config
+        0.8 = 20% below config
+    """
+
     ion_laser_name = tb.get_physical_laser_name(VirtualLaserKey.ION)
     ion_pulse_name = "ion"
-    macro_run_aods([ion_laser_name], aod_suffices=[ion_pulse_name])
-    _macro_pulse_series(
-        ion_laser_name, ion_pulse_name, ion_coords_list, do_target_list=do_target_list
+
+    macro_run_aods(
+        laser_names=[ion_laser_name],
+        aod_suffices=[ion_pulse_name],
     )
 
+    _macro_pulse_series(
+        ion_laser_name,
+        ion_pulse_name,
+        ion_coords_list,
+        ion_duration_list,
+        ion_amp_list,
+        ion_duration_override,
+        ion_amp_override,
+        aod_accees_time_override,
+        do_target_list,
+    )
 
 def macro_scc(
     scc_coords_list: list[list[float]],
@@ -652,10 +689,277 @@ def macro_pulse_combo(
         )
 
 
+
+def _make_row_pairs(
+    coords_list,
+    duration_list=None,
+    amp_list=None,
+    y_tol_MHz=0.05,
+):
+    """
+    Make pair groups that share approximately the same y coordinate.
+
+    This is important for AOD multiplexing:
+        two x tones + one y tone -> two spots
+
+    Avoid arbitrary pairs:
+        two x tones + two y tones -> four spots, including ghost/cross spots.
+
+    Parameters
+    ----------
+    coords_list : list[[x_MHz, y_MHz]]
+    duration_list : list[int] or None
+        Durations in ns.
+    amp_list : list[float] or None
+        AOD RF amplitude multipliers.
+    y_tol_MHz : float
+        Maximum y-frequency mismatch allowed for a row pair.
+
+    Returns
+    -------
+    pair_records : list[dict]
+    single_records : list[dict]
+    """
+
+    records = []
+    for ind, coords in enumerate(coords_list):
+        dur = None if duration_list is None else duration_list[ind]
+        amp = None if amp_list is None else amp_list[ind]
+
+        records.append(
+            {
+                "ind": ind,
+                "x": float(coords[0]),
+                "y": float(coords[1]),
+                "duration": dur,
+                "amp": amp,
+            }
+        )
+
+    # Sort by y first, then x.
+    records = sorted(records, key=lambda r: (r["y"], r["x"]))
+
+    rows = []
+    for rec in records:
+        placed = False
+        for row in rows:
+            if abs(rec["y"] - row["y_ref"]) <= y_tol_MHz:
+                row["records"].append(rec)
+                # keep row reference stable-ish
+                row["y_ref"] = float(np.mean([r["y"] for r in row["records"]]))
+                placed = True
+                break
+
+        if not placed:
+            rows.append({"y_ref": rec["y"], "records": [rec]})
+
+    pair_records = []
+    single_records = []
+
+    for row in rows:
+        row_recs = sorted(row["records"], key=lambda r: r["x"])
+
+        # Pair neighboring x positions in the same row.
+        ii = 0
+        while ii < len(row_recs):
+            if ii + 1 < len(row_recs):
+                r0 = row_recs[ii]
+                r1 = row_recs[ii + 1]
+
+                # Shared y frequency: use average.
+                y_pair = 0.5 * (r0["y"] + r1["y"])
+
+                # For simultaneous pair, duration must be common.
+                # Use max to avoid under-pulsing one NV.
+                if r0["duration"] is None and r1["duration"] is None:
+                    dur_pair = None
+                elif r0["duration"] is None:
+                    dur_pair = r1["duration"]
+                elif r1["duration"] is None:
+                    dur_pair = r0["duration"]
+                else:
+                    dur_pair = max(r0["duration"], r1["duration"])
+
+                # First version: common amp for the pair.
+                # Use max to avoid under-powering one NV.
+                # if r0["amp"] is None and r1["amp"] is None:
+                #     amp_pair = None
+                # elif r0["amp"] is None:
+                #     amp_pair = r1["amp"]
+                # elif r1["amp"] is None:
+                #     amp_pair = r0["amp"]
+                # else:
+                #     amp_pair = max(r0["amp"], r1["amp"])
+                
+                # Common amp for the pair.
+                # Do NOT sum the two amplitudes.
+                # Use the average of the two calibrated single-NV amplitudes.
+                if r0["amp"] is None and r1["amp"] is None:
+                    amp_pair = None
+                elif r0["amp"] is None:
+                    amp_pair = r1["amp"]
+                elif r1["amp"] is None:
+                    amp_pair = r0["amp"]
+                else:
+                    amp_pair = 0.5 * (float(r0["amp"]) + float(r1["amp"]))
+
+                # pair_records.append(
+                #     {
+                #         "inds": [r0["ind"], r1["ind"]],
+                #         "x0": r0["x"],
+                #         "x1": r1["x"],
+                #         "y": y_pair,
+                #         "duration": dur_pair,
+                #         "amp": amp_pair,
+                #     }
+                # )
+                
+                pair_records.append(
+                {
+                    "inds": [r0["ind"], r1["ind"]],
+                    "x0": r0["x"],
+                    "x1": r1["x"],
+                    "y": y_pair,
+                    "duration": dur_pair,
+                    "amp": amp_pair,
+                }
+                )
+                ii += 2
+            else:
+                single_records.append(row_recs[ii])
+                ii += 1
+
+    return pair_records, single_records
+
+
+def _get_row_pair_aod_elements(laser_name):
+    """
+    Row-pair multiplexing elements.
+
+    Uses:
+        x tone 1: ao_<laser_name>_x
+        x tone 2: ao_<laser_name>_x_2
+        y tone  : ao_<laser_name>_y
+
+    This creates two spots on the same y row.
+    """
+
+    x0_el = f"ao_{laser_name}_x"
+    x1_el = f"ao_{laser_name}_x_2"
+    y_el = f"ao_{laser_name}_y"
+
+    return x0_el, x1_el, y_el
+
+
+def macro_run_aod_row_pair(
+    laser_name: str,
+    aod_suffix: str,
+    amp_val=None,
+):
+    """
+    Turn on AOD tones needed for row-pair multiplexing.
+
+    Two x tones + one y tone.
+
+    amp_val:
+        QUA amplitude multiplier.
+        None means use the config default pulse amplitude.
+    """
+
+    x0_el, x1_el, y_el = _get_row_pair_aod_elements(laser_name)
+
+    if aod_suffix is None:
+        pulse_name = "aod_cw"
+    else:
+        pulse_name = f"aod_cw-{aod_suffix}"
+
+    qua.align()
+
+    qua.ramp_to_zero(x0_el)
+    qua.ramp_to_zero(x1_el)
+    qua.ramp_to_zero(y_el)
+
+    if amp_val is None:
+        qua.play(pulse_name, x0_el)
+        qua.play(pulse_name, x1_el)
+        qua.play(pulse_name, y_el)
+    else:
+        qua.play(pulse_name * qua.amp(amp_val), x0_el)
+        qua.play(pulse_name * qua.amp(amp_val), x1_el)
+        qua.play(pulse_name * qua.amp(amp_val), y_el)
 # endregion
 
 
-# region Private QUA macros
+# # region Private QUA macros
+# def _macro_single_pulse(
+#     laser_name: str,
+#     coords: list[float],
+#     pulse_name: str,
+#     duration: int = None,
+#     amp: float = None,
+#     aod_accees_time: int = None,
+#     convert_to_Hz: bool = True,
+    
+# ):
+#     """Apply a single laser pulse at the passed coordinate pair. Does not align
+#     before beginning the macro
+
+#     Parameters
+#     ----------
+#     laser_name : str
+#         Name of laser to pulse
+#     coords : list[float]
+#         Coordinate pair to target
+#     pulse_name : str
+#         Name of the pulse to play
+#     duration : int, optional
+#         Pulse duration in cc, by default whatever is in config
+#     amp : float, optional
+#         Pulse amplitude, by default whatever is in config
+#     convert_to_Hz : bool, optional
+#         Whether to convert coords from MHz to Hz, by default True
+#     """
+#     # Setup
+#     laser_el = get_laser_mod_element(laser_name)
+#     x_el = f"ao_{laser_name}_x"
+#     y_el = f"ao_{laser_name}_y"
+
+#     global _cache_pol_reps_ind
+
+#     buffer = get_widefield_operation_buffer()
+#     if aod_accees_time is not None:
+#         accees_time = aod_accees_time
+#     else:
+#         accees_time = get_aod_access_time()
+        
+
+#     if convert_to_Hz:
+#         coords = [int(el * 10**6) for el in coords]
+
+#     if amp is None:
+#         qua.play("continue", x_el)
+#         qua.play("continue", y_el)
+#     else:
+#         with qua.if_(amp == 0):
+#             qua.play("continue", x_el)
+#             qua.play("continue", y_el)
+#         with qua.else_():
+#             macro_run_aods(
+#                 laser_names=[laser_name], aod_suffices=[pulse_name], amps=[amp]
+#             )
+#     qua.update_frequency(x_el, coords[0])
+#     qua.update_frequency(y_el, coords[1])
+
+#     # Pulse the laser
+#     qua.wait(accees_time + buffer, laser_el)
+#     if duration is None:
+#         qua.play(pulse_name, laser_el)
+#     elif isinstance(duration, int) and duration == 0:
+#         pass
+#     else:
+#         qua.play(pulse_name, laser_el, duration=duration)
+#     qua.wait(buffer, laser_el)
+
 def _macro_single_pulse(
     laser_name: str,
     coords: list[float],
@@ -664,43 +968,33 @@ def _macro_single_pulse(
     amp: float = None,
     aod_accees_time: int = None,
     convert_to_Hz: bool = True,
-    
 ):
-    """Apply a single laser pulse at the passed coordinate pair. Does not align
-    before beginning the macro
-
-    Parameters
-    ----------
-    laser_name : str
-        Name of laser to pulse
-    coords : list[float]
-        Coordinate pair to target
-    pulse_name : str
-        Name of the pulse to play
-    duration : int, optional
-        Pulse duration in cc, by default whatever is in config
-    amp : float, optional
-        Pulse amplitude, by default whatever is in config
-    convert_to_Hz : bool, optional
-        Whether to convert coords from MHz to Hz, by default True
     """
-    # Setup
+    Apply a single laser pulse at the passed coordinate pair.
+    Does not align before beginning the macro.
+    """
+
     laser_el = get_laser_mod_element(laser_name)
     x_el = f"ao_{laser_name}_x"
     y_el = f"ao_{laser_name}_y"
 
-    global _cache_pol_reps_ind
-
     buffer = get_widefield_operation_buffer()
+
     if aod_accees_time is not None:
         accees_time = aod_accees_time
     else:
         accees_time = get_aod_access_time()
-        
 
+    # Keep previous behavior.
+    # In _macro_pulse_series, coords are already QUA variables in Hz,
+    # so convert_to_Hz must be False there.
     if convert_to_Hz:
         coords = [int(el * 10**6) for el in coords]
 
+    # ------------------------------------------------------------
+    # Update AOD amplitude BEFORE frequency update.
+    # amp is QUA multiplier. amp=1.0 means config base amplitude.
+    # ------------------------------------------------------------
     if amp is None:
         qua.play("continue", x_el)
         qua.play("continue", y_el)
@@ -708,23 +1002,35 @@ def _macro_single_pulse(
         with qua.if_(amp == 0):
             qua.play("continue", x_el)
             qua.play("continue", y_el)
+
         with qua.else_():
             macro_run_aods(
-                laser_names=[laser_name], aod_suffices=[pulse_name], amps=[amp]
+                laser_names=[laser_name],
+                aod_suffices=[pulse_name],
+                amps=[amp],
             )
+
+    # ------------------------------------------------------------
+    # Then update AOD frequencies.
+    # ------------------------------------------------------------
     qua.update_frequency(x_el, coords[0])
     qua.update_frequency(y_el, coords[1])
 
-    # Pulse the laser
+    # ------------------------------------------------------------
+    # Wait after amplitude + frequency update before laser pulse.
+    # Increase aod_accees_time_override if amp settling is slow.
+    # ------------------------------------------------------------
     qua.wait(accees_time + buffer, laser_el)
+
     if duration is None:
         qua.play(pulse_name, laser_el)
     elif isinstance(duration, int) and duration == 0:
         pass
     else:
         qua.play(pulse_name, laser_el, duration=duration)
-    qua.wait(buffer, laser_el)
 
+    qua.wait(buffer, laser_el)
+    
 
 def _macro_pulse_series(
     laser_name: str,
@@ -936,6 +1242,340 @@ def _macro_scc_no_shelving(
     )
 
 
+def _macro_row_pair_pulse(
+    laser_name: str,
+    x0_freq_Hz,
+    x1_freq_Hz,
+    y_freq_Hz,
+    pulse_name: str,
+    duration=None,
+    amp_val=None,
+    aod_accees_time=None,
+):
+    """
+    Pulse two spots simultaneously on the same y row.
+
+    Spot 0: (x0, y)
+    Spot 1: (x1, y)
+
+    This avoids 2x2 ghost spots because there is only one y tone.
+    """
+
+    laser_el = get_laser_mod_element(laser_name)
+
+    x0_el, x1_el, y_el = _get_row_pair_aod_elements(laser_name)
+
+    buffer = get_widefield_operation_buffer()
+
+    if aod_accees_time is None:
+        aod_accees_time = get_aod_access_time()
+
+    # Start / update AOD CW tones.
+    macro_run_aod_row_pair(
+        laser_name=laser_name,
+        aod_suffix=pulse_name,
+        amp_val=amp_val,
+    )
+
+    # Update frequencies.
+    qua.update_frequency(x0_el, x0_freq_Hz)
+    qua.update_frequency(x1_el, x1_freq_Hz)
+    qua.update_frequency(y_el, y_freq_Hz)
+
+    qua.align(x0_el, x1_el, y_el, laser_el)
+
+    # Wait for AOD access / settling.
+    qua.wait(aod_accees_time + buffer, laser_el)
+
+    # One common laser modulation pulse hits both row-pair spots.
+    if duration is None:
+        qua.play(pulse_name, laser_el)
+    elif isinstance(duration, int) and duration == 0:
+        pass
+    else:
+        qua.play(pulse_name, laser_el, duration=duration)
+
+    qua.wait(buffer, laser_el)
+    
+def _macro_pulse_series_row_pairs(
+    laser_name: str,
+    pulse_name: str,
+    coords_list: list[list[float]],
+    duration_list: list[int] = None,
+    amp_list: list[float] = None,
+    duration_override: int = None,
+    amp_override: float = None,
+    aod_accees_time_override: int = None,
+    do_target_list: list[bool] = None,
+    y_tol_MHz: float = 0.05,
+):
+    """
+    Pairwise multiplexed pulse series.
+
+    Strategy:
+        Pair NVs with approximately same y AOD frequency.
+        For each pair:
+            play two x tones and one y tone simultaneously.
+
+    Leftover NVs are pulsed serially using the original _macro_pulse_series().
+    """
+
+    if len(coords_list) == 0:
+        return
+
+    if do_target_list is not None:
+        # First version: keep pairwise multiplexing simple.
+        # Use serial mode when doing targeted/conditional charge init.
+        _macro_pulse_series(
+            laser_name,
+            pulse_name,
+            coords_list,
+            duration_list,
+            amp_list,
+            duration_override,
+            amp_override,
+            aod_accees_time_override,
+            do_target_list,
+        )
+        return
+
+    pair_records, single_records = _make_row_pairs(
+        coords_list,
+        duration_list=duration_list,
+        amp_list=amp_list,
+        y_tol_MHz=y_tol_MHz,
+    )
+
+    # ------------------------------------------------------------------
+    # Pair records
+    # ------------------------------------------------------------------
+    if len(pair_records) > 0:
+        x0_list = [int(r["x0"] * 1e6) for r in pair_records]
+        x1_list = [int(r["x1"] * 1e6) for r in pair_records]
+        y_list = [int(r["y"] * 1e6) for r in pair_records]
+
+        if duration_override is not None:
+            duration_cc_list = [duration_override for _ in pair_records]
+        else:
+            duration_cc_list = []
+            for r in pair_records:
+                if r["duration"] is None:
+                    duration_cc_list.append(-1)
+                else:
+                    duration_cc_list.append(convert_ns_to_cc(r["duration"]))
+
+        if amp_override is not None:
+            amp_list_pair = [float(amp_override) for _ in pair_records]
+        else:
+            amp_list_pair = []
+            for r in pair_records:
+                if r["amp"] is None:
+                    amp_list_pair.append(-1.0)
+                else:
+                    amp_list_pair.append(float(r["amp"]))
+
+        x0_var = qua.declare(int)
+        x1_var = qua.declare(int)
+        y_var = qua.declare(int)
+        dur_var = qua.declare(int)
+        amp_var = qua.declare(qua.fixed)
+
+        qua.align()
+
+        with qua.for_each_(
+            (x0_var, x1_var, y_var, dur_var, amp_var),
+            (x0_list, x1_list, y_list, duration_cc_list, amp_list_pair),
+        ):
+            # Handle optional amp.
+            # If amp_var < 0, use default AOD pulse amplitude.
+            with qua.if_(amp_var < 0):
+                with qua.if_(dur_var < 0):
+                    _macro_row_pair_pulse(
+                        laser_name,
+                        x0_var,
+                        x1_var,
+                        y_var,
+                        pulse_name=pulse_name,
+                        duration=None,
+                        amp_val=None,
+                        aod_accees_time=aod_accees_time_override,
+                    )
+                with qua.else_():
+                    _macro_row_pair_pulse(
+                        laser_name,
+                        x0_var,
+                        x1_var,
+                        y_var,
+                        pulse_name=pulse_name,
+                        duration=dur_var,
+                        amp_val=None,
+                        aod_accees_time=aod_accees_time_override,
+                    )
+
+            with qua.else_():
+                with qua.if_(dur_var < 0):
+                    _macro_row_pair_pulse(
+                        laser_name,
+                        x0_var,
+                        x1_var,
+                        y_var,
+                        pulse_name=pulse_name,
+                        duration=None,
+                        amp_val=amp_var,
+                        aod_accees_time=aod_accees_time_override,
+                    )
+                with qua.else_():
+                    _macro_row_pair_pulse(
+                        laser_name,
+                        x0_var,
+                        x1_var,
+                        y_var,
+                        pulse_name=pulse_name,
+                        duration=dur_var,
+                        amp_val=amp_var,
+                        aod_accees_time=aod_accees_time_override,
+                    )
+
+    # ------------------------------------------------------------------
+    # Leftover singles: use original serial pulse series.
+    # ------------------------------------------------------------------
+    if len(single_records) > 0:
+        single_coords = [[r["x"], r["y"]] for r in single_records]
+
+        if duration_list is None:
+            single_durations = None
+        else:
+            single_durations = [r["duration"] for r in single_records]
+
+        if amp_list is None:
+            single_amps = None
+        else:
+            single_amps = [r["amp"] for r in single_records]
+
+        _macro_pulse_series(
+            laser_name,
+            pulse_name,
+            single_coords,
+            single_durations,
+            single_amps,
+            duration_override,
+            amp_override,
+            aod_accees_time_override,
+            do_target_list=None,
+        )
+
+
+def macro_polarize_row_pairs(
+    coords_list: list[list[float]],
+    duration_list: list[int] = None,
+    amp_list: list[float] = None,
+    duration_override: int = None,
+    amp_override: float = None,
+    targeted_polarization: bool = False,
+    verify_charge_states: bool = False,
+    spin_pol: bool = True,
+    spin_pol_duration_override: int = None,
+    spin_pol_amp_override: float = None,
+    aod_accees_time_override: int = None,
+    y_tol_MHz: float = 0.05,
+):
+    """
+    Pairwise row-multiplexed charge initialization.
+
+    First version:
+        no targeted_polarization
+        no verify_charge_states
+
+    If those are requested, fall back to original serial macro_polarize.
+    """
+
+    if targeted_polarization or verify_charge_states:
+        macro_polarize(
+            coords_list,
+            duration_list=duration_list,
+            amp_list=amp_list,
+            duration_override=duration_override,
+            amp_override=amp_override,
+            targeted_polarization=targeted_polarization,
+            verify_charge_states=verify_charge_states,
+            spin_pol=spin_pol,
+            spin_pol_duration_override=spin_pol_duration_override,
+            spin_pol_amp_override=spin_pol_amp_override,
+            aod_accees_time_override=aod_accees_time_override,
+        )
+        return
+
+    pol_laser_name = tb.get_physical_laser_name(VirtualLaserKey.CHARGE_POL)
+    pulse_name = "charge_pol"
+
+    _macro_pulse_series_row_pairs(
+        pol_laser_name,
+        pulse_name,
+        coords_list,
+        duration_list=duration_list,
+        amp_list=amp_list,
+        duration_override=duration_override,
+        amp_override=amp_override,
+        aod_accees_time_override=aod_accees_time_override,
+        do_target_list=None,
+        y_tol_MHz=y_tol_MHz,
+    )
+
+    if spin_pol:
+        macro_spin_polarize(
+            spin_pol_duration_override,
+            spin_pol_amp_override,
+        )
+        
+def macro_scc_row_pairs(
+    scc_coords_list: list[list[float]],
+    scc_duration_list: list[int] = None,
+    scc_amp_list: list[float] = None,
+    scc_duration_override: int = None,
+    scc_amp_override: float = None,
+    aod_accees_time_override: int = None,
+    do_target_list: list[bool] = None,
+    y_tol_MHz: float = 0.05,
+):
+    """
+    Pairwise row-multiplexed SCC.
+
+    If do_target_list is used, fall back to serial SCC for safety.
+    """
+
+    config = common.get_config_dict()
+    do_shelving_pulse = config["Optics"]["PulseSettings"]["scc_shelving_pulse"]
+
+    if do_shelving_pulse:
+        raise NotImplementedError("Pairwise SCC with shelving not implemented yet.")
+
+    if do_target_list is not None:
+        macro_scc(
+            scc_coords_list,
+            scc_duration_list=scc_duration_list,
+            scc_amp_list=scc_amp_list,
+            scc_duration_override=scc_duration_override,
+            scc_amp_override=scc_amp_override,
+            aod_accees_time_override=aod_accees_time_override,
+            do_target_list=do_target_list,
+        )
+        return
+
+    scc_laser_name = tb.get_physical_laser_name(VirtualLaserKey.SCC)
+    scc_pulse_name = "scc"
+
+    _macro_pulse_series_row_pairs(
+        scc_laser_name,
+        scc_pulse_name,
+        scc_coords_list,
+        duration_list=scc_duration_list,
+        amp_list=scc_amp_list,
+        duration_override=scc_duration_override,
+        amp_override=scc_amp_override,
+        aod_accees_time_override=aod_accees_time_override,
+        do_target_list=None,
+        y_tol_MHz=y_tol_MHz,
+    )
 # endregion
 # region Getters and utils
 

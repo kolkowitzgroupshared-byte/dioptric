@@ -34,7 +34,12 @@ from slmsuite.hardware.cameras.thorlabs import ThorCam
 from utils import data_manager as dm
 from utils import kplotlib as kpl
 
+from matplotlib.colors import LinearSegmentedColormap
 
+blue_cmap = LinearSegmentedColormap.from_list(
+    "white_to_C0",
+    ["white", "#1f77b4"],
+    )
 # =============================================================================
 # Small helpers
 # =============================================================================
@@ -69,16 +74,16 @@ def _show_nonblocking(fig, show=True):
 # =============================================================================
 
 
-def safe_get_image(cam, exposure=0.0001, tries=20, delay_s=0.05):
+def safe_get_image(cam, exposure=0.0001, tries=200, delay_s=0.005):
     """Set exposure and keep trying until a real image is returned."""
     cam.set_exposure(exposure)
-    time.sleep(0.15)
+    # time.sleep(0.15)
 
     for _ in range(tries):
         img = cam.get_image()
         if img is not None:
             return img
-        time.sleep(delay_s)
+        # time.sleep(delay_s)
 
     raise RuntimeError("Camera returned None after multiple attempts.")
 
@@ -103,12 +108,43 @@ def integrate_spot_intensities(img, spot_pts, roi=8):
     return np.asarray(vals, dtype=np.float32)
 
 
-def brightest_spot_centroid(img, threshold_percentile=99.8):
-    """Find the brightest connected component and return a weighted centroid."""
+def brightest_spot_centroid(
+    img,
+    threshold_percentile=99.8,
+    expected_xy=None,
+    half_width=120,
+):
+    """
+    Find brightest connected component and return weighted centroid.
+
+    If expected_xy is given, only search inside a box around that point.
+    This avoids accidentally picking bright edge artifacts.
+    """
     imgf = np.asarray(img).astype(np.float32)
 
-    thresh = np.percentile(imgf, threshold_percentile)
-    mask = (imgf >= thresh).astype(np.uint8)
+    h, w = imgf.shape
+
+    # ------------------------------------------------------------
+    # Restrict search region if expected_xy is given.
+    # ------------------------------------------------------------
+    if expected_xy is not None:
+        x0, y0 = expected_xy
+        x0 = int(round(x0))
+        y0 = int(round(y0))
+
+        x_min = max(0, x0 - half_width)
+        x_max = min(w, x0 + half_width + 1)
+        y_min = max(0, y0 - half_width)
+        y_max = min(h, y0 + half_width + 1)
+
+        img_search = imgf[y_min:y_max, x_min:x_max]
+    else:
+        x_min = 0
+        y_min = 0
+        img_search = imgf
+
+    thresh = np.percentile(img_search, threshold_percentile)
+    mask = (img_search >= thresh).astype(np.uint8)
 
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask)
 
@@ -117,29 +153,40 @@ def brightest_spot_centroid(img, threshold_percentile=99.8):
 
     for i in range(1, num_labels):
         area = stats[i, cv2.CC_STAT_AREA]
+
         if 3 <= area <= 8000:
-            total = imgf[labels == i].sum()
+            total = img_search[labels == i].sum()
+
             if total > best_sum:
                 best_sum = total
                 best_i = i
 
     if best_i is None:
-        raise RuntimeError("Could not find brightest spot.")
+        raise RuntimeError("Could not find brightest spot in selected region.")
 
     ys, xs = np.where(labels == best_i)
-    weights = imgf[ys, xs] - thresh
+    weights = img_search[ys, xs] - thresh
     weights = np.clip(weights, 0, None)
 
     if weights.sum() <= 0:
-        xy = centroids[best_i].astype(np.float32)
+        xy_local = centroids[best_i].astype(np.float32)
     else:
-        xy = np.array(
+        xy_local = np.array(
             [
                 np.sum(xs * weights) / np.sum(weights),
                 np.sum(ys * weights) / np.sum(weights),
             ],
             dtype=np.float32,
         )
+
+    # Convert crop-local coordinate back to full-image coordinate.
+    xy = np.array(
+        [
+            xy_local[0] + x_min,
+            xy_local[1] + y_min,
+        ],
+        dtype=np.float32,
+    )
 
     return xy
 
@@ -282,7 +329,7 @@ def scan_dmd_axis_for_spots_onpass(
 
     # Reference pass image.
     dmd.pass_all(True)
-    time.sleep(0.2)
+    # time.sleep(0.2)
     img_pass = safe_get_image(cam, exposure=exposure)
     pass_vals = integrate_spot_intensities(img_pass, cam_pts, roi=roi)
     pass_safe = np.maximum(pass_vals, 1.0)
@@ -293,7 +340,7 @@ def scan_dmd_axis_for_spots_onpass(
 
     for p in positions:
         dmd.show_blocking_stripe(axis, float(p), int(stripe_width), int(plane))
-        time.sleep(settle_s)
+        # time.sleep(settle_s)
 
         img = safe_get_image(cam, exposure=exposure)
         vals = integrate_spot_intensities(img, cam_pts, roi=roi)
@@ -313,9 +360,30 @@ def scan_dmd_axis_for_spots_onpass(
 
     drops = np.asarray(drops, dtype=np.float32)
     scan_vals = np.asarray(scan_vals, dtype=np.float32)
+    
     best_indices = np.argmax(drops, axis=0)
-    best_positions = positions[best_indices].astype(np.float32)
+    argmax_positions = positions[best_indices].astype(np.float32)
+    
+    (
+        fit_positions,
+        spot_fwhm,
+        spot_sigma,
+        fit_params,
+        fit_center_errors,
+        fit_r2,
+    ) = fit_widths_from_drop_curves(
+        positions=positions,
+        drops=drops,
+        stripe_width=stripe_width,
+    )
 
+    # Use argmax as a fallback if a fit fails.
+    best_positions = np.where(
+        np.isfinite(fit_positions),
+        fit_positions,
+        argmax_positions,
+    ).astype(np.float32)
+    
     raw = {
         "axis": axis,
         "positions": positions,
@@ -327,9 +395,26 @@ def scan_dmd_axis_for_spots_onpass(
         "pass_image": np.asarray(img_pass),
         "pass_vals": pass_vals,
         "scan_vals": scan_vals,
-        "scan_images": _maybe_stack_images(scan_images) if save_scan_images else None,
+        "scan_images": (
+            _maybe_stack_images(scan_images)
+            if save_scan_images
+            else None
+        ),
         "drops": drops,
+
+        # Discrete estimate
         "best_indices": best_indices.astype(np.int32),
+        "argmax_positions": argmax_positions,
+
+        # Fitted estimate
+        "fit_positions": fit_positions,
+        "fit_center_errors": fit_center_errors,
+        "fit_params": fit_params,
+        "fit_r2": fit_r2,
+        "spot_fwhm": spot_fwhm,
+        "spot_sigma": spot_sigma,
+
+        # Coordinate actually returned to the calibration
         "best_positions": best_positions,
     }
 
@@ -365,7 +450,8 @@ def apply_affine(M, pts):
 def plot_camera_points(img, points=None, labels=None, title="Camera image", show=False):
     img = np.asarray(img)
     fig, ax = plt.subplots(figsize=(8, 6))
-    ax.imshow(img, cmap="gray")
+    # ax.imshow(img, cmap="gray")
+    ax.imshow(img, cmap=blue_cmap)
 
     if points is not None:
         points = np.asarray(points, dtype=np.float32)
@@ -381,27 +467,202 @@ def plot_camera_points(img, points=None, labels=None, title="Camera image", show
     _show_nonblocking(fig, show=show)
     return fig
 
+def stripe_gaussian_drop(
+    position,
+    offset,
+    amplitude,
+    center,
+    sigma,
+    stripe_width,
+):
+    """
+    Fraction of a 1D Gaussian spot blocked by a finite-width stripe.
 
-def plot_response_curves(positions, responses, title="DMD scan", show=False):
-    positions = np.asarray(positions, dtype=np.float32)
-    responses = np.asarray(responses, dtype=np.float32)
+    center:
+        DMD coordinate of the optical spot.
+
+    sigma:
+        Gaussian spot width projected onto the scanned DMD axis.
+    """
+    from scipy.special import erf
+
+    position = np.asarray(position, dtype=np.float64)
+
+    left = (
+        position - center + stripe_width / 2
+    ) / (np.sqrt(2) * sigma)
+
+    right = (
+        position - center - stripe_width / 2
+    ) / (np.sqrt(2) * sigma)
+
+    return offset + amplitude * 0.5 * (
+        erf(left) - erf(right)
+    )
+
+def plot_response_curves(
+    positions,
+    responses,
+    title="DMD scan",
+    stripe_width=None,
+    fit_params=None,
+    fit_positions=None,
+    fit_center_errors=None,
+    fit_r2=None,
+    argmax_positions=None,
+    show=False,
+):
+    """
+    Plot raw drop measurements and optional finite-stripe Gaussian fits.
+    """
+    positions = np.asarray(positions, dtype=np.float64)
+    responses = np.asarray(responses, dtype=np.float64)
+
     if responses.ndim == 1:
         responses = responses[:, None]
 
-    fig, ax = plt.subplots(figsize=(8, 4))
-    nspots = responses.shape[1]
+    if fit_params is not None:
+        fit_params = np.asarray(fit_params, dtype=np.float64)
 
-    for i in range(nspots):
-        ax.plot(positions, responses[:, i], "-o", label=f"spot {i}")
+    if fit_positions is not None:
+        fit_positions = np.asarray(fit_positions, dtype=np.float64)
 
-    ax.set_xlabel("DMD scan position")
-    ax.set_ylabel("fractional intensity drop")
+    if fit_center_errors is not None:
+        fit_center_errors = np.asarray(
+            fit_center_errors,
+            dtype=np.float64,
+        )
+
+    if fit_r2 is not None:
+        fit_r2 = np.asarray(fit_r2, dtype=np.float64)
+
+    if argmax_positions is not None:
+        argmax_positions = np.asarray(
+            argmax_positions,
+            dtype=np.float64,
+        )
+
+    fig, ax = plt.subplots(figsize=(9, 5))
+
+    dense_positions = np.linspace(
+        positions.min(),
+        positions.max(),
+        2000,
+    )
+
+    num_spots = responses.shape[1]
+
+    for i in range(num_spots):
+        # Plot measured points first.
+        data_line = ax.plot(
+            positions,
+            responses[:, i],
+            "o",
+            markersize=4,
+            label=None,
+        )[0]
+
+        plot_color = data_line.get_color()
+
+        valid_fit = (
+            stripe_width is not None
+            and fit_params is not None
+            and i < len(fit_params)
+            and np.all(np.isfinite(fit_params[i]))
+        )
+
+        if valid_fit:
+            offset, amplitude, center, sigma = fit_params[i]
+
+            fitted_curve = stripe_gaussian_drop(
+                dense_positions,
+                offset,
+                amplitude,
+                center,
+                sigma,
+                stripe_width,
+            )
+
+            if (
+                fit_center_errors is not None
+                and i < len(fit_center_errors)
+                and np.isfinite(fit_center_errors[i])
+            ):
+                center_text = (
+                    f"{center:.2f} ± "
+                    f"{fit_center_errors[i]:.2f}"
+                )
+            else:
+                center_text = f"{center:.2f}"
+
+            if (
+                fit_r2 is not None
+                and i < len(fit_r2)
+                and np.isfinite(fit_r2[i])
+            ):
+                quality_text = f", R²={fit_r2[i]:.3f}"
+            else:
+                quality_text = ""
+
+            ax.plot(
+                dense_positions,
+                fitted_curve,
+                "-",
+                linewidth=2,
+                color=plot_color,
+                label=(
+                    f"spot {i}: center={center_text} px"
+                    f"{quality_text}"
+                ),
+            )
+
+            # Mark the fitted DMD coordinate.
+            ax.axvline(
+                center,
+                linestyle="--",
+                linewidth=1,
+                color=plot_color,
+                alpha=0.7,
+            )
+
+        else:
+            ax.plot(
+                [],
+                [],
+                "o",
+                color=plot_color,
+                label=f"spot {i}: data only",
+            )
+
+        # Optional marker for the old discrete argmax estimate.
+        if (
+            argmax_positions is not None
+            and i < len(argmax_positions)
+            and np.isfinite(argmax_positions[i])
+        ):
+            argmax_x = argmax_positions[i]
+            argmax_index = int(
+                np.argmin(np.abs(positions - argmax_x))
+            )
+
+            ax.plot(
+                argmax_x,
+                responses[argmax_index, i],
+                "x",
+                markersize=8,
+                color=plot_color,
+            )
+
+    ax.set_xlabel("DMD stripe-center position [mirrors]")
+    ax.set_ylabel("Fractional intensity drop")
     ax.set_title(title)
-    ax.legend()
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.25)
+
     fig.tight_layout()
     _show_nonblocking(fig, show=show)
-    return fig
 
+    return fig
 
 def plot_affine_check(data, show=False):
     tri_cam_pts = _arr(data.get("tri_cam_pts"))
@@ -427,56 +688,110 @@ def plot_affine_check(data, show=False):
 
 def process_and_plot(data, show=False):
     """
-    Generate all diagnostic plots from a saved raw-data dictionary.
+    Generate diagnostic plots from a saved raw-data dictionary.
 
-    This is intentionally separated from acquisition so you can later do:
-        data = dm.get_raw_data(file_id=...)
-        figs = process_and_plot(data, show=True)
+    This function supports both:
+        1. New scan data containing fitted-curve information.
+        2. Older scan data containing only positions and drop values.
+
+    Example
+    -------
+    data = load_raw_data_npz_compressed(npz_path)
+    figs = process_and_plot(data, show=True)
     """
     figs = []
 
-    if data.get("img_zero") is not None and data.get("zero_cam_xy") is not None:
+    def append_scan_plot(scan_key, title):
+        """Create and append one DMD scan-response plot."""
+        scan = data.get(scan_key)
+
+        if scan is None:
+            return
+
+        positions = scan.get("positions")
+        drops = scan.get("drops")
+
+        if positions is None or drops is None:
+            print(
+                f"Skipping {scan_key}: "
+                "missing positions or drop data."
+            )
+            return
+
+        fig = plot_response_curves(
+            positions=positions,
+            responses=drops,
+            stripe_width=scan.get("stripe_width"),
+            fit_params=scan.get("fit_params"),
+            fit_positions=scan.get("fit_positions"),
+            fit_center_errors=scan.get("fit_center_errors"),
+            fit_r2=scan.get("fit_r2"),
+            argmax_positions=scan.get("argmax_positions"),
+            title=title,
+            show=show,
+        )
+
+        if fig is not None:
+            figs.append(fig)
+
+    # ------------------------------------------------------------------
+    # Zero-order camera image
+    # ------------------------------------------------------------------
+    img_zero = data.get("img_zero")
+    zero_cam_xy = data.get("zero_cam_xy")
+
+    if img_zero is not None and zero_cam_xy is not None:
         figs.append(
             plot_camera_points(
-                data["img_zero"],
-                points=data["zero_cam_xy"],
+                img=img_zero,
+                points=zero_cam_xy,
                 labels=["0th"],
                 title="0th-order / reference beam centroid",
                 show=show,
             )
         )
 
-    if data.get("zero_x") is not None:
-        figs.append(
-            plot_response_curves(
-                data["zero_x"]["positions"],
-                data["zero_x"]["drops"],
-                title="0th-order DMD x scan",
-                show=show,
-            )
-        )
+    # ------------------------------------------------------------------
+    # Zero-order DMD scans
+    # ------------------------------------------------------------------
+    append_scan_plot(
+        scan_key="zero_x",
+        title="0th-order DMD x scan",
+    )
 
-    if data.get("zero_y") is not None:
-        figs.append(
-            plot_response_curves(
-                data["zero_y"]["positions"],
-                data["zero_y"]["drops"],
-                title="0th-order DMD y scan",
-                show=show,
-            )
-        )
+    append_scan_plot(
+        scan_key="zero_y",
+        title="0th-order DMD y scan",
+    )
 
-    if data.get("img_triangle") is not None and data.get("tri_cam_pts") is not None:
-        tri_pts = _arr(data["tri_cam_pts"])
-        labels = [str(ind) for ind in range(len(tri_pts))]
-        if data.get("zero_cam_xy") is not None:
-            points = np.vstack([_arr(data["zero_cam_xy"]), tri_pts])
-            labels = ["0th"] + labels
+    # ------------------------------------------------------------------
+    # Triangle camera image
+    # ------------------------------------------------------------------
+    img_triangle = data.get("img_triangle")
+    tri_cam_pts = data.get("tri_cam_pts")
+
+    if img_triangle is not None and tri_cam_pts is not None:
+        tri_cam_pts = _arr(tri_cam_pts)
+
+        if tri_cam_pts.ndim == 1:
+            tri_cam_pts = tri_cam_pts[None, :]
+
+        triangle_labels = [
+            f"spot {index}"
+            for index in range(len(tri_cam_pts))
+        ]
+
+        if zero_cam_xy is not None:
+            zero_point = _arr(zero_cam_xy).reshape(1, 2)
+            points = np.vstack([zero_point, tri_cam_pts])
+            labels = ["0th"] + triangle_labels
         else:
-            points = tri_pts
+            points = tri_cam_pts
+            labels = triangle_labels
+
         figs.append(
             plot_camera_points(
-                data["img_triangle"],
+                img=img_triangle,
                 points=points,
                 labels=labels,
                 title="Triangle calibration spots",
@@ -484,29 +799,29 @@ def process_and_plot(data, show=False):
             )
         )
 
-    if data.get("triangle_x") is not None:
-        figs.append(
-            plot_response_curves(
-                data["triangle_x"]["positions"],
-                data["triangle_x"]["drops"],
-                title="Triangle DMD x scan",
-                show=show,
-            )
-        )
+    # ------------------------------------------------------------------
+    # Triangle DMD scans
+    # ------------------------------------------------------------------
+    append_scan_plot(
+        scan_key="triangle_x",
+        title="Triangle DMD x scan",
+    )
 
-    if data.get("triangle_y") is not None:
-        figs.append(
-            plot_response_curves(
-                data["triangle_y"]["positions"],
-                data["triangle_y"]["drops"],
-                title="Triangle DMD y scan",
-                show=show,
-            )
-        )
+    append_scan_plot(
+        scan_key="triangle_y",
+        title="Triangle DMD y scan",
+    )
 
-    fig = plot_affine_check(data, show=show)
-    if fig is not None:
-        figs.append(fig)
+    # ------------------------------------------------------------------
+    # Affine-transformation diagnostic
+    # ------------------------------------------------------------------
+    affine_fig = plot_affine_check(
+        data,
+        show=show,
+    )
+
+    if affine_fig is not None:
+        figs.append(affine_fig)
 
     return figs
 
@@ -657,8 +972,8 @@ def calibrate_zero_order_onpass(
     cam,
     exposure=0.0001,
     roi=12,
-    stripe_width=50,
-    zero_radius_px=30,
+    stripe_width=40,
+    zero_radius_px=11,
     save_scan_images=True,
 ):
     """
@@ -668,12 +983,18 @@ def calibrate_zero_order_onpass(
     print("\n=== 0th-order calibration ===")
 
     dmd.pass_all(False)
-    time.sleep(0.2)
+    # time.sleep(0.2)
     img_zero = safe_get_image(cam, exposure=exposure)
 
+    # zero_cam_xy = brightest_spot_centroid(
+    #     img_zero,
+    #     threshold_percentile=99.8,
+    # )
     zero_cam_xy = brightest_spot_centroid(
         img_zero,
         threshold_percentile=99.8,
+        expected_xy=[710, 532],
+        half_width=120,
     )
 
     cam_pts = np.array([zero_cam_xy], dtype=np.float32)
@@ -683,7 +1004,7 @@ def calibrate_zero_order_onpass(
         cam=cam,
         cam_pts=cam_pts,
         axis="x",
-        positions=np.arange(970, 1120, 4),
+        positions=np.arange(850, 1000, 2),
         stripe_width=stripe_width,
         plane=220,
         exposure=exposure,
@@ -696,7 +1017,7 @@ def calibrate_zero_order_onpass(
         cam=cam,
         cam_pts=cam_pts,
         axis="y",
-        positions=np.arange(360, 500, 4),
+        positions=np.arange(450, 600, 2),
         stripe_width=stripe_width,
         plane=221,
         exposure=exposure,
@@ -744,7 +1065,7 @@ def calibrate_triangle_onpass(
     print("\n=== Triangle calibration ===")
 
     dmd.pass_all(True)
-    time.sleep(0.2)
+    # time.sleep(0.1)
     img_triangle = safe_get_image(cam, exposure=exposure)
 
     tri_cam_pts = detect_top_n_spots(
@@ -767,7 +1088,7 @@ def calibrate_triangle_onpass(
         cam=cam,
         cam_pts=tri_cam_pts,
         axis="x",
-        positions=np.arange(500, 1400, 15),
+        positions=np.arange(300, 1320, 4),
         stripe_width=stripe_width,
         plane=222,
         exposure=exposure,
@@ -783,18 +1104,18 @@ def calibrate_triangle_onpass(
         "triangle_x": x_raw,
     }
     process_and_plot(tmp_data, show=True)
-    input("X scan done. Press Enter for Y scan...")
+    # input("X scan done. Press Enter for Y scan...")
 
     y_positions, y_drop, dmd_y, y_raw = scan_dmd_axis_for_spots_onpass(
         dmd=dmd,
         cam=cam,
         cam_pts=tri_cam_pts,
         axis="y",
-        positions=np.arange(80, 1000, 15),
+        positions=np.arange(80, 1100, 4),
         stripe_width=stripe_width,
         plane=223,
         exposure=exposure,
-        roi=roi,
+        roi=roi,    
         save_scan_images=save_scan_images,
     )
 
@@ -827,6 +1148,19 @@ def _ensure_parent_dir(path):
         path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
+def _npz_path_from_dm_path(file_path):
+    """
+    Convert a dm.get_file_path path to a real .npz path and ensure folder exists.
+
+    If dm path is:
+        .../name.txt
+
+    this returns:
+        .../name.npz
+    """
+    file_path = Path(file_path)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    return file_path.with_suffix(".npz")
 
 def save_zero_order_calibration_npz(
     zero_data,
@@ -914,23 +1248,330 @@ def save_server_calibration_npz(
     print(f"Saved compact server affine calibration to: {path}")
     return str(path)
 
+def save_thorcam_snapshot(img, label="thorcam-snapshot", exposure=0.0001):
+    timestamp = dm.get_time_stamp()
 
+    file_path = dm.get_file_path(
+        __file__,
+        timestamp,
+        label,
+    )
+
+    # Save raw image data
+    np.savez_compressed(
+        str(file_path) + ".npz",
+        img=np.asarray(img),
+        exposure=np.array(exposure, dtype=np.float32),
+        timestamp=np.asarray(timestamp),
+    )
+
+    # Save plotted image
+    fig, ax = plt.subplots(figsize=(8, 5.5))
+    ax.imshow(img, cmap=blue_cmap)
+    ax.set_title(label)
+    cbar = fig.colorbar(ax.images[0], ax=ax)
+    cbar.set_label("counts")
+
+    dm.save_figure(fig, file_path)
+
+    print("Saved image data:", str(file_path) + ".npz")
+    print("Saved figure:", file_path)
+
+    return str(file_path) + ".npz", fig
+
+
+def do_thorcam_hardware_roi_with_yellow(
+    label="thorcam-yellow-image",
+    exposure=0.0001,
+    yellow_channel=7,
+    yellow_amp=0.08,
+    roi_xywh=None,  # None = full image; otherwise (x, y, width, height)
+    wait_before_cleanup=True,
+):
+    from slmsuite.hardware.cameras.thorlabs import ThorCam
+    from utils import common
+
+    cxn = None
+    opx = None
+    cam = None
+
+    try:
+        cxn = common.labrad_connect()
+        opx = cxn.QM_opx
+
+        opx.constant_ac([], [yellow_channel], [yellow_amp], [0])
+        time.sleep(0.2)
+
+        cam = ThorCam(serial="26438", verbose=True)
+
+        # Hardware ROI only if requested.
+        if roi_xywh is not None:
+            x, y, w, h = roi_xywh
+            x, y, w, h = int(x), int(y), int(w), int(h)
+
+            # ThorCam set_woi format: (x_start, width, y_start, height)
+            cam.set_woi((x, w, y, h))
+            image_origin_xy = np.array([x, y], dtype=np.float32)
+            save_roi_xywh = np.array([x, y, w, h], dtype=np.int32)
+            x_label = "ROI x [px]"
+            y_label = "ROI y [px]"
+        else:
+            image_origin_xy = np.array([0, 0], dtype=np.float32)
+            save_roi_xywh = np.array([-1, -1, -1, -1], dtype=np.int32)
+            x_label = "Camera x [px]"
+            y_label = "Camera y [px]"
+
+        img = safe_get_image(cam, exposure=exposure)
+
+        img_f = img.astype(np.float32)
+        bg = np.percentile(img_f, 20)
+        weights = np.clip(img_f - bg, 0, None)
+
+        if weights.sum() > 0:
+            yy, xx = np.mgrid[0:img.shape[0], 0:img.shape[1]]
+            cx = image_origin_xy[0] + np.sum(xx * weights) / weights.sum()
+            cy = image_origin_xy[1] + np.sum(yy * weights) / weights.sum()
+            centroid_xy = np.array([cx, cy], dtype=np.float32)
+        else:
+            centroid_xy = np.array([np.nan, np.nan], dtype=np.float32)
+
+        print("\n=== ThorCam readout ===")
+        print("roi_xywh:", None if roi_xywh is None else tuple(save_roi_xywh))
+        print("image shape:", img.shape)
+        print("sum:", float(np.sum(img)))
+        print("mean:", float(np.mean(img)))
+        print("max:", float(np.max(img)))
+        print("centroid_xy full camera:", centroid_xy)
+
+        timestamp = dm.get_time_stamp()
+        file_path = dm.get_file_path(__file__, timestamp, label)
+
+        npz_path = _npz_path_from_dm_path(file_path)
+
+        np.savez_compressed(
+            npz_path,
+            img=np.asarray(img),
+            roi_xywh=save_roi_xywh,
+            img_sum=np.asarray(np.sum(img), dtype=np.float32),
+            img_mean=np.asarray(np.mean(img), dtype=np.float32),
+            img_max=np.asarray(np.max(img), dtype=np.float32),
+            centroid_xy=np.asarray(centroid_xy, dtype=np.float32),
+            exposure=np.asarray(exposure, dtype=np.float32),
+            yellow_channel=np.asarray(yellow_channel, dtype=np.int32),
+            yellow_amp=np.asarray(yellow_amp, dtype=np.float32),
+        )
+
+        fig, ax = plt.subplots(figsize=(8, 7))
+        vmin, vmax = np.percentile(img, [0, 99.98])
+        ax.imshow(
+            img,
+            cmap=blue_cmap,
+            vmin=vmin,
+            vmax=vmax,
+            interpolation="nearest",
+        )
+        ax.set_title(label)
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+        fig.colorbar(ax.images[0], ax=ax, label="counts")
+        dm.save_figure(fig, file_path)
+        print("Saved image data:", npz_path)
+        print("Saved image figure:", file_path)
+
+        if wait_before_cleanup:
+            input("Press Enter to turn off yellow...")
+            
+        plt.show(block=False)
+
+        return img, centroid_xy, str(npz_path)
+
+    finally:
+        try:
+            if opx is not None:
+                opx.constant_ac([], [yellow_channel], [0.0], [0])
+        except Exception as exc:
+            print("Could not turn off yellow:", exc)
+
+        try:
+            if cam is not None:
+                cam.close()
+        except Exception:
+            pass
+
+        try:
+            if cxn is not None:
+                cxn.disconnect()
+        except Exception:
+            pass
 # =============================================================================
 # Main acquisition / reload path
 # =============================================================================
 
+def fit_widths_from_drop_curves(positions, drops, stripe_width):
+    """
+    Fit each blocking-stripe response.
+
+    Returns
+    -------
+    centers : array
+        Fitted DMD coordinates.
+
+    fwhms : array
+        FWHM of the underlying Gaussian spot along the scanned axis.
+
+    sigmas : array
+        Gaussian sigma values.
+
+    fit_params : array, shape [num_spots, 4]
+        Columns are [offset, amplitude, center, sigma].
+
+    center_errors : array
+        One-standard-deviation uncertainties from the covariance matrix.
+
+    fit_r2 : array
+        Coefficient of determination for each fit.
+    """
+    from scipy.optimize import curve_fit
+
+    positions = np.asarray(positions, dtype=np.float64)
+    drops = np.asarray(drops, dtype=np.float64)
+
+    if drops.ndim == 1:
+        drops = drops[:, None]
+
+    num_spots = drops.shape[1]
+
+    centers = np.full(num_spots, np.nan, dtype=np.float32)
+    sigmas = np.full(num_spots, np.nan, dtype=np.float32)
+    fwhms = np.full(num_spots, np.nan, dtype=np.float32)
+
+    fit_params = np.full(
+        (num_spots, 4),
+        np.nan,
+        dtype=np.float32,
+    )
+
+    center_errors = np.full(
+        num_spots,
+        np.nan,
+        dtype=np.float32,
+    )
+
+    fit_r2 = np.full(
+        num_spots,
+        np.nan,
+        dtype=np.float32,
+    )
+
+    def model(position, offset, amplitude, center, sigma):
+        return stripe_gaussian_drop(
+            position,
+            offset,
+            amplitude,
+            center,
+            sigma,
+            stripe_width,
+        )
+
+    for i in range(num_spots):
+        y = drops[:, i]
+
+        offset0 = float(np.percentile(y, 10))
+        amplitude0 = float(np.max(y) - offset0)
+        center0 = float(positions[np.argmax(y)])
+
+        # A moderate initial estimate. The fit will refine it.
+        sigma0 = max(float(stripe_width) / 2, 2.0)
+
+        try:
+            popt, pcov = curve_fit(
+                model,
+                positions,
+                y,
+                p0=[
+                    offset0,
+                    amplitude0,
+                    center0,
+                    sigma0,
+                ],
+                bounds=(
+                    [
+                        -0.2,
+                        0.0,
+                        positions.min(),
+                        0.5,
+                    ],
+                    [
+                        1.2,
+                        2.0,
+                        positions.max(),
+                        500.0,
+                    ],
+                ),
+                maxfev=20000,
+            )
+
+            offset, amplitude, center, sigma = popt
+            y_fit = model(positions, *popt)
+
+            residual_sum = np.sum((y - y_fit) ** 2)
+            total_sum = np.sum((y - np.mean(y)) ** 2)
+
+            if total_sum > 0:
+                r_squared = 1.0 - residual_sum / total_sum
+            else:
+                r_squared = np.nan
+
+            if (
+                pcov is not None
+                and pcov.shape == (4, 4)
+                and np.isfinite(pcov[2, 2])
+                and pcov[2, 2] >= 0
+            ):
+                center_error = np.sqrt(pcov[2, 2])
+            else:
+                center_error = np.nan
+
+            centers[i] = center
+            sigmas[i] = sigma
+            fwhms[i] = 2.35482 * sigma
+            fit_params[i] = popt
+            center_errors[i] = center_error
+            fit_r2[i] = r_squared
+
+            print(
+                f"Spot {i}: center={center:.3f} ± "
+                f"{center_error:.3f} DMD px, "
+                f"sigma={sigma:.3f} px, "
+                f"R²={r_squared:.4f}"
+            )
+
+        except Exception as exc:
+            print(f"Fit failed for spot {i}: {exc}")
+
+    return (
+        centers,
+        fwhms,
+        sigmas,
+        fit_params,
+        center_errors,
+        fit_r2,
+    )
 
 def main(
     load_file_id=None,
     load_npz_path=None,
     camera_serial="26438",
     exposure_zero=0.0001,
-    exposure_triangle=0.001,
+    exposure_triangle=0.0001,
     save_scan_images=True,
     reuse_zero_order=True,
     force_zero_order=False,
     zero_calib_path="dmdsuite/calibration/zero_order_onpass.npz",
     server_calib_path="dmdsuite/calibration/triangle_affine_onpass.npz",
+    yellow_channel=7,
+    yellow_amp=0.08,
+    use_yellow=True,
 ):
     """
     If load_file_id is None, run a new calibration.
@@ -953,8 +1594,14 @@ def main(
 
     cxn = labrad.connect(username="", password="")
     dmd = cxn.dmd_dlp6500
+    opx = cxn.QM_opx
     cam = ThorCam(serial=camera_serial, verbose=True)
 
+    if use_yellow:
+        opx.constant_ac([], [yellow_channel], [yellow_amp], [0])
+        time.sleep(0.2)
+        print(f"Yellow ON: channel={yellow_channel}, amp={yellow_amp}")
+        
     data = {
         "timestamp": timestamp,
         "camera_serial": camera_serial,
@@ -967,6 +1614,9 @@ def main(
         "server_calib_path": server_calib_path,
         "exposure_zero": float(exposure_zero),
         "exposure_triangle": float(exposure_triangle),
+        "use_yellow": bool(use_yellow),
+        "yellow_channel": int(yellow_channel),
+        "yellow_amp": float(yellow_amp),
     }
 
     try:
@@ -1003,9 +1653,9 @@ def main(
                 dmd=dmd,
                 cam=cam,
                 exposure=exposure_zero,
-                roi=12,
-                stripe_width=50,
-                zero_radius_px=30,
+                roi=8,
+                stripe_width=20,
+                zero_radius_px=11,
                 save_scan_images=save_scan_images,
             )
             zero_data["timestamp"] = timestamp
@@ -1036,7 +1686,7 @@ def main(
             zero_cam_xy=data["zero_cam_xy"],
             exposure=exposure_triangle,
             roi=8,
-            stripe_width=40,
+            stripe_width=20,
             save_scan_images=save_scan_images,
         )
         data.update(triangle_data)
@@ -1074,7 +1724,22 @@ def main(
         raise
 
     finally:
-        cam.close()
+        try:
+            if use_yellow:
+                opx.constant_ac([], [yellow_channel], [0.0], [0])
+                print("Yellow OFF")
+        except Exception as exc:
+            print("Could not turn off yellow:", exc)
+
+        try:
+            cam.close()
+        except Exception:
+            pass
+
+        try:
+            cxn.disconnect()
+        except Exception:
+            pass
 
     kpl.show()
     return data
@@ -1090,10 +1755,26 @@ if __name__ == "__main__":
 
     # To reprocess the new compressed DMD raw .npz, set this to the .npz path.
     LOAD_NPZ_PATH = None
-
     main(
         load_file_id=LOAD_FILE_ID,
         load_npz_path=LOAD_NPZ_PATH,
-        reuse_zero_order=True,   # use dmdsuite/calibration/zero_order_onpass.npz if present
-        force_zero_order=False,  # set True only when you want to redo 0th-order scan
+        reuse_zero_order=False,
+        force_zero_order=True,
+        use_yellow=True,
+        yellow_channel=7,
+        yellow_amp=0.045,
     )
+    # take a quick image
+    # do_thorcam_hardware_roi_with_yellow(
+    # label="full-image-test",
+    # exposure=0.0001,
+    # yellow_amp=0.04,
+    # roi_xywh=None,
+    # )
+    # do_thorcam_hardware_roi_with_yellow(``
+    #     label="hardware-roi-test",
+    #     exposure=0.0001,
+    #     yellow_channel=7,
+    #     yellow_amp=0.08,
+    #     roi_xywh=(500, 350, 500, 500),
+    # )

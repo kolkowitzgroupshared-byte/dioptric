@@ -1712,6 +1712,371 @@ def draw_circle_on_nv(
     if not no_legend:
         ax.legend()
 
+# region AOD AMP 
+
+# ----------------------------
+# Empirical calibration data
+# ----------------------------
+import numpy as np
+
+
+# ----------------------------
+# Empirical calibration data
+# ----------------------------
+GREEN_AMP = np.array([0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.14, 0.16], dtype=float)
+GREEN_PWR = np.array([12, 162, 752, 2170, 4520, 7660, 11500, 15400], dtype=float)
+
+RED_AMP = np.array([0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.14, 0.16], dtype=float)
+RED_PWR = np.array([24, 303, 1430, 4160, 9000, 16200, 25000, 34200], dtype=float)
+
+GREEN_FREQ = np.array([90, 95, 100, 105, 110, 115, 120, 125], dtype=float)
+GREEN_FREQ_PWR = np.array([260, 310, 330, 350, 460, 340, 240, 140], dtype=float)
+
+RED_FREQ = np.array([55, 60, 65, 70, 75, 80, 85, 90], dtype=float)
+RED_FREQ_PWR = np.array([112, 200, 255, 260, 270, 260, 205, 110], dtype=float)
+
+
+def _interp_clipped(x, xp, fp):
+    """
+    1D interpolation with clipping at the calibration range.
+    """
+    x = np.asarray(x, dtype=float)
+    x_clip = np.clip(x, xp[0], xp[-1])
+    return np.interp(x_clip, xp, fp)
+
+
+def _fit_power_law_gamma(amp_pts, pwr_pts):
+    """
+    Fit P = C * amp^gamma.
+
+    Only returns gamma because for QUA multipliers we only need the exponent.
+    """
+    amp_pts = np.asarray(amp_pts, dtype=float)
+    pwr_pts = np.asarray(pwr_pts, dtype=float)
+
+    valid = (amp_pts > 0) & (pwr_pts > 0)
+    log_amp = np.log(amp_pts[valid])
+    log_pwr = np.log(pwr_pts[valid])
+
+    gamma, log_c = np.polyfit(log_amp, log_pwr, 1)
+    c = np.exp(log_c)
+
+    return float(gamma), float(c)
+
+
+def make_aod_qua_multiplier_fn_2d(
+    amp_pts,
+    pwr_pts,
+    freq_pts,
+    freq_pwr_pts,
+    ref_freq,
+    min_qua_amp=0.5,
+    max_qua_amp=2.0,
+    min_rel_eff=1e-6,
+    return_debug=False,
+):
+    """
+    Return a function:
+
+        qua_amp(coords)
+
+    This returns a dimensionless QUA amplitude multiplier.
+
+    Important:
+        No absolute base amplitude is used.
+        QUA amp = 1.0 means use the config pulse amplitude.
+
+    Model:
+        P(amp, fx, fy) ≈ amp^gamma * h(fx) * h(fy)
+
+    Therefore, to compensate frequency loss:
+
+        qua_amp = (1 / [h(fx) h(fy)])^(1 / gamma)
+
+    where gamma is fit from the empirical amplitude-power curve.
+    """
+
+    amp_pts = np.asarray(amp_pts, dtype=float)
+    pwr_pts = np.asarray(pwr_pts, dtype=float)
+    freq_pts = np.asarray(freq_pts, dtype=float)
+    freq_pwr_pts = np.asarray(freq_pwr_pts, dtype=float)
+
+    gamma, c = _fit_power_law_gamma(amp_pts, pwr_pts)
+
+    ref_freq_pwr = float(_interp_clipped(ref_freq, freq_pts, freq_pwr_pts))
+    rel_eff_pts = freq_pwr_pts / ref_freq_pwr
+
+    def qua_amp(coords):
+        coords = np.asarray(coords, dtype=float).ravel()
+
+        if len(coords) == 1:
+            fx = float(coords[0])
+            fy = float(ref_freq)
+        else:
+            fx = float(coords[0])
+            fy = float(coords[1])
+
+        rel_eff_x = float(_interp_clipped(fx, freq_pts, rel_eff_pts))
+        rel_eff_y = float(_interp_clipped(fy, freq_pts, rel_eff_pts))
+
+        rel_eff = max(rel_eff_x * rel_eff_y, min_rel_eff)
+
+        # Dimensionless QUA multiplier relative to config.
+        multiplier_unclipped = rel_eff ** (-1.0 / gamma)
+        multiplier = float(np.clip(multiplier_unclipped, min_qua_amp, max_qua_amp))
+
+        if return_debug:
+            return {
+                "qua_amp": multiplier,
+                "qua_amp_unclipped": float(multiplier_unclipped),
+                "fx": fx,
+                "fy": fy,
+                "rel_eff_x": rel_eff_x,
+                "rel_eff_y": rel_eff_y,
+                "rel_eff_total": rel_eff,
+                "gamma": gamma,
+                "power_law_c": c,
+            }
+
+        return multiplier
+
+    return qua_amp
+
+
+# -------------------------------------------
+# Build QUA multiplier functions
+# -------------------------------------------
+green_qua_amp_fn_2d = make_aod_qua_multiplier_fn_2d(
+    GREEN_AMP,
+    GREEN_PWR,
+    GREEN_FREQ,
+    GREEN_FREQ_PWR,
+    ref_freq=110.0,
+    min_qua_amp=0.5,
+    max_qua_amp=2.0,
+)
+
+red_qua_amp_fn_2d = make_aod_qua_multiplier_fn_2d(
+    RED_AMP,
+    RED_PWR,
+    RED_FREQ,
+    RED_FREQ_PWR,
+    ref_freq=75.0,
+    min_qua_amp=0.5,
+    max_qua_amp=2.0,
+)
+
+def get_freq_from_coords(coords, freq_index=0):
+    """
+    Extract the frequency coordinate used for this calibration.
+    If coords is scalar, returns it directly.
+    If coords is [fx, fy], pick freq_index.
+    """
+    arr = np.asarray(coords, dtype=float).ravel()
+    if len(arr) == 1:
+        return float(arr[0])
+    return float(arr[freq_index])
+
+
+def fit_power_law_amp_curve(amp_pts, pwr_pts):
+    """
+    Fit P = C * amp^gamma using log-log fit.
+    """
+    amp_pts = np.asarray(amp_pts, dtype=float)
+    pwr_pts = np.asarray(pwr_pts, dtype=float)
+
+    good = (amp_pts > 0) & (pwr_pts > 0)
+
+    log_amp = np.log(amp_pts[good])
+    log_pwr = np.log(pwr_pts[good])
+
+    gamma, log_C = np.polyfit(log_amp, log_pwr, 1)
+    C = np.exp(log_C)
+
+    print("Power-law fit:")
+    print("C =", C)
+    print("gamma =", gamma)
+
+    return C, gamma
+
+
+def power_from_amp_powerlaw(amp, C, gamma):
+    amp = np.asarray(amp, dtype=float)
+    return C * amp**gamma
+
+
+def amp_from_power_powerlaw(power, C, gamma):
+    power = np.asarray(power, dtype=float)
+    power = np.maximum(power, 1e-12)
+    return (power / C) ** (1.0 / gamma)
+
+
+def make_aod_amp_fn_2d_powerlaw(
+    amp_pts,
+    pwr_pts,
+    freq_pts,
+    freq_pwr_pts,
+    ref_freq,
+    min_amp=0.02,
+    max_amp=0.16,
+    min_scale=0.5,
+    max_scale=2.0,
+):
+    """
+    Return final_amp(coords, base_amp).
+
+    Model:
+        P(amp, fx, fy) = C * amp^gamma * h(fx) * h(fy)
+
+    Assumes both AOD axes have the same frequency-efficiency curve h(f).
+    """
+    C, gamma = fit_power_law_amp_curve(amp_pts, pwr_pts)
+
+    ref_freq_pwr = _interp_clipped(ref_freq, freq_pts, freq_pwr_pts)
+    rel_eff_pts = freq_pwr_pts / ref_freq_pwr
+
+    def final_amp(coords, base_amp):
+        coords = np.asarray(coords, dtype=float).ravel()
+        base_amp = float(base_amp)
+
+        if len(coords) == 1:
+            fx = float(coords[0])
+            fy = float(ref_freq)
+        else:
+            fx = float(coords[0])
+            fy = float(coords[1])
+
+        # Target power at reference frequency using power-law amp calibration.
+        target_pwr = power_from_amp_powerlaw(base_amp, C, gamma)
+
+        # Frequency efficiency correction.
+        rel_eff_x = _interp_clipped(fx, freq_pts, rel_eff_pts)
+        rel_eff_y = _interp_clipped(fy, freq_pts, rel_eff_pts)
+
+        rel_eff = float(rel_eff_x * rel_eff_y)
+        rel_eff = max(rel_eff, 1e-9)
+
+        # Required amplitude power before frequency loss.
+        needed_pwr = target_pwr / rel_eff
+
+        # Invert power-law.
+        needed_amp = amp_from_power_powerlaw(needed_pwr, C, gamma)
+
+        # Safety limits.
+        needed_amp = np.clip(
+            needed_amp,
+            max(min_amp, base_amp * min_scale),
+            min(max_amp, base_amp * max_scale),
+        )
+
+        return float(needed_amp)
+
+    return final_amp
+
+
+
+def plot_amp_distribution_over_space(
+    pixel_coords_list,
+    charge_pol_amps,
+    scc_amp_list,
+    figsize=(7, 6),
+    marker_size=28,
+):
+    pixel_coords = np.asarray(pixel_coords_list, dtype=float)
+    x = pixel_coords[:, 0]
+    y = pixel_coords[:, 1]
+
+    charge_pol_amps = np.asarray(charge_pol_amps, dtype=float)
+    scc_amp_list = np.asarray(scc_amp_list, dtype=float)
+
+    # --------------------------------------------------
+    # Plot 1: Green amplitude over NV space
+    # --------------------------------------------------
+    fig1, ax1 = plt.subplots(figsize=figsize)
+    sc1 = ax1.scatter(
+        x,
+        y,
+        c=charge_pol_amps,
+        s=marker_size,
+        cmap="viridis",
+    )
+    ax1.set_title("Green charge-polarization amplitude over NV space")
+    ax1.set_xlabel("Pixel x")
+    ax1.set_ylabel("Pixel y")
+    ax1.invert_yaxis()   # image-style coordinates
+    cbar1 = fig1.colorbar(sc1, ax=ax1)
+    cbar1.set_label("Green amplitude")
+
+    # --------------------------------------------------
+    # Plot 2: Red amplitude over NV space
+    # --------------------------------------------------
+    fig2, ax2 = plt.subplots(figsize=figsize)
+    sc2 = ax2.scatter(
+        x,
+        y,
+        c=scc_amp_list,
+        s=marker_size,
+        cmap="plasma",
+    )
+    ax2.set_title("Red SCC amplitude over NV space")
+    ax2.set_xlabel("Pixel x")
+    ax2.set_ylabel("Pixel y")
+    ax2.invert_yaxis()
+    cbar2 = fig2.colorbar(sc2, ax=ax2)
+    cbar2.set_label("Red amplitude")
+
+    print("Green amplitude range:", np.min(charge_pol_amps), "to", np.max(charge_pol_amps))
+    print("Red amplitude range:", np.min(scc_amp_list), "to", np.max(scc_amp_list))
+
+    return fig1, fig2
+
+
+def plot_aod_freqs_over_space(
+    pixel_coords_list,
+    green_coords_list,
+    red_coords_list,
+    marker_size=20,
+):
+    pixel_arr = np.asarray(pixel_coords_list, dtype=float)
+    green_arr = np.asarray(green_coords_list, dtype=float)
+    red_arr = np.asarray(red_coords_list, dtype=float)
+
+    x = pixel_arr[:, 0]
+    y = pixel_arr[:, 1]
+
+    plots = [
+        (green_arr[:, 0], "Green AOD fx over NV space", "Green fx [MHz]"),
+        (green_arr[:, 1], "Green AOD fy over NV space", "Green fy [MHz]"),
+        (red_arr[:, 0], "Red AOD fx over NV space", "Red fx [MHz]"),
+        (red_arr[:, 1], "Red AOD fy over NV space", "Red fy [MHz]"),
+    ]
+
+    figs = []
+
+    for values, title, cbar_label in plots:
+        fig, ax = plt.subplots(figsize=(6.5, 5.5))
+
+        sc = ax.scatter(
+            x,
+            y,
+            c=values,
+            s=marker_size,
+        )
+
+        ax.set_title(title)
+        ax.set_xlabel("Pixel x")
+        ax.set_ylabel("Pixel y")
+        ax.set_aspect("equal", adjustable="box")
+        ax.invert_yaxis()
+
+        cbar = fig.colorbar(sc, ax=ax)
+        cbar.set_label(cbar_label)
+
+        figs.append(fig)
+
+    return figs
+
+# endregion
 
 if __name__ == "__main__":
     print(adus_to_photons(700))

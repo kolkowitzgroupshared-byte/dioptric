@@ -90,6 +90,29 @@ def plot_histograms(
         return fig
 
 
+def subtract_low_tail_background(sig_counts, ref_counts, q=1.0, clip=True):
+    """
+    Shift signal and reference count distributions so their low-count tails
+    start near zero.
+
+    q: percentile used as baseline. Use 1 or 2 instead of exact min.
+    """
+
+    sig_counts = np.asarray(sig_counts, dtype=float)
+    ref_counts = np.asarray(ref_counts, dtype=float)
+
+    sig_bg = np.nanpercentile(sig_counts, q)
+    ref_bg = np.nanpercentile(ref_counts, q)
+
+    sig_corr = sig_counts - sig_bg
+    ref_corr = ref_counts - ref_bg
+
+    if clip:
+        sig_corr = np.maximum(sig_corr, 0)
+        ref_corr = np.maximum(ref_corr, 0)
+
+    return sig_corr, ref_corr, sig_bg, ref_bg
+
 def process_and_plot(
     raw_data,
     do_plot_histograms=False,
@@ -120,8 +143,23 @@ def process_and_plot(
     for ind in range(num_nvs):
         if ind in weak_esr:
             continue
-        sig_counts_list = sig_counts_lists[ind]
-        ref_counts_list = ref_counts_lists[ind]
+        # sig_counts_list = sig_counts_lists[ind]
+        # ref_counts_list = ref_counts_lists[ind]
+        
+        sig_counts_list_raw = sig_counts_lists[ind]
+        ref_counts_list_raw = ref_counts_lists[ind]
+
+        sig_counts_list, ref_counts_list, sig_bg, ref_bg = subtract_low_tail_background(
+            sig_counts_list_raw,
+            ref_counts_list_raw,
+            q=0.0,
+            clip=False,
+        )
+
+        print(
+            f"NV {ind}: sig_bg={sig_bg:.3f}, ref_bg={ref_bg:.3f}, "
+            f"bg_shift(sig-ref)={sig_bg - ref_bg:.3f}"
+        )
 
         # Only use ref counts for threshold determination
         popt, _, red_chi_sq = fit_bimodal_histogram(
@@ -308,8 +346,7 @@ def main(
     seq_file = "charge_state_histograms.py"
     num_steps = 1
 
-    # Turn the list of NV indices to ionize into a list of True/False for
-    # each NV according to whether it should be targeted
+    # Turn the list of NV indices to ionize into a list of True/False.
     if ion_do_target_inds is None:
         ion_do_target_list = None
     else:
@@ -324,21 +361,46 @@ def main(
     pulse_gen = tb.get_server_pulse_gen()
 
     ### Collect the data
-
     def run_fn(shuffled_step_inds):
+        # Green charge polarization parameters
         pol_coords_list, pol_duration_list, pol_amp_list = (
-            widefield.get_pulse_parameter_lists(nv_list, VirtualLaserKey.CHARGE_POL)
+            widefield.get_pulse_parameter_lists(
+                nv_list,
+                VirtualLaserKey.CHARGE_POL,
+            )
         )
-        ion_coords_list = widefield.get_coords_list(nv_list, VirtualLaserKey.ION)
+
+        # Ionization parameters
+        # This requires VirtualLaserKey.ION to be defined in each NVSig
+        # if you want per-NV duration/amplitude control.
+        ion_coords_list, ion_duration_list, ion_amp_list = (
+            widefield.get_pulse_parameter_lists(
+                nv_list,
+                VirtualLaserKey.ION,
+            )
+        )
+        
+        print("\n=== HOST SIDE: ION PARAMS ===")
+        print("len ion_coords_list:", len(ion_coords_list))
+        print("len ion_duration_list:", len(ion_duration_list))
+        print("len ion_amp_list:", len(ion_amp_list) if ion_amp_list is not None else None)
+
+        if ion_amp_list is not None:
+            ion_amp_arr = np.asarray(ion_amp_list, dtype=float)
+            print("ion_amp_list min/max:", np.nanmin(ion_amp_arr), np.nanmax(ion_amp_arr))
+            print("ion_amp_list first 10:", ion_amp_arr[:10])
+            
         seq_args = [
             pol_coords_list,
             pol_duration_list,
             pol_amp_list,
             ion_coords_list,
+            ion_duration_list,
+            ion_amp_list,
             ion_do_target_list,
             verify_charge_states,
         ]
-        # print("seq_args:", seq_args)
+
         seq_args_string = tb.encode_seq_args(seq_args)
         pulse_gen.stream_load(seq_file, seq_args_string, num_reps)
 
@@ -352,7 +414,6 @@ def main(
         save_images_avg_reps=False,
         charge_prep_fn=charge_prep_fn,
     )
-
     ### Processing
 
     timestamp = dm.get_time_stamp()
@@ -421,7 +482,7 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
     data = dm.get_raw_data(
         # file_stem="2026_03_17-20_16_39-qnami-nv0_2026_02_20", load_npz=True,
-        file_stem="2026_05_10-17_31_56-qnami-nv0_2026_02_20", load_npz=True
+        file_stem="2026_06_14-18_44_06-qnami-nv0_2026_02_20", load_npz=True
     )
-    process_and_plot(data, do_plot_histograms=False)
+    process_and_plot(data, do_plot_histograms=True)
     kpl.show(block=True)

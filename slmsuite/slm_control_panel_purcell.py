@@ -8,6 +8,7 @@ Created on Spring, 2024
 """
 
 import os
+import sys
 import warnings
 from datetime import datetime
 
@@ -18,6 +19,8 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
+from utils import common
+from utils import data_manager as dm
 # Generate a phase .gif
 from IPython.display import Image
 
@@ -26,6 +29,8 @@ from slmsuite.hardware.cameraslms import FourierSLM
 from slmsuite.hardware.slms.thorlabs import ThorSLM
 from slmsuite.holography import analysis, toolbox
 from slmsuite.holography.algorithms import SpotHologram
+
+from slmsuite.nv_coords_weights_reorder_reassign import curve_extreme_weights_simple
 
 warnings.filterwarnings("ignore")
 mpl.rc("image", cmap="Blues")
@@ -93,7 +98,7 @@ def blaze(vector_deg=(0.2, 0.2)):
 def fourier_calibration():
     cam.set_exposure(0.0001)  # Increase exposure because power will be split many ways
     fs.fourier_calibrate(
-        array_shape=[15, 15],  # Size of the calibration grid (Nx, Ny) [knm]
+        array_shape=[11, 11],  # Size of the calibration grid (Nx, Ny) [knm]
         array_pitch=[100, 100],  # Pitch of the calibration grid (x, y) [knm]
         plot=True,
     )
@@ -175,12 +180,12 @@ def evaluate_uniformity(vectors=None, size=25):
 
 
 def circles():
-    cam.set_exposure(0.1)
+    # cam.set_exposure(0.1)
 
-    center = (750, 530)
+    center = (705, 520)
 
     # Use larger radii and more spacing
-    radii = np.linspace(50, 200, num=5)
+    radii = np.linspace(20, 120, num=6)
 
     circle_points = []
     for radius in radii:
@@ -213,22 +218,32 @@ def circles():
 
     phase = hologram.extract_phase()
     slm.write(phase, settle=True)
+    
+    file_path = r"slmsuite\phase"
+    now = datetime.now()
+    date_time_str = now.strftime("%Y%m%d_%H%M%S")  # Format: YYYYMMDD_HHMMSS
+    filename = f"slm_calibration_circle_{date_time_str}.npy"
+    # Save the phase data
+    save(phase, file_path, filename)
+    # cam_plot()
 
 # region "nv phase calulation"
 def calibration_triangle():
     # Define parameters for the equilateral triangle
-    center = (710, 540)  # Center of the triangle
-    # side_length = 200  # 
-    # side_length = 140  # Length of each side of the triangle
-    side_length = 80  # Length of each side of the triangle
+    center = (710, 530)  # Center of the triangle
+    # side_length = 80  # Length of each side of the triangle
+    side_length = 150  # Length of each side of the triangle
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
     theta = np.linspace(0, 2 * np.pi, 4)[:-1]  # Exclude the last point to avoid overlap
     x_triangle = center[0] + side_length * np.cos(theta + np.pi / 6)  # X coordinates
     y_triangle = center[1] + side_length * np.sin(theta + np.pi / 6)  # Y coordinates
-
+    
+    # x_triangle = [849.90381057, 560.09618943, 720.0]
+    # sys.exit()
     # Combine the coordinates into a grid format
     triangle_points = np.vstack((x_triangle, y_triangle))
+
     print("thorcam coords:", triangle_points)
     hologram = SpotHologram(
         shape=(2048, 2048), spot_vectors=triangle_points, basis="ij", cameraslm=fs
@@ -244,81 +259,191 @@ def calibration_triangle():
 
     phase = hologram.extract_phase()
     slm.write(phase, settle=True)
-    # file_path = r"slmsuite\calibration"
-    # num_nvs = len(nuvu_pixel_coords)
-    # now = datetime.now()
-    # date_time_str = now.strftime("%Y%m%d_%H%M%S")  # Format: YYYYMMDD_HHMMSS
-    # filename = f"slm_calibration_{num_nvs}nvs_{date_time_str}.npy"
+    file_path = r"slmsuite\phase"
+    now = datetime.now()
+    date_time_str = now.strftime("%Y%m%d_%H%M%S")  # Format: YYYYMMDD_HHMMSS
+    filename = f"slm_calibration_triangle_{date_time_str}.npy"
     # Save the phase data
-    # save(phase, file_path, filename)
+    save(phase, file_path, filename)
     # cam_plot()
     
-# def nuvu2thorcam_calibration(coords):
-#     """
-#     Calibrates and transforms coordinates from the Nuvu camera's coordinate system
-#     to the Thorlabs camera's coordinate system using an affine transformation.
-#     """
-#     cal_coords_thorcam = np.array(
-#         [[883.205,   640. ], [536.795,  640. ], [710., 340.]], dtype="float32"
-#     )
+def nuvu2thorcam_calibration(coords):
+    """
+    Calibrates and transforms coordinates from the Nuvu camera's coordinate system
+    to the Thorlabs camera's coordinate system using an affine transformation.
+    """
+    # cal_coords_thorcam = np.array(
+    #     [[883.205,   640. ], [536.795,  640. ], [710., 340.]], dtype="float32"
+    # )
 
-#     cal_coords_nuvu = np.array(
-#         [[338.04, 361.354], [311.711, 11.032], [18.043, 209.58]], dtype="float32"
-#     )
-#     # Compute the affine transformation matrix
-#     M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
-#     # Append a column of ones to the input coordinates to facilitate affine transformation
-#     ones_column = np.ones((coords.shape[0], 1))
-#     coords_homogeneous = np.hstack((coords, ones_column))
-#     thorcam_coords = np.dot(coords_homogeneous, M.T)
+    # cal_coords_nuvu = np.array(
+    #     [[338.04, 361.354], [311.711, 11.032], [18.043, 209.58]], dtype="float32"
+    # )
+    
+    cal_coords_thorcam = np.array(
+        [                
+            [848.56406461, 620.0],
+            [571.43593539, 620.0],
+            [710.0,        380.0],
+        ], dtype="float32"
+    )
 
-#     return thorcam_coords
+    cal_coords_nuvu = np.array(
+        [
+            [84.57, 7.014],
+            [92.258, 353.467],
+            [337.832, 184.63],
+        ], dtype="float32"
+    )
+    # Compute the affine transformation matrix
+    M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
+    # Append a column of ones to the input coordinates to facilitate affine transformation
+    ones_column = np.ones((coords.shape[0], 1))
+    coords_homogeneous = np.hstack((coords, ones_column))
+    thorcam_coords = np.dot(coords_homogeneous, M.T)
+
+    return thorcam_coords
 
 def apply_affine(M, coords):
     coords = np.asarray(coords, dtype=np.float32)
+
+    single_point = False
+    if coords.ndim == 1:
+        coords = coords[None, :]
+        single_point = True
+
     ones = np.ones((coords.shape[0], 1), dtype=np.float32)
     coords_h = np.hstack([coords, ones])
-    return coords_h @ M.T
+    out = coords_h @ M.T
+
+    if single_point:
+        return out[0]
+
+    return out
 
 
-def nuvu2thorcam_slm(coords, calib_path="slmsuite/calibration/nuvu_to_thorcam_slm.npz"):
+def nuvu2thorcam_slm(
+    coords,
+    calib_path="slmsuite/calibration/nuvu_to_thorcam_slm.npz",
+):
     data = np.load(calib_path, allow_pickle=True)
     M = np.asarray(data["M_nuvu_to_thorcam_slm"], dtype=np.float32)
     return apply_affine(M, coords)
 
-def load_nv_coords( 
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_reordered.npz",   
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz",   
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
-    file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz",   
-):
+# file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_reordered.npz",   
+# file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz",   
+# file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
+# file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz",   
+# file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered.npz",   
+# file_path="slmsuite/nv_blob_detection/nv_blob_1271nvs_reordered.npz",   
+# file_path="slmsuite/nv_blob_detection/nv_blob_1267nvs_reordered.npz",   
+# file_path="slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz",  
+
+def load_nv_coords():
+    config = common.get_config_dict()
+    file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
     data = np.load(file_path, allow_pickle=True)
     nv_coordinates = data["nv_coordinates"]
     spot_weights = data["updated_spot_weights"]
     print(f"len of nv coords: {len(nv_coordinates)}")
     return nv_coordinates, spot_weights
 
-nuvu_pixel_coords, spot_weights = load_nv_coords()
-# nuvu_pixel_coords = np.array([[215.025, 203.863], [308.628, 103.893], [238.142, 328.739], [63.706, 100.683]])
+# nuvu_pixel_coords, spot_weights = load_nv_coords()
+# # nuvu_pixel_coords = np.array([[215.025, 203.863], [308.628, 103.893], [238.142, 328.739], [63.706, 100.683]])
 # thorcam_coords_xy = nuvu2thorcam_calibration(nuvu_pixel_coords).T
-thorcam_coords_xy = nuvu2thorcam_slm(nuvu_pixel_coords).T
+# thorcam_coords_xy = nuvu2thorcam_calibration(nuvu_pixel_coords).T
+
+# ----------------------------
+# Load coordinates and weights
+# ----------------------------
+nuvu_pixel_coords, spot_weights = load_nv_coords()
+
+data_spot_weight = dm.get_raw_data(
+    # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+    # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+    # file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
+    # file_stem= "2026_07_11-14_54_21-repeated_readout_survival_with_slm_weights_2026_07_11-04_37_50-qnami-nv0_2026_02_20"
+    # file_stem="2026_07_18-23_11_48-reoptimized_slm_score_survival_focused_2026_07_18-11_10_09-qnami-nv0_2026_02_20"
+    file_stem="2026_07_22-15_53_45-reoptimized_slm_score_survival_focused_2026_07_22-04_39_34-qnami-nv0_2026_02_20"
+)
+# spot_weights = data_spot_weight["optimal_weights"]
+spot_weights  = data_spot_weight["slm_amplitude_weight"]
+# spot_weights = data_spot_weight["slm_mean_norm_weight_clipped"]
+# # spot_weights = np.squeeze(spot_weights)
+# sys.exit()
+
+spot_weights = curve_extreme_weights_simple(
+        spot_weights, scaling_factor=1.5
+    )
+spot_weights = np.array(spot_weights)
+
+# If weights are 2D, choose one row/column as needed.
+# This keeps the most common case: shape (N,)
+# if spot_weights.ndim != 1:
+#     print("spot_weights original shape after squeeze:", spot_weights.shape)
+#     spot_weights = spot_weights.ravel()
+
+# Transform Nuvu coordinates to ThorCam coordinates
+thorcam_coords = nuvu2thorcam_slm(nuvu_pixel_coords)  # shape: (N, 2)
+thorcam_coords_xy = thorcam_coords.T                  # shape: (2, N)
+
+print("nuvu_pixel_coords shape:", nuvu_pixel_coords.shape)
+print("thorcam_coords shape:", thorcam_coords_xy.shape)
+print("spot_weights shape:", spot_weights.shape)
+print("spot weight min/max:", np.nanmin(spot_weights), np.nanmax(spot_weights))
+
+# # Match lengths safely
+# num = min(len(nuvu_pixel_coords), len(spot_weights))
+# nuvu_pixel_coords =nuvu_pixel_coords[:num]
+# spot_weights = spot_weights[:num]
+
+# print("Using NVs:", num)
+
+# # ----------------------------
+# # Plot spot weights on ThorCam
+# # ----------------------------
+# fig, ax = plt.subplots(figsize=(7, 6))
+
+# sc = ax.scatter(
+#     nuvu_pixel_coords[:, 0],
+#     nuvu_pixel_coords[:, 1],
+#     c=spot_weights,
+#     s=20,
+#     cmap="viridis",
+# )
+
+# ax.set_xlabel("ThorCam x pixel")
+# ax.set_ylabel("ThorCam y pixel")
+# ax.set_title("Optimized SLM Spot Weights")
+# ax.set_aspect("equal")
+
+# # Camera/image coordinates usually have y increasing downward.
+# # Uncomment if you want the plot to match image display orientation.
+# ax.invert_yaxis()
+
+# cbar = fig.colorbar(sc, ax=ax)
+# cbar.set_label("Spot weight")
+
+# fig.tight_layout()
+# plt.show()
+# sys.exit()
 
 def compute_and_write_nvs_phase():
     hologram = SpotHologram(
         shape=(4096, 2048),
         spot_vectors=thorcam_coords_xy,
         basis="ij",
-        # spot_amp=spot_weights,
+        spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally
     hologram.optimize(
         "WGS-Kim",
-        maxiter=40,
+        maxiter=30,
         feedback="computational_spot",
         stat_groups=["computational_spot"],
     )
-# 
+    # Precondition computationally
     initial_phase = hologram.extract_phase()
     # Define the path to save the phase data1
     file_path = r"slmsuite\computed_phase"
@@ -326,9 +451,9 @@ def compute_and_write_nvs_phase():
     now = datetime.now()
     date_time_str = now.strftime("%Y%m%d_%H%M%S")
     filename = f"slm_phase_{num_nvs}nvs_{date_time_str}.npy"
-    # file_path = dm.get_file_path(__file__, filename)
     # Save the phase data
     save(initial_phase, file_path, filename)
+    # write
     slm.write(initial_phase, settle=True)
     # cam_plot()
     
@@ -339,7 +464,12 @@ def write_pre_computed_nvs_phase():
 
 
 def write_pre_computed_circles():
-    phase = np.load("slmsuite\circles\slm_phase_circles_20250606_163346.npy")
+    phase = np.load("slmsuite\phase\slm_calibration_circles_20260607_121625.npy")
+    slm.write(phase, settle=True)
+    # cam_plot()
+    
+def write_pre_computed_triangle():
+    phase = np.load("slmsuite\phase\slm_calibration_triangle_20260611_150224.npy")
     slm.write(phase, settle=True)
     # cam_plot()
 
@@ -400,10 +530,14 @@ try:
     # load_wavefront_calibration()
     
     compute_and_write_nvs_phase()
+    # write_pre_computed_nvs_phase()
+    
     # calibration_triangle()
+    # write_pre_computed_triangle()
     
     # circles()
-    # smiley()
+    # write_pre_computed_circles()
+    # smiley()e
     # cam_plot()
     
     input("Pattern displayed and held. Press Enter to close...")
@@ -412,6 +546,7 @@ finally:
 
     if slm is not None:
         slm.close()
+
 
     if cam is not None:
         cam.close()

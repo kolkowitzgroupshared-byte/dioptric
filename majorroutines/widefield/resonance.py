@@ -273,9 +273,18 @@ def main(
     seq_file = "resonance_ref2.py"
 
     ### Collect the data
-
     def run_fn(step_inds):
-        seq_args = [widefield.get_base_scc_seq_args(nv_list, uwave_ind_list), step_inds]
+        base_scc_seq_args = widefield.get_base_scc_seq_args(nv_list, uwave_ind_list)
+        base_scc_seq_args.append(
+            {
+                "pairwise_init": True,
+                "pairwise_scc": True,
+                "y_tol_MHz": 0.05,
+                "spin_pol": True,
+                "aod_access_time_override": None,
+            }
+        )
+        seq_args = [base_scc_seq_args, step_inds]
         seq_args_string = tb.encode_seq_args(seq_args)
         pulse_gen.stream_load(seq_file, seq_args_string, num_reps)
         # print(seq_args)

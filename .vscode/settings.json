@@ -1,31 +1,15 @@
 {
-  // Environment file
   "python.envFile": "${workspaceFolder}/.vscode/.env",
-
-  // Python / Pylance
-  "python.analysis.typeCheckingMode": "off",
-
-  // Generic per-user conda environment path
-  "python.defaultInterpreterPath": "${env:USERPROFILE}\\miniconda3\\envs\\dioptric\\python.exe",
-
-  // Let VS Code activate selected Python env
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}",
+    "${workspaceFolder}/utils"
+  ],
+  "python.defaultInterpreterPath": "C:\\Users\\saroj\\.conda\\envs\\dioptric\\python.exe",
   "python.terminal.activateEnvironment": true,
-
-  // PowerShell terminal with generic conda path
-  "terminal.integrated.profiles.windows": {
-    "Conda (dioptric, PowerShell)": {
-      "source": "PowerShell",
-      "icon": "terminal-powershell",
-      "args": [
-        "-NoExit",
-        "-Command",
-        "(& \"$env:USERPROFILE\\miniconda3\\condabin\\conda.bat\" \"shell.powershell\" \"hook\") | Out-String | Invoke-Expression; conda activate dioptric"
-      ]
-    }
+  "terminal.integrated.cwd": "${workspaceFolder}",
+  "terminal.integrated.env.windows": {
+    "PYTHONPATH": "${workspaceFolder};${workspaceFolder}\\utils"
   },
-
-  "terminal.integrated.defaultProfile.windows": "Conda (dioptric, PowerShell)",
   "python-envs.defaultEnvManager": "ms-python.python:conda",
   "python-envs.defaultPackageManager": "ms-python.python:conda"
 }
-

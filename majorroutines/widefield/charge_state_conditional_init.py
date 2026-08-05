@@ -198,7 +198,7 @@ def main(
         num_reps,
         num_runs,
         run_fn=run_fn,
-        save_images=False,
+        save_images=True,
         save_images_avg_reps=False,
         charge_prep_fn=charge_prep_fn,
         num_exps=1,

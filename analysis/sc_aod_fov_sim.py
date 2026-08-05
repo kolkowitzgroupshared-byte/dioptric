@@ -17,13 +17,18 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 from utils import kplotlib as kpl
+
 kpl.init_kplotlib()
+
+
 @dataclass
 class Objective:
-    M_nom: float = 100.0       # nominal magnification printed on objective
+    M_nom: float = 100.0  # nominal magnification printed on objective
     NA: float = 0.95
-    FN_mm: float = 26.5        # field number (mm) at intermediate image plane
-    f_tube_nom_mm: float = 180.0  # Olympus infinity systems are typically 180 mm tube lens
+    FN_mm: float = 26.5  # field number (mm) at intermediate image plane
+    f_tube_nom_mm: float = (
+        180.0  # Olympus infinity systems are typically 180 mm tube lens
+    )
 
     def f_obj_mm(self) -> float:
         # objective focal length (design): f_obj = f_tube_nom / M_nom
@@ -171,7 +176,11 @@ def plot_fov_vs_f2_multi_bandwidth(
     plt.scatter(mark_f2_m * 100.0, mark_scan, label=f"Marked f2 (Δf={bold_MHz:g} MHz)")
 
     # overlay limits
-    plt.axhline(fn_limit_um, linestyle="--", label=f"Objective FN limit (~{fn_limit_um:.0f} µm diameter)")
+    plt.axhline(
+        fn_limit_um,
+        linestyle="--",
+        label=f"Objective FN limit (~{fn_limit_um:.0f} µm diameter)",
+    )
     # plt.axhline(cam_x_um, linestyle="--", label=f"Camera limit X (~{cam_x_um:.0f} µm)")
     # plt.axhline(cam_y_um, linestyle=":",  label=f"Camera limit Y (~{cam_y_um:.0f} µm)")
 
@@ -196,7 +205,7 @@ if __name__ == "__main__":
         f1_m=0.30,
         f2_m=0.50,
         delta_f_Hz=45e6,
-        wavelength_m=532e-9,   # <-- set your actual wavelength
+        wavelength_m=532e-9,  # <-- set your actual wavelength
         v_acoustic_m_s=617.0,  # <-- set from AOD datasheet
     )
 
@@ -223,15 +232,28 @@ if __name__ == "__main__":
         aod.f2_m = f2_m
         res = summarize_fov(obj, cam, aod, f_tube_actual_mm=f_tube_actual_mm)
 
-        print("\n=== 4f with f1=%.0f cm, f2=%.0f cm ===" % (aod.f1_m*100, aod.f2_m*100))
-        print("Objective f_obj = %.3f mm,  M_eff = %.2f×" % (res["objective_f_obj_mm"], res["M_eff"]))
+        print(
+            "\n=== 4f with f1=%.0f cm, f2=%.0f cm ==="
+            % (aod.f1_m * 100, aod.f2_m * 100)
+        )
+        print(
+            "Objective f_obj = %.3f mm,  M_eff = %.2f×"
+            % (res["objective_f_obj_mm"], res["M_eff"])
+        )
         print("AOD scan (peak-to-peak, 1D)     : %.1f µm" % res["AOD_scan_pp_um (1D)"])
-        print("Objective FN limit (diameter)    : %.1f µm" % (res["Objective_FN_limit_um (diameter)"]))
+        print(
+            "Objective FN limit (diameter)    : %.1f µm"
+            % (res["Objective_FN_limit_um (diameter)"])
+        )
         cx, cy = res["Camera_limit_um (x,y)"]
         print("Camera limit (x, y)              : (%.1f, %.1f) µm" % (cx, cy))
         ux, uy = res["Predicted_usable_um (x,y)"]
         print("Predicted usable (x, y)          : (%.1f, %.1f) µm" % (ux, uy))
 
-    print("\nNOTE: If you measure only ~34×34 µm, you are likely limited by clipping/vignetting,")
-    print("AOD efficiency roll-off (effective Δf smaller), or relay mis-conjugation—not FN.")
+    print(
+        "\nNOTE: If you measure only ~34×34 µm, you are likely limited by clipping/vignetting,"
+    )
+    print(
+        "AOD efficiency roll-off (effective Δf smaller), or relay mis-conjugation—not FN."
+    )
     kpl.show(block=True)

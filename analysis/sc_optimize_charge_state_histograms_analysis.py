@@ -1,103 +1,84 @@
 # -*- coding: utf-8 -*-
 """
-Illuminate an area, collecting onto the camera. Interleave a signal and control sequence
-and plot the difference
-Created on Fall 2024
-@author: saroj chand
+Charge/readout or polarization optimization analysis.
+
+CPU:
+    Parallel SciPy bimodal histogram fits over NV x step.
+
+GPU:
+    Optional CuPy acceleration for recomputing optimal step values from saved
+    processed data. This does not GPU-accelerate scipy fitting.
+
+Created Fall 2024
+Updated June 2026
+@author: Saroj Chand
 """
+
+from __future__ import annotations
+
+import os
+
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
+import sys
+import traceback
 
 import matplotlib.pyplot as plt
 import numpy as np
-from joblib import Parallel, delayed
-from scipy.optimize import curve_fit
 
+# Compatibility patch for old labrad with newer NumPy
+if not hasattr(np, "bool8"):
+    np.bool8 = np.bool_
+
+from joblib import Parallel, delayed
+
+try:
+    import cupy as cp
+
+    GPU_AVAILABLE = True
+except Exception:
+    cp = None
+    GPU_AVAILABLE = False
+
+from analysis import bimodal_histogram
 from analysis.bimodal_histogram import (
     ProbDist,
     determine_threshold,
     fit_bimodal_histogram,
 )
-from analysis import bimodal_histogram
 from utils import data_manager as dm
 from utils import kplotlib as kpl
+
+
+# =============================================================================
+# Helpers
+# =============================================================================
+
 
 def make_json_safe(obj):
     if isinstance(obj, np.ndarray):
         return obj.tolist()
-    elif isinstance(obj, (np.floating, np.integer)):
+
+    if isinstance(obj, np.generic):
         return obj.item()
-    elif isinstance(obj, np.bool_):
-        return bool(obj)
-    elif isinstance(obj, dict):
-        return {k: make_json_safe(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
+
+    if isinstance(obj, dict):
+        return {str(k): make_json_safe(v) for k, v in obj.items()}
+
+    if isinstance(obj, (list, tuple)):
         return [make_json_safe(v) for v in obj]
-    elif isinstance(obj, tuple):
-        return [make_json_safe(v) for v in obj]
-    else:
-        return obj
-    
-def find_optimal_value_geom_mean(
-    step_vals, prep_fidelity, readout_fidelity, goodness_of_fit, weights=(1, 1, 1)
-):
-    """
-    Finds the optimal step value using a weighted geometric mean of fidelities and goodness of fit.
 
-    """
-    w1, w2, w3 = weights
-
-    # Remove the first entry from each list
-    step_vals = step_vals[2:]
-    prep_fidelity = prep_fidelity[2:]
-    readout_fidelity = readout_fidelity[2:]
-    goodness_of_fit = goodness_of_fit[2:]
-    # Normalize metrics (avoid division by zero)
-    norm_prep_fidelity = (prep_fidelity - np.nanmin(prep_fidelity)) / (
-        np.nanmax(prep_fidelity) - np.nanmin(prep_fidelity) + 1e-12
-    )
-    norm_readout_fidelity = (readout_fidelity - np.nanmin(readout_fidelity)) / (
-        np.nanmax(readout_fidelity) - np.nanmin(readout_fidelity) + 1e-12
-    )
-    norm_goodness = (goodness_of_fit - np.nanmin(goodness_of_fit)) / (
-        np.nanmax(goodness_of_fit) - np.nanmin(goodness_of_fit) + 1e-12
-    )
-    inverted_goodness = 1 - norm_goodness  # Minimize goodness of fit
-
-    # Compute weighted geometric mean
-    # combined_score = (
-    #     (norm_readout_fidelity**w1) * (norm_prep_fidelity**w2) * (inverted_goodness**w3)
-    # ) ** (1 / (w1 + w2 + w3))
-    combined_score = (
-        w1 * norm_prep_fidelity + w2 * norm_readout_fidelity + w3 * inverted_goodness
-    )
-    # Find the step value corresponding to the maximum combined score
-    max_index = np.nanargmax(combined_score)
-    max_combined_score = combined_score[max_index]
-    optimal_step_val = step_vals[max_index]
-    optimal_prep_fidelity = prep_fidelity[max_index]
-    optimal_readout_fidelity = readout_fidelity[max_index]
-
-    return (
-        optimal_step_val,
-        optimal_prep_fidelity,
-        optimal_readout_fidelity,
-        max_combined_score,
-    )
+    return obj
 
 
-def fit_fn(tau, delay, slope, decay):
-    """
-    Fit function modeling the preparation fidelity as a function of polarization duration.
-    """
-    tau = np.array(tau) - delay
-    return slope * tau * np.exp(-tau / decay)
-
-
-def _to_python_scalar(x):
-    if isinstance(x, (np.integer, np.floating)):
-        return x.item()
-    if isinstance(x, np.bool_):
-        return bool(x)
-    return x
+def get_prob_dist(prob_dist_name):
+    try:
+        return ProbDist[prob_dist_name]
+    except Exception:
+        return getattr(ProbDist, prob_dist_name)
 
 
 def _fit_params_to_list(fit_params_arr, num_nvs, num_steps):
@@ -105,7 +86,12 @@ def _fit_params_to_list(fit_params_arr, num_nvs, num_steps):
         [
             None
             if fit_params_arr[nv_ind, step_ind] is None
-            else np.asarray(fit_params_arr[nv_ind, step_ind], dtype=float).ravel().tolist()
+            else np.asarray(
+                fit_params_arr[nv_ind, step_ind],
+                dtype=float,
+            )
+            .ravel()
+            .tolist()
             for step_ind in range(num_steps)
         ]
         for nv_ind in range(num_nvs)
@@ -121,14 +107,171 @@ def _counts_to_list(condensed_counts, num_nvs, num_steps):
         for nv_ind in range(num_nvs)
     ]
 
-def process_and_plot(raw_data, do_plot=False):
+
+def find_optimal_value_geom_mean(
+    step_vals,
+    prep_fidelity,
+    readout_fidelity,
+    goodness_of_fit,
+    weights=(1, 1, 1),
+    skip_first=2,
+):
+    """
+    Choose optimal step using weighted normalized score.
+
+    score =
+        w1 * normalized prep fidelity
+      + w2 * normalized readout fidelity
+      + w3 * inverted normalized goodness_of_fit
+
+    Larger score is better.
+    """
+
+    w1, w2, w3 = weights
+
+    step_vals = np.asarray(step_vals, dtype=float)[skip_first:]
+    prep_fidelity = np.asarray(prep_fidelity, dtype=float)[skip_first:]
+    readout_fidelity = np.asarray(readout_fidelity, dtype=float)[skip_first:]
+    goodness_of_fit = np.asarray(goodness_of_fit, dtype=float)[skip_first:]
+
+    good = (
+        np.isfinite(step_vals)
+        & np.isfinite(prep_fidelity)
+        & np.isfinite(readout_fidelity)
+        & np.isfinite(goodness_of_fit)
+    )
+
+    if not np.any(good):
+        raise ValueError("No finite values for optimization.")
+
+    step_vals = step_vals[good]
+    prep_fidelity = prep_fidelity[good]
+    readout_fidelity = readout_fidelity[good]
+    goodness_of_fit = goodness_of_fit[good]
+
+    norm_prep = (prep_fidelity - np.nanmin(prep_fidelity)) / (
+        np.nanmax(prep_fidelity) - np.nanmin(prep_fidelity) + 1e-12
+    )
+
+    norm_readout = (readout_fidelity - np.nanmin(readout_fidelity)) / (
+        np.nanmax(readout_fidelity) - np.nanmin(readout_fidelity) + 1e-12
+    )
+
+    norm_gof = (goodness_of_fit - np.nanmin(goodness_of_fit)) / (
+        np.nanmax(goodness_of_fit) - np.nanmin(goodness_of_fit) + 1e-12
+    )
+
+    inverted_gof = 1.0 - norm_gof
+
+    combined_score = (
+        w1 * norm_prep
+        + w2 * norm_readout
+        + w3 * inverted_gof
+    )
+
+    max_index = int(np.nanargmax(combined_score))
+
+    return (
+        float(step_vals[max_index]),
+        float(prep_fidelity[max_index]),
+        float(readout_fidelity[max_index]),
+        float(combined_score[max_index]),
+    )
+
+
+# =============================================================================
+# Parallel CPU fitting worker
+# =============================================================================
+
+
+def fit_bimodal_nv_step_job(
+    nv_ind,
+    step_ind,
+    counts_data,
+    prob_dist_name="COMPOUND_POISSON",
+):
+    """
+    Top-level worker for Windows/joblib.
+
+    One job = one NV, one step.
+    """
+
+    try:
+        prob_dist = get_prob_dist(prob_dist_name)
+        counts_data = np.asarray(counts_data, dtype=float).flatten()
+
+        popt, pcov, chi_squared = fit_bimodal_histogram(
+            counts_data,
+            prob_dist,
+        )
+
+        if popt is None:
+            return {
+                "nv_ind": int(nv_ind),
+                "step_ind": int(step_ind),
+                "threshold": np.nan,
+                "readout_fidelity": np.nan,
+                "prep_fidelity": np.nan,
+                "goodness_of_fit": np.nan,
+                "fit_success": False,
+                "fit_params": None,
+                "error": None,
+            }
+
+        threshold, readout_fidelity = determine_threshold(
+            popt,
+            prob_dist,
+            dark_mode_weight=0.5,
+            ret_fidelity=True,
+        )
+
+        prep_fidelity = 1.0 - float(popt[0])
+
+        return {
+            "nv_ind": int(nv_ind),
+            "step_ind": int(step_ind),
+            "threshold": float(threshold),
+            "readout_fidelity": float(readout_fidelity),
+            "prep_fidelity": float(prep_fidelity),
+            "goodness_of_fit": float(chi_squared),
+            "fit_success": True,
+            "fit_params": np.asarray(popt, dtype=float),
+            "error": None,
+        }
+
+    except Exception:
+        return {
+            "nv_ind": int(nv_ind),
+            "step_ind": int(step_ind),
+            "threshold": np.nan,
+            "readout_fidelity": np.nan,
+            "prep_fidelity": np.nan,
+            "goodness_of_fit": np.nan,
+            "fit_success": False,
+            "fit_params": None,
+            "error": traceback.format_exc(),
+        }
+
+
+# =============================================================================
+# Main CPU parallel processing
+# =============================================================================
+
+
+def process_and_plot(
+    raw_data,
+    do_plot=False,
+    n_jobs=12,
+    joblib_verbose=10,
+    save_condensed_counts=True,
+):
     nv_list = raw_data["nv_list"]
     num_nvs = len(nv_list)
 
     min_step_val = raw_data["min_step_val"]
     max_step_val = raw_data["max_step_val"]
-    max_step_val = raw_data["max_step_val"]
     num_steps = raw_data["num_steps"]
+
     step_vals_raw = np.linspace(min_step_val, max_step_val, num_steps)
 
     optimize_pol_or_readout = raw_data["optimize_pol_or_readout"]
@@ -139,29 +282,26 @@ def process_and_plot(raw_data, do_plot=False):
     yellow_charge_readout_amp = raw_data["opx_config"]["waveforms"][
         "yellow_charge_readout"
     ]["sample"]
+
     green_aod_cw_charge_pol_amp = raw_data["opx_config"]["waveforms"][
         "green_aod_cw-charge_pol"
     ]["sample"]
 
-    counts = np.array(raw_data["counts"])
-    ref_exp_ind = 1
+    counts = np.asarray(raw_data["counts"])
+    ref_exp_ind = 2
 
-    # [nv_ind, step_ind, shot_ind]
-    condensed_counts = np.array(
-        [
-            [
-                np.asarray(counts[ref_exp_ind, nv_ind, :, step_ind, :]).flatten()
-                for step_ind in range(num_steps)
-            ]
-            for nv_ind in range(num_nvs)
-        ],
-        dtype=object,
-    )
+    condensed_counts = np.empty((num_nvs, num_steps), dtype=object)
+
+    for nv_ind in range(num_nvs):
+        for step_ind in range(num_steps):
+            condensed_counts[nv_ind, step_ind] = np.asarray(
+                counts[ref_exp_ind, nv_ind, :, step_ind, :]
+            ).flatten()
 
     prob_dist = ProbDist.COMPOUND_POISSON
 
-    # --- analysis x-axis used in plots/optimization ---
     step_vals = step_vals_raw.copy()
+
     if optimize_pol_or_readout:
         if optimize_duration_or_amp:
             x_label = "Polarization duration (ns)"
@@ -177,54 +317,38 @@ def process_and_plot(raw_data, do_plot=False):
             step_vals = a * (step_vals**b) + c
             x_label = "Readout amplitude (uW)"
 
-    def process_nv_step(nv_ind, step_ind):
-        counts_data = np.asarray(condensed_counts[nv_ind, step_ind])
+    print("\n=== Starting parallel charge optimization fits ===")
+    print(f"num_nvs: {num_nvs}")
+    print(f"num_steps: {num_steps}")
+    print(f"total fits: {num_nvs * num_steps}")
+    print(f"n_jobs: {n_jobs}")
+    print(f"prob_dist: {prob_dist.name}")
 
-        try:
-            popt, pcov, chi_squared = fit_bimodal_histogram(counts_data, prob_dist)
-
-            if popt is None:
-                return {
-                    "threshold": np.nan,
-                    "readout_fidelity": np.nan,
-                    "prep_fidelity": np.nan,
-                    "goodness_of_fit": np.nan,
-                    "fit_success": False,
-                    "fit_params": None,
-                }
-
-            threshold, readout_fidelity = determine_threshold(
-                popt, prob_dist, dark_mode_weight=0.5, ret_fidelity=True
-            )
-            prep_fidelity = 1 - popt[0]
-
-            return {
-                "threshold": threshold,
-                "readout_fidelity": readout_fidelity,
-                "prep_fidelity": prep_fidelity,
-                "goodness_of_fit": chi_squared,
-                "fit_success": True,
-                "fit_params": np.asarray(popt, dtype=float),
-            }
-
-        except Exception as e:
-            print(f"Error processing NV {nv_ind}, step {step_ind}: {e}")
-            return {
-                "threshold": np.nan,
-                "readout_fidelity": np.nan,
-                "prep_fidelity": np.nan,
-                "goodness_of_fit": np.nan,
-                "fit_success": False,
-                "fit_params": None,
-            }
-
-    flat_results = Parallel(n_jobs=-1)(
-        delayed(process_nv_step)(nv_ind, step_ind)
+    tasks = [
+        (
+            nv_ind,
+            step_ind,
+            condensed_counts[nv_ind, step_ind],
+            prob_dist.name,
+        )
         for nv_ind in range(num_nvs)
         for step_ind in range(num_steps)
-    )
+    ]
 
-    # --- unpack into arrays ---
+    if n_jobs is None or int(n_jobs) == 1:
+        flat_results = [fit_bimodal_nv_step_job(*task) for task in tasks]
+    else:
+        flat_results = Parallel(
+            n_jobs=int(n_jobs),
+            backend="loky",
+            verbose=joblib_verbose,
+            batch_size="auto",
+            # pre_dispatch="2*n_jobs"
+        )(
+            delayed(fit_bimodal_nv_step_job)(*task)
+            for task in tasks
+        )
+
     threshold_arr = np.full((num_nvs, num_steps), np.nan)
     readout_fidelity_arr = np.full((num_nvs, num_steps), np.nan)
     prep_fidelity_arr = np.full((num_nvs, num_steps), np.nan)
@@ -232,9 +356,16 @@ def process_and_plot(raw_data, do_plot=False):
     fit_success_arr = np.zeros((num_nvs, num_steps), dtype=bool)
     fit_params_arr = np.empty((num_nvs, num_steps), dtype=object)
 
-    for flat_ind, res in enumerate(flat_results):
-        nv_ind = flat_ind // num_steps
-        step_ind = flat_ind % num_steps
+    num_errors = 0
+
+    for res in flat_results:
+        nv_ind = int(res["nv_ind"])
+        step_ind = int(res["step_ind"])
+
+        if res["error"] is not None:
+            num_errors += 1
+            print(f"\nFit failed for NV {nv_ind}, step {step_ind}")
+            print(res["error"])
 
         threshold_arr[nv_ind, step_ind] = res["threshold"]
         readout_fidelity_arr[nv_ind, step_ind] = res["readout_fidelity"]
@@ -243,79 +374,74 @@ def process_and_plot(raw_data, do_plot=False):
         fit_success_arr[nv_ind, step_ind] = res["fit_success"]
         fit_params_arr[nv_ind, step_ind] = res["fit_params"]
 
+    print("\n=== Fit summary ===")
+    print("Successful fits:", int(np.sum(fit_success_arr)), "/", num_nvs * num_steps)
+    print("Errors:", int(num_errors))
+
     optimal_values = []
     optimal_step_vals = []
-    nv_indices = []
 
     for nv_ind in range(num_nvs):
         try:
             (
                 optimal_step_val,
-                optimal_prep_fidality,
-                optimal_readout_fidality,
+                optimal_prep_fidelity,
+                optimal_readout_fidelity,
                 max_combined_score,
             ) = find_optimal_value_geom_mean(
                 step_vals,
-                readout_fidelity_arr[nv_ind],
                 prep_fidelity_arr[nv_ind],
+                readout_fidelity_arr[nv_ind],
                 goodness_of_fit_arr[nv_ind],
-                weights=(1.0, 1.0, 1.0),
+                weights=(1, 1, 1),
             )
 
             optimal_step_vals.append(optimal_step_val)
-            nv_indices.append(nv_ind)
+
             optimal_values.append(
                 (
                     nv_ind,
                     optimal_step_val,
-                    optimal_prep_fidality,
-                    optimal_readout_fidality,
+                    optimal_prep_fidelity,
+                    optimal_readout_fidelity,
                     max_combined_score,
                 )
             )
 
         except Exception as e:
-            print(f"Failed to process NV{nv_ind}: {e}")
+            print(f"Failed to optimize NV {nv_ind}: {e}")
+            optimal_step_vals.append(np.nan)
             optimal_values.append((nv_ind, np.nan, np.nan, np.nan, np.nan))
             continue
 
         if do_plot:
-            fig, ax1 = plt.subplots(figsize=(7, 5))
-            ax1.plot(step_vals, readout_fidelity_arr[nv_ind], label="Readout Fidelity", color="orange")
-            ax1.plot(step_vals, prep_fidelity_arr[nv_ind], label="Prep Fidelity", linestyle="--", color="green")
-            ax1.set_xlabel(x_label)
-            ax1.set_ylabel("Fidelity")
-            ax1.grid(True, linestyle="--", alpha=0.6)
-
-            ax2 = ax1.twinx()
-            ax2.plot(
-                step_vals,
-                goodness_of_fit_arr[nv_ind],
-                color="gray",
-                linestyle="--",
-                label=r"Goodness of Fit ($\chi^2_{\text{reduced}}$)",
-                alpha=0.7,
+            fig = plot_processed_nv_metrics_from_arrays(
+                step_vals=step_vals,
+                x_label=x_label,
+                readout=readout_fidelity_arr[nv_ind],
+                prep=prep_fidelity_arr[nv_ind],
+                gof=goodness_of_fit_arr[nv_ind],
+                nv_ind=nv_ind,
+                opt_step=optimal_step_val,
+                opt_prep=optimal_prep_fidelity,
+                opt_readout=optimal_readout_fidelity,
+                opt_score=max_combined_score,
             )
-            ax2.set_ylabel(r"Goodness of Fit ($\chi^2_{\text{reduced}}$)", color="gray")
-
-            ax1.axvline(optimal_step_val, color="red", linestyle="--",
-                        label=f"Optimal Step Val: {optimal_step_val:.3f}")
-            ax2.axvline(optimal_step_val, color="red", linestyle="--")
-
-            lines, labels = ax1.get_legend_handles_labels()
-            lines2, labels2 = ax2.get_legend_handles_labels()
-            ax1.legend(lines + lines2, labels + labels2, loc="upper left", fontsize=11)
-            ax1.set_title(f"NV{nv_ind} - Optimal Step Val: {optimal_step_val:.3f}")
-            plt.tight_layout()
             plt.show(block=True)
 
-    valid_step_vals = np.asarray([val for val in optimal_step_vals if not np.isnan(val)], dtype=float)
+    optimal_step_vals = np.asarray(optimal_step_vals, dtype=float)
+    valid_step_vals = optimal_step_vals[np.isfinite(optimal_step_vals)]
+
     if len(valid_step_vals) == 0:
         raise ValueError("No valid step values found.")
 
-    total_power = np.sum(valid_step_vals) / len(valid_step_vals)
+    total_power = float(np.nanmean(valid_step_vals))
     optimal_weights = valid_step_vals / total_power
-    aom_voltage = ((total_power - c) / a) ** (1 / b)
+
+    if x_label == "Readout amplitude (uW)" and total_power > c:
+        aom_voltage = float(((total_power - c) / a) ** (1 / b))
+    else:
+        aom_voltage = np.nan
 
     avg_readout_fidelity = np.nanmean(readout_fidelity_arr, axis=0)
     avg_prep_fidelity = np.nanmean(prep_fidelity_arr, axis=0)
@@ -323,13 +449,13 @@ def process_and_plot(raw_data, do_plot=False):
 
     (
         avg_optimal_step_val,
-        avg_optimal_readout_fidelity,
         avg_optimal_prep_fidelity,
+        avg_optimal_readout_fidelity,
         avg_max_combined_score,
     ) = find_optimal_value_geom_mean(
         step_vals,
-        avg_readout_fidelity,
         avg_prep_fidelity,
+        avg_readout_fidelity,
         avg_goodness_of_fit,
         weights=(1, 1, 1),
     )
@@ -340,23 +466,30 @@ def process_and_plot(raw_data, do_plot=False):
 
     (
         median_optimal_step_val,
-        median_optimal_readout_fidelity,
         median_optimal_prep_fidelity,
+        median_optimal_readout_fidelity,
         median_max_combined_score,
     ) = find_optimal_value_geom_mean(
         step_vals,
-        median_readout_fidelity,
         median_prep_fidelity,
+        median_readout_fidelity,
         median_goodness_of_fit,
         weights=(1, 1, 2),
     )
 
-    base_file_stem = raw_data.get("file_stem") or raw_data.get("file_name") or "raw_data"
+    base_file_stem = (
+        raw_data.get("file_stem")
+        or raw_data.get("file_name")
+        or raw_data.get("timestamp")
+        or "raw_data"
+    )
+
     if isinstance(base_file_stem, (list, tuple)):
         base_file_stem = "_".join(map(str, base_file_stem))
+
     base_file_stem = str(base_file_stem).replace(" ", "_")
+
     results = {
-        # identity / metadata
         "file_stem_source": str(base_file_stem),
         "num_nvs": int(num_nvs),
         "num_steps": int(num_steps),
@@ -364,9 +497,8 @@ def process_and_plot(raw_data, do_plot=False):
         "step_vals_raw": np.asarray(step_vals_raw, dtype=float).tolist(),
         "step_vals": np.asarray(step_vals, dtype=float).tolist(),
         "x_label": x_label,
-        "prob_dist_name": prob_dist.name if hasattr(prob_dist, "name") else str(prob_dist),
-
-        # optimization mode metadata
+        "prob_dist_name": prob_dist.name,
+        "n_jobs": None if n_jobs is None else int(n_jobs),
         "optimize_pol_or_readout": bool(optimize_pol_or_readout),
         "optimize_duration_or_amp": bool(optimize_duration_or_amp),
         "yellow_charge_readout_amp": float(yellow_charge_readout_amp),
@@ -374,63 +506,80 @@ def process_and_plot(raw_data, do_plot=False):
         "power_fit_a": float(a),
         "power_fit_b": float(b),
         "power_fit_c": float(c),
-
-        # processed per-NV / per-step data
-        "readout_fidelity_arr": np.asarray(readout_fidelity_arr, dtype=float).tolist(),
-        "prep_fidelity_arr": np.asarray(prep_fidelity_arr, dtype=float).tolist(),
-        "goodness_of_fit_arr": np.asarray(goodness_of_fit_arr, dtype=float).tolist(),
-        "threshold_arr": np.asarray(threshold_arr, dtype=float).tolist(),
-        "fit_success_arr": np.asarray(fit_success_arr, dtype=bool).tolist(),
-        "fit_params_arr": _fit_params_to_list(fit_params_arr, num_nvs, num_steps),
-
-        # raw processed counts so you can replot / refit later
-        "condensed_counts": _counts_to_list(condensed_counts, num_nvs, num_steps),
-
-        # optimal values per NV
+        "readout_fidelity_arr": readout_fidelity_arr.tolist(),
+        "prep_fidelity_arr": prep_fidelity_arr.tolist(),
+        "goodness_of_fit_arr": goodness_of_fit_arr.tolist(),
+        "threshold_arr": threshold_arr.tolist(),
+        "fit_success_arr": fit_success_arr.tolist(),
+        "fit_params_arr": _fit_params_to_list(
+            fit_params_arr,
+            num_nvs,
+            num_steps,
+        ),
         "optimal_values": [
             [
                 int(v[0]),
-                float(v[1]) if not np.isnan(v[1]) else None,
-                float(v[2]) if not np.isnan(v[2]) else None,
-                float(v[3]) if not np.isnan(v[3]) else None,
-                float(v[4]) if not np.isnan(v[4]) else None,
+                float(v[1]) if np.isfinite(v[1]) else None,
+                float(v[2]) if np.isfinite(v[2]) else None,
+                float(v[3]) if np.isfinite(v[3]) else None,
+                float(v[4]) if np.isfinite(v[4]) else None,
             ]
             for v in optimal_values
         ],
-        "optimal_step_vals": np.asarray(optimal_step_vals, dtype=float).tolist(),
-        "valid_step_vals": np.asarray(valid_step_vals, dtype=float).tolist(),
-        "optimal_weights": np.asarray(optimal_weights, dtype=float).tolist(),
+        "optimal_step_vals": optimal_step_vals.tolist(),
+        "valid_step_vals": valid_step_vals.tolist(),
+        "optimal_weights": optimal_weights.tolist(),
         "total_power": float(total_power),
-        "aom_voltage": float(aom_voltage),
-
-        # aggregate curves
-        "avg_readout_fidelity": np.asarray(avg_readout_fidelity, dtype=float).tolist(),
-        "avg_prep_fidelity": np.asarray(avg_prep_fidelity, dtype=float).tolist(),
-        "avg_goodness_of_fit": np.asarray(avg_goodness_of_fit, dtype=float).tolist(),
-        "median_readout_fidelity": np.asarray(median_readout_fidelity, dtype=float).tolist(),
-        "median_prep_fidelity": np.asarray(median_prep_fidelity, dtype=float).tolist(),
-        "median_goodness_of_fit": np.asarray(median_goodness_of_fit, dtype=float).tolist(),
-
-        # aggregate optima
+        "aom_voltage": float(aom_voltage) if np.isfinite(aom_voltage) else None,
+        "avg_readout_fidelity": avg_readout_fidelity.tolist(),
+        "avg_prep_fidelity": avg_prep_fidelity.tolist(),
+        "avg_goodness_of_fit": avg_goodness_of_fit.tolist(),
+        "median_readout_fidelity": median_readout_fidelity.tolist(),
+        "median_prep_fidelity": median_prep_fidelity.tolist(),
+        "median_goodness_of_fit": median_goodness_of_fit.tolist(),
         "avg_optimal_step_val": float(avg_optimal_step_val),
-        "avg_optimal_readout_fidelity": float(avg_optimal_readout_fidelity),
         "avg_optimal_prep_fidelity": float(avg_optimal_prep_fidelity),
+        "avg_optimal_readout_fidelity": float(avg_optimal_readout_fidelity),
         "avg_max_combined_score": float(avg_max_combined_score),
         "median_optimal_step_val": float(median_optimal_step_val),
-        "median_optimal_readout_fidelity": float(median_optimal_readout_fidelity),
         "median_optimal_prep_fidelity": float(median_optimal_prep_fidelity),
+        "median_optimal_readout_fidelity": float(median_optimal_readout_fidelity),
         "median_max_combined_score": float(median_max_combined_score),
     }
+
+    if save_condensed_counts:
+        results["condensed_counts"] = _counts_to_list(
+            condensed_counts,
+            num_nvs,
+            num_steps,
+        )
+    else:
+        results["condensed_counts"] = None
 
     timestamp = dm.get_time_stamp()
     file_name = f"optimization_processed_full_{base_file_stem}"
     file_path = dm.get_file_path(__file__, timestamp, file_name)
-    dm.save_raw_data(results, file_path)
 
-    print(f"Processed data saved to '{file_path}'.")
+    dm.save_raw_data(
+        make_json_safe(results),
+        file_path,
+    )
+
+    print(f"Processed data saved to: {file_path}")
+
     return results
 
-def recompute_optimal_from_processed(analyzed_data, nv_ind, weights=(1, 1, 1)):
+
+# =============================================================================
+# CPU and GPU recompute from saved processed data
+# =============================================================================
+
+
+def recompute_optimal_from_processed(
+    analyzed_data,
+    nv_ind,
+    weights=(1, 1, 1),
+):
     step_vals = np.asarray(analyzed_data["step_vals"], dtype=float)
     prep = np.asarray(analyzed_data["prep_fidelity_arr"][nv_ind], dtype=float)
     readout = np.asarray(analyzed_data["readout_fidelity_arr"][nv_ind], dtype=float)
@@ -438,15 +587,20 @@ def recompute_optimal_from_processed(analyzed_data, nv_ind, weights=(1, 1, 1)):
 
     return find_optimal_value_geom_mean(
         step_vals,
-        prep,          # correct order
-        readout,       # correct order
+        prep,
+        readout,
         gof,
         weights=weights,
     )
 
 
-def recompute_all_optimal_values_from_processed(analyzed_data, weights=(1, 1, 1), nv_indices=None):
+def recompute_all_optimal_values_from_processed(
+    analyzed_data,
+    weights=(1, 1, 1),
+    nv_indices=None,
+):
     num_nvs = int(analyzed_data["num_nvs"])
+
     if nv_indices is None:
         nv_indices = range(num_nvs)
 
@@ -460,6 +614,7 @@ def recompute_all_optimal_values_from_processed(analyzed_data, weights=(1, 1, 1)
                 nv_ind,
                 weights=weights,
             )
+
             optimal_values.append(
                 {
                     "nv_ind": int(nv_ind),
@@ -470,6 +625,7 @@ def recompute_all_optimal_values_from_processed(analyzed_data, weights=(1, 1, 1)
                 }
             )
             optimal_step_vals.append(opt_step)
+
         except Exception as e:
             print(f"Failed on NV {nv_ind}: {e}")
             optimal_values.append(
@@ -481,6 +637,7 @@ def recompute_all_optimal_values_from_processed(analyzed_data, weights=(1, 1, 1)
                     "max_combined_score": np.nan,
                 }
             )
+            optimal_step_vals.append(np.nan)
 
     optimal_step_vals = np.asarray(optimal_step_vals, dtype=float)
     valid_step_vals = optimal_step_vals[np.isfinite(optimal_step_vals)]
@@ -490,30 +647,222 @@ def recompute_all_optimal_values_from_processed(analyzed_data, weights=(1, 1, 1)
         "optimal_step_vals": optimal_step_vals,
         "valid_step_vals": valid_step_vals,
         "weights_used": tuple(weights),
+        "used_gpu": False,
     }
 
-    # Only meaningful for readout-amplitude optimization
     x_label = analyzed_data.get("x_label", "")
-    if x_label == "Readout amplitude (uW)" and len(valid_step_vals) > 0:
-        total_power = float(np.mean(valid_step_vals))
-        a = float(analyzed_data["power_fit_a"])
-        b = float(analyzed_data["power_fit_b"])
-        c = float(analyzed_data["power_fit_c"])
 
-        optimal_weights = valid_step_vals / total_power
-        if total_power > c:
-            aom_voltage = float(((total_power - c) / a) ** (1 / b))
-        else:
-            aom_voltage = np.nan
-
+    if len(valid_step_vals) > 0:
+        total_power = float(np.nanmean(valid_step_vals))
         summary["total_power"] = total_power
-        summary["optimal_weights"] = optimal_weights
-        summary["aom_voltage"] = aom_voltage
+        summary["optimal_weights"] = valid_step_vals / total_power
+
+        if x_label == "Readout amplitude (uW)":
+            a = float(analyzed_data["power_fit_a"])
+            b = float(analyzed_data["power_fit_b"])
+            c = float(analyzed_data["power_fit_c"])
+
+            if total_power > c:
+                summary["aom_voltage"] = float(((total_power - c) / a) ** (1 / b))
+            else:
+                summary["aom_voltage"] = np.nan
 
     return summary
 
 
-def plot_processed_nv_metrics(analyzed_data, nv_ind, weights=(1, 1, 1)):
+def recompute_all_optimal_values_from_processed_gpu(
+    analyzed_data,
+    weights=(1, 1, 1),
+    skip_first=2,
+):
+    """
+    GPU-vectorized recompute from saved arrays.
+
+    This is fast, but only accelerates recomputing optimal steps.
+    It does not accelerate the original SciPy histogram fits.
+    """
+
+    if not GPU_AVAILABLE:
+        print("CuPy/GPU not available. Falling back to CPU.")
+        return recompute_all_optimal_values_from_processed(
+            analyzed_data,
+            weights=weights,
+        )
+
+    w1, w2, w3 = weights
+
+    step_vals_cpu = np.asarray(analyzed_data["step_vals"], dtype=float)
+    prep_cpu = np.asarray(analyzed_data["prep_fidelity_arr"], dtype=float)
+    readout_cpu = np.asarray(analyzed_data["readout_fidelity_arr"], dtype=float)
+    gof_cpu = np.asarray(analyzed_data["goodness_of_fit_arr"], dtype=float)
+
+    step_vals = cp.asarray(step_vals_cpu[skip_first:], dtype=cp.float64)
+    prep = cp.asarray(prep_cpu[:, skip_first:], dtype=cp.float64)
+    readout = cp.asarray(readout_cpu[:, skip_first:], dtype=cp.float64)
+    gof = cp.asarray(gof_cpu[:, skip_first:], dtype=cp.float64)
+
+    num_nvs = prep.shape[0]
+
+    prep_min = cp.nanmin(prep, axis=1, keepdims=True)
+    prep_max = cp.nanmax(prep, axis=1, keepdims=True)
+
+    readout_min = cp.nanmin(readout, axis=1, keepdims=True)
+    readout_max = cp.nanmax(readout, axis=1, keepdims=True)
+
+    gof_min = cp.nanmin(gof, axis=1, keepdims=True)
+    gof_max = cp.nanmax(gof, axis=1, keepdims=True)
+
+    norm_prep = (prep - prep_min) / (prep_max - prep_min + 1e-12)
+    norm_readout = (readout - readout_min) / (readout_max - readout_min + 1e-12)
+    norm_gof = (gof - gof_min) / (gof_max - gof_min + 1e-12)
+
+    score = (
+        w1 * norm_prep
+        + w2 * norm_readout
+        + w3 * (1.0 - norm_gof)
+    )
+
+    score_safe = cp.where(cp.isfinite(score), score, -cp.inf)
+
+    best_step_ind = cp.argmax(score_safe, axis=1)
+    best_score = score_safe[cp.arange(num_nvs), best_step_ind]
+
+    optimal_step_vals = step_vals[best_step_ind]
+    optimal_prep = prep[cp.arange(num_nvs), best_step_ind]
+    optimal_readout = readout[cp.arange(num_nvs), best_step_ind]
+
+    good_nv = cp.isfinite(best_score)
+
+    optimal_step_vals = cp.where(good_nv, optimal_step_vals, cp.nan)
+    optimal_prep = cp.where(good_nv, optimal_prep, cp.nan)
+    optimal_readout = cp.where(good_nv, optimal_readout, cp.nan)
+    best_score = cp.where(good_nv, best_score, cp.nan)
+
+    optimal_step_vals_cpu = cp.asnumpy(optimal_step_vals)
+    optimal_prep_cpu = cp.asnumpy(optimal_prep)
+    optimal_readout_cpu = cp.asnumpy(optimal_readout)
+    best_score_cpu = cp.asnumpy(best_score)
+
+    valid_step_vals = optimal_step_vals_cpu[np.isfinite(optimal_step_vals_cpu)]
+
+    optimal_values = []
+
+    for nv_ind in range(num_nvs):
+        optimal_values.append(
+            {
+                "nv_ind": int(nv_ind),
+                "optimal_step_val": float(optimal_step_vals_cpu[nv_ind])
+                if np.isfinite(optimal_step_vals_cpu[nv_ind])
+                else np.nan,
+                "optimal_prep_fidelity": float(optimal_prep_cpu[nv_ind])
+                if np.isfinite(optimal_prep_cpu[nv_ind])
+                else np.nan,
+                "optimal_readout_fidelity": float(optimal_readout_cpu[nv_ind])
+                if np.isfinite(optimal_readout_cpu[nv_ind])
+                else np.nan,
+                "max_combined_score": float(best_score_cpu[nv_ind])
+                if np.isfinite(best_score_cpu[nv_ind])
+                else np.nan,
+            }
+        )
+
+    summary = {
+        "optimal_values": optimal_values,
+        "optimal_step_vals": optimal_step_vals_cpu,
+        "valid_step_vals": valid_step_vals,
+        "weights_used": tuple(weights),
+        "used_gpu": True,
+    }
+
+    x_label = analyzed_data.get("x_label", "")
+
+    if len(valid_step_vals) > 0:
+        total_power = float(np.nanmean(valid_step_vals))
+        summary["total_power"] = total_power
+        summary["optimal_weights"] = valid_step_vals / total_power
+
+        if x_label == "Readout amplitude (uW)":
+            a = float(analyzed_data["power_fit_a"])
+            b = float(analyzed_data["power_fit_b"])
+            c = float(analyzed_data["power_fit_c"])
+
+            if total_power > c:
+                summary["aom_voltage"] = float(((total_power - c) / a) ** (1 / b))
+            else:
+                summary["aom_voltage"] = np.nan
+
+    return summary
+
+
+# =============================================================================
+# Plotting from processed data
+# =============================================================================
+
+
+def plot_processed_nv_metrics_from_arrays(
+    step_vals,
+    x_label,
+    readout,
+    prep,
+    gof,
+    nv_ind,
+    opt_step,
+    opt_prep,
+    opt_readout,
+    opt_score,
+):
+    fig, ax1 = plt.subplots(figsize=(7, 5))
+
+    ax1.plot(step_vals, readout, label="Readout fidelity", color="orange")
+    ax1.plot(step_vals, prep, label="Prep fidelity", linestyle="--", color="green")
+    ax1.set_xlabel(x_label)
+    ax1.set_ylabel("Fidelity")
+    ax1.grid(True, linestyle="--", alpha=0.6)
+
+    ax2 = ax1.twinx()
+    ax2.plot(
+        step_vals,
+        gof,
+        color="gray",
+        linestyle="--",
+        label=r"Goodness of fit",
+        alpha=0.7,
+    )
+    ax2.set_ylabel("Goodness of fit", color="gray")
+
+    if np.isfinite(opt_step):
+        ax1.axvline(
+            opt_step,
+            color="red",
+            linestyle="--",
+            label=f"Optimal = {opt_step:.3f}",
+        )
+        ax2.axvline(opt_step, color="red", linestyle="--")
+
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+
+    ax1.legend(
+        lines1 + lines2,
+        labels1 + labels2,
+        loc="upper left",
+        fontsize=10,
+    )
+
+    ax1.set_title(
+        f"NV {nv_ind}: opt={opt_step:.3f}, "
+        f"prep={opt_prep:.3f}, readout={opt_readout:.3f}, score={opt_score:.3f}"
+    )
+
+    plt.tight_layout()
+    return fig
+
+
+def plot_processed_nv_metrics(
+    analyzed_data,
+    nv_ind,
+    weights=(1, 1, 1),
+):
     step_vals = np.asarray(analyzed_data["step_vals"], dtype=float)
     x_label = analyzed_data["x_label"]
 
@@ -527,369 +876,411 @@ def plot_processed_nv_metrics(analyzed_data, nv_ind, weights=(1, 1, 1)):
         weights=weights,
     )
 
-    fig, ax1 = plt.subplots(figsize=(7, 5))
-    ax1.plot(step_vals, readout, label="Readout Fidelity", color="orange")
-    ax1.plot(step_vals, prep, label="Prep Fidelity", linestyle="--", color="green")
-    ax1.set_xlabel(x_label)
-    ax1.set_ylabel("Fidelity")
-    ax1.grid(True, linestyle="--", alpha=0.6)
-
-    ax2 = ax1.twinx()
-    ax2.plot(
+    return plot_processed_nv_metrics_from_arrays(
         step_vals,
+        x_label,
+        readout,
+        prep,
         gof,
-        color="gray",
-        linestyle="--",
-        label=r"Goodness of Fit ($\chi^2_{\mathrm{reduced}}$)",
-        alpha=0.7,
+        nv_ind,
+        opt_step,
+        opt_prep,
+        opt_readout,
+        opt_score,
     )
-    ax2.set_ylabel(r"Goodness of Fit ($\chi^2_{\mathrm{reduced}}$)", color="gray")
 
-    if np.isfinite(opt_step):
-        ax1.axvline(opt_step, color="red", linestyle="--", label=f"Optimal = {opt_step:.3f}")
-        ax2.axvline(opt_step, color="red", linestyle="--")
 
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper left", fontsize=10)
+def plot_ref_histogram_from_processed(
+    analyzed_data,
+    nv_ind,
+    step_ind,
+    density=True,
+):
+    if analyzed_data.get("condensed_counts", None) is None:
+        raise KeyError(
+            "This processed file does not contain condensed_counts. "
+            "Run process_and_plot(..., save_condensed_counts=True)."
+        )
 
-    ax1.set_title(
-        f"NV {nv_ind}\n"
-        f"opt step={opt_step:.3f}, prep={opt_prep:.3f}, readout={opt_readout:.3f}, score={opt_score:.3f}"
+    counts = np.asarray(
+        analyzed_data["condensed_counts"][nv_ind][step_ind],
+        dtype=float,
     )
-    plt.tight_layout()
-    return fig
 
-
-def plot_ref_histogram_from_processed(analyzed_data, nv_ind, step_ind, density=True):
-    """
-    Plots the saved reference histogram for one NV and one step from the processed file.
-    This uses condensed_counts, which in your saved file is reference-only data.
-    """
-    counts = np.asarray(analyzed_data["condensed_counts"][nv_ind][step_ind], dtype=float)
     threshold = float(analyzed_data["threshold_arr"][nv_ind][step_ind])
     fit_success = bool(analyzed_data["fit_success_arr"][nv_ind][step_ind])
     fit_params = analyzed_data["fit_params_arr"][nv_ind][step_ind]
+
     step_vals = np.asarray(analyzed_data["step_vals"], dtype=float)
     x_label = analyzed_data["x_label"]
 
-    fig, ax = plt.subplots()
-    kpl.histogram(ax, counts, density=density)
+    fig, ax = plt.subplots(figsize=(6.5, 5))
+
+    kpl.histogram(
+        ax,
+        counts,
+        density=density,
+    )
+
     ax.set_xlabel("Integrated counts")
     ax.set_ylabel("Probability" if density else "Occurrences")
-    ax.set_title(f"NV {nv_ind}, step {step_ind}, {x_label}={step_vals[step_ind]:.3f}")
+    ax.set_title(
+        f"NV {nv_ind}, step {step_ind}, "
+        f"{x_label} = {step_vals[step_ind]:.3f}"
+    )
 
     if np.isfinite(threshold):
-        ax.axvline(threshold, color=kpl.KplColors.GRAY, ls="dashed", label="Threshold")
+        ax.axvline(
+            threshold,
+            color=kpl.KplColors.GRAY,
+            ls="dashed",
+            label="Threshold",
+        )
 
     if fit_success and fit_params is not None:
         popt = np.asarray(fit_params, dtype=float)
+
         prob_dist_name = analyzed_data.get("prob_dist_name", "COMPOUND_POISSON")
-        prob_dist_local = getattr(ProbDist, prob_dist_name)
+        prob_dist_local = get_prob_dist(prob_dist_name)
 
-        x_vals = np.linspace(0, max(np.max(counts), threshold if np.isfinite(threshold) else 0) + 1, 1000)
+        x_max = max(
+            np.nanmax(counts),
+            threshold if np.isfinite(threshold) else 0,
+        )
 
-        single_mode_num_params = bimodal_histogram.get_single_mode_num_params(prob_dist_local)
+        x_vals = np.linspace(0, x_max + 1, 1000)
+
+        single_mode_num_params = bimodal_histogram.get_single_mode_num_params(
+            prob_dist_local
+        )
         single_mode_pdf = bimodal_histogram.get_single_mode_pdf(prob_dist_local)
         bimodal_pdf = bimodal_histogram.get_bimodal_pdf(prob_dist_local)
 
         dark_mode_line = popt[0] * single_mode_pdf(
-            x_vals, *popt[1 : 1 + single_mode_num_params]
+            x_vals,
+            *popt[1 : 1 + single_mode_num_params],
         )
+
         bright_mode_line = (1 - popt[0]) * single_mode_pdf(
-            x_vals, *popt[1 + single_mode_num_params :]
+            x_vals,
+            *popt[1 + single_mode_num_params :],
         )
+
         bimodal_line = bimodal_pdf(x_vals, *popt)
 
-        kpl.plot_line(ax, x_vals, dark_mode_line, color=kpl.KplColors.RED, label="NV$^{0}$ mode")
-        kpl.plot_line(ax, x_vals, bright_mode_line, color=kpl.KplColors.GREEN, label="NV$^{-}$ mode")
-        kpl.plot_line(ax, x_vals, bimodal_line, color=kpl.KplColors.BLUE, label="Combined")
-        ax.legend(loc=kpl.Loc.UPPER_RIGHT)
+        kpl.plot_line(
+            ax,
+            x_vals,
+            dark_mode_line,
+            color=kpl.KplColors.RED,
+            label="NV$^{0}$ mode",
+        )
+
+        kpl.plot_line(
+            ax,
+            x_vals,
+            bright_mode_line,
+            color=kpl.KplColors.GREEN,
+            label="NV$^{-}$ mode",
+        )
+
+        kpl.plot_line(
+            ax,
+            x_vals,
+            bimodal_line,
+            color=kpl.KplColors.BLUE,
+            label="Combined",
+        )
+
+    ax.legend(loc=kpl.Loc.UPPER_RIGHT)
 
     return fig
 
+def recompute_optimal_step_index_from_processed(
+    analyzed_data,
+    nv_ind,
+    weights=(1, 1, 1),
+    skip_first=2,
+):
+    """
+    Return the optimal step index for one NV using the same score rule as
+    find_optimal_value_geom_mean().
+    """
 
-##=====================================================
+    w1, w2, w3 = weights
 
-def process_nv_step(nv_ind, step_ind, condensed_counts):
-    counts_data = condensed_counts[nv_ind, step_ind]
-    try:
-        popt, pcov, chi_squared = fit_bimodal_histogram(
-            counts_data, ProbDist.COMPOUND_POISSON
-        )
-        if popt is None:
-            return np.nan, np.nan, np.nan
-        threshold, readout_fidelity = determine_threshold(
-            popt, ProbDist.COMPOUND_POISSON, dark_mode_weight=0.5, ret_fidelity=True
-        )
-        prep_fidelity = 1 - popt[0]  # Population weight of dark state
-        return readout_fidelity, prep_fidelity, chi_squared
-    except Exception as e:
-        print(f"Error processing NV {nv_ind}, step {step_ind}: {e}")
-        return np.nan, np.nan, np.nan
+    step_vals = np.asarray(analyzed_data["step_vals"], dtype=float)
+    prep = np.asarray(analyzed_data["prep_fidelity_arr"][nv_ind], dtype=float)
+    readout = np.asarray(analyzed_data["readout_fidelity_arr"][nv_ind], dtype=float)
+    gof = np.asarray(analyzed_data["goodness_of_fit_arr"][nv_ind], dtype=float)
 
+    original_inds = np.arange(step_vals.size)
 
-def process_and_plot_charge(raw_data, do_plot=False):
-    nv_list = raw_data["nv_list"]
-    num_nvs = len(nv_list)
-    min_step_val = raw_data["min_step_val"]
-    max_step_val = raw_data["max_step_val"]
-    num_steps = raw_data["num_steps"]
-    step_vals = np.linspace(min_step_val, max_step_val, num_steps)
+    step_vals_use = step_vals[skip_first:]
+    prep_use = prep[skip_first:]
+    readout_use = readout[skip_first:]
+    gof_use = gof[skip_first:]
+    inds_use = original_inds[skip_first:]
 
-    counts = np.array(raw_data["counts"])
-    ref_exp_ind = 1
-    condensed_counts = np.array(
-        [
-            [
-                counts[ref_exp_ind, nv_ind, :, step_ind, :].flatten()
-                for step_ind in range(num_steps)
-            ]
-            for nv_ind in range(num_nvs)
-        ]
+    good = (
+        np.isfinite(step_vals_use)
+        & np.isfinite(prep_use)
+        & np.isfinite(readout_use)
+        & np.isfinite(gof_use)
     )
 
-    # Process each NV-step pair in parallel
-    results = Parallel(n_jobs=-1)(
-        delayed(process_nv_step)(nv_ind, step_ind, condensed_counts)
-        for nv_ind in range(num_nvs)
-        for step_ind in range(num_steps)
+    if not np.any(good):
+        raise ValueError(f"No finite optimization values for NV {nv_ind}.")
+
+    step_vals_use = step_vals_use[good]
+    prep_use = prep_use[good]
+    readout_use = readout_use[good]
+    gof_use = gof_use[good]
+    inds_use = inds_use[good]
+
+    norm_prep = (prep_use - np.nanmin(prep_use)) / (
+        np.nanmax(prep_use) - np.nanmin(prep_use) + 1e-12
     )
 
-    try:
-        results = np.array(results, dtype=float).reshape(num_nvs, num_steps, 3)
-    except ValueError as e:
-        print(f"Error reshaping results: {e}")
-        return
+    norm_readout = (readout_use - np.nanmin(readout_use)) / (
+        np.nanmax(readout_use) - np.nanmin(readout_use) + 1e-12
+    )
 
-    prep_fidelity = results[:, :, 1]
-    readout_fidelity = results[:, :, 0]
-    ### **Perform Fitting**
-    opti_durs, opti_fidelities = [], []
+    norm_gof = (gof_use - np.nanmin(gof_use)) / (
+        np.nanmax(gof_use) - np.nanmin(gof_use) + 1e-12
+    )
 
-    # --- Saturation models (with offset) ---
-    def sat_decay_fit_fn(t, F0, A, t0, tau_r, tau_d):
-        t = np.asarray(t, dtype=float)
-        x = np.maximum(t - t0, 0.0)  # gate before t0
-        tau_r = np.maximum(tau_r, 1e-12)
-        tau_d = np.maximum(tau_d, 1e-12)
-        return F0 + 2 * A * (1.0 - np.exp(-x / tau_r)) * np.exp(-x / tau_d)
-        # return A * (1.0 - np.exp(-x / tau_r)) * np.exp(-x / tau_d)
+    score = w1 * norm_prep + w2 * norm_readout + w3 * (1.0 - norm_gof)
 
-    def sat_decay_x_peak(tau_r, tau_d):
-        tau_r = max(float(tau_r), 1e-12)
-        tau_d = max(float(tau_d), 1e-12)
-        return tau_r * np.log(1.0 + tau_d / tau_r)
+    best_local = int(np.nanargmax(score))
+    best_step_ind = int(inds_use[best_local])
 
-    # --- Robust initial guesses + bounds ---
-    def sat_decay_initial_guess(x, y):
-        x = np.asarray(x, float)
-        y = np.asarray(y, float)
-        span = float(x[-1] - x[0]) if x[-1] > x[0] else 1.0
-        dt = np.median(np.diff(x))
+    return {
+        "step_ind": best_step_ind,
+        "step_val": float(step_vals[best_step_ind]),
+        "prep_fidelity": float(prep[best_step_ind]),
+        "readout_fidelity": float(readout[best_step_ind]),
+        "goodness_of_fit": float(gof[best_step_ind]),
+        "score": float(score[best_local]),
+    }
 
-        # Baseline & amplitude
-        F0_0 = float(np.nanpercentile(y, 5))
-        ymax = float(np.nanpercentile(y, 95))
-        A_0 = float(max(1e-4, ymax - F0_0))  # if fidelity, cap elsewhere if you want
 
-        # Onset t0 near strongest rise
-        dy = np.diff(y, prepend=y[0])
-        i_rise = int(np.clip(np.argmax(dy), 0, len(x) - 1))
-        t0_0 = float(max(x[0], x[i_rise] - 0.5 * dt))
+def plot_prep_vs_readout_optimal_only(
+    analyzed_data,
+    weights=(1, 1, 1),
+    skip_first=2,
+):
+    """
+    One point per NV:
+        x = prep fidelity at that NV's optimal step
+        y = readout fidelity at that NV's optimal step
+    """
 
-        # Time constants: start with τd >> τr so peak isn't too early
-        tau_r0 = max(dt, 0.15 * span)
-        tau_d0 = max(5 * tau_r0, 1.0 * span)
+    prep_arr = np.asarray(analyzed_data["prep_fidelity_arr"], dtype=float)
+    readout_arr = np.asarray(analyzed_data["readout_fidelity_arr"], dtype=float)
+    num_nvs = int(analyzed_data["num_nvs"])
 
-        p0 = [F0_0, A_0, t0_0, tau_r0, tau_d0]
-
-        # Bounds (adjust if your y is guaranteed in [0,1])
-        F0_lo, F0_hi = min(y) - 0.2 * abs(y).max(), max(y) + 0.2 * abs(y).max()
-        A_lo, A_hi = 0.0, max(1.5 * (ymax - F0_0), 1e-3)
-        t0_lo, t0_hi = x[0] - 2 * span, x[-1] + 2 * span
-        tr_lo, tr_hi = dt / 10, 2 * span
-        td_lo, td_hi = dt / 10, 10 * span
-
-        lo = [F0_lo, A_lo, t0_lo, tr_lo, td_lo]
-        hi = [F0_hi, A_hi, t0_hi, tr_hi, td_hi]
-        return p0, (lo, hi)
+    prep_opt = []
+    readout_opt = []
+    opt_step_inds = []
+    opt_step_vals = []
 
     for nv_ind in range(num_nvs):
-        r = readout_fidelity[nv_ind].astype(float)
-        y = prep_fidelity[nv_ind].astype(float)
-        x = step_vals.astype(float)
-        # Clean
-        x = np.asarray(x, float)
-        y = np.asarray(y, float)
-        m = np.isfinite(x) & np.isfinite(y)
-        x_f, y_f = x[m], y[m]
-        if x_f.size < 4:
-            raise RuntimeError("Not enough points for fit.")
-
-        p0, bounds = sat_decay_initial_guess(x_f, y_f)
-        popt, pcov = curve_fit(
-            sat_decay_fit_fn, x_f, y_f, p0=p0, bounds=bounds, maxfev=200000
-        )
-        F0, A, t0, tau_r, tau_d = popt
-
-        # analytic peak
-        x_pk_rel = sat_decay_x_peak(tau_r, tau_d)
-        t_peak = float(t0 + x_pk_rel)
-        y_peak = float(sat_decay_fit_fn(t_peak, *popt))
-
-        results = {"params": popt, "cov": pcov, "t_peak": t_peak, "y_peak": y_peak}
-
-        return_curve = True
-        grid = None
-        if return_curve:
-            if grid is None:
-                grid = np.linspace(x_f.min(), x_f.max(), 1000)
-            y_model = sat_decay_fit_fn(grid, *popt)
-            results.update({"grid_t": grid, "grid_y": y_model})
-
-        F0, A, t0, tau_r, tau_d = results["params"]
-        opti_dur = float(np.clip(results["t_peak"], min_step_val, max_step_val))
-        opti_fid = float(results["y_peak"])
-        opti_durs.append(round(opti_dur / 4) * 4)
-        opti_fidelities.append(round(opti_fid, 3))
-
-        # Snap to hardware grid
-        opti_durs.append(round(opti_dur / 4) * 4)
-        opti_fidelities.append(round(opti_fid, 3))
-
-        if do_plot:
-            # --- Plot ---
-            plt.figure(figsize=(6, 5))
-            plt.scatter(x_f, y_f, label="Measured")
-            plt.plot(results["grid_t"], results["grid_y"], label="Sat-Decay Fit")
-            plt.axvline(
-                opti_dur,
-                color="green",
-                linestyle="--",
-                label=f"Peak ≈ {opti_dur:.0f} ns",
+        try:
+            opt_info = recompute_optimal_step_index_from_processed(
+                analyzed_data,
+                nv_ind=nv_ind,
+                weights=weights,
+                skip_first=skip_first,
             )
-            plt.scatter([opti_dur], [opti_fid], color="green", zorder=5)
-            plt.xlabel("Duration (ns)")
-            plt.ylabel("Fidelity")
-            plt.ylim(0, 1)
-            plt.grid(True, alpha=0.3)
-            plt.legend()
-            plt.show(block=True)
 
-    if opti_durs:
-        print("Optimal Polarization Durations:", opti_durs)
+            step_ind = int(opt_info["step_ind"])
 
-        # Filter out None values to compute median
-        numeric_durations = [d for d in opti_durs if d is not None]
-        median_duration = int(np.nanmedian(numeric_durations))
-        # Replace None or out-of-range values with median
-        opti_durs = [
-            (
-                median_duration
-                if (d is None or (100 <= d <= 200) or (1930 <= d <= 2000))
-                else d
-            )
-            for d in opti_durs
-        ]
+            prep_val = prep_arr[nv_ind, step_ind]
+            readout_val = readout_arr[nv_ind, step_ind]
 
-        print("Updated Optimal Durations:", opti_durs)
-        # print("Optimal Preparation Fidelities:", opti_fidelities)
-        print(f"Median Optimal Duration: {np.median(opti_durs)} ns")
-        print(f"Median Optimal Fidelity: {np.median(opti_fidelities)}")
-        print(f"Max Optimal Duration: {np.max(opti_durs)} ns")
-        print(f"Min Optimal Duration: {np.min(opti_durs)} ns")
-        ###
-        plt.figure()
-        plt.scatter(opti_durs, opti_fidelities)
-        plt.xlabel("Polarization Duration (ns)")
-        plt.ylabel("Preparation Fidelity")
-        plt.title(f"NV Num: {nv_ind}")
-        plt.legend()
-        plt.show(block=True)
+            if np.isfinite(prep_val) and np.isfinite(readout_val):
+                prep_opt.append(prep_val)
+                readout_opt.append(readout_val)
+                opt_step_inds.append(step_ind)
+                opt_step_vals.append(opt_info["step_val"])
 
-    return
+        except Exception as e:
+            print(f"Skipping NV {nv_ind}: {e}")
 
+    prep_opt = np.asarray(prep_opt, dtype=float)
+    readout_opt = np.asarray(readout_opt, dtype=float)
+    opt_step_inds = np.asarray(opt_step_inds, dtype=int)
+    opt_step_vals = np.asarray(opt_step_vals, dtype=float)
+
+    fig, ax = plt.subplots(figsize=(6.5, 5.5))
+
+    sc = ax.scatter(
+        readout_opt,
+        prep_opt,
+        c=opt_step_vals,   # color by optimal step value
+        s=18,
+        alpha=0.75,
+    )
+    ax.set_xlabel("Readout fidelity")
+    ax.set_ylabel("Prep fidelity")
+    ax.set_xlim(0, 1.02)
+    ax.set_ylim(0, 1.02)
+    ax.set_title("Prep vs readout fidelity at each NV's optimal step")
+    ax.grid(True, linestyle="--", alpha=0.4)
+
+    cbar = plt.colorbar(sc, ax=ax)
+    cbar.set_label(analyzed_data.get("x_label", "Optimal step value"))
+
+    # optional median marker
+    # if prep_opt.size > 0:
+    #     ax.scatter(
+    #         np.nanmedian(prep_opt),
+    #         np.nanmedian(readout_opt),
+    #         marker="x",
+    #         s=80,
+    #         color="black",
+    #         label="Median point",
+    #     )
+    #     ax.legend(fontsize=8)
+
+    return fig
 
 if __name__ == "__main__":
     kpl.init_kplotlib()
-    ## readout amp
-    file_id = "2026_03_22-21_49_52-qnami-nv0_2026_02_20"
-    file_id = "2026_04_03-08_23_00-qnami-nv0_2026_02_20" ## 1277
+
+    # -------------------------------------------------------------------------
+    # Option A: process new raw data with CPU parallel fitting.
+    # -------------------------------------------------------------------------
+    run_new_processing = False
+    file_id = "2026_06_24-23_33_18-qnami-nv0_2026_02_20" ## pol amp
+    file_id = "2026_06_26-21_58_16-qnami-nv0_2026_02_20" ## readout amp
+    file_id = "2026_07_08-22_48_57-qnami-nv0_2026_02_20" ## readout amp
+    file_id = "2026_07_08-22_48_57-qnami-nv0_2026_02_20" ## readout amp
+    file_id = "2026_07_08-22_48_57-qnami-nv0_2026_02_20" ## readout amp
+    file_id = "2026_07_14-20_28_11-qnami-nv0_2026_02_20" ## readout amp two readout
     
-    ## pol amp var
-    # file_id = "2026_03_24-21_11_43-qnami-nv0_2026_02_20" ## 1460
-    # file_id = "2026_03_25-23_32_41-qnami-nv0_2026_02_20" ## 1306
+    if run_new_processing:
+        raw_data = dm.get_raw_data(
+            file_stem=file_id,
+            load_npz=True,
+        )
+
+        raw_data["file_stem"] = file_id
+
+        results = process_and_plot(
+            raw_data,
+            do_plot=False,
+            n_jobs=12,
+            joblib_verbose=10,
+            save_condensed_counts=True,
+        )
+
+        kpl.show(block=True)
+        sys.exit()
+
+    # -------------------------------------------------------------------------
+    # Option B: load processed data and recompute optima.
+    # -------------------------------------------------------------------------
+    # analyzed_file_id = "2026_06_26-01_41_43-optimization_processed_full_raw_data"
+    # analyzed_file_id = "2026_06_30-18_16_28-optimization_processed_full_2026_06_24-23_33_18-qnami-nv0_2026_02_20"
+    # analyzed_file_id = "2026_07_09-13_04_44-optimization_processed_full_2026_07_08-22_48_57-qnami-nv0_2026_02_20"
+    analyzed_file_id = "2026_07_15-16_13_25-optimization_processed_full_2026_07_14-20_28_11-qnami-nv0_2026_02_20"
+    "2026_07_10-11_41_33-qnami-nv0_2026_02_20-dmd_block_confirmed"
+    analyzed = dm.get_raw_data(
+        file_stem=analyzed_file_id,
+        load_npz=True,
+    )
+
+    new_weights = (0, 1, 1)
+
+    print("GPU available:", GPU_AVAILABLE)
+
+    summary = recompute_all_optimal_values_from_processed_gpu(
+        analyzed,
+        weights=new_weights,
+    )
+
+    plot_prep_vs_readout_optimal_only(
+        analyzed,
+        weights=new_weights,
+        skip_first=2,
+    )
+    kpl.show(block=True)
     
-    ## pol dur var
-    # file_id = "2026_03_17-06_00_50-qnami-nv0_2026_02_20"
+    print("used_gpu:", summary.get("used_gpu", False))
+    print("num valid NVs:", len(summary["valid_step_vals"]))
+    print("mean optimal step:", np.nanmean(summary["optimal_step_vals"]))
 
-    raw_data = dm.get_raw_data(file_stem=file_id, load_npz=True)
-    process_and_plot(raw_data, do_plot=False)
-    # process_and_plot_charge(raw_data, do_plot=True)
-    
-    
+    if "optimal_weights" in summary:
+        print("total_power:", summary.get("total_power", None))
+        print("aom_voltage:", summary.get("aom_voltage", None))
 
-    # analyzed_file_id = "2026_03_26-15_04_19-optimization_processed_full_raw_data"
-    # analyzed = dm.get_raw_data(file_stem=analyzed_file_id, load_npz=True)
+    summary["source_analyzed_file"] = analyzed_file_id
+    summary["weights_used"] = new_weights
 
-    # new_weights = (1, 2, 1)
+    timestamp = dm.get_time_stamp()
+    weights_str = "_".join(str(w) for w in new_weights)
+    file_name = f"recomputed_summary_w_{weights_str}_{analyzed_file_id}"
+    file_path = dm.get_file_path(__file__, timestamp, file_name)
 
-    # # 1) recompute one NV with new weights
-    # nv_ind = 10
-    # opt_step, opt_prep, opt_readout, opt_score = recompute_optimal_from_processed(
-    #     analyzed,
-    #     nv_ind=nv_ind,
-    #     weights=new_weights,
-    # )
-    # print(
-    #     f"NV {nv_ind}: opt_step={opt_step}, prep={opt_prep}, "
-    #     f"readout={opt_readout}, score={opt_score}"
+    # dm.save_raw_data(
+    #     make_json_safe(summary),
+    #     file_path,
     # )
 
-    # # 2) recompute all NVs with new weights
-    # summary = recompute_all_optimal_values_from_processed(
-    #     analyzed,
-    #     weights=new_weights,
-    # )
-    # print("num valid NVs:", len(summary["valid_step_vals"]))
-    # print("mean optimal step:", np.nanmean(summary["optimal_step_vals"]))
+    print("Saved recomputed summary:", file_path)
 
-    # if "optimal_weights" in summary:
-    #     print("optimal_weights:", list(summary["optimal_weights"]))
-    #     print("total_power:", summary["total_power"])
-    #     print("aom_voltage:", summary["aom_voltage"])
+    # -------------------------------------------------------------------------
+    # Plot only selected NVs. Do not plot all 1176 with block=True.
+    # -------------------------------------------------------------------------
+    inspect_nv_inds = [0, 1, 2, 3, 10, 50, 100, 500, 800]
+    for nv_ind in inspect_nv_inds:
+        if nv_ind >= int(analyzed["num_nvs"]):
+            continue
 
-    # # add metadata to saved summary
-    # summary["source_analyzed_file"] = analyzed_file_id
-    # summary["nv_checked"] = nv_ind
-    # summary["single_nv_result"] = {
-    #     "nv_ind": int(nv_ind),
-    #     "opt_step": float(opt_step),
-    #     "opt_prep": float(opt_prep),
-    #     "opt_readout": float(opt_readout),
-    #     "opt_score": float(opt_score),
-    # }
+        opt_step, opt_prep, opt_readout, opt_score = recompute_optimal_from_processed(
+            analyzed,
+            nv_ind=nv_ind,
+            weights=new_weights,
+        )
 
-    # summary_to_save = make_json_safe(summary)
+        print(
+            f"NV {nv_ind}: opt_step={opt_step:.3f}, "
+            f"prep={opt_prep:.3f}, readout={opt_readout:.3f}, "
+            f"score={opt_score:.3f}"
+        )
 
-    # timestamp = dm.get_time_stamp()
-    # weights_str = "_".join(str(w) for w in new_weights)
-    # file_name = f"recomputed_summary_w_{weights_str}_{analyzed_file_id}"
-    # file_path = dm.get_file_path(__file__, timestamp, file_name)
-    # dm.save_raw_data(summary_to_save, file_path)
+        plot_processed_nv_metrics(
+            analyzed,
+            nv_ind=nv_ind,
+            weights=new_weights,
+        )
 
-    # print(f"Saved recomputed summary to: {file_path}")
+        try:
+            opt_info = recompute_optimal_step_index_from_processed(
+                analyzed,
+                nv_ind=nv_ind,
+                weights=new_weights,
+                skip_first=2,
+            )
 
-    # # 3) plot metric curves for one NV
-    # fig1 = plot_processed_nv_metrics(analyzed, nv_ind=nv_ind, weights=new_weights)
+            opt_step_ind = opt_info["step_ind"]
 
-    # # 4) plot one saved reference histogram at a chosen step
-    # fig2 = plot_ref_histogram_from_processed(
-    #     analyzed,
-    #     nv_ind=nv_ind,
-    #     step_ind=8,
-    #     density=True,
-    # )
+            print(
+                f"Plotting optimal histogram for NV {nv_ind}: "
+                f"step_ind={opt_step_ind}, "
+                f"step_val={opt_info['step_val']:.3f}"
+            )
 
-    # kpl.show(block=True)
+            plot_ref_histogram_from_processed(
+                analyzed,
+                nv_ind=nv_ind,
+                step_ind=opt_step_ind,
+                density=True,
+            )
+
+        except Exception as e:
+            print(f"Could not plot optimal histogram for NV {nv_ind}: {e}")
+
+    kpl.show(block=True)

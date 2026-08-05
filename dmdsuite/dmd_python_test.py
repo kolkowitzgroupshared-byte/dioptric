@@ -121,21 +121,22 @@
 
 
 
-# import labrad
+import labrad
 
-# cxn = labrad.connect(username="", password="")
-# dmd = cxn.dmd_dlp6500
+cxn = labrad.connect(username="", password="")
+dmd = cxn.dmd_dlp6500
 
-# print(dmd.get_state())
+print(dmd.get_state())
 
-# input("Press Enter to PASS all...")
-# dmd.pass_all(False)
+input("Press Enter to PASS all...")
+dmd.pass_all(False)
 
-# input("Press Enter to BLOCK all...")
-# dmd.block_all()
 
-# input("Press Enter to PASS all again...")
-# dmd.pass_all(False)
+input("Press Enter to BLOCK all...")
+dmd.block_all()
+
+input("Press Enter to PASS all again...")
+dmd.pass_all(False)
 
 
 # print("Initial state:")
