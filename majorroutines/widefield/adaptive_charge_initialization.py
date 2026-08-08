@@ -1443,7 +1443,16 @@ def analyze_and_plot_final_check(
     # ------------------------------------------------------------------
     # Plot only the per-run summary
     # ------------------------------------------------------------------
+    mode_labels = {
+        "old": "Standard conditional initialization",
+        "dmd_all_on": "DMD all-on control",
+        "dmd_block_confirmed": "DMD blocks confirmed NVs",
+    }
 
+    mode_label = mode_labels.get(
+        mode,
+        str(mode).replace("_", " "),
+    )
     fig, ax = plt.subplots(
         figsize=(7.5, 5.5),
     )
@@ -1525,7 +1534,8 @@ def analyze_and_plot_final_check(
     )
 
     fig.suptitle(
-        "Adaptive initialization: independent final verification",
+        f"Adaptive initialization: independent final verification\n"
+        f"Mode: {mode_label}",
         fontsize=15,
     )
 
@@ -3536,8 +3546,8 @@ if __name__ == "__main__":
         # file_stem="2026_07_19-01_02_13-qnami-nv0_2026_02_20-dmd_block_confirmed", 
         # file_stem = "2026_07_21-16_15_53-qnami-nv0_2026_02_20-dmd_block_confirmed",
         # file_stem = "2026_07_19-21_29_05-qnami-nv0_2026_02_20-dmd_block_confirmed",
-        # file_stem = "2026_08_03-19_50_45-qnami-nv0_2026_02_20-dmd_all_on",
-        file_stem = "2026_08_04-11_58_06-qnami-nv0_2026_02_20-dmd_block_confirmed",
+        file_stem = "2026_08_04-13_30_16-qnami-nv0_2026_02_20-dmd_all_on",
+        # file_stem = "2026_08_04-13_31_58-qnami-nv0_2026_02_20-dmd_block_confirmed",
         load_npz=True)
 
     timestamp = raw_data["timestamp"]

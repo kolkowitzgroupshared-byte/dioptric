@@ -281,9 +281,9 @@ def do_adaptive_charge_initialization(nv_list):
         mode="dmd_block_confirmed",
         # mode="dmd_all_on",
         dmd_indices=None,      # full nv_list, DMD index = nv_list index
-        dmd_radius_px=10,
+        dmd_radius_px=11,
         dmd_plane=230,
-        confirm_margin_counts=0.0,
+        confirm_margin_counts=1.0,
         save_images=True,
         save_images_avg_reps=False,
         save_data=True,
@@ -1609,19 +1609,19 @@ def do_opx_constant_ac():
     # )
     # opx.constant_ac([1])  # Just laser
     # Green
-    # opx.constant_ac(
-    #     [4],  # Digital channels
-    #     [3, 4],  # Analog channels
-    #     [0.08, 0.08],  # Analog voltages
-    #     [101.0, 101.0],  # Analog frequencies
-    # )
-    # Green + red
     opx.constant_ac(
-        [4, 1],  # Digital channels
-        [3, 4, 2, 6],  # Analog channels
-        [0.08, 0.08, 0.08, 0.08],  # Analog voltages;
-        [126.958, 127.769, 90.817, 92.654],
+        [4],  # Digital channels
+        [3, 4],  # Analog channels
+        [0.02, 0.02],  # Analog voltages
+        [101.0, 101.0],  # Analog frequencies
     )
+    # Green + red
+    # opx.constant_ac(
+    #     [4, 1],  # Digital channels
+    #     [3, 4, 2, 6],  # Analog channels
+    #     [0.08, 0.08, 0.08, 0.08],  # Analog voltages;
+    #     [126.958, 127.769, 90.817, 92.654],
+    # )
     # green_coords_list = [
     #     [97.763, 98.184],
     #     [73.727, 115.462],
@@ -1842,7 +1842,7 @@ if __name__ == "__main__":
     date_str = "2026_02_20"
     sample_coords = [-1.20, -0.75]
     z_coord = -1.7
-    # z_coord = -3.7
+    # z_coord = -3.9
     
     config = common.get_config_dict()
     file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
@@ -1924,7 +1924,9 @@ if __name__ == "__main__":
         # file_stem = "2026_07_19-00_47_30-single_step_charge_hist_single_cpu_2026_07_19-00_17_00-qnami-nv0_2026_02_20",
         # file_stem = "2026_07_20-17_07_53-single_step_charge_hist_single_cpu_2026_07_20-17_04_32-qnami-nv0_2026_02_20",
         # file_stem = "2026_07_21-16_11_27-single_step_charge_hist_single_cpu_2026_07_21-16_08_28-qnami-nv0_2026_02_20",
-        file_stem = "2026_07_23-00_37_58-single_step_charge_hist_single_cpu_2026_07_22-22_20_35-qnami-nv0_2026_02_20",
+        # file_stem = "2026_07_23-00_37_58-single_step_charge_hist_single_cpu_2026_07_22-22_20_35-qnami-nv0_2026_02_20",
+        # file_stem = "2026_08_04-13_25_01-single_step_charge_hist_single_cpu_2026_08_04-13_21_07-qnami-nv0_2026_02_20",
+        file_stem = "2026_08_04-16_28_51-single_step_charge_hist_single_cpu_2026_08_04-16_25_34-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
@@ -1989,7 +1991,7 @@ if __name__ == "__main__":
     num_nvs = len(pixel_coords_list)
     # threshold_list = [None] * num_nvs
     scc_duration_list = [88] * num_nvs
-    pol_duration_list = [2000] * num_nvs
+    pol_duration_list = [10000] * num_nvs
 
     # -------------------------------------------
     # amplitudes

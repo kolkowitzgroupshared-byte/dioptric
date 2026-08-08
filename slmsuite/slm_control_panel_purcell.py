@@ -367,7 +367,7 @@ data_spot_weight = dm.get_raw_data(
     file_stem="2026_07_22-15_53_45-reoptimized_slm_score_survival_focused_2026_07_22-04_39_34-qnami-nv0_2026_02_20"
 )
 # spot_weights = data_spot_weight["optimal_weights"]
-spot_weights  = data_spot_weight["slm_amplitude_weight"]
+# spot_weights  = data_spot_weight["slm_amplitude_weight"]
 # spot_weights = data_spot_weight["slm_mean_norm_weight_clipped"]
 # # spot_weights = np.squeeze(spot_weights)
 # sys.exit()
@@ -433,7 +433,7 @@ def compute_and_write_nvs_phase():
         shape=(4096, 2048),
         spot_vectors=thorcam_coords_xy,
         basis="ij",
-        spot_amp=spot_weights,
+        # spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally
@@ -458,7 +458,7 @@ def compute_and_write_nvs_phase():
     # cam_plot()
     
 def write_pre_computed_nvs_phase():
-    phase = np.load("slmsuite\computed_phase\slm_phase_75nvs_20250605_181402.npy")
+    phase = np.load("slmsuite\computed_phase\slm_phase_415nvs_20260805_144355.npy")
     slm.write(phase, settle=True)
     # cam_plot()
 
@@ -529,8 +529,8 @@ try:
     # wavefront_calibration()
     # load_wavefront_calibration()
     
-    compute_and_write_nvs_phase()
-    # write_pre_computed_nvs_phase()
+    # compute_and_write_nvs_phase()
+    write_pre_computed_nvs_phase()
     
     # calibration_triangle()
     # write_pre_computed_triangle()

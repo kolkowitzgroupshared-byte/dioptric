@@ -30,13 +30,18 @@ from __future__ import annotations
 import sys
 import copy
 import json
+import csv
 import time
 import traceback
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize, TwoSlopeNorm
+from scipy.optimize import curve_fit
+from scipy.ndimage import gaussian_filter
+from scipy.stats import pearsonr, spearmanr
 
 from majorroutines.widefield import base_routine
 from utils import data_manager as dm
@@ -44,9 +49,6 @@ from utils import kplotlib as kpl
 from utils import tool_belt as tb
 from utils import widefield
 from utils.constants import VirtualLaserKey
-
-import csv
-from scipy.optimize import curve_fit
 
 # =============================================================================
 # Basic helpers
@@ -2612,6 +2614,287 @@ def load_wait_sweep(
     analyses = [analyses[ind] for ind in order]
     return raw_datasets, analyses
 
+def filter_analyses_for_wait_trend(
+    analyses,
+    exclude_nv_inds=None,
+):
+    """
+    Create filtered particle-analysis dictionaries and recompute all
+    run-level quantities used by summarize_wait_sweep().
+
+    The original analysis dictionaries are not modified.
+    """
+
+    if exclude_nv_inds is None:
+        exclude_nv_inds = []
+
+    exclude_nv_inds = np.unique(
+        np.asarray(
+            exclude_nv_inds,
+            dtype=int,
+        )
+    )
+
+    filtered_analyses = []
+
+    for analysis in analyses:
+        out = dict(analysis)
+
+        initial_mask = np.asarray(
+            analysis["initial_nvm_mask"],
+            dtype=bool,
+        )
+
+        final_mask = np.asarray(
+            analysis["final_nvm_mask"],
+            dtype=bool,
+        )
+
+        candidate_mask = np.asarray(
+            analysis[
+                "candidate_nvm_to_nv0_mask"
+            ],
+            dtype=bool,
+        )
+
+        retained_mask = np.asarray(
+            analysis["retained_nvm_mask"],
+            dtype=bool,
+        )
+
+        final_ambiguous_mask = np.asarray(
+            analysis["final_ambiguous_mask"],
+            dtype=bool,
+        )
+
+        num_nvs, num_runs = initial_mask.shape
+
+        keep_mask = np.ones(
+            num_nvs,
+            dtype=bool,
+        )
+
+        valid_excluded = exclude_nv_inds[
+            (exclude_nv_inds >= 0)
+            & (exclude_nv_inds < num_nvs)
+        ]
+
+        keep_mask[
+            valid_excluded
+        ] = False
+
+        original_nv_inds = np.where(
+            keep_mask
+        )[0]
+
+        # ----------------------------------------------------------
+        # Apply the same NV filter to every dataset
+        # ----------------------------------------------------------
+
+        initial_filtered = initial_mask[
+            keep_mask
+        ]
+
+        final_filtered = final_mask[
+            keep_mask
+        ]
+
+        candidate_filtered = candidate_mask[
+            keep_mask
+        ]
+
+        retained_filtered = retained_mask[
+            keep_mask
+        ]
+
+        ambiguous_filtered = (
+            initial_filtered
+            & final_ambiguous_mask[
+                keep_mask
+            ]
+        )
+
+        num_filtered_nvs = int(
+            np.sum(keep_mask)
+        )
+
+        # ----------------------------------------------------------
+        # Recompute per-run counts
+        # ----------------------------------------------------------
+
+        num_initial_by_run = np.sum(
+            initial_filtered,
+            axis=0,
+        )
+
+        num_final_by_run = np.sum(
+            final_filtered,
+            axis=0,
+        )
+
+        num_candidates_by_run = np.sum(
+            candidate_filtered,
+            axis=0,
+        )
+
+        num_retained_by_run = np.sum(
+            retained_filtered,
+            axis=0,
+        )
+
+        num_ambiguous_by_run = np.sum(
+            ambiguous_filtered,
+            axis=0,
+        )
+
+        retention_by_run = np.full(
+            num_runs,
+            np.nan,
+            dtype=float,
+        )
+
+        event_fraction_by_run = np.full(
+            num_runs,
+            np.nan,
+            dtype=float,
+        )
+
+        good_runs = (
+            num_initial_by_run > 0
+        )
+
+        retention_by_run[
+            good_runs
+        ] = (
+            num_retained_by_run[good_runs]
+            / num_initial_by_run[good_runs]
+        )
+
+        event_fraction_by_run[
+            good_runs
+        ] = (
+            num_candidates_by_run[good_runs]
+            / num_initial_by_run[good_runs]
+        )
+
+        # ----------------------------------------------------------
+        # Recompute per-NV probabilities
+        # ----------------------------------------------------------
+
+        eligible_trials_by_nv = np.sum(
+            initial_filtered,
+            axis=1,
+        )
+
+        event_trials_by_nv = np.sum(
+            candidate_filtered,
+            axis=1,
+        )
+
+        event_probability_by_nv = np.full(
+            num_filtered_nvs,
+            np.nan,
+            dtype=float,
+        )
+
+        good_nv = (
+            eligible_trials_by_nv > 0
+        )
+
+        event_probability_by_nv[
+            good_nv
+        ] = (
+            event_trials_by_nv[good_nv]
+            / eligible_trials_by_nv[good_nv]
+        )
+
+        # ----------------------------------------------------------
+        # Update the copy
+        # ----------------------------------------------------------
+
+        out.update(
+            {
+                "num_nvs": num_filtered_nvs,
+                "excluded_nv_inds": (
+                    valid_excluded.tolist()
+                ),
+                "original_nv_inds": (
+                    original_nv_inds.tolist()
+                ),
+
+                "initial_nvm_mask": (
+                    initial_filtered.tolist()
+                ),
+                "final_nvm_mask": (
+                    final_filtered.tolist()
+                ),
+                "candidate_nvm_to_nv0_mask": (
+                    candidate_filtered.tolist()
+                ),
+                "retained_nvm_mask": (
+                    retained_filtered.tolist()
+                ),
+
+                "num_initial_nvm_by_run": (
+                    num_initial_by_run.tolist()
+                ),
+                "num_final_nvm_by_run": (
+                    num_final_by_run.tolist()
+                ),
+                "num_candidates_by_run": (
+                    num_candidates_by_run.tolist()
+                ),
+                "num_retained_by_run": (
+                    num_retained_by_run.tolist()
+                ),
+                "num_ambiguous_by_run": (
+                    num_ambiguous_by_run.tolist()
+                ),
+
+                "retention_by_run": (
+                    retention_by_run.tolist()
+                ),
+                "event_fraction_by_run": (
+                    event_fraction_by_run.tolist()
+                ),
+
+                "eligible_trials_by_nv": (
+                    eligible_trials_by_nv.tolist()
+                ),
+                "event_trials_by_nv": (
+                    event_trials_by_nv.tolist()
+                ),
+                "event_probability_by_nv": (
+                    event_probability_by_nv.tolist()
+                ),
+
+                "mean_initial_nvm": float(
+                    np.mean(num_initial_by_run)
+                ),
+                "mean_final_nvm": float(
+                    np.mean(num_final_by_run)
+                ),
+                "mean_candidates_per_run": float(
+                    np.mean(
+                        num_candidates_by_run
+                    )
+                ),
+                "mean_retention": float(
+                    np.nanmean(
+                        retention_by_run
+                    )
+                ),
+                "mean_event_fraction": float(
+                    np.nanmean(
+                        event_fraction_by_run
+                    )
+                ),
+            }
+        )
+
+        filtered_analyses.append(out)
+
+    return filtered_analyses
 
 def summarize_wait_sweep(
     analyses: Sequence[Dict[str, Any]],
@@ -3359,15 +3642,35 @@ def run_particle_memory_dark_wait_comparison_analysis(
     recompute_analysis: bool = False,
     save_fig: bool = True,
     save_csv: bool = True,
+    exclude_nv_inds=None,
 ):
     raw_datasets, analyses = load_wait_sweep(
         file_stems,
         recompute_analysis=recompute_analysis,
     )
-    summary = summarize_wait_sweep(analyses)
-    print_wait_sweep_table(summary)
-    # fig = plot_wait_sweep_summary(summary)
-    fig = plot_wait_sweep_summary(summary, zoom_retention_axes=True,)
+    
+    if exclude_nv_inds is not None:
+        analyses_for_summary = (
+            filter_analyses_for_wait_trend(
+                analyses,
+                exclude_nv_inds=exclude_nv_inds,
+            )
+        )
+    else:
+        analyses_for_summary = analyses
+
+    summary = summarize_wait_sweep(
+        analyses_for_summary
+    )
+
+    print_wait_sweep_table(
+        summary
+    )
+
+    fig = plot_wait_sweep_summary(
+        summary,
+        zoom_retention_axes=True,
+    )
 
 
     timestamp = dm.get_time_stamp()
@@ -3389,15 +3692,15 @@ def run_particle_memory_dark_wait_comparison_analysis(
     return {
         "raw_datasets": raw_datasets,
         "analyses": analyses,
+        "filtered_analyses": analyses_for_summary,
+        "excluded_nv_inds": (
+            []
+            if exclude_nv_inds is None
+            else list(exclude_nv_inds)
+        ),
         "summary": summary,
         "fig": fig,
     }
-
-from typing import Any, Dict, Optional, Sequence
-
-import matplotlib.pyplot as plt
-import numpy as np
-from matplotlib.colors import Normalize, TwoSlopeNorm
 
 
 def plot_nv_loss_row_by_row(
@@ -3406,122 +3709,220 @@ def plot_nv_loss_row_by_row(
     subtract_zero_wait: bool = False,
     show_percent: bool = True,
     percentile_limit: float = 99.0,
+    exclude_nv_inds: Optional[Sequence[int]] = None,
+    max_zero_wait_loss_probability: Optional[float] = None,
+    min_zero_wait_eligible_runs: int = 5,
 ):
     """
     Plot per-NV charge-loss probability as a wait-time × NV-index heat map.
 
-    Rows:
-        Dark-wait datasets.
+    Bad actors can be removed in two ways:
 
-    Columns:
-        NV indices.
+        1. Manual exclusion:
+               exclude_nv_inds=[12, 57, 143]
 
-    Color:
-        Probability of a confident NV- -> NV0 transition.
+        2. Automatic exclusion using the 0 s control:
+               max_zero_wait_loss_probability=0.30
+               min_zero_wait_eligible_runs=10
+
+    An automatically excluded NV must:
+
+        - be initially verified in at least
+          ``min_zero_wait_eligible_runs`` runs; and
+        - show an NV- -> NV0 event probability at 0 s greater than or
+          equal to ``max_zero_wait_loss_probability``.
+
+    Excluded NVs remain at their original heat-map positions and appear gray.
+
+    The returned ``filtered_analyses`` contains recomputed run-level statistics
+    and can be passed to:
+
+        summarize_wait_sweep(...)
+        plot_wait_sweep_summary(...)
 
     Parameters
     ----------
     analyses:
-        Sequence of particle_analysis dictionaries.
+        Sequence of particle-analysis dictionaries.
 
     selected_waits_s:
-        Optional wait times to include, such as:
-            [0, 60, 300, 600, 1800]
-
-        None includes all wait times.
+        Wait times to include in the heat map. For each requested value,
+        the closest available dataset is selected.
 
     subtract_zero_wait:
-        False:
-            Plot the absolute loss probability.
-
-        True:
-            Plot excess loss relative to the 0 s dataset.
+        If True, subtract each NV's measured loss probability at 0 s.
 
     show_percent:
-        Show probability in percent instead of fractions.
+        If True, display probabilities in percent.
 
     percentile_limit:
-        Upper color limit percentile. This prevents a few unstable NVs
-        from making the rest of the heat map appear dark.
+        Percentile used for the color scale. This affects only the displayed
+        color range and does not exclude NVs.
+
+    exclude_nv_inds:
+        Original NV indices to exclude manually.
+
+    max_zero_wait_loss_probability:
+        Automatic bad-actor threshold based on the 0 s control.
+        Use None to disable automatic filtering.
+
+    min_zero_wait_eligible_runs:
+        Minimum number of eligible 0 s trials required before an NV can be
+        excluded automatically.
+
+    Returns
+    -------
+    result, fig
+
+    result contains:
+        wait_s
+        probability_matrix
+        filtered_probability_matrix
+        plot_matrix
+        eligible_matrix
+        event_matrix
+        excluded_nv_inds
+        automatically_excluded_nv_inds
+        manually_excluded_nv_inds
+        kept_nv_inds
+        filtered_analyses
     """
 
+    # ==============================================================
+    # Input checks
+    # ==============================================================
+
     if not analyses:
-        raise ValueError("No analyses were supplied.")
-
-    analyses = sorted(
-        analyses,
-        key=lambda analysis: float(analysis["dark_wait_s"]),
-    )
-
-    # --------------------------------------------------------------
-    # Select requested wait times
-    # --------------------------------------------------------------
-
-    if selected_waits_s is not None:
-        selected_analyses = []
-
-        for requested_wait in selected_waits_s:
-            closest_analysis = min(
-                analyses,
-                key=lambda analysis: abs(
-                    float(analysis["dark_wait_s"])
-                    - float(requested_wait)
-                ),
-            )
-
-            if closest_analysis not in selected_analyses:
-                selected_analyses.append(closest_analysis)
-
-        analyses = sorted(
-            selected_analyses,
-            key=lambda analysis: float(analysis["dark_wait_s"]),
+        raise ValueError(
+            "No analyses were supplied."
         )
 
-    wait_s = np.asarray(
-        [
-            float(analysis["dark_wait_s"])
-            for analysis in analyses
-        ],
-        dtype=float,
+    percentile_limit = float(
+        percentile_limit
     )
 
-    probability_rows = []
-    eligible_rows = []
-    event_rows = []
+    if not (
+        0.0 < percentile_limit <= 100.0
+    ):
+        raise ValueError(
+            "percentile_limit must lie in (0, 100]."
+        )
+
+    min_zero_wait_eligible_runs = int(
+        min_zero_wait_eligible_runs
+    )
+
+    if min_zero_wait_eligible_runs < 1:
+        raise ValueError(
+            "min_zero_wait_eligible_runs must be at least 1."
+        )
+
+    if max_zero_wait_loss_probability is not None:
+        max_zero_wait_loss_probability = float(
+            max_zero_wait_loss_probability
+        )
+
+        if not (
+            0.0
+            <= max_zero_wait_loss_probability
+            <= 1.0
+        ):
+            raise ValueError(
+                "max_zero_wait_loss_probability must lie in [0, 1]."
+            )
+
+    all_analyses = sorted(
+        list(analyses),
+        key=lambda analysis: float(
+            analysis["dark_wait_s"]
+        ),
+    )
+
+    # ==============================================================
+    # Validate mask shapes
+    # ==============================================================
+
+    required_mask_keys = (
+        "initial_nvm_mask",
+        "final_nvm_mask",
+        "final_ambiguous_mask",
+        "candidate_nvm_to_nv0_mask",
+        "retained_nvm_mask",
+    )
 
     reference_num_nvs = None
 
-    # --------------------------------------------------------------
-    # Calculate probability for each NV at each wait time
-    # --------------------------------------------------------------
+    for analysis in all_analyses:
+        mask_arrays = {}
 
-    for analysis in analyses:
-        initial_nvm_mask = np.asarray(
+        for key in required_mask_keys:
+            if key not in analysis:
+                raise KeyError(
+                    f"Analysis at dark wait "
+                    f"{analysis.get('dark_wait_s')} s "
+                    f"is missing {key!r}."
+                )
+
+            mask_arrays[key] = np.asarray(
+                analysis[key],
+                dtype=bool,
+            )
+
+        reference_shape = mask_arrays[
+            "initial_nvm_mask"
+        ].shape
+
+        if len(reference_shape) != 2:
+            raise ValueError(
+                "Expected masks with shape [nv, run]; "
+                f"got {reference_shape}."
+            )
+
+        for key, mask in mask_arrays.items():
+            if mask.shape != reference_shape:
+                raise ValueError(
+                    f"{key} has shape {mask.shape}, "
+                    f"but initial_nvm_mask has shape "
+                    f"{reference_shape}."
+                )
+
+        current_num_nvs = int(
+            reference_shape[0]
+        )
+
+        if reference_num_nvs is None:
+            reference_num_nvs = current_num_nvs
+
+        elif current_num_nvs != reference_num_nvs:
+            raise ValueError(
+                "The datasets contain different numbers of NVs."
+            )
+
+    num_nvs = int(
+        reference_num_nvs
+    )
+
+    # ==============================================================
+    # Helper: calculate per-NV event probability
+    # ==============================================================
+
+    def calculate_nv_probability(
+        analysis: Dict[str, Any],
+    ):
+        initial_mask = np.asarray(
             analysis["initial_nvm_mask"],
             dtype=bool,
         )
 
         event_mask = np.asarray(
-            analysis["candidate_nvm_to_nv0_mask"],
+            analysis[
+                "candidate_nvm_to_nv0_mask"
+            ],
             dtype=bool,
         )
 
-        if initial_nvm_mask.shape != event_mask.shape:
-            raise ValueError(
-                "initial_nvm_mask and candidate mask shapes differ."
-            )
-
-        num_nvs = initial_nvm_mask.shape[0]
-
-        if reference_num_nvs is None:
-            reference_num_nvs = num_nvs
-        elif num_nvs != reference_num_nvs:
-            raise ValueError(
-                "The datasets contain different numbers of NVs."
-            )
-
         eligible_count = np.sum(
-            initial_nvm_mask,
+            initial_mask,
             axis=1,
         ).astype(float)
 
@@ -3531,7 +3932,7 @@ def plot_nv_loss_row_by_row(
         ).astype(float)
 
         probability = np.full(
-            num_nvs,
+            initial_mask.shape[0],
             np.nan,
             dtype=float,
         )
@@ -3543,14 +3944,590 @@ def plot_nv_loss_row_by_row(
             / eligible_count[good]
         )
 
-        probability_rows.append(probability)
-        eligible_rows.append(eligible_count)
-        event_rows.append(event_count)
+        return (
+            probability,
+            eligible_count,
+            event_count,
+        )
+
+    # ==============================================================
+    # Find the 0 s control
+    # ==============================================================
+
+    zero_analyses = [
+        analysis
+        for analysis in all_analyses
+        if np.isclose(
+            float(analysis["dark_wait_s"]),
+            0.0,
+        )
+    ]
+
+    zero_analysis = (
+        zero_analyses[0]
+        if zero_analyses
+        else None
+    )
+
+    zero_required = (
+        subtract_zero_wait
+        or max_zero_wait_loss_probability is not None
+    )
+
+    if zero_required and zero_analysis is None:
+        raise ValueError(
+            "A 0 s dataset is required for zero-wait subtraction "
+            "or automatic bad-actor filtering."
+        )
+
+    if zero_analysis is not None:
+        (
+            zero_probability,
+            zero_eligible_count,
+            zero_event_count,
+        ) = calculate_nv_probability(
+            zero_analysis
+        )
+
+    else:
+        zero_probability = np.full(
+            num_nvs,
+            np.nan,
+            dtype=float,
+        )
+
+        zero_eligible_count = np.zeros(
+            num_nvs,
+            dtype=float,
+        )
+
+        zero_event_count = np.zeros(
+            num_nvs,
+            dtype=float,
+        )
+
+    # ==============================================================
+    # Manual filtering
+    # ==============================================================
+
+    manual_excluded_mask = np.zeros(
+        num_nvs,
+        dtype=bool,
+    )
+
+    if exclude_nv_inds is not None:
+        manual_inds = np.unique(
+            np.asarray(
+                exclude_nv_inds,
+                dtype=int,
+            )
+        )
+
+        invalid_inds = manual_inds[
+            (manual_inds < 0)
+            | (manual_inds >= num_nvs)
+        ]
+
+        if invalid_inds.size > 0:
+            raise IndexError(
+                "exclude_nv_inds contains invalid indices: "
+                f"{invalid_inds.tolist()}"
+            )
+
+        manual_excluded_mask[
+            manual_inds
+        ] = True
+
+    # ==============================================================
+    # Automatic filtering from the 0 s control
+    # ==============================================================
+
+    automatic_excluded_mask = np.zeros(
+        num_nvs,
+        dtype=bool,
+    )
+
+    if max_zero_wait_loss_probability is not None:
+        automatic_excluded_mask = (
+            np.isfinite(
+                zero_probability
+            )
+            & (
+                zero_eligible_count
+                >= min_zero_wait_eligible_runs
+            )
+            & (
+                zero_probability
+                >= max_zero_wait_loss_probability
+            )
+        )
+
+    # Combine manual and automatic filters.
+    excluded_mask = (
+        manual_excluded_mask
+        | automatic_excluded_mask
+    )
+
+    keep_mask = ~excluded_mask
+
+    excluded_nv_inds = np.where(
+        excluded_mask
+    )[0].astype(int)
+
+    manually_excluded_nv_inds = np.where(
+        manual_excluded_mask
+    )[0].astype(int)
+
+    automatically_excluded_nv_inds = np.where(
+        automatic_excluded_mask
+    )[0].astype(int)
+
+    kept_nv_inds = np.where(
+        keep_mask
+    )[0].astype(int)
+
+    if kept_nv_inds.size == 0:
+        raise ValueError(
+            "The requested filter excludes every NV."
+        )
+
+    print(
+        "\n"
+        + "=" * 78
+    )
+    print(
+        "PER-NV WAIT-SWEEP FILTERING"
+    )
+    print(
+        "=" * 78
+    )
+
+    print(
+        "Total NVs:",
+        num_nvs,
+    )
+
+    print(
+        "Manually excluded:",
+        manually_excluded_nv_inds.tolist(),
+    )
+
+    print(
+        "Automatically excluded from 0 s control:",
+        automatically_excluded_nv_inds.tolist(),
+    )
+
+    print(
+        "Combined excluded:",
+        excluded_nv_inds.tolist(),
+    )
+
+    print(
+        "NVs retained:",
+        int(kept_nv_inds.size),
+        "/",
+        num_nvs,
+    )
+
+    # ==============================================================
+    # Create filtered analyses for the wait-time trend
+    # ==============================================================
+
+    filtered_analyses = []
+
+    for analysis in all_analyses:
+        filtered_analysis = dict(
+            analysis
+        )
+
+        initial_mask = np.asarray(
+            analysis["initial_nvm_mask"],
+            dtype=bool,
+        )[keep_mask]
+
+        final_mask = np.asarray(
+            analysis["final_nvm_mask"],
+            dtype=bool,
+        )[keep_mask]
+
+        final_ambiguous_mask = np.asarray(
+            analysis["final_ambiguous_mask"],
+            dtype=bool,
+        )[keep_mask]
+
+        candidate_mask = np.asarray(
+            analysis[
+                "candidate_nvm_to_nv0_mask"
+            ],
+            dtype=bool,
+        )[keep_mask]
+
+        retained_mask = np.asarray(
+            analysis["retained_nvm_mask"],
+            dtype=bool,
+        )[keep_mask]
+
+        (
+            num_filtered_nvs,
+            num_runs,
+        ) = initial_mask.shape
+
+        # ----------------------------------------------------------
+        # Recalculate run-level counts
+        # ----------------------------------------------------------
+
+        num_initial_by_run = np.sum(
+            initial_mask,
+            axis=0,
+        )
+
+        num_final_by_run = np.sum(
+            final_mask,
+            axis=0,
+        )
+
+        num_candidates_by_run = np.sum(
+            candidate_mask,
+            axis=0,
+        )
+
+        num_retained_by_run = np.sum(
+            retained_mask,
+            axis=0,
+        )
+
+        num_ambiguous_by_run = np.sum(
+            initial_mask
+            & final_ambiguous_mask,
+            axis=0,
+        )
+
+        # ----------------------------------------------------------
+        # Recalculate run-level fractions
+        # ----------------------------------------------------------
+
+        retention_by_run = np.full(
+            num_runs,
+            np.nan,
+            dtype=float,
+        )
+
+        event_fraction_by_run = np.full(
+            num_runs,
+            np.nan,
+            dtype=float,
+        )
+
+        good_runs = (
+            num_initial_by_run > 0
+        )
+
+        retention_by_run[
+            good_runs
+        ] = (
+            num_retained_by_run[
+                good_runs
+            ]
+            / num_initial_by_run[
+                good_runs
+            ]
+        )
+
+        event_fraction_by_run[
+            good_runs
+        ] = (
+            num_candidates_by_run[
+                good_runs
+            ]
+            / num_initial_by_run[
+                good_runs
+            ]
+        )
+
+        # ----------------------------------------------------------
+        # Recalculate per-NV event probabilities
+        # ----------------------------------------------------------
+
+        eligible_trials_by_nv = np.sum(
+            initial_mask,
+            axis=1,
+        )
+
+        event_trials_by_nv = np.sum(
+            candidate_mask,
+            axis=1,
+        )
+
+        event_probability_by_nv = np.full(
+            num_filtered_nvs,
+            np.nan,
+            dtype=float,
+        )
+
+        good_nv = (
+            eligible_trials_by_nv > 0
+        )
+
+        event_probability_by_nv[
+            good_nv
+        ] = (
+            event_trials_by_nv[
+                good_nv
+            ]
+            / eligible_trials_by_nv[
+                good_nv
+            ]
+        )
+
+        if np.any(
+            np.isfinite(
+                retention_by_run
+            )
+        ):
+            mean_retention = float(
+                np.nanmean(
+                    retention_by_run
+                )
+            )
+        else:
+            mean_retention = np.nan
+
+        if np.any(
+            np.isfinite(
+                event_fraction_by_run
+            )
+        ):
+            mean_event_fraction = float(
+                np.nanmean(
+                    event_fraction_by_run
+                )
+            )
+        else:
+            mean_event_fraction = np.nan
+
+        filtered_analysis.update(
+            {
+                "num_nvs": int(
+                    num_filtered_nvs
+                ),
+                "num_runs": int(
+                    num_runs
+                ),
+                "original_nv_inds": (
+                    kept_nv_inds.tolist()
+                ),
+                "excluded_nv_inds": (
+                    excluded_nv_inds.tolist()
+                ),
+                "initial_nvm_mask": (
+                    initial_mask.tolist()
+                ),
+                "final_nvm_mask": (
+                    final_mask.tolist()
+                ),
+                "final_ambiguous_mask": (
+                    final_ambiguous_mask.tolist()
+                ),
+                "candidate_nvm_to_nv0_mask": (
+                    candidate_mask.tolist()
+                ),
+                "retained_nvm_mask": (
+                    retained_mask.tolist()
+                ),
+                "num_initial_nvm_by_run": (
+                    num_initial_by_run.tolist()
+                ),
+                "num_final_nvm_by_run": (
+                    num_final_by_run.tolist()
+                ),
+                "num_candidates_by_run": (
+                    num_candidates_by_run.tolist()
+                ),
+                "num_retained_by_run": (
+                    num_retained_by_run.tolist()
+                ),
+                "num_ambiguous_by_run": (
+                    num_ambiguous_by_run.tolist()
+                ),
+                "retention_by_run": (
+                    retention_by_run.tolist()
+                ),
+                "event_fraction_by_run": (
+                    event_fraction_by_run.tolist()
+                ),
+                "eligible_trials_by_nv": (
+                    eligible_trials_by_nv.tolist()
+                ),
+                "event_trials_by_nv": (
+                    event_trials_by_nv.tolist()
+                ),
+                "event_probability_by_nv": (
+                    event_probability_by_nv.tolist()
+                ),
+                "mean_initial_nvm": float(
+                    np.mean(
+                        num_initial_by_run
+                    )
+                ),
+                "mean_final_nvm": float(
+                    np.mean(
+                        num_final_by_run
+                    )
+                ),
+                "mean_candidates_per_run": float(
+                    np.mean(
+                        num_candidates_by_run
+                    )
+                ),
+                "median_candidates_per_run": float(
+                    np.median(
+                        num_candidates_by_run
+                    )
+                ),
+                "mean_retention": (
+                    mean_retention
+                ),
+                "mean_event_fraction": (
+                    mean_event_fraction
+                ),
+                "filter_description": (
+                    "Bad-actor NVs removed before "
+                    "wait-sweep trend calculation."
+                ),
+            }
+        )
+
+        # ----------------------------------------------------------
+        # Filter other fields whose first dimension is NV index
+        # ----------------------------------------------------------
+
+        per_nv_keys = (
+            "initial_counts",
+            "final_counts",
+            "final_nv0_confident_mask",
+            "coords_xy",
+        )
+
+        for key in per_nv_keys:
+            value = analysis.get(
+                key,
+                None,
+            )
+
+            if value is None:
+                continue
+
+            array = np.asarray(
+                value
+            )
+
+            if (
+                array.ndim >= 1
+                and array.shape[0] == num_nvs
+            ):
+                filtered_analysis[
+                    key
+                ] = array[
+                    keep_mask
+                ].tolist()
+
+        # Cluster indices refer to the full original NV list.
+        # Remove them instead of returning stale cluster information.
+        for key in (
+            "cluster_components_by_run",
+            "max_cluster_size_by_run",
+            "num_clusters_by_run",
+            "num_large_clusters_by_run",
+        ):
+            filtered_analysis.pop(
+                key,
+                None,
+            )
+
+        filtered_analyses.append(
+            filtered_analysis
+        )
+
+    # ==============================================================
+    # Select wait times for the heat map
+    # ==============================================================
+
+    selected_analyses = all_analyses
+
+    if selected_waits_s is not None:
+        selected_analyses = []
+
+        for requested_wait in selected_waits_s:
+            closest_analysis = min(
+                all_analyses,
+                key=lambda analysis: abs(
+                    float(
+                        analysis["dark_wait_s"]
+                    )
+                    - float(
+                        requested_wait
+                    )
+                ),
+            )
+
+            if (
+                closest_analysis
+                not in selected_analyses
+            ):
+                selected_analyses.append(
+                    closest_analysis
+                )
+
+        selected_analyses = sorted(
+            selected_analyses,
+            key=lambda analysis: float(
+                analysis["dark_wait_s"]
+            ),
+        )
+
+    wait_s = np.asarray(
+        [
+            float(
+                analysis["dark_wait_s"]
+            )
+            for analysis in selected_analyses
+        ],
+        dtype=float,
+    )
+
+    # ==============================================================
+    # Calculate each heat-map row
+    # ==============================================================
+
+    probability_rows = []
+    eligible_rows = []
+    event_rows = []
+
+    for analysis in selected_analyses:
+        (
+            probability,
+            eligible_count,
+            event_count,
+        ) = calculate_nv_probability(
+            analysis
+        )
+
+        probability_rows.append(
+            probability
+        )
+
+        eligible_rows.append(
+            eligible_count
+        )
+
+        event_rows.append(
+            event_count
+        )
 
     probability_matrix = np.asarray(
         probability_rows,
         dtype=float,
-    )  # shape = [wait, NV]
+    )
 
     eligible_matrix = np.asarray(
         eligible_rows,
@@ -3562,73 +4539,130 @@ def plot_nv_loss_row_by_row(
         dtype=float,
     )
 
-    # --------------------------------------------------------------
+   # ==============================================================
+    # Physically remove excluded NVs from all displayed matrices
+    # ==============================================================
+
+    filtered_probability_matrix = probability_matrix[
+        :,
+        keep_mask,
+    ]
+
+    filtered_eligible_matrix = eligible_matrix[
+        :,
+        keep_mask,
+    ]
+
+    filtered_event_matrix = event_matrix[
+        :,
+        keep_mask,
+    ]
+
+    filtered_zero_probability = zero_probability[
+        keep_mask
+    ]
+
+
+    # Defensive shape checks
+    if (
+        filtered_probability_matrix.shape[1]
+        != filtered_zero_probability.size
+    ):
+        raise RuntimeError(
+            "Filtered probability matrix and zero-wait vector "
+            "have inconsistent NV dimensions: "
+            f"{filtered_probability_matrix.shape} versus "
+            f"{filtered_zero_probability.shape}."
+        )
+
+    if (
+        filtered_eligible_matrix.shape
+        != filtered_probability_matrix.shape
+    ):
+        raise RuntimeError(
+            "Filtered eligible and probability matrices "
+            "have inconsistent shapes."
+        )
+
+    if (
+        filtered_event_matrix.shape
+        != filtered_probability_matrix.shape
+    ):
+        raise RuntimeError(
+            "Filtered event and probability matrices "
+            "have inconsistent shapes."
+        )
+
+
+    # ==============================================================
     # Optional zero-wait subtraction
-    # --------------------------------------------------------------
+    # ==============================================================
 
     if subtract_zero_wait:
-        zero_inds = np.where(
-            np.isclose(wait_s, 0.0)
-        )[0]
-
-        if zero_inds.size == 0:
-            raise ValueError(
-                "A 0 s dataset is required for baseline subtraction."
-            )
-
-        zero_probability = probability_matrix[
-            int(zero_inds[0])
-        ]
-
         plot_matrix = (
-            probability_matrix
-            - zero_probability[None, :]
+            filtered_probability_matrix
+            - filtered_zero_probability[
+                None,
+                :,
+            ]
         )
 
         title = (
-            "Per-NV excess charge loss above the 0 s baseline"
+            "Per-NV excess charge loss "
+            "above the 0 s baseline"
         )
 
         colorbar_label = (
             "Excess loss probability"
         )
+
     else:
-        plot_matrix = probability_matrix.copy()
+        plot_matrix = (
+            filtered_probability_matrix.copy()
+        )
 
         title = (
-            "Per-NV charge loss at different dark waits"
+            "Per-NV charge loss at "
+            "different dark waits"
         )
 
         colorbar_label = (
             "NV$^- \\rightarrow$ NV$^0$ probability"
-        )
+    )
 
     if show_percent:
-        plot_matrix = 100.0 * plot_matrix
+        plot_matrix = (
+            100.0 * plot_matrix
+        )
+
         colorbar_label += " (%)"
 
-    # Mask NVs that were never initially verified.
+    # Excluded and unavailable entries appear gray.
     masked_matrix = np.ma.masked_invalid(
         plot_matrix
     )
 
     finite_values = plot_matrix[
-        np.isfinite(plot_matrix)
+        np.isfinite(
+            plot_matrix
+        )
     ]
 
     if finite_values.size == 0:
         raise ValueError(
-            "No finite loss probabilities were found."
+            "No finite loss probabilities remain after filtering."
         )
 
-    # --------------------------------------------------------------
+    # ==============================================================
     # Color normalization
-    # --------------------------------------------------------------
+    # ==============================================================
 
     if subtract_zero_wait:
         color_limit = float(
             np.nanpercentile(
-                np.abs(finite_values),
+                np.abs(
+                    finite_values
+                ),
                 percentile_limit,
             )
         )
@@ -3674,11 +4708,13 @@ def plot_nv_loss_row_by_row(
         "lightgray"
     )
 
-    # --------------------------------------------------------------
+    # ==============================================================
     # Plot
-    # --------------------------------------------------------------
+    # ==============================================================
 
-    num_waits, num_nvs = plot_matrix.shape
+    num_waits = int(
+        plot_matrix.shape[0]
+    )
 
     fig_height = max(
         4.0,
@@ -3702,17 +4738,30 @@ def plot_nv_loss_row_by_row(
     wait_labels = []
 
     for current_wait_s in wait_s:
-        if np.isclose(current_wait_s, 0.0):
+        if np.isclose(
+            current_wait_s,
+            0.0,
+        ):
             label = "0 s"
-        elif current_wait_s < 60:
-            label = f"{current_wait_s:g} s"
-        else:
-            label = f"{current_wait_s / 60:g} min"
 
-        wait_labels.append(label)
+        elif current_wait_s < 60:
+            label = (
+                f"{current_wait_s:g} s"
+            )
+
+        else:
+            label = (
+                f"{current_wait_s / 60:g} min"
+            )
+
+        wait_labels.append(
+            label
+        )
 
     ax.set_yticks(
-        np.arange(num_waits)
+        np.arange(
+            num_waits
+        )
     )
 
     ax.set_yticklabels(
@@ -3720,7 +4769,7 @@ def plot_nv_loss_row_by_row(
     )
 
     ax.set_xlabel(
-        "NV index"
+        "Original NV index"
     )
 
     ax.set_ylabel(
@@ -3731,9 +4780,12 @@ def plot_nv_loss_row_by_row(
         title
     )
 
-    # Horizontal lines make each time row easier to identify.
+    # Horizontal boundaries separate the wait-time rows.
     for boundary in (
-        np.arange(num_waits + 1) - 0.5
+        np.arange(
+            num_waits + 1
+        )
+        - 0.5
     ):
         ax.axhline(
             boundary,
@@ -3752,22 +4804,88 @@ def plot_nv_loss_row_by_row(
         colorbar_label
     )
 
-    return {
+    # ==============================================================
+    # Return numerical results
+    # ==============================================================
+
+    result = {
         "wait_s": wait_s,
-        "probability_matrix": probability_matrix,
-        "plot_matrix": plot_matrix,
-        "eligible_matrix": eligible_matrix,
-        "event_matrix": event_matrix,
-    }, fig
-    
 
-from typing import Any, Dict
+        # Complete original matrices: wait × 631 NVs
+        "probability_matrix": (
+            probability_matrix
+        ),
+        "eligible_matrix": (
+            eligible_matrix
+        ),
+        "event_matrix": (
+            event_matrix
+        ),
+        "zero_wait_probability": (
+            zero_probability
+        ),
 
-import matplotlib.pyplot as plt
-import numpy as np
-from scipy.ndimage import gaussian_filter
-from scipy.stats import pearsonr, spearmanr
+        # Compact filtered matrices: wait × 602 NVs in your current run
+        "filtered_probability_matrix": (
+            filtered_probability_matrix
+        ),
+        "filtered_eligible_matrix": (
+            filtered_eligible_matrix
+        ),
+        "filtered_event_matrix": (
+            filtered_event_matrix
+        ),
+        "filtered_zero_wait_probability": (
+            filtered_zero_probability
+        ),
 
+        "plot_matrix": (
+            plot_matrix
+        ),
+
+        "excluded_nv_mask": (
+            excluded_mask
+        ),
+        "excluded_nv_inds": (
+            excluded_nv_inds.tolist()
+        ),
+        "manually_excluded_nv_inds": (
+            manually_excluded_nv_inds.tolist()
+        ),
+        "automatically_excluded_nv_inds": (
+            automatically_excluded_nv_inds.tolist()
+        ),
+        "kept_nv_inds": (
+            kept_nv_inds.tolist()
+        ),
+
+        "num_original_nvs": int(
+            num_nvs
+        ),
+        "num_retained_nvs": int(
+            kept_nv_inds.size
+        ),
+
+        "max_zero_wait_loss_probability": (
+            max_zero_wait_loss_probability
+        ),
+        "min_zero_wait_eligible_runs": (
+            min_zero_wait_eligible_runs
+        ),
+
+        "zero_wait_eligible_count": (
+            zero_eligible_count
+        ),
+        "zero_wait_event_count": (
+            zero_event_count
+        ),
+
+        "filtered_analyses": (
+            filtered_analyses
+        ),
+    }
+
+    return result, fig
 
 def _correlation_summary(x, y):
     """Return Pearson and Spearman correlations after removing invalid values."""
@@ -4366,25 +5484,2102 @@ def analyze_drift_state_correlation(
     )
 
     return result, fig
-    
-if __name__ == "__main__":
-    kpl.init_kplotlib()
-    
-    file_stem = "2026_07_26-18_11_11-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1800s-wait-1800s"
-    raw_data = dm.get_raw_data(
-        file_stem=file_stem,
-        load_npz=True,
+
+
+def find_persistent_bad_nvs(
+    analyses,
+    selected_waits_s=None,
+    high_probability_threshold=0.10,
+    min_fraction_high=0.70,
+    min_high_waits=6,
+    min_valid_waits=7,
+    min_eligible_per_wait=10,
+    min_median_probability=0.10,
+    min_pooled_probability=0.10,
+    require_short_and_long_waits=True,
+    short_wait_max_s=60.0,
+    long_wait_min_s=300.0,
+    min_short_high_waits=2,
+    min_long_high_waits=2,
+    verbose=True,
+):
+    """
+    Identify NVs with consistently high NV- -> NV0 probability throughout
+    the dark-wait sweep.
+
+    The function operates entirely on the cached ``analyses`` dictionaries.
+    It does not reload raw data or rerun charge-state classification.
+    """
+
+    if not analyses:
+        raise ValueError(
+            "No analyses were supplied."
+        )
+
+    if not 0.0 <= high_probability_threshold <= 1.0:
+        raise ValueError(
+            "high_probability_threshold must lie in [0, 1]."
+        )
+
+    if not 0.0 <= min_fraction_high <= 1.0:
+        raise ValueError(
+            "min_fraction_high must lie in [0, 1]."
+        )
+
+    # --------------------------------------------------------------
+    # Sort datasets by wait time
+    # --------------------------------------------------------------
+
+    all_analyses = sorted(
+        list(analyses),
+        key=lambda analysis: float(
+            analysis["dark_wait_s"]
+        ),
     )
 
-    drift_result, fig_drift = (
-        analyze_drift_state_correlation(
-            raw_data,
-            register_images=True,
+    available_waits_s = np.asarray(
+        [
+            float(analysis["dark_wait_s"])
+            for analysis in all_analyses
+        ],
+        dtype=float,
+    )
+
+    # --------------------------------------------------------------
+    # Select the requested wait times
+    # --------------------------------------------------------------
+
+    if selected_waits_s is None:
+        selected_indices = list(
+            range(len(all_analyses))
+        )
+
+    else:
+        selected_indices = []
+
+        for requested_wait_s in selected_waits_s:
+            closest_ind = int(
+                np.argmin(
+                    np.abs(
+                        available_waits_s
+                        - float(requested_wait_s)
+                    )
+                )
+            )
+
+            if closest_ind not in selected_indices:
+                selected_indices.append(
+                    closest_ind
+                )
+
+        selected_indices.sort(
+            key=lambda ind: available_waits_s[ind]
+        )
+
+    selected_analyses = [
+        all_analyses[ind]
+        for ind in selected_indices
+    ]
+
+    wait_s = available_waits_s[
+        selected_indices
+    ]
+
+    # --------------------------------------------------------------
+    # Build wait × NV matrices
+    # --------------------------------------------------------------
+
+    probability_rows = []
+    eligible_rows = []
+    event_rows = []
+
+    num_nvs_reference = None
+
+    for analysis in selected_analyses:
+        initial_mask = np.asarray(
+            analysis["initial_nvm_mask"],
+            dtype=bool,
+        )
+
+        event_mask = np.asarray(
+            analysis[
+                "candidate_nvm_to_nv0_mask"
+            ],
+            dtype=bool,
+        )
+
+        if initial_mask.shape != event_mask.shape:
+            raise ValueError(
+                "Initial and event masks have different shapes."
+            )
+
+        if initial_mask.ndim != 2:
+            raise ValueError(
+                "Expected masks with shape [nv, run]."
+            )
+
+        num_nvs = initial_mask.shape[0]
+
+        if num_nvs_reference is None:
+            num_nvs_reference = num_nvs
+
+        elif num_nvs != num_nvs_reference:
+            raise ValueError(
+                "Different wait datasets contain different NV counts."
+            )
+
+        eligible_count = np.sum(
+            initial_mask,
+            axis=1,
+        ).astype(float)
+
+        event_count = np.sum(
+            event_mask,
+            axis=1,
+        ).astype(float)
+
+        probability = np.full(
+            num_nvs,
+            np.nan,
+            dtype=float,
+        )
+
+        good = eligible_count > 0
+
+        probability[good] = (
+            event_count[good]
+            / eligible_count[good]
+        )
+
+        probability_rows.append(
+            probability
+        )
+
+        eligible_rows.append(
+            eligible_count
+        )
+
+        event_rows.append(
+            event_count
+        )
+
+    probability_matrix = np.asarray(
+        probability_rows,
+        dtype=float,
+    )
+
+    eligible_matrix = np.asarray(
+        eligible_rows,
+        dtype=float,
+    )
+
+    event_matrix = np.asarray(
+        event_rows,
+        dtype=float,
+    )
+
+    num_waits, num_nvs = (
+        probability_matrix.shape
+    )
+
+    # --------------------------------------------------------------
+    # Determine valid and high-probability measurements
+    # --------------------------------------------------------------
+
+    valid_matrix = (
+        np.isfinite(
+            probability_matrix
+        )
+        & (
+            eligible_matrix
+            >= int(min_eligible_per_wait)
         )
     )
 
-    kpl.show(block=True)
-    sys.exit()
+    high_matrix = (
+        valid_matrix
+        & (
+            probability_matrix
+            >= float(
+                high_probability_threshold
+            )
+        )
+    )
+
+    num_valid_waits_by_nv = np.sum(
+        valid_matrix,
+        axis=0,
+    )
+
+    num_high_waits_by_nv = np.sum(
+        high_matrix,
+        axis=0,
+    )
+
+    fraction_high_by_nv = np.full(
+        num_nvs,
+        np.nan,
+        dtype=float,
+    )
+
+    has_valid_waits = (
+        num_valid_waits_by_nv > 0
+    )
+
+    fraction_high_by_nv[
+        has_valid_waits
+    ] = (
+        num_high_waits_by_nv[
+            has_valid_waits
+        ]
+        / num_valid_waits_by_nv[
+            has_valid_waits
+        ]
+    )
+
+    # --------------------------------------------------------------
+    # Median probability across valid waits
+    # --------------------------------------------------------------
+
+    median_probability_by_nv = np.full(
+        num_nvs,
+        np.nan,
+        dtype=float,
+    )
+
+    for nv_ind in range(num_nvs):
+        values = probability_matrix[
+            valid_matrix[:, nv_ind],
+            nv_ind,
+        ]
+
+        if values.size > 0:
+            median_probability_by_nv[
+                nv_ind
+            ] = float(
+                np.median(values)
+            )
+
+    # --------------------------------------------------------------
+    # Pooled probability across all valid waits
+    # --------------------------------------------------------------
+
+    pooled_probability_by_nv = np.full(
+        num_nvs,
+        np.nan,
+        dtype=float,
+    )
+
+    for nv_ind in range(num_nvs):
+        valid_wait_mask = valid_matrix[
+            :,
+            nv_ind,
+        ]
+
+        total_eligible = np.sum(
+            eligible_matrix[
+                valid_wait_mask,
+                nv_ind,
+            ]
+        )
+
+        total_events = np.sum(
+            event_matrix[
+                valid_wait_mask,
+                nv_ind,
+            ]
+        )
+
+        if total_eligible > 0:
+            pooled_probability_by_nv[
+                nv_ind
+            ] = (
+                total_events
+                / total_eligible
+            )
+
+    # --------------------------------------------------------------
+    # Require persistence at both short and long waits
+    # --------------------------------------------------------------
+
+    short_wait_rows = (
+        wait_s
+        <= float(short_wait_max_s)
+    )
+
+    long_wait_rows = (
+        wait_s
+        >= float(long_wait_min_s)
+    )
+
+    num_short_high_by_nv = np.sum(
+        high_matrix[
+            short_wait_rows
+        ],
+        axis=0,
+    )
+
+    num_long_high_by_nv = np.sum(
+        high_matrix[
+            long_wait_rows
+        ],
+        axis=0,
+    )
+
+    # --------------------------------------------------------------
+    # Final persistent-bad-actor criterion
+    # --------------------------------------------------------------
+
+    bad_mask = (
+        (
+            num_valid_waits_by_nv
+            >= int(min_valid_waits)
+        )
+        & (
+            num_high_waits_by_nv
+            >= int(min_high_waits)
+        )
+        & (
+            fraction_high_by_nv
+            >= float(min_fraction_high)
+        )
+        & (
+            median_probability_by_nv
+            >= float(
+                min_median_probability
+            )
+        )
+        & (
+            pooled_probability_by_nv
+            >= float(
+                min_pooled_probability
+            )
+        )
+    )
+
+    if require_short_and_long_waits:
+        bad_mask &= (
+            (
+                num_short_high_by_nv
+                >= int(min_short_high_waits)
+            )
+            & (
+                num_long_high_by_nv
+                >= int(min_long_high_waits)
+            )
+        )
+
+    bad_nv_inds = np.where(
+        bad_mask
+    )[0].astype(int)
+
+    kept_nv_inds = np.where(
+        ~bad_mask
+    )[0].astype(int)
+
+    # --------------------------------------------------------------
+    # Diagnostic output
+    # --------------------------------------------------------------
+
+    if verbose:
+        print(
+            "\n"
+            + "=" * 78
+        )
+        print(
+            "PERSISTENT FULL-SWEEP BAD-ACTOR FILTER"
+        )
+        print(
+            "=" * 78
+        )
+
+        print(
+            "Wait times:",
+            wait_s.tolist(),
+        )
+
+        print(
+            "Total NVs:",
+            num_nvs,
+        )
+
+        print(
+            "High probability threshold:",
+            high_probability_threshold,
+        )
+
+        print(
+            "Minimum high waits:",
+            min_high_waits,
+            "/",
+            num_waits,
+        )
+
+        print(
+            "Minimum fraction high:",
+            min_fraction_high,
+        )
+
+        print(
+            "Minimum valid waits:",
+            min_valid_waits,
+        )
+
+        print(
+            "Minimum median probability:",
+            min_median_probability,
+        )
+
+        print(
+            "Minimum pooled probability:",
+            min_pooled_probability,
+        )
+
+        print(
+            "Persistent bad NV count:",
+            bad_nv_inds.size,
+        )
+
+        print(
+            "Persistent bad NV indices:",
+            bad_nv_inds.tolist(),
+        )
+
+        print(
+            "NVs retained:",
+            kept_nv_inds.size,
+            "/",
+            num_nvs,
+        )
+
+        if bad_nv_inds.size > 0:
+            print(
+                "\nRemoved NV details:"
+            )
+
+            for nv_ind in bad_nv_inds:
+                values_percent = []
+
+                for value in probability_matrix[
+                    :,
+                    nv_ind,
+                ]:
+                    if np.isfinite(value):
+                        values_percent.append(
+                            f"{100.0 * value:.1f}"
+                        )
+                    else:
+                        values_percent.append(
+                            "nan"
+                        )
+
+                print(
+                    f"NV {nv_ind:3d}: "
+                    f"high={num_high_waits_by_nv[nv_ind]}/"
+                    f"{num_valid_waits_by_nv[nv_ind]}, "
+                    f"short-high="
+                    f"{num_short_high_by_nv[nv_ind]}, "
+                    f"long-high="
+                    f"{num_long_high_by_nv[nv_ind]}, "
+                    f"median="
+                    f"{100 * median_probability_by_nv[nv_ind]:.1f}%, "
+                    f"pooled="
+                    f"{100 * pooled_probability_by_nv[nv_ind]:.1f}%, "
+                    f"probabilities="
+                    f"[{', '.join(values_percent)}]%"
+                )
+
+    result = {
+        "wait_s": wait_s,
+        "probability_matrix": probability_matrix,
+        "eligible_matrix": eligible_matrix,
+        "event_matrix": event_matrix,
+        "valid_matrix": valid_matrix,
+        "high_matrix": high_matrix,
+        "num_valid_waits_by_nv": (
+            num_valid_waits_by_nv
+        ),
+        "num_high_waits_by_nv": (
+            num_high_waits_by_nv
+        ),
+        "fraction_high_by_nv": (
+            fraction_high_by_nv
+        ),
+        "median_probability_by_nv": (
+            median_probability_by_nv
+        ),
+        "pooled_probability_by_nv": (
+            pooled_probability_by_nv
+        ),
+        "num_short_high_by_nv": (
+            num_short_high_by_nv
+        ),
+        "num_long_high_by_nv": (
+            num_long_high_by_nv
+        ),
+        "bad_nv_mask": bad_mask,
+        "bad_nv_inds": (
+            bad_nv_inds.tolist()
+        ),
+        "kept_nv_inds": (
+            kept_nv_inds.tolist()
+        ),
+    }
+
+    return bad_nv_inds.tolist(), result
+
+def fit_individual_nv_dark_survival(
+    analyses,
+    min_eligible_per_wait=10,
+    min_valid_waits=6,
+    min_fit_amplitude=0.005,
+    min_r_squared=0.0,
+    max_relative_tau_error=3.0,
+    max_tau_factor=100.0,
+    verbose=True,
+):
+    """
+    Fit every NV independently to
+
+        D_i(t) = D_inf,i + (1 - D_inf,i) exp(-t / tau_i)
+
+    where D_i(t) is that NV's retention normalized to its measured
+    zero-wait retention.
+
+    Parameters
+    ----------
+    analyses:
+        Preferably the filtered analyses returned by
+        plot_nv_loss_row_by_row()["filtered_analyses"].
+
+    min_eligible_per_wait:
+        Minimum number of initial NV- trials required at a wait time.
+
+    min_valid_waits:
+        Minimum number of usable wait-time measurements needed for fitting.
+
+    min_fit_amplitude:
+        Minimum fitted loss amplitude, 1 - D_inf, required for a
+        meaningful decay fit.
+
+    min_r_squared:
+        Minimum R-squared for inclusion in the lifetime distribution.
+
+    max_relative_tau_error:
+        Maximum allowed tau_stderr / tau.
+
+    max_tau_factor:
+        Reject fits with tau greater than this factor times the longest
+        measured wait time.
+    """
+
+    if not analyses:
+        raise ValueError(
+            "No analyses were supplied."
+        )
+
+    sorted_analyses = sorted(
+        list(analyses),
+        key=lambda analysis: float(
+            analysis["dark_wait_s"]
+        ),
+    )
+
+    wait_s = np.asarray(
+        [
+            float(analysis["dark_wait_s"])
+            for analysis in sorted_analyses
+        ],
+        dtype=float,
+    )
+
+    zero_rows = np.where(
+        np.isclose(
+            wait_s,
+            0.0,
+        )
+    )[0]
+
+    if zero_rows.size == 0:
+        raise ValueError(
+            "A 0 s dataset is required for individual-NV normalization."
+        )
+
+    zero_row_ind = int(
+        zero_rows[0]
+    )
+
+    probability_rows = []
+    probability_sem_rows = []
+    eligible_rows = []
+    retained_rows = []
+
+    reference_num_nvs = None
+
+    for analysis in sorted_analyses:
+        initial_mask = np.asarray(
+            analysis["initial_nvm_mask"],
+            dtype=bool,
+        )
+
+        retained_mask = np.asarray(
+            analysis["retained_nvm_mask"],
+            dtype=bool,
+        )
+
+        if initial_mask.shape != retained_mask.shape:
+            raise ValueError(
+                "Initial and retained masks have different shapes."
+            )
+
+        if initial_mask.ndim != 2:
+            raise ValueError(
+                "Expected masks with shape [nv, run]."
+            )
+
+        num_nvs = initial_mask.shape[0]
+
+        if reference_num_nvs is None:
+            reference_num_nvs = num_nvs
+
+        elif num_nvs != reference_num_nvs:
+            raise ValueError(
+                "The wait datasets contain different numbers of NVs."
+            )
+
+        eligible_count = np.sum(
+            initial_mask,
+            axis=1,
+        ).astype(float)
+
+        retained_count = np.sum(
+            retained_mask,
+            axis=1,
+        ).astype(float)
+
+        retention_probability = np.full(
+            num_nvs,
+            np.nan,
+            dtype=float,
+        )
+
+        good = eligible_count > 0
+
+        retention_probability[good] = (
+            retained_count[good]
+            / eligible_count[good]
+        )
+
+        # Adjusted binomial estimate prevents zero uncertainty when
+        # all or none of the trials are retained.
+        adjusted_probability = np.full(
+            num_nvs,
+            np.nan,
+            dtype=float,
+        )
+
+        adjusted_probability[good] = (
+            retained_count[good] + 0.5
+        ) / (
+            eligible_count[good] + 1.0
+        )
+
+        retention_sem = np.full(
+            num_nvs,
+            np.nan,
+            dtype=float,
+        )
+
+        retention_sem[good] = np.sqrt(
+            adjusted_probability[good]
+            * (
+                1.0
+                - adjusted_probability[good]
+            )
+            / (
+                eligible_count[good] + 1.0
+            )
+        )
+
+        probability_rows.append(
+            retention_probability
+        )
+
+        probability_sem_rows.append(
+            retention_sem
+        )
+
+        eligible_rows.append(
+            eligible_count
+        )
+
+        retained_rows.append(
+            retained_count
+        )
+
+    retention_matrix = np.asarray(
+        probability_rows,
+        dtype=float,
+    )
+
+    retention_sem_matrix = np.asarray(
+        probability_sem_rows,
+        dtype=float,
+    )
+
+    eligible_matrix = np.asarray(
+        eligible_rows,
+        dtype=float,
+    )
+
+    retained_matrix = np.asarray(
+        retained_rows,
+        dtype=float,
+    )
+
+    num_waits, num_nvs = (
+        retention_matrix.shape
+    )
+
+    # filtered_analyses preserves the original NV indices.
+    original_nv_inds_raw = sorted_analyses[0].get(
+        "original_nv_inds"
+    )
+
+    if original_nv_inds_raw is None:
+        original_nv_inds = np.arange(
+            num_nvs,
+            dtype=int,
+        )
+
+    else:
+        original_nv_inds = np.asarray(
+            original_nv_inds_raw,
+            dtype=int,
+        )
+
+        if original_nv_inds.size != num_nvs:
+            raise ValueError(
+                "original_nv_inds has the wrong length."
+            )
+
+    max_wait_s = float(
+        np.max(wait_s)
+    )
+
+    maximum_allowed_tau_s = (
+        max_tau_factor
+        * max_wait_s
+    )
+
+    fit_results = []
+
+    for compact_nv_ind in range(num_nvs):
+        original_nv_ind = int(
+            original_nv_inds[
+                compact_nv_ind
+            ]
+        )
+
+        valid_mask = (
+            np.isfinite(
+                retention_matrix[
+                    :,
+                    compact_nv_ind
+                ]
+            )
+            & (
+                eligible_matrix[
+                    :,
+                    compact_nv_ind
+                ]
+                >= int(min_eligible_per_wait)
+            )
+        )
+
+        num_valid_waits = int(
+            np.sum(valid_mask)
+        )
+
+        result = {
+            "compact_nv_ind": int(
+                compact_nv_ind
+            ),
+            "original_nv_ind": (
+                original_nv_ind
+            ),
+            "success": False,
+            "quality_pass": False,
+            "num_valid_waits": (
+                num_valid_waits
+            ),
+        }
+
+        if num_valid_waits < min_valid_waits:
+            result["error"] = (
+                "Too few valid wait times."
+            )
+
+            fit_results.append(
+                result
+            )
+
+            continue
+
+        if not valid_mask[zero_row_ind]:
+            result["error"] = (
+                "Insufficient zero-wait trials."
+            )
+
+            fit_results.append(
+                result
+            )
+
+            continue
+
+        zero_retention = float(
+            retention_matrix[
+                zero_row_ind,
+                compact_nv_ind,
+            ]
+        )
+
+        zero_retention_sem = float(
+            retention_sem_matrix[
+                zero_row_ind,
+                compact_nv_ind,
+            ]
+        )
+
+        if (
+            not np.isfinite(zero_retention)
+            or zero_retention <= 0
+        ):
+            result["error"] = (
+                "Invalid zero-wait retention."
+            )
+
+            fit_results.append(
+                result
+            )
+
+            continue
+
+        retention = retention_matrix[
+            :,
+            compact_nv_ind
+        ]
+
+        retention_sem = (
+            retention_sem_matrix[
+                :,
+                compact_nv_ind
+            ]
+        )
+
+        dark_survival = (
+            retention
+            / zero_retention
+        )
+
+        # Approximate propagated uncertainty for the normalized ratio.
+        dark_survival_sem = np.sqrt(
+            (
+                retention_sem
+                / zero_retention
+            ) ** 2
+            + (
+                retention
+                * zero_retention_sem
+                / zero_retention**2
+            ) ** 2
+        )
+
+        dark_survival[
+            zero_row_ind
+        ] = 1.0
+
+        valid_sem = dark_survival_sem[
+            valid_mask
+        ]
+
+        positive_sem = valid_sem[
+            np.isfinite(valid_sem)
+            & (valid_sem > 0)
+        ]
+
+        sem_floor = (
+            float(
+                np.nanmedian(
+                    positive_sem
+                )
+            )
+            if positive_sem.size > 0
+            else 0.01
+        )
+
+        dark_survival_sem[
+            zero_row_ind
+        ] = max(
+            sem_floor,
+            1e-3,
+        )
+
+        try:
+            fit = _fit_dark_survival(
+                wait_s[
+                    valid_mask
+                ],
+                dark_survival[
+                    valid_mask
+                ],
+                dark_survival_sem[
+                    valid_mask
+                ],
+            )
+
+        except Exception as exc:
+            result["error"] = str(exc)
+
+            fit_results.append(
+                result
+            )
+
+            continue
+
+        if not fit.get(
+            "success",
+            False,
+        ):
+            result["error"] = fit.get(
+                "error",
+                "Fit failed.",
+            )
+
+            fit_results.append(
+                result
+            )
+
+            continue
+
+        plateau = float(
+            fit["plateau"]
+        )
+
+        tau_s = float(
+            fit["tau_dark_s"]
+        )
+
+        tau_stderr_s = float(
+            fit["tau_dark_s_stderr"]
+        )
+
+        r_squared = float(
+            fit["r_squared"]
+        )
+
+        fit_amplitude = (
+            1.0 - plateau
+        )
+
+        relative_tau_error = (
+            tau_stderr_s / tau_s
+            if (
+                np.isfinite(tau_stderr_s)
+                and tau_s > 0
+            )
+            else np.inf
+        )
+
+        predicted_survival_at_max_wait = float(
+            _dark_survival_model(
+                max_wait_s,
+                plateau,
+                tau_s,
+            )
+        )
+
+        predicted_loss_at_max_wait = (
+            1.0
+            - predicted_survival_at_max_wait
+        )
+
+        quality_pass = bool(
+            np.isfinite(tau_s)
+            and tau_s > 0
+            and tau_s <= maximum_allowed_tau_s
+            and fit_amplitude
+            >= float(min_fit_amplitude)
+            and np.isfinite(r_squared)
+            and r_squared
+            >= float(min_r_squared)
+            and relative_tau_error
+            <= float(max_relative_tau_error)
+        )
+
+        result.update(
+            {
+                "success": True,
+                "quality_pass": (
+                    quality_pass
+                ),
+                "plateau": plateau,
+                "plateau_stderr": float(
+                    fit[
+                        "plateau_stderr"
+                    ]
+                ),
+                "fit_amplitude": (
+                    fit_amplitude
+                ),
+                "tau_s": tau_s,
+                "tau_s_stderr": (
+                    tau_stderr_s
+                ),
+                "tau_min": (
+                    tau_s / 60.0
+                ),
+                "tau_min_stderr": (
+                    tau_stderr_s / 60.0
+                ),
+                "relative_tau_error": (
+                    relative_tau_error
+                ),
+                "r_squared": (
+                    r_squared
+                ),
+                "predicted_loss_at_max_wait": (
+                    predicted_loss_at_max_wait
+                ),
+                "wait_s": (
+                    wait_s.tolist()
+                ),
+                "valid_mask": (
+                    valid_mask.tolist()
+                ),
+                "dark_survival": (
+                    dark_survival.tolist()
+                ),
+                "dark_survival_sem": (
+                    dark_survival_sem.tolist()
+                ),
+                "fit_x_s": (
+                    fit["fit_x_s"]
+                ),
+                "fit_y": (
+                    fit["fit_y"]
+                ),
+            }
+        )
+
+        fit_results.append(
+            result
+        )
+
+    successful_fits = [
+        fit
+        for fit in fit_results
+        if fit.get(
+            "success",
+            False,
+        )
+    ]
+
+    quality_fits = [
+        fit
+        for fit in successful_fits
+        if fit.get(
+            "quality_pass",
+            False,
+        )
+    ]
+
+    if verbose:
+        print(
+            "\n"
+            + "=" * 78
+        )
+
+        print(
+            "INDIVIDUAL-NV DARK-SURVIVAL FITS"
+        )
+
+        print(
+            "=" * 78
+        )
+
+        print(
+            "NVs analyzed:",
+            num_nvs,
+        )
+
+        print(
+            "Successful fits:",
+            len(successful_fits),
+        )
+
+        print(
+            "Fits passing quality cuts:",
+            len(quality_fits),
+        )
+
+        if quality_fits:
+            tau_values_min = np.asarray(
+                [
+                    fit["tau_min"]
+                    for fit in quality_fits
+                ],
+                dtype=float,
+            )
+
+            print(
+                "Median tau:",
+                f"{np.median(tau_values_min):.2f} min",
+            )
+
+            print(
+                "Central 68% tau interval:",
+                f"{np.percentile(tau_values_min, 16):.2f}",
+                "to",
+                f"{np.percentile(tau_values_min, 84):.2f}",
+                "min",
+            )
+
+    return {
+        "wait_s": wait_s,
+        "original_nv_inds": (
+            original_nv_inds
+        ),
+        "retention_matrix": (
+            retention_matrix
+        ),
+        "retention_sem_matrix": (
+            retention_sem_matrix
+        ),
+        "eligible_matrix": (
+            eligible_matrix
+        ),
+        "retained_matrix": (
+            retained_matrix
+        ),
+        "fit_results": (
+            fit_results
+        ),
+        "successful_fits": (
+            successful_fits
+        ),
+        "quality_fits": (
+            quality_fits
+        ),
+        "maximum_allowed_tau_s": (
+            maximum_allowed_tau_s
+        ),
+    }
+    
+def plot_individual_nv_lifetime_histogram(
+    individual_fit_result,
+    quality_only=True,
+    num_bins=20,
+):
+    """
+    Plot the distribution of independently fitted NV charge lifetimes.
+    """
+
+    fits = (
+        individual_fit_result[
+            "quality_fits"
+        ]
+        if quality_only
+        else individual_fit_result[
+            "successful_fits"
+        ]
+    )
+
+    tau_min = np.asarray(
+        [
+            fit["tau_min"]
+            for fit in fits
+            if (
+                np.isfinite(
+                    fit["tau_min"]
+                )
+                and fit["tau_min"] > 0
+            )
+        ],
+        dtype=float,
+    )
+
+    if tau_min.size == 0:
+        raise ValueError(
+            "No valid individual-NV lifetimes are available."
+        )
+
+    lower = float(
+        np.min(tau_min)
+    )
+
+    upper = float(
+        np.max(tau_min)
+    )
+
+    if np.isclose(
+        lower,
+        upper,
+    ):
+        lower *= 0.8
+        upper *= 1.2
+
+    bins = np.logspace(
+        np.log10(lower),
+        np.log10(upper),
+        int(num_bins) + 1,
+    )
+
+    fig, ax = plt.subplots(
+        figsize=(7.5, 5.5)
+    )
+
+    ax.hist(
+        tau_min,
+        bins=bins,
+        edgecolor="black",
+        alpha=0.8,
+    )
+
+    median_tau_min = float(
+        np.median(tau_min)
+    )
+
+    ax.axvline(
+        median_tau_min,
+        linestyle="--",
+        linewidth=2,
+        label=(
+            f"Median = "
+            f"{median_tau_min:.2f} min"
+        ),
+    )
+
+    ax.set_xscale(
+        "log"
+    )
+
+    ax.set_xlabel(
+        "Individual-NV fitted charge lifetime, "
+        r"$\tau_i$ (min)"
+    )
+
+    ax.set_ylabel(
+        "Number of NVs"
+    )
+
+    ax.set_title(
+        "Distribution of individual-NV "
+        "dark charge lifetimes"
+    )
+
+    ax.legend()
+
+    fig.tight_layout()
+
+    return fig
+
+
+def plot_fastest_individual_nv_curves(
+    individual_fit_result,
+    top_n=5,
+    quality_only=True,
+):
+    """
+    Plot the NVs with the largest fitted loss at the longest measured
+    dark wait.
+    """
+
+    fits = (
+        individual_fit_result[
+            "quality_fits"
+        ]
+        if quality_only
+        else individual_fit_result[
+            "successful_fits"
+        ]
+    )
+
+    if not fits:
+        raise ValueError(
+            "No individual-NV fits are available."
+        )
+
+    ranked_fits = sorted(
+        fits,
+        key=lambda fit: float(
+            fit[
+                "predicted_loss_at_max_wait"
+            ]
+        ),
+        reverse=True,
+    )
+
+    selected_fits = ranked_fits[
+        : int(top_n)
+    ]
+
+    fig, ax = plt.subplots(
+        figsize=(8.5, 6.0)
+    )
+
+    selected_original_nv_inds = []
+
+    for fit in selected_fits:
+        original_nv_ind = int(
+            fit["original_nv_ind"]
+        )
+
+        selected_original_nv_inds.append(
+            original_nv_ind
+        )
+
+        wait_s = np.asarray(
+            fit["wait_s"],
+            dtype=float,
+        )
+
+        dark_survival = np.asarray(
+            fit["dark_survival"],
+            dtype=float,
+        )
+
+        dark_survival_sem = np.asarray(
+            fit["dark_survival_sem"],
+            dtype=float,
+        )
+
+        valid_mask = np.asarray(
+            fit["valid_mask"],
+            dtype=bool,
+        )
+
+        fit_x_s = np.asarray(
+            fit["fit_x_s"],
+            dtype=float,
+        )
+
+        fit_y = np.asarray(
+            fit["fit_y"],
+            dtype=float,
+        )
+
+        label = (
+            f"NV {original_nv_ind}: "
+            f"$\\tau$={fit['tau_min']:.2f} min, "
+            f"loss@max="
+            f"{100 * fit['predicted_loss_at_max_wait']:.1f}%"
+        )
+
+        ax.errorbar(
+            wait_s[
+                valid_mask
+            ],
+            dark_survival[
+                valid_mask
+            ],
+            yerr=dark_survival_sem[
+                valid_mask
+            ],
+            marker="o",
+            linestyle="none",
+            capsize=2,
+        )
+
+        ax.plot(
+            fit_x_s,
+            fit_y,
+            linewidth=2,
+            label=label,
+        )
+
+    ax.set_xscale(
+        "symlog",
+        linthresh=10.0,
+    )
+
+    ax.set_xlabel(
+        "Dark wait time (s)"
+    )
+
+    ax.set_ylabel(
+        "Dark survival relative to 0 s"
+    )
+
+    ax.set_title(
+        f"Top {len(selected_fits)} fastest-decaying NVs"
+    )
+
+    ax.legend(
+        fontsize=8,
+    )
+
+    fig.tight_layout()
+
+    print(
+        "\nNVs most likely to switch at long times:",
+        selected_original_nv_inds,
+    )
+
+    return (
+        fig,
+        selected_original_nv_inds,
+    )
+def remove_individual_nv_fit_outliers(
+    individual_fit_result,
+    mad_z_threshold=3.5,
+    min_r_squared=0.0,
+    max_relative_tau_error=1.5,
+    max_tau_factor=10.0,
+    min_tau_s=1.0,
+    verbose=True,
+):
+    """
+    Remove pathological individual-NV lifetime fits.
+
+    Filtering occurs in two stages:
+
+    1. Remove poorly constrained fits:
+       - nonfinite or nonpositive tau
+       - low R-squared
+       - excessive relative tau uncertainty
+       - tau far beyond the experimental time window
+
+    2. Remove statistical outliers using a robust modified z-score
+       applied to log10(tau).
+
+    Returns a copy of individual_fit_result whose ``quality_fits`` entry
+    contains only the cleaned fits. The original result is not modified.
+    """
+
+    fits = list(
+        individual_fit_result[
+            "quality_fits"
+        ]
+    )
+
+    wait_s = np.asarray(
+        individual_fit_result["wait_s"],
+        dtype=float,
+    )
+
+    max_measured_wait_s = float(
+        np.nanmax(wait_s)
+    )
+
+    max_allowed_tau_s = (
+        float(max_tau_factor)
+        * max_measured_wait_s
+    )
+
+    preliminarily_kept = []
+    quality_rejected = []
+
+    # --------------------------------------------------------------
+    # Remove poorly constrained fits
+    # --------------------------------------------------------------
+
+    for fit in fits:
+        tau_s = float(
+            fit.get("tau_s", np.nan)
+        )
+
+        tau_stderr_s = float(
+            fit.get(
+                "tau_s_stderr",
+                np.nan,
+            )
+        )
+
+        r_squared = float(
+            fit.get(
+                "r_squared",
+                np.nan,
+            )
+        )
+
+        relative_tau_error = (
+            tau_stderr_s / tau_s
+            if (
+                np.isfinite(tau_s)
+                and tau_s > 0
+                and np.isfinite(tau_stderr_s)
+            )
+            else np.inf
+        )
+
+        rejection_reasons = []
+
+        if (
+            not np.isfinite(tau_s)
+            or tau_s <= float(min_tau_s)
+        ):
+            rejection_reasons.append(
+                "invalid or too-small tau"
+            )
+
+        if (
+            np.isfinite(tau_s)
+            and tau_s > max_allowed_tau_s
+        ):
+            rejection_reasons.append(
+                "tau exceeds experimental range"
+            )
+
+        if (
+            not np.isfinite(r_squared)
+            or r_squared
+            < float(min_r_squared)
+        ):
+            rejection_reasons.append(
+                "poor R-squared"
+            )
+
+        if (
+            not np.isfinite(
+                relative_tau_error
+            )
+            or relative_tau_error
+            > float(max_relative_tau_error)
+        ):
+            rejection_reasons.append(
+                "large tau uncertainty"
+            )
+
+        fit_copy = dict(fit)
+
+        fit_copy[
+            "relative_tau_error"
+        ] = relative_tau_error
+
+        if rejection_reasons:
+            fit_copy[
+                "outlier_reason"
+            ] = "; ".join(
+                rejection_reasons
+            )
+
+            quality_rejected.append(
+                fit_copy
+            )
+
+        else:
+            preliminarily_kept.append(
+                fit_copy
+            )
+
+    if len(preliminarily_kept) < 3:
+        raise ValueError(
+            "Fewer than three individual-NV fits remain "
+            "after fit-quality filtering."
+        )
+
+    # --------------------------------------------------------------
+    # Robust outlier removal in log10(tau)
+    # --------------------------------------------------------------
+
+    tau_s_values = np.asarray(
+        [
+            fit["tau_s"]
+            for fit in preliminarily_kept
+        ],
+        dtype=float,
+    )
+
+    log_tau = np.log10(
+        tau_s_values
+    )
+
+    median_log_tau = float(
+        np.median(log_tau)
+    )
+
+    absolute_deviation = np.abs(
+        log_tau - median_log_tau
+    )
+
+    mad_log_tau = float(
+        np.median(
+            absolute_deviation
+        )
+    )
+
+    if (
+        not np.isfinite(mad_log_tau)
+        or mad_log_tau <= 0
+    ):
+        # No measurable spread, so do not classify distribution outliers.
+        modified_z_score = np.zeros(
+            log_tau.size,
+            dtype=float,
+        )
+
+    else:
+        modified_z_score = (
+            0.67448975
+            * (
+                log_tau
+                - median_log_tau
+            )
+            / mad_log_tau
+        )
+
+    distribution_outlier_mask = (
+        np.abs(
+            modified_z_score
+        )
+        > float(mad_z_threshold)
+    )
+
+    cleaned_fits = []
+    distribution_outliers = []
+
+    for fit_ind, fit in enumerate(
+        preliminarily_kept
+    ):
+        fit_copy = dict(fit)
+
+        fit_copy[
+            "log_tau_modified_z"
+        ] = float(
+            modified_z_score[
+                fit_ind
+            ]
+        )
+
+        if distribution_outlier_mask[
+            fit_ind
+        ]:
+            fit_copy[
+                "outlier_reason"
+            ] = (
+                "extreme lifetime in "
+                "log10(tau) distribution"
+            )
+
+            distribution_outliers.append(
+                fit_copy
+            )
+
+        else:
+            cleaned_fits.append(
+                fit_copy
+            )
+
+    all_removed_fits = (
+        quality_rejected
+        + distribution_outliers
+    )
+
+    # --------------------------------------------------------------
+    # Return a compatible result for the existing plotting functions
+    # --------------------------------------------------------------
+
+    cleaned_result = dict(
+        individual_fit_result
+    )
+
+    # Existing plotting functions use quality_fits.
+    cleaned_result[
+        "quality_fits"
+    ] = cleaned_fits
+
+    cleaned_result[
+        "outlier_removed_fits"
+    ] = all_removed_fits
+
+    cleaned_result[
+        "fit_quality_rejected"
+    ] = quality_rejected
+
+    cleaned_result[
+        "distribution_outliers"
+    ] = distribution_outliers
+
+    cleaned_result[
+        "outlier_filter_settings"
+    ] = {
+        "mad_z_threshold": float(
+            mad_z_threshold
+        ),
+        "min_r_squared": float(
+            min_r_squared
+        ),
+        "max_relative_tau_error": float(
+            max_relative_tau_error
+        ),
+        "max_tau_factor": float(
+            max_tau_factor
+        ),
+        "min_tau_s": float(
+            min_tau_s
+        ),
+        "max_allowed_tau_s": float(
+            max_allowed_tau_s
+        ),
+    }
+
+    if verbose:
+        print(
+            "\n"
+            + "=" * 78
+        )
+
+        print(
+            "INDIVIDUAL-NV FIT OUTLIER REMOVAL"
+        )
+
+        print(
+            "=" * 78
+        )
+
+        print(
+            "Initial quality fits:",
+            len(fits),
+        )
+
+        print(
+            "Rejected by fit quality:",
+            len(quality_rejected),
+        )
+
+        print(
+            "Rejected by log-tau MAD:",
+            len(distribution_outliers),
+        )
+
+        print(
+            "Final retained fits:",
+            len(cleaned_fits),
+        )
+
+        if all_removed_fits:
+            print(
+                "\nRemoved fits:"
+            )
+
+            for fit in all_removed_fits:
+                original_nv_ind = fit[
+                    "original_nv_ind"
+                ]
+
+                tau_min = float(
+                    fit.get(
+                        "tau_min",
+                        np.nan,
+                    )
+                )
+
+                r_squared = float(
+                    fit.get(
+                        "r_squared",
+                        np.nan,
+                    )
+                )
+
+                relative_error = float(
+                    fit.get(
+                        "relative_tau_error",
+                        np.nan,
+                    )
+                )
+
+                reason = fit.get(
+                    "outlier_reason",
+                    "unknown",
+                )
+
+                print(
+                    f"NV {original_nv_ind:3d}: "
+                    f"tau={tau_min:.3g} min, "
+                    f"R²={r_squared:.3f}, "
+                    f"relative error={relative_error:.2f}, "
+                    f"reason={reason}"
+                )
+
+    return cleaned_result
+
+
+def _find_analysis_for_wait(
+    analyses,
+    wait_s,
+    atol=1e-9,
+):
+    """Return the analysis dict matching a requested dark wait."""
+    for analysis in analyses:
+        if np.isclose(float(analysis["dark_wait_s"]), float(wait_s), atol=atol):
+            return analysis
+    return None
+
+
+def _detect_run_outliers(
+    values,
+    method="mad",
+    threshold=3.5,
+):
+    """
+    Detect outlier runs from a 1D array.
+
+    method = "mad"
+        robust median absolute deviation method
+
+    method = "zscore"
+        mean/std based method
+    """
+    values = np.asarray(values, dtype=float)
+
+    outlier_mask = np.zeros(values.shape, dtype=bool)
+    valid = np.isfinite(values)
+
+    if np.sum(valid) < 4:
+        return outlier_mask
+
+    x = values[valid]
+
+    if method.lower() == "zscore":
+        mean = float(np.mean(x))
+        std = float(np.std(x, ddof=1))
+        if std <= 0:
+            return outlier_mask
+        z = np.abs((x - mean) / std)
+        outlier_mask[valid] = z > threshold
+        return outlier_mask
+
+    # Default: robust MAD
+    median = float(np.median(x))
+    mad = float(np.median(np.abs(x - median)))
+
+    if mad <= 0:
+        # fallback to std if MAD collapses
+        mean = float(np.mean(x))
+        std = float(np.std(x, ddof=1))
+        if std <= 0:
+            return outlier_mask
+        z = np.abs((x - mean) / std)
+        outlier_mask[valid] = z > 2.5
+        return outlier_mask
+
+    robust_z = 0.6745 * (x - median) / mad
+    outlier_mask[valid] = np.abs(robust_z) > threshold
+    return outlier_mask
+
+
+def plot_wait_sweep_run_bars(
+    analyses,
+    selected_waits_s=None,
+    metric="num_candidates_by_run",
+    outlier_method="mad",
+    outlier_threshold=3.5,
+    ncols=3,
+    sharey=True,
+    show_mean=True,
+    show_median=True,
+    sort_runs=False,
+):
+    """
+    Plot per-run bar charts for each dark-wait dataset.
+
+    Parameters
+    ----------
+    analyses : list of analysis dicts
+        Already loaded particle-memory analyses.
+
+    selected_waits_s : list or None
+        Which wait times to show. If None, all available waits are used.
+
+    metric : str
+        One of:
+            "num_candidates_by_run"
+            "retention_by_run"
+            "num_ambiguous_by_run"
+            "num_initial_nvm_by_run"
+            "num_final_nvm_by_run"
+            "num_retained_by_run"
+
+    outlier_method : str
+        "mad" or "zscore"
+
+    outlier_threshold : float
+        Threshold for outlier detection.
+
+    sort_runs : bool
+        If True, sort bars within each panel by value.
+    """
+
+    metric_label_map = {
+        "num_candidates_by_run": "Confident NV$^- \\rightarrow$ NV$^0$ count / run",
+        "retention_by_run": "Retention fraction / run",
+        "num_ambiguous_by_run": "Ambiguous count / run",
+        "num_initial_nvm_by_run": "Initial NV$^-$ count / run",
+        "num_final_nvm_by_run": "Final NV$^-$ count / run",
+        "num_retained_by_run": "Retained NV$^-$ count / run",
+    }
+
+    if metric not in metric_label_map:
+        raise ValueError(
+            f"Unsupported metric '{metric}'. "
+            f"Choose from {list(metric_label_map.keys())}."
+        )
+
+    if selected_waits_s is None:
+        selected_waits_s = sorted(
+            [float(analysis["dark_wait_s"]) for analysis in analyses]
+        )
+
+    selected_analyses = []
+    for wait_s in selected_waits_s:
+        analysis = _find_analysis_for_wait(analyses, wait_s)
+        if analysis is not None:
+            selected_analyses.append(analysis)
+
+    if len(selected_analyses) == 0:
+        raise ValueError("No matching analyses found for selected_waits_s.")
+
+    num_panels = len(selected_analyses)
+    ncols = min(ncols, num_panels)
+    nrows = int(np.ceil(num_panels / ncols))
+
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(4.6 * ncols, 3.8 * nrows),
+        sharey=sharey,
+    )
+
+    axes = np.atleast_1d(axes).ravel()
+
+    results = {
+        "metric": metric,
+        "waits_s": [],
+        "per_wait": [],
+    }
+
+    for panel_ind, analysis in enumerate(selected_analyses):
+        ax = axes[panel_ind]
+
+        wait_s = float(analysis["dark_wait_s"])
+        values = np.asarray(analysis[metric], dtype=float)
+        run_inds = np.arange(len(values), dtype=int)
+
+        if sort_runs:
+            sort_inds = np.argsort(values)
+            values = values[sort_inds]
+            run_inds = run_inds[sort_inds]
+
+        outlier_mask = _detect_run_outliers(
+            values,
+            method=outlier_method,
+            threshold=outlier_threshold,
+        )
+
+        colors = np.array(
+            [kpl.KplColors.BLUE] * len(values),
+            dtype=object,
+        )
+        colors[outlier_mask] = kpl.KplColors.RED
+
+        ax.bar(
+            np.arange(len(values)),
+            values,
+            color=colors,
+            alpha=0.75,
+            edgecolor="black",
+            linewidth=0.3,
+        )
+
+        if show_mean:
+            mean_val = float(np.nanmean(values))
+            ax.axhline(
+                mean_val,
+                color=kpl.KplColors.GREEN,
+                linestyle="--",
+                linewidth=1.5,
+                label=f"mean = {mean_val:.3g}",
+            )
+        else:
+            mean_val = np.nan
+
+        if show_median:
+            median_val = float(np.nanmedian(values))
+            ax.axhline(
+                median_val,
+                color=kpl.KplColors.GRAY,
+                linestyle=":",
+                linewidth=1.5,
+                label=f"median = {median_val:.3g}",
+            )
+        else:
+            median_val = np.nan
+
+        ax.set_title(
+            f"wait = {wait_s:g} s\n"
+            f"runs = {len(values)}, outliers = {int(np.sum(outlier_mask))}",
+            fontsize=11,
+        )
+        ax.set_xlabel("Run index" if not sort_runs else "Sorted run index")
+        ax.set_ylabel(metric_label_map[metric])
+        ax.grid(True, axis="y", alpha=0.3)
+
+        # Show original run numbers if sorted=False; otherwise show dense index
+        if not sort_runs:
+            x_positions = np.arange(len(values))
+            ax.set_xticks(x_positions)
+            if len(values) <= 20:
+                ax.set_xticklabels([str(ind) for ind in run_inds], rotation=0)
+            else:
+                step = max(1, len(values) // 10)
+                shown = np.arange(0, len(values), step)
+                ax.set_xticks(shown)
+                ax.set_xticklabels([str(run_inds[i]) for i in shown], rotation=0)
+
+        ax.legend(fontsize=8, loc="best")
+
+        results["waits_s"].append(wait_s)
+        results["per_wait"].append(
+            {
+                "dark_wait_s": wait_s,
+                "values": values.tolist(),
+                "mean": mean_val,
+                "median": median_val,
+                "outlier_run_inds": run_inds[outlier_mask].astype(int).tolist(),
+                "num_outliers": int(np.sum(outlier_mask)),
+            }
+        )
+
+    # turn off unused axes
+    for ax in axes[num_panels:]:
+        ax.axis("off")
+
+    fig.suptitle(
+        f"Per-run bar plots: {metric_label_map[metric]}",
+        fontsize=14,
+    )
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+
+    return results, fig
+if __name__ == "__main__":
+    kpl.init_kplotlib()
+    
+    # file_stem = "2026_07_26-18_11_11-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1800s-wait-1800s"
+    # raw_data = dm.get_raw_data(
+    #     file_stem=file_stem,
+    #     load_npz=True,
+    # )
+
+    # drift_result, fig_drift = (
+    #     analyze_drift_state_correlation(
+    #         raw_data,
+    #         register_images=True,
+    #     )
+    # )
+
+    # kpl.show(block=True)
+    # sys.exit()
     
     # FILE_STEMS = [
     # "2026_07_23-01_05_24-qnami-nv0_2026_02_20-particle-memory-source_off_wait_0s-wait-0s",
@@ -4400,25 +7595,99 @@ if __name__ == "__main__":
     FILE_STEMS = [
     "2026_07_24-21_43_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_0s-wait-0s",
     "2026_07_24-22_27_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_10s-wait-10s",
+    "2026_07_24-23_44_20-qnami-nv0_2026_02_20-particle-memory-source_off_wait_30s-wait-30s",
     "2026_07_25-01_51_32-qnami-nv0_2026_02_20-particle-memory-source_off_wait_60s-wait-60s",
     "2026_07_25-05_57_38-qnami-nv0_2026_02_20-particle-memory-source_off_wait_180s-wait-180s",
     "2026_07_25-12_33_01-qnami-nv0_2026_02_20-particle-memory-source_off_wait_300s-wait-300s",
     "2026_07_25-21_07_06-qnami-nv0_2026_02_20-particle-memory-source_off_wait_600s-wait-600s",
     "2026_07_26-05_34_29-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1200s-wait-1200s",
     "2026_07_26-18_11_11-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1800s-wait-1800s",
-    "2026_07_27-19_18_59-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
+    # "2026_07_27-19_18_59-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
     ]
     
-    output = run_particle_memory_dark_wait_comparison_analysis(
-        file_stems=FILE_STEMS,
-        recompute_analysis=False,
-        save_fig=True,
-        save_csv=True,
+    # # ------------------------------------------------------------------
+    # # Load datasets only once
+    # # ------------------------------------------------------------------
+    # output = run_particle_memory_dark_wait_comparison_analysis(
+    #     file_stems=FILE_STEMS,
+    #     recompute_analysis=False,
+    #     save_fig=True,
+    #     save_csv=False,
+    # )
+
+    # analyses = output["analyses"]
+
+    # # ------------------------------------------------------------------
+    # # Save lightweight wait-sweep analysis cache
+    # # ------------------------------------------------------------------
+
+    # analysis_cache_timestamp = dm.get_time_stamp()
+
+    # analysis_cache_file_path = dm.get_file_path(
+    #     __file__,
+    #     analysis_cache_timestamp,
+    #     "particle-memory-dark-wait-analysis-cache",
+    # )
+
+    # analysis_cache = {
+    #     "analysis_type": "particle_memory_dark_wait_analysis_cache",
+    #     "timestamp": analysis_cache_timestamp,
+    #     "file_stems": list(FILE_STEMS),
+    #     "analyses": _json_safe(analyses),
+    #     "summary": _json_safe(output.get("summary", {})),
+    # }
+
+    # dm.save_raw_data(
+    #     analysis_cache,
+    #     analysis_cache_file_path,
+    # )
+
+    # print(
+    #     "Saved wait-sweep analysis cache:",
+    #     analysis_cache_file_path,
+    # )
+    
+    # ------------------------------------------------------------------
+    # Load previously saved lightweight analysis cache
+    # ------------------------------------------------------------------
+
+    analysis_cache_file_stem = (
+        "2026_08_05-18_19_19-"
+        "particle-memory-dark-wait-analysis-cache"
     )
-    analyses = output["analyses"]
-    row_result, fig_rows = plot_nv_loss_row_by_row(
-    analyses,
-    selected_waits_s=[
+
+    analysis_cache = dm.get_raw_data(
+        file_stem=analysis_cache_file_stem,
+        load_npz=True,
+    )
+
+    analyses = analysis_cache[
+        "analyses"
+    ]
+
+    FILE_STEMS = analysis_cache[
+        "file_stems"
+    ]
+
+    print(
+        "Loaded cached analyses:",
+        len(analyses),
+    )
+
+    print(
+        "Wait times:",
+        [
+            analysis["dark_wait_s"]
+            for analysis in analyses
+        ],
+    )
+
+
+    # ------------------------------------------------------------------
+    # Select wait-time datasets
+    # ------------------------------------------------------------------
+
+    selected_waits_s = [
         0,
         10,
         30,
@@ -4428,28 +7697,264 @@ if __name__ == "__main__":
         600,
         1200,
         1800,
-        3600,
-    ],
-    subtract_zero_wait=False,
-    show_percent=True,
+    ]
+
+
+
+    run_bar_result, fig_run_bars = plot_wait_sweep_run_bars(
+        analyses,
+        selected_waits_s=selected_waits_s,
+        metric="num_candidates_by_run",
+        outlier_method="mad",
+        outlier_threshold=3.5,
+        ncols=3,
+        sharey=True,
+        show_mean=True,
+        show_median=True,
+        sort_runs=False,
     )
     
-    excess_row_result, fig_excess_rows = plot_nv_loss_row_by_row(
-    analyses,
-    selected_waits_s=[
-        0,
-        10,
-        30,
-        60,
-        180,
-        300,
-        600,
-        1200,
-        1800,
-        3600,
-    ],
-    subtract_zero_wait=True,
-    show_percent=True,
+    
+    run_retention_result, fig_retention_bars = plot_wait_sweep_run_bars(
+        analyses,
+        selected_waits_s=selected_waits_s,
+        metric="retention_by_run",
+        outlier_method="mad",
+        outlier_threshold=3.5,
+        ncols=3,
+        sharey=True,
+        show_mean=True,
+        show_median=True,
+        sort_runs=False,
+    )
+    
+    run_bar_result_sorted, fig_run_bars_sorted = plot_wait_sweep_run_bars(
+        analyses,
+        selected_waits_s=selected_waits_s,
+        metric="num_candidates_by_run",
+        outlier_method="mad",
+        outlier_threshold=3.5,
+        ncols=3,
+        sharey=True,
+        sort_runs=True,
+    )
+    kpl.show(block=True)
+    # ------------------------------------------------------------------
+    # Identify NVs that are persistently unstable across the wait sweep
+    # ------------------------------------------------------------------
+
+    BAD_NV_INDS, bad_actor_result = find_persistent_bad_nvs(
+        analyses,
+        selected_waits_s=selected_waits_s,
+
+        # A wait-time probability of at least 10% is high.
+        high_probability_threshold=0.05,
+
+        # High in at least 70% of valid wait datasets.
+        min_fraction_high=0.60,
+
+        # Explicitly require at least 6 high datasets.
+        min_high_waits=3,
+
+        # Require usable data in at least 7 datasets.
+        min_valid_waits=3,
+
+        min_eligible_per_wait=10,
+
+        # Require consistently high central probability.
+        min_median_probability=0.10,
+
+        # Require high probability when all eligible trials are pooled.
+        min_pooled_probability=0.10,
+
+        # Require high behavior at both ends of the sweep.
+        require_short_and_long_waits=True,
+        short_wait_max_s=60.0,
+        long_wait_min_s=300.0,
+        min_short_high_waits=2,
+        min_long_high_waits=2,
+
+        verbose=True,
+    )
+
+    print(
+        "\nBad NVs used for all plots:",
+        BAD_NV_INDS,
+    )
+
+
+    # ------------------------------------------------------------------
+    # Absolute heat map after removing persistent bad actors
+    # ------------------------------------------------------------------
+
+    row_result, fig_rows = plot_nv_loss_row_by_row(
+        analyses,
+        selected_waits_s=selected_waits_s,
+        subtract_zero_wait=False,
+        show_percent=True,
+        percentile_limit=99.0,
+
+        # Apply the persistent bad-actor list.
+        exclude_nv_inds=BAD_NV_INDS,
+
+        # Disable the old zero-wait-only automatic filter.
+        max_zero_wait_loss_probability=None,
+    )
+
+
+    # ------------------------------------------------------------------
+    # Get analyses with the same NVs removed
+    # ------------------------------------------------------------------
+
+    filtered_analyses = row_result[
+        "filtered_analyses"
+    ]
+
+
+    # ------------------------------------------------------------------
+    # Recompute the wait-time summary and lifetime fit
+    # ------------------------------------------------------------------
+
+    filtered_summary = summarize_wait_sweep(
+        filtered_analyses
+    )
+
+    print_wait_sweep_table(
+        filtered_summary
+    )
+
+    fig_filtered_trend = plot_wait_sweep_summary(
+        filtered_summary,
+        zoom_retention_axes=True,
+    )
+
+
+    # ------------------------------------------------------------------
+    # Baseline-subtracted heat map using the same NV population
+    # ------------------------------------------------------------------
+
+    excess_row_result, fig_excess_rows = (
+        plot_nv_loss_row_by_row(
+            analyses,
+            selected_waits_s=selected_waits_s,
+
+            # This must be True for the baseline-subtracted plot.
+            subtract_zero_wait=False,
+
+            show_percent=True,
+            percentile_limit=99.0,
+            exclude_nv_inds=BAD_NV_INDS,
+            max_zero_wait_loss_probability=None,
+        )
+    )
+
+
+    # ------------------------------------------------------------------
+    # Final verification
+    # ------------------------------------------------------------------
+
+    print(
+        "\nOriginal NV count:",
+        row_result["num_original_nvs"],
+    )
+
+    print(
+        "Excluded persistent bad actors:",
+        len(BAD_NV_INDS),
+    )
+
+    print(
+        "Retained NV count:",
+        row_result["num_retained_nvs"],
+    )
+
+    print(
+        "Excluded indices:",
+        BAD_NV_INDS,
+    )
+
+
+
+    # ------------------------------------------------------------------
+    # Fit every retained NV
+    # ------------------------------------------------------------------
+
+    individual_fit_result = (
+        fit_individual_nv_dark_survival(
+            filtered_analyses,
+            min_eligible_per_wait=10,
+            min_valid_waits=6,
+            min_fit_amplitude=0.005,
+            min_r_squared=0.0,
+            max_relative_tau_error=6.0,
+            verbose=True,
+        )
+    )
+
+
+    # ------------------------------------------------------------------
+    # Remove poor fits and extreme lifetime outliers
+    # ------------------------------------------------------------------
+
+    clean_individual_fit_result = (
+        remove_individual_nv_fit_outliers(
+            individual_fit_result,
+
+            # Robust outlier threshold in log10(tau).
+            mad_z_threshold=3.5,
+
+            # Fit-quality cuts.
+            min_r_squared=0.0,
+            max_relative_tau_error=1.5,
+
+            # Do not trust tau values more than 10 times
+            # the longest measured dark time.
+            max_tau_factor=10.0,
+
+            min_tau_s=1.0,
+            verbose=True,
+        )
+    )
+
+
+    # ------------------------------------------------------------------
+    # Histogram after removing outliers
+    # ------------------------------------------------------------------
+
+    fig_nv_tau_histogram = (
+        plot_individual_nv_lifetime_histogram(
+            clean_individual_fit_result,
+            quality_only=True,
+            num_bins=20,
+        )
+    )
+
+
+    # ------------------------------------------------------------------
+    # Plot the five fastest NVs remaining after outlier removal
+    # ------------------------------------------------------------------
+
+    fig_fast_nvs, fast_nv_inds = (
+        plot_fastest_individual_nv_curves(
+            clean_individual_fit_result,
+            top_n=5,
+            quality_only=True,
+        )
+    )
+
+    print(
+        "Fastest retained NV indices:",
+        fast_nv_inds,
+    )
+
+    print(
+        "Removed fit outlier indices:",
+        [
+            fit["original_nv_ind"]
+            for fit in clean_individual_fit_result[
+                "outlier_removed_fits"
+            ]
+        ],
     )
 
     kpl.show(block=True)
@@ -4468,7 +7973,6 @@ if __name__ == "__main__":
     file_stem = (
         # "2026_07_19-09_54_11-qnami-nv0_2026_02_20-particle-memory-source_off-wait-300s"
     "2026_07_19-09_54_11-qnami-nv0_2026_02_20-particle-memory-source_off-wait-300s"
-    
     )
 
 
