@@ -32,7 +32,7 @@ def main(
     num_reps,
     num_runs,
     uwave_ind,
-    uwave_power_dbm=None,
+    uwave_power_dbm=3,
     laser_power=None,
     optimize_between_runs=False,
     do_plot=True,

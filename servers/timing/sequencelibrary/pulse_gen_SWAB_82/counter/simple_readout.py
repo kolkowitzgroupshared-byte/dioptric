@@ -210,6 +210,6 @@ def get_seq(pulse_streamer, config, args):
 if __name__ == "__main__":
     config = common.get_config_dict()
     # Keep 4-arg shape for compatibility; laser args are ignored
-    args = [500_000, 10_000_000, "laser_INTE_520", 1.0]
+    args = [200_000, 10_000_000, "laser_INTE_520", 1.0]
     seq, ret_vals, period = get_seq(None, config, args)
     seq.plot()

@@ -61,8 +61,8 @@ def load_data(data_dir, base_name):
 
 #region File Input
 def main():
-    data_dir = r"G:\nvdata\pc_cryo\branch_master\confocal_rabi\2026_05"
-    base_name = "2026_05_15-11_55_14-(Wu)"
+    data_dir = r"G:\nvdata\pc_cryo\branch_master\confocal_rabi\2026_07"
+    base_name = "2026_07_29-16_52_19-(DenseNV)"
 
     taus_ns, counts = load_data(data_dir, base_name)
 
