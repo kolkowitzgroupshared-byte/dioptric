@@ -791,18 +791,20 @@ if __name__ == "__main__":
     # file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
     # file_stem= "2026_07_11-14_54_21-repeated_readout_survival_with_slm_weights_2026_07_11-04_37_50-qnami-nv0_2026_02_20"
     # file_stem="2026_07_18-23_11_48-reoptimized_slm_score_survival_focused_2026_07_18-11_10_09-qnami-nv0_2026_02_20"
-    file_stem="2026_07_22-15_53_45-reoptimized_slm_score_survival_focused_2026_07_22-04_39_34-qnami-nv0_2026_02_20"
+    # file_stem="2026_07_22-15_53_45-reoptimized_slm_score_survival_focused_2026_07_22-04_39_34-qnami-nv0_2026_02_20"
+    # file_stem="2026_08_05-14_57_39-reoptimized_slm_score_survival_focused_2026_08_05-04_43_20-qnami-nv0_2026_02_20"
+    file_stem="2026_08_05-14_57_39-reoptimized_slm_score_survival_focused_2026_08_05-04_43_20-qnami-nv0_2026_02_20"
     )
     # spot_weights = data_spot_weight["optimal_weights"]
-    spot_weights  = data_spot_weight["slm_amplitude_weight"]
+    # spot_weights  = data_spot_weight["slm_amplitude_weight"]
     # spot_weights = data_spot_weight["slm_mean_norm_weight_clipped"]
     # # spot_weights = np.squeeze(spot_weights)
     # sys.exit()
 
-    spot_weights = curve_extreme_weights_simple(
-            spot_weights, scaling_factor=1.5
-        )
-    spot_weights = np.array(spot_weights)
+    # spot_weights = curve_extreme_weights_simple(
+    #         spot_weights, scaling_factor=1.5
+    #     )
+    # spot_weights = np.array(spot_weights)
     
     # fitted_data = dm.get_raw_data(file_stem="2026_03_23-16_39_03-optimal_values_2026_03_22-21_49_52-qnami-nv0_2026_02_20")
     # saved_summary = dm.get_raw_data(file_stem="2026_03_26-18_13_04-recomputed_summary_w_1_2_1_2026_03_26-15_04_19-optimization_processed_full_raw_data")
@@ -1040,7 +1042,9 @@ if __name__ == "__main__":
         # file_stem="2026_03_25-16_28_08-charge_state_analysis_hist_data_raw_data", load_npz=True
         # file_stem="2026_03_25-18_15_53-charge_state_analysis_hist_data_raw_data", load_npz=True
         # file_stem= "2026_07_15-15_17_51-single_step_charge_hist_single_cpu_2026_07_15-13_03_24-qnami-nv0_2026_02_20",
-        file_stem= "2026_08_04-13_47_40-single_step_charge_hist_single_cpu_2026_08_04-13_21_07-qnami-nv0_2026_02_20",
+        # file_stem= "2026_08_04-13_47_40-single_step_charge_hist_single_cpu_2026_08_04-13_21_07-qnami-nv0_2026_02_20",
+        # file_stem= "2026_08_08-16_47_43-single_step_charge_hist_single_cpu_2026_08_08-16_44_44-qnami-nv0_2026_02_20",
+        file_stem= "2026_08_08-18_51_29-single_step_charge_hist_single_cpu_2026_08_08-18_48_51-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     print (data.keys())
@@ -1078,7 +1082,7 @@ if __name__ == "__main__":
         if (v1 is not None and v2 is not None)
         and all(isinstance(x, (int, float)) for x in (v1, v2))
         and not (math.isnan(v1) or math.isnan(v2))
-        and v1 >= 0.8 and v2 >= 0.55
+        and v1 >= 0.95 and v2 >= 0.55
     ]
     # print(np.sort(list(include_indices)))
     filtered_reordered_coords = [filtered_reordered_coords[i] for i in include_indices]
@@ -1096,7 +1100,7 @@ if __name__ == "__main__":
     )
 
     # aom_voltage = 0.2923
-    aom_voltage = 0.1923
+    aom_voltage = 0.1600
     a, b, c = 1.5133e04, 2.6976, -38.63  # UPDATED 2025-09-17
 
     total_power = a * (aom_voltage) ** b + c
@@ -1183,11 +1187,11 @@ if __name__ == "__main__":
     # filtered_reordered_spot_weights = filtered_reordered_spot_weights[:4094]
     # filtered_reordered_coords = filtered_reordered_coords[:4094]
     # Save the filtered results
-    save_results(
-        filtered_reordered_coords,
-        filtered_reordered_spot_weights,
-        filename="slmsuite/nv_blob_detection/nv_blob_415nvs_reordered_inside_dmd.npz",
-    )
+    # save_results(
+    #     filtered_reordered_coords,
+    #     filtered_reordered_spot_weights,
+    #     filename="slmsuite/nv_blob_detection/nv_blob_366nvs_reordered_inside_dmd.npz",
+    # )
 
     # # Plot the original image with circles around each NV
     fig, ax = plt.subplots()

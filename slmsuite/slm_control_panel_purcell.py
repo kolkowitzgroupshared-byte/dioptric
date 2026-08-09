@@ -364,7 +364,8 @@ data_spot_weight = dm.get_raw_data(
     # file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
     # file_stem= "2026_07_11-14_54_21-repeated_readout_survival_with_slm_weights_2026_07_11-04_37_50-qnami-nv0_2026_02_20"
     # file_stem="2026_07_18-23_11_48-reoptimized_slm_score_survival_focused_2026_07_18-11_10_09-qnami-nv0_2026_02_20"
-    file_stem="2026_07_22-15_53_45-reoptimized_slm_score_survival_focused_2026_07_22-04_39_34-qnami-nv0_2026_02_20"
+    # file_stem="2026_07_22-15_53_45-reoptimized_slm_score_survival_focused_2026_07_22-04_39_34-qnami-nv0_2026_02_20"
+    file_stem="2026_08_05-14_57_39-reoptimized_slm_score_survival_focused_2026_08_05-04_43_20-qnami-nv0_2026_02_20"
 )
 # spot_weights = data_spot_weight["optimal_weights"]
 # spot_weights  = data_spot_weight["slm_amplitude_weight"]
@@ -372,10 +373,10 @@ data_spot_weight = dm.get_raw_data(
 # # spot_weights = np.squeeze(spot_weights)
 # sys.exit()
 
-spot_weights = curve_extreme_weights_simple(
-        spot_weights, scaling_factor=1.5
-    )
-spot_weights = np.array(spot_weights)
+# spot_weights = curve_extreme_weights_simple(
+#         spot_weights, scaling_factor=1.0
+#     )
+# spot_weights = np.array(spot_weights)
 
 # If weights are 2D, choose one row/column as needed.
 # This keeps the most common case: shape (N,)
@@ -433,7 +434,7 @@ def compute_and_write_nvs_phase():
         shape=(4096, 2048),
         spot_vectors=thorcam_coords_xy,
         basis="ij",
-        # spot_amp=spot_weights,
+        spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally
@@ -458,7 +459,7 @@ def compute_and_write_nvs_phase():
     # cam_plot()
     
 def write_pre_computed_nvs_phase():
-    phase = np.load("slmsuite\computed_phase\slm_phase_415nvs_20260805_144355.npy")
+    phase = np.load("slmsuite\computed_phase\slm_phase_402nvs_20260808_170021.npy")
     slm.write(phase, settle=True)
     # cam_plot()
 
@@ -529,8 +530,8 @@ try:
     # wavefront_calibration()
     # load_wavefront_calibration()
     
-    # compute_and_write_nvs_phase()
-    write_pre_computed_nvs_phase()
+    compute_and_write_nvs_phase()
+    # write_pre_computed_nvs_phase()
     
     # calibration_triangle()
     # write_pre_computed_triangle()
