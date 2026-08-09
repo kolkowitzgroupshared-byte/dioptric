@@ -1044,7 +1044,8 @@ if __name__ == "__main__":
         # file_stem= "2026_07_15-15_17_51-single_step_charge_hist_single_cpu_2026_07_15-13_03_24-qnami-nv0_2026_02_20",
         # file_stem= "2026_08_04-13_47_40-single_step_charge_hist_single_cpu_2026_08_04-13_21_07-qnami-nv0_2026_02_20",
         # file_stem= "2026_08_08-16_47_43-single_step_charge_hist_single_cpu_2026_08_08-16_44_44-qnami-nv0_2026_02_20",
-        file_stem= "2026_08_08-18_51_29-single_step_charge_hist_single_cpu_2026_08_08-18_48_51-qnami-nv0_2026_02_20",
+        # file_stem= "2026_08_08-18_51_29-single_step_charge_hist_single_cpu_2026_08_08-18_48_51-qnami-nv0_2026_02_20",
+        file_stem= "2026_08_08-21_33_29-single_step_charge_hist_single_cpu_2026_08_08-20_30_31-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     print (data.keys())
@@ -1082,7 +1083,7 @@ if __name__ == "__main__":
         if (v1 is not None and v2 is not None)
         and all(isinstance(x, (int, float)) for x in (v1, v2))
         and not (math.isnan(v1) or math.isnan(v2))
-        and v1 >= 0.95 and v2 >= 0.55
+        and v1 >= 0.98 and v2 >= 0.60
     ]
     # print(np.sort(list(include_indices)))
     filtered_reordered_coords = [filtered_reordered_coords[i] for i in include_indices]
@@ -1187,11 +1188,11 @@ if __name__ == "__main__":
     # filtered_reordered_spot_weights = filtered_reordered_spot_weights[:4094]
     # filtered_reordered_coords = filtered_reordered_coords[:4094]
     # Save the filtered results
-    # save_results(
-    #     filtered_reordered_coords,
-    #     filtered_reordered_spot_weights,
-    #     filename="slmsuite/nv_blob_detection/nv_blob_366nvs_reordered_inside_dmd.npz",
-    # )
+    save_results(
+        filtered_reordered_coords,
+        filtered_reordered_spot_weights,
+        filename="slmsuite/nv_blob_detection/nv_blob_351nvs_reordered_inside_dmd.npz",
+    )
 
     # # Plot the original image with circles around each NV
     fig, ax = plt.subplots()

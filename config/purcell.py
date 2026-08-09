@@ -156,6 +156,7 @@ config |= {
             # "slmsuite/nv_blob_detection/nv_blob_404nvs_reordered_inside_dmd.npz"
             # "slmsuite/nv_blob_detection/nv_blob_402nvs_reordered_inside_dmd.npz"
             "slmsuite/nv_blob_detection/nv_blob_366nvs_reordered_inside_dmd.npz"
+            # "slmsuite/nv_blob_detection/nv_blob_351nvs_reordered_inside_dmd.npz"
         ),
         "slm_fourier_calib_path": (
             "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00015.h5"
@@ -1058,7 +1059,8 @@ opx_config = {
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1942}, ## 631NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1710}, ## 415NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1693}, ## 402NVs
-        "yellow_charge_readout": {"type": "constant", "sample": 0.160}, ## 404NVs
+        "yellow_charge_readout": {"type": "constant", "sample": 0.160}, ## 366NVs
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.1582}, ## 404NVs
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other

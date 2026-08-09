@@ -283,7 +283,7 @@ def do_adaptive_charge_initialization(nv_list):
         dmd_indices=None,      # full nv_list, DMD index = nv_list index
         dmd_radius_px=11,
         dmd_plane=230,
-        confirm_margin_counts=1.0,
+        confirm_margin_counts=5.0,
         save_images=True,
         save_images_avg_reps=False,
         save_data=True,
@@ -339,16 +339,16 @@ def do_charge_state_particle_memory(nv_list):
     
 def do_charge_state_particle_memory_wait_sweep(nv_list):
     wait_plan = [
-        (0, 100),
-        (10, 100),
-        (30, 100),
-        (60, 100),
-        (180, 75),
-        (300, 75),
-        (600, 50),
-        (1200, 25),
-        (1800, 25),
-        (3600, 25),
+        (0, 20),
+        (10, 20),
+        (30, 20),
+        (60, 20),
+        (180, 20),
+        (300, 20),
+        (600, 20),
+        (1200, 20),
+        (1800, 20),
+        # (3600, 25),
     ]
 
     results = {}
@@ -368,7 +368,7 @@ def do_charge_state_particle_memory_wait_sweep(nv_list):
             dark_wait_s=dark_wait_s,
             mode="dmd_block_confirmed",
             dmd_indices=None,
-            dmd_radius_px=8,
+            dmd_radius_px=11,
             dmd_plane=230,
             confirm_margin_counts=1.0,
             take_initial_check=True,
@@ -1928,7 +1928,9 @@ if __name__ == "__main__":
         # file_stem = "2026_08_04-13_25_01-single_step_charge_hist_single_cpu_2026_08_04-13_21_07-qnami-nv0_2026_02_20",
         # file_stem = "2026_08_04-16_28_51-single_step_charge_hist_single_cpu_2026_08_04-16_25_34-qnami-nv0_2026_02_20",
         # file_stem = "2026_08_08-16_47_43-single_step_charge_hist_single_cpu_2026_08_08-16_44_44-qnami-nv0_2026_02_20",
-        file_stem = "2026_08_08-17_24_56-single_step_charge_hist_single_cpu_2026_08_08-17_21_48-qnami-nv0_2026_02_20",
+        # file_stem = "2026_08_08-17_24_56-single_step_charge_hist_single_cpu_2026_08_08-17_21_48-qnami-nv0_2026_02_20",
+        # file_stem = "2026_08_08-21_33_29-single_step_charge_hist_single_cpu_2026_08_08-20_30_31-qnami-nv0_2026_02_20",
+        file_stem = "2026_08_08-22_54_51-single_step_charge_hist_single_cpu_2026_08_08-22_52_19-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
@@ -2153,11 +2155,11 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        do_charge_state_histograms(nv_list)
+        # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
-        # do_charge_state_particle_memory_wait_sweep(nv_list)
+        do_charge_state_particle_memory_wait_sweep(nv_list)
         # do_charge_state_measurement_backaction(nv_list)
         
         # do_dmd_crosstalk_matrix(
