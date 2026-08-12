@@ -350,7 +350,6 @@ def do_charge_state_particle_memory_wait_sweep(nv_list):
         (1800, 20),
         # (3600, 25),
     ]
-
     results = {}
 
     for dark_wait_s, num_runs in wait_plan:
@@ -1842,7 +1841,7 @@ if __name__ == "__main__":
     date_str = "2026_02_20"
     sample_coords = [-1.20, -0.75]
     z_coord = -1.7
-    # z_coord = -3.9
+    # z_coord = -4.1
     
     config = common.get_config_dict()
     file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
@@ -1896,10 +1895,10 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.74, 98.166],
-    #     [73.715, 115.446],
-    #     [100.72, 68.894],
-    #     [126.953, 127.76],
+    #     [97.773, 98.134],
+    #     [73.725, 115.419],
+    #     [100.75, 68.855],
+    #     [127.011, 127.718],
     # ]
     # red_coords_list = [
     #     [66.826, 67.772],
@@ -1930,7 +1929,8 @@ if __name__ == "__main__":
         # file_stem = "2026_08_08-16_47_43-single_step_charge_hist_single_cpu_2026_08_08-16_44_44-qnami-nv0_2026_02_20",
         # file_stem = "2026_08_08-17_24_56-single_step_charge_hist_single_cpu_2026_08_08-17_21_48-qnami-nv0_2026_02_20",
         # file_stem = "2026_08_08-21_33_29-single_step_charge_hist_single_cpu_2026_08_08-20_30_31-qnami-nv0_2026_02_20",
-        file_stem = "2026_08_08-22_54_51-single_step_charge_hist_single_cpu_2026_08_08-22_52_19-qnami-nv0_2026_02_20",
+        # file_stem = "2026_08_08-22_54_51-single_step_charge_hist_single_cpu_2026_08_08-22_52_19-qnami-nv0_2026_02_20",
+        file_stem= "2026_08_11-17_25_05-single_step_charge_hist_single_cpu_2026_08_11-17_19_57-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
@@ -2097,7 +2097,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)     
+        do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list: 
@@ -2155,11 +2155,11 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        # do_charge_state_histograms(nv_list)
+        do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
-        do_charge_state_particle_memory_wait_sweep(nv_list)
+        # do_charge_state_particle_memory_wait_sweep(nv_list)
         # do_charge_state_measurement_backaction(nv_list)
         
         # do_dmd_crosstalk_matrix(

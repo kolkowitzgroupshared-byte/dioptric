@@ -7562,9 +7562,260 @@ def plot_wait_sweep_run_bars(
     fig.tight_layout(rect=[0, 0, 1, 0.96])
 
     return results, fig
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+from utils import data_manager as dm
+from utils import kplotlib as kpl
+
+
+def plot_nv_minus_by_run_separate_reps(
+    file_stems,
+    selected_waits_s=None,
+    rep_inds=(1, 11, 12),
+    rep_labels=None,
+    exclude_nv_inds=None,
+    show_fraction=False,
+    ncols=3,
+    verbose=True,
+):
+    """
+    Make 3 separate figures (or as many reps as requested), one figure per rep.
+
+    Each figure contains one subplot per dark-wait dataset, and each subplot
+    shows the run-by-run number (or fraction) of NVs classified as NV-.
+
+    Parameters
+    ----------
+    file_stems : sequence of str
+        Raw particle-memory dataset file stems.
+
+    selected_waits_s : sequence or None
+        Only include these dark-wait times.
+
+    rep_inds : tuple/list of int
+        Rep indices to inspect, e.g. (1, 11, 12).
+
+    rep_labels : dict or None
+        Optional labels for rep indices, e.g.
+        {1: "rep 1: early init", 11: "rep 11: initial check", 12: "rep 12: after wait"}
+
+    exclude_nv_inds : sequence or None
+        Original NV indices to exclude.
+
+    show_fraction : bool
+        False -> plot number of NV-.
+        True  -> plot fraction of kept NVs classified NV-.
+
+    ncols : int
+        Number of subplot columns per figure.
+
+    Returns
+    -------
+    dataset_results : list of dict
+        Per-dataset computed run-by-run values.
+
+    figures : dict
+        figures[rep_ind] = matplotlib figure
+    """
+
+    if exclude_nv_inds is None:
+        exclude_nv_inds = np.array([], dtype=int)
+    else:
+        exclude_nv_inds = np.unique(np.asarray(exclude_nv_inds, dtype=int))
+
+    if rep_labels is None:
+        rep_labels = {
+            rep_inds[0]: f"rep {rep_inds[0]}",
+            rep_inds[1]: f"rep {rep_inds[1]}",
+            rep_inds[2]: f"rep {rep_inds[2]}",
+        }
+
+    # --------------------------------------------------------------
+    # Load all requested datasets
+    # --------------------------------------------------------------
+    dataset_results = []
+
+    for file_stem in file_stems:
+        raw_data = dm.get_raw_data(
+            file_stem=file_stem,
+            load_npz=True,
+        )
+
+        wait_s = float(raw_data["dark_wait_s"])
+
+        if selected_waits_s is not None:
+            selected_waits_s = np.asarray(selected_waits_s, dtype=float)
+            if not np.any(np.isclose(wait_s, selected_waits_s)):
+                continue
+
+        counts_all = np.asarray(raw_data["counts"], dtype=float)
+
+        if counts_all.ndim != 5:
+            raise ValueError(
+                f"Expected counts[exp, nv, run, step, rep], got {counts_all.shape}"
+            )
+
+        # counts shape -> [nv, run, rep]
+        counts = counts_all[0, :, :, 0, :]
+        num_nvs, num_runs, num_reps = counts.shape
+
+        if "analysis_thresholds" in raw_data:
+            thresholds = np.asarray(raw_data["analysis_thresholds"], dtype=float)
+        elif "thresholds" in raw_data:
+            thresholds = np.asarray(raw_data["thresholds"], dtype=float)
+        else:
+            raise ValueError(f"No thresholds found in {file_stem}")
+
+        if thresholds.shape != (num_nvs,):
+            raise ValueError(
+                f"Threshold shape mismatch: {thresholds.shape} vs {(num_nvs,)}"
+            )
+
+        # Apply optional NV exclusion
+        keep_mask = np.ones(num_nvs, dtype=bool)
+        valid_excluded = exclude_nv_inds[
+            (exclude_nv_inds >= 0) & (exclude_nv_inds < num_nvs)
+        ]
+        keep_mask[valid_excluded] = False
+
+        counts = counts[keep_mask, :, :]
+        thresholds = thresholds[keep_mask]
+        num_kept_nvs = int(np.sum(keep_mask))
+
+        # classify all reps with the same threshold
+        nvm_mask = counts > thresholds[:, None, None]
+
+        rep_counts = {}
+        for rep_ind in rep_inds:
+            if rep_ind < 0 or rep_ind >= num_reps:
+                raise ValueError(
+                    f"Requested rep {rep_ind} is outside range [0, {num_reps - 1}] "
+                    f"for file {file_stem}"
+                )
+
+            values = np.sum(nvm_mask[:, :, rep_ind], axis=0).astype(float)
+
+            if show_fraction:
+                values = values / num_kept_nvs
+
+            rep_counts[rep_ind] = values
+
+        dataset_results.append(
+            {
+                "file_stem": file_stem,
+                "dark_wait_s": wait_s,
+                "num_runs": num_runs,
+                "num_reps": num_reps,
+                "num_kept_nvs": num_kept_nvs,
+                "rep_counts": rep_counts,
+            }
+        )
+
+    dataset_results.sort(key=lambda d: d["dark_wait_s"])
+
+    if not dataset_results:
+        raise ValueError("No matching datasets were loaded.")
+
+    # --------------------------------------------------------------
+    # Make one figure per rep
+    # --------------------------------------------------------------
+    figures = {}
+
+    num_panels = len(dataset_results)
+    ncols = min(int(ncols), num_panels)
+    nrows = int(np.ceil(num_panels / ncols))
+
+    for rep_ind in rep_inds:
+        fig, axes = plt.subplots(
+            nrows,
+            ncols,
+            figsize=(5.2 * ncols, 3.8 * nrows),
+            sharey=True,
+        )
+        axes = np.atleast_1d(axes).ravel()
+
+        for panel_ind, dataset in enumerate(dataset_results):
+            ax = axes[panel_ind]
+
+            yvals = np.asarray(dataset["rep_counts"][rep_ind], dtype=float)
+            num_runs = int(dataset["num_runs"])
+            run_inds = np.arange(num_runs)
+
+            ax.bar(
+                run_inds,
+                yvals,
+                alpha=0.75,
+            )
+
+            mean_val = float(np.mean(yvals))
+            std_val = float(np.std(yvals, ddof=1)) if len(yvals) > 1 else 0.0
+
+            ax.axhline(
+                mean_val,
+                linestyle="--",
+                linewidth=1.4,
+                color="k",
+                alpha=0.7,
+            )
+
+            ax.set_title(
+                f"wait = {dataset['dark_wait_s']:g} s\n"
+                f"mean = {mean_val:.2f}, std = {std_val:.2f}",
+                fontsize=10,
+            )
+            ax.set_xlabel("Run index")
+
+            if show_fraction:
+                ax.set_ylabel("NV$^-$ fraction")
+                ax.set_ylim(0, 1.02)
+            else:
+                ax.set_ylabel("Number of NV$^-$")
+
+            ax.grid(True, axis="y", alpha=0.25)
+
+            tick_step = max(1, int(np.ceil(num_runs / 10)))
+            ticks = np.arange(0, num_runs, tick_step)
+            ax.set_xticks(ticks)
+            ax.set_xticklabels([str(t) for t in ticks])
+
+        for ax in axes[num_panels:]:
+            ax.axis("off")
+
+        fig.suptitle(
+            f"Run-by-run NV$^-$ population: {rep_labels.get(rep_ind, f'rep {rep_ind}')}",
+            fontsize=14,
+        )
+        fig.tight_layout(rect=[0, 0, 1, 0.94])
+
+        figures[rep_ind] = fig
+
+    # --------------------------------------------------------------
+    # Optional text summary
+    # --------------------------------------------------------------
+    if verbose:
+        print("\n" + "=" * 90)
+        print("RUN-BY-RUN NV- POPULATION SUMMARY")
+        print("=" * 90)
+
+        for rep_ind in rep_inds:
+            print(f"\n--- {rep_labels.get(rep_ind, f'rep {rep_ind}')} ---")
+            for dataset in dataset_results:
+                values = np.asarray(dataset["rep_counts"][rep_ind], dtype=float)
+                print(
+                    f"wait={dataset['dark_wait_s']:>6g} s | "
+                    f"mean={np.mean(values):.3f}, "
+                    f"std={np.std(values, ddof=1) if len(values) > 1 else 0.0:.3f}, "
+                    f"min={np.min(values):.3f}, "
+                    f"max={np.max(values):.3f}"
+                )
+
+    return dataset_results, figures
+
 if __name__ == "__main__":
     kpl.init_kplotlib()
-    
     # file_stem = "2026_07_26-18_11_11-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1800s-wait-1800s"
     # raw_data = dm.get_raw_data(
     #     file_stem=file_stem,
@@ -7584,7 +7835,7 @@ if __name__ == "__main__":
     # FILE_STEMS = [
     # "2026_07_23-01_05_24-qnami-nv0_2026_02_20-particle-memory-source_off_wait_0s-wait-0s",
     # "2026_07_23-01_48_56-qnami-nv0_2026_02_20-particle-memory-source_off_wait_10s-wait-10s",
-    # # "2026_07_23-03_05_50-qnami-nv0_2026_02_20-particle-memory-source_off_wait_30s-wait-30s",
+    # "2026_07_23-03_05_50-qnami-nv0_2026_02_20-particle-memory-source_off_wait_30s-wait-30s",
     # "2026_07_23-05_13_51-qnami-nv0_2026_02_20-particle-memory-source_off_wait_60s-wait-60s",
     # "2026_07_23-09_19_48-qnami-nv0_2026_02_20-particle-memory-source_off_wait_180s-wait-180s",
     # "2026_07_23-15_55_08-qnami-nv0_2026_02_20-particle-memory-source_off_wait_300s-wait-300s",
@@ -7592,18 +7843,60 @@ if __name__ == "__main__":
     # "2026_07_24-08_56_35-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1200s-wait-1200s",
     # ]
     
-    FILE_STEMS = [
-    "2026_07_24-21_43_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_0s-wait-0s",
-    "2026_07_24-22_27_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_10s-wait-10s",
-    "2026_07_24-23_44_20-qnami-nv0_2026_02_20-particle-memory-source_off_wait_30s-wait-30s",
-    "2026_07_25-01_51_32-qnami-nv0_2026_02_20-particle-memory-source_off_wait_60s-wait-60s",
-    "2026_07_25-05_57_38-qnami-nv0_2026_02_20-particle-memory-source_off_wait_180s-wait-180s",
-    "2026_07_25-12_33_01-qnami-nv0_2026_02_20-particle-memory-source_off_wait_300s-wait-300s",
-    "2026_07_25-21_07_06-qnami-nv0_2026_02_20-particle-memory-source_off_wait_600s-wait-600s",
-    "2026_07_26-05_34_29-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1200s-wait-1200s",
-    "2026_07_26-18_11_11-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1800s-wait-1800s",
+    # FILE_STEMS = [
+    # "2026_07_24-21_43_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_0s-wait-0s",
+    # "2026_07_24-22_27_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_10s-wait-10s",
+    # "2026_07_24-23_44_20-qnami-nv0_2026_02_20-particle-memory-source_off_wait_30s-wait-30s",
+    # "2026_07_25-01_51_32-qnami-nv0_2026_02_20-particle-memory-source_off_wait_60s-wait-60s",
+    # "2026_07_25-05_57_38-qnami-nv0_2026_02_20-particle-memory-source_off_wait_180s-wait-180s",
+    # "2026_07_25-12_33_01-qnami-nv0_2026_02_20-particle-memory-source_off_wait_300s-wait-300s",
+    # "2026_07_25-21_07_06-qnami-nv0_2026_02_20-particle-memory-source_off_wait_600s-wait-600s",
+    # "2026_07_26-05_34_29-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1200s-wait-1200s",
+    # "2026_07_26-18_11_11-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1800s-wait-1800s",
     # "2026_07_27-19_18_59-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
+    # ]
+    
+    FILE_STEMS = [
+    "2026_08_08-23_11_09-qnami-nv0_2026_02_20-particle-memory-source_off_wait_0s-wait-0s",
+    "2026_08_08-23_19_25-qnami-nv0_2026_02_20-particle-memory-source_off_wait_10s-wait-10s",
+    "2026_08_08-23_34_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_30s-wait-30s",
+    "2026_08_08-23_59_13-qnami-nv0_2026_02_20-particle-memory-source_off_wait_60s-wait-60s",
+    "2026_08_09-01_04_06-qnami-nv0_2026_02_20-particle-memory-source_off_wait_180s-wait-180s",
+    "2026_08_09-02_49_00-qnami-nv0_2026_02_20-particle-memory-source_off_wait_300s-wait-300s",
+    "2026_08_09-06_13_54-qnami-nv0_2026_02_20-particle-memory-source_off_wait_600s-wait-600s",
+    "2026_08_09-12_58_47-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1200s-wait-1200s",
+    "2026_08_09-23_03_43-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1800s-wait-1800s",
     ]
+    
+    selected_waits_s = [
+        0,
+        10,
+        30,
+        60,
+        180,
+        300,
+        600,
+        1200,
+        1800,
+        # 3600,
+    ]
+
+    rep_stats, rep_figs = plot_nv_minus_by_run_separate_reps(
+        FILE_STEMS,
+        selected_waits_s=selected_waits_s,
+        rep_inds=(1, 11, 12),
+        rep_labels={
+            1: "rep 1: early initialization",
+            11: "rep 11: immediate final check",
+            12: "rep 12: after dark wait",
+        },
+        exclude_nv_inds=None,   # or BAD_NV_INDS
+        show_fraction=False,    # True if you want fraction instead of count
+        ncols=3,
+        verbose=True,
+    )
+
+    kpl.show(block=True)
     
     # # ------------------------------------------------------------------
     # # Load datasets only once
@@ -7617,9 +7910,9 @@ if __name__ == "__main__":
 
     # analyses = output["analyses"]
 
-    # # ------------------------------------------------------------------
-    # # Save lightweight wait-sweep analysis cache
-    # # ------------------------------------------------------------------
+    # # # ------------------------------------------------------------------
+    # # # Save lightweight wait-sweep analysis cache
+    # # # ------------------------------------------------------------------
 
     # analysis_cache_timestamp = dm.get_time_stamp()
 
@@ -7651,9 +7944,13 @@ if __name__ == "__main__":
     # Load previously saved lightweight analysis cache
     # ------------------------------------------------------------------
 
+    # analysis_cache_file_stem = (
+    #     "2026_08_05-18_19_19-"
+    #     "particle-memory-dark-wait-analysis-cache"
+    # )
+    
     analysis_cache_file_stem = (
-        "2026_08_05-18_19_19-"
-        "particle-memory-dark-wait-analysis-cache"
+        "2026_08_10-10_41_25-particle-memory-dark-wait-analysis-cache"
     )
 
     analysis_cache = dm.get_raw_data(
@@ -7683,6 +7980,7 @@ if __name__ == "__main__":
     )
 
 
+
     # ------------------------------------------------------------------
     # Select wait-time datasets
     # ------------------------------------------------------------------
@@ -7706,7 +8004,7 @@ if __name__ == "__main__":
         selected_waits_s=selected_waits_s,
         metric="num_candidates_by_run",
         outlier_method="mad",
-        outlier_threshold=3.5,
+        outlier_threshold=2.0,
         ncols=3,
         sharey=True,
         show_mean=True,
@@ -7720,7 +8018,7 @@ if __name__ == "__main__":
         selected_waits_s=selected_waits_s,
         metric="retention_by_run",
         outlier_method="mad",
-        outlier_threshold=3.5,
+        outlier_threshold=2.0,
         ncols=3,
         sharey=True,
         show_mean=True,
@@ -7733,7 +8031,7 @@ if __name__ == "__main__":
         selected_waits_s=selected_waits_s,
         metric="num_candidates_by_run",
         outlier_method="mad",
-        outlier_threshold=3.5,
+        outlier_threshold=2.0,
         ncols=3,
         sharey=True,
         sort_runs=True,
@@ -7754,10 +8052,10 @@ if __name__ == "__main__":
         min_fraction_high=0.60,
 
         # Explicitly require at least 6 high datasets.
-        min_high_waits=3,
+        min_high_waits=2,
 
         # Require usable data in at least 7 datasets.
-        min_valid_waits=3,
+        min_valid_waits=2,
 
         min_eligible_per_wait=10,
 
