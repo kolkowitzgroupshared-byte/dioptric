@@ -1358,7 +1358,7 @@ if __name__ == "__main__":
     # =============================================================================
     # User settings
     # =============================================================================
-    # FILE_ID = "2026_07_10-12_06_57-qnami-nv0_2026_02_20"
+    # FILE_ID = "2026_07_10-12_06_57-qnami-nv0_2026_02_20"  ## 814 working NVs 200ms readout
     # FILE_ID = "2026_07_10-16_57_47-qnami-nv0_2026_02_20", ## 814 working NVs 200ms readout
     # FILE_ID = "2026_07_13-17_00_15-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
     # FILE_ID = "2026_07_14-13_06_11-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
@@ -1389,14 +1389,23 @@ if __name__ == "__main__":
     # FILE_ID = "2026_08_08-22_18_32-qnami-nv0_2026_02_20" ## 351 working NVs 500ms readout
     # FILE_ID = "2026_08_08-22_52_19-qnami-nv0_2026_02_20" ## 366 working NVs 500ms readout
     # FILE_ID = "2026_08_11-17_19_57-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
-    FILE_ID = "2026_08_11-18_07_37-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
-
+    # FILE_ID = "2026_08_11-18_07_37-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_11-18_48_10-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_11-19_24_34-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_12-12_07_04-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_12-17_14_34-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_12-17_57_58-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_12-19_07_49-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    FILE_ID = "2026_08_12-21_37_43-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    
     # SAVED_ANALYSIS_FILE_ID = "2026_07_15-19_48_48-single_step_charge_hist_single_cpu_2026_07_15-19_42_19-qnami-nv0_2026_02_20"
     # SAVED_ANALYSIS_FILE_ID = "2026_07_21-16_11_27-single_step_charge_hist_single_cpu_2026_07_21-16_08_28-qnami-nv0_2026_02_20"
-    SAVED_ANALYSIS_FILE_ID = "2026_08_08-20_07_48-single_step_charge_hist_single_cpu_2026_08_08-19_19_02-qnami-nv0_2026_02_20"
+    # SAVED_ANALYSIS_FILE_ID = "2026_08_08-20_07_48-single_step_charge_hist_single_cpu_2026_08_08-19_19_02-qnami-nv0_2026_02_20"
+    SAVED_ANALYSIS_FILE_ID = "2026_08_12-17_24_52-single_step_charge_hist_single_cpu_2026_08_12-17_14_34-qnami-nv0_2026_02_20"
+    # SAVED_ANALYSIS_FILE_ID = "2026_08_12-18_01_24-single_step_charge_hist_single_cpu_2026_08_12-17_57_58-qnami-nv0_2026_02_20"
+    # SAVED_ANALYSIS_FILE_ID = "2026_08_12-20_33_59-single_step_charge_hist_single_cpu_2026_08_12-19_07_49-qnami-nv0_2026_02_20"
  
     RUN_NEW_PROCESSING = True
-
     MODEL_KIND = "single"
     BACKEND = "cpu"
 

@@ -281,9 +281,9 @@ def do_adaptive_charge_initialization(nv_list):
         mode="dmd_block_confirmed",
         # mode="dmd_all_on",
         dmd_indices=None,      # full nv_list, DMD index = nv_list index
-        dmd_radius_px=11,
+        dmd_radius_px=8,
         dmd_plane=230,
-        confirm_margin_counts=5.0,
+        confirm_margin_counts=1.0,
         save_images=True,
         save_images_avg_reps=False,
         save_data=True,
@@ -1895,16 +1895,16 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.773, 98.134],
-    #     [73.725, 115.419],
-    #     [100.75, 68.855],
-    #     [127.011, 127.718],
+    #     [97.743, 98.152],
+    #     [73.722, 115.434],
+    #     [100.73, 68.865],
+    #     [127.007, 127.72],
     # ]
     # red_coords_list = [
-    #     [66.826, 67.772],
-    #     [47.273, 81.38],
-    #     [69.645, 44.033],
-    #     [90.325, 92.229],
+    #     [66.935, 67.73],
+    #     [47.279, 81.37],
+    #     [69.653, 44.01],
+    #     [90.369, 92.197],
     # ]
     
     analysis_data = dm.get_raw_data(
@@ -1930,7 +1930,9 @@ if __name__ == "__main__":
         # file_stem = "2026_08_08-17_24_56-single_step_charge_hist_single_cpu_2026_08_08-17_21_48-qnami-nv0_2026_02_20",
         # file_stem = "2026_08_08-21_33_29-single_step_charge_hist_single_cpu_2026_08_08-20_30_31-qnami-nv0_2026_02_20",
         # file_stem = "2026_08_08-22_54_51-single_step_charge_hist_single_cpu_2026_08_08-22_52_19-qnami-nv0_2026_02_20",
-        file_stem= "2026_08_11-17_25_05-single_step_charge_hist_single_cpu_2026_08_11-17_19_57-qnami-nv0_2026_02_20",
+        # file_stem= "2026_08_11-17_25_05-single_step_charge_hist_single_cpu_2026_08_11-17_19_57-qnami-nv0_2026_02_20",
+        # file_stem ="2026_08_11-21_53_16-single_step_charge_hist_single_cpu_2026_08_11-19_24_34-qnami-nv0_2026_02_20",
+        file_stem ="2026_08_12-17_24_52-single_step_charge_hist_single_cpu_2026_08_12-17_14_34-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
