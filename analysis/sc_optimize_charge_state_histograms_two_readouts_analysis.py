@@ -2732,18 +2732,17 @@ def save_results_again(results: Dict[str, Any], prefix: str = "repeated_readout_
 if __name__ == "__main__":
     kpl.init_kplotlib()
 
-    # Set this True to run the expensive CPU/joblib fitting again.
-    run_new_analysis = False
-
     # False: load the saved processed fit arrays and re-optimize quickly.
     # True: rerun all CPU/joblib histogram fits from the raw data.
-    RUN_NEW_ANALYSIS = False
+    RUN_NEW_ANALYSIS = True
 
     # Raw data are still loaded when plotting histograms.
     # file_id = "2026_07_11-04_37_50-qnami-nv0_2026_02_20"
-    file_id = "2026_07_14-20_28_11-qnami-nv0_2026_02_20"
-
-
+    # file_id = "2026_07_14-20_28_11-qnami-nv0_2026_02_20"
+    # file_id = "2026_07_22-04_39_34-qnami-nv0_2026_02_20"
+    # file_id = "2026_08_05-04_43_20-qnami-nv0_2026_02_20"
+    file_id = "2026_08_12-10_12_17-qnami-nv0_2026_02_20" ## 631NVs
+     
 
     # processed_file = "2026_07_14-16_52_29-repeated_readout_slm_processed_2026_07_11-04_37_50-qnami-nv0_2026_02_20"
     processed_file = "2026_07_18-11_47_06-repeated_readout_slm_processed_2026_07_18-11_10_09-qnami-nv0_2026_02_20"
