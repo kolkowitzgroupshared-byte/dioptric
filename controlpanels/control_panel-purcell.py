@@ -339,16 +339,19 @@ def do_charge_state_particle_memory(nv_list):
     
 def do_charge_state_particle_memory_wait_sweep(nv_list):
     wait_plan = [
-        (0, 20),
-        (10, 20),
-        (30, 20),
-        (60, 20),
-        (180, 20),
-        (300, 20),
-        (600, 20),
-        (1200, 20),
-        (1800, 20),
-        # (3600, 25),
+        # (0, 20),
+        # (10, 20),
+        # (30, 20),
+        # (60, 20),
+        # (180, 20),
+        # (300, 20),
+        # (600, 20),
+        # (1200, 20),
+        # (1800, 20),
+        (3600, 12),
+        (3600, 12),
+        (3600, 12),
+        (3600, 12),
     ]
     results = {}
 
@@ -367,7 +370,7 @@ def do_charge_state_particle_memory_wait_sweep(nv_list):
             dark_wait_s=dark_wait_s,
             mode="dmd_block_confirmed",
             dmd_indices=None,
-            dmd_radius_px=11,
+            dmd_radius_px=8,
             dmd_plane=230,
             confirm_margin_counts=1.0,
             take_initial_check=True,
@@ -1932,7 +1935,7 @@ if __name__ == "__main__":
         # file_stem = "2026_08_08-22_54_51-single_step_charge_hist_single_cpu_2026_08_08-22_52_19-qnami-nv0_2026_02_20",
         # file_stem= "2026_08_11-17_25_05-single_step_charge_hist_single_cpu_2026_08_11-17_19_57-qnami-nv0_2026_02_20",
         # file_stem ="2026_08_11-21_53_16-single_step_charge_hist_single_cpu_2026_08_11-19_24_34-qnami-nv0_2026_02_20",
-        file_stem ="2026_08_12-17_24_52-single_step_charge_hist_single_cpu_2026_08_12-17_14_34-qnami-nv0_2026_02_20",
+        file_stem ="2026_08_12-23_18_49-single_step_charge_hist_single_cpu_2026_08_12-22_13_55-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
@@ -2157,7 +2160,7 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        do_charge_state_histograms(nv_list)
+        # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)

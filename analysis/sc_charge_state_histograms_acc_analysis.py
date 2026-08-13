@@ -1396,7 +1396,8 @@ if __name__ == "__main__":
     # FILE_ID = "2026_08_12-17_14_34-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
     # FILE_ID = "2026_08_12-17_57_58-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
     # FILE_ID = "2026_08_12-19_07_49-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
-    FILE_ID = "2026_08_12-21_37_43-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_12-21_37_43-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    FILE_ID = "2026_08_12-22_13_55-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
     
     # SAVED_ANALYSIS_FILE_ID = "2026_07_15-19_48_48-single_step_charge_hist_single_cpu_2026_07_15-19_42_19-qnami-nv0_2026_02_20"
     # SAVED_ANALYSIS_FILE_ID = "2026_07_21-16_11_27-single_step_charge_hist_single_cpu_2026_07_21-16_08_28-qnami-nv0_2026_02_20"

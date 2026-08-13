@@ -7867,18 +7867,21 @@ if __name__ == "__main__":
     "2026_08_09-12_58_47-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1200s-wait-1200s",
     "2026_08_09-23_03_43-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1800s-wait-1800s",
     ]
-    
+    ####
+    FILE_STEMS = [
+    "2026_08_13-11_33_24-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
+    ]
     selected_waits_s = [
-        0,
-        10,
-        30,
-        60,
-        180,
-        300,
-        600,
-        1200,
-        1800,
-        # 3600,
+        # 0,
+        # 10,
+        # 30,
+        # 60,
+        # 180,
+        # 300,
+        # 600,
+        # 1200,
+        # 1800,
+        3600,
     ]
 
     rep_stats, rep_figs = plot_nv_minus_by_run_separate_reps(
