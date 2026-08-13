@@ -916,7 +916,7 @@ def plot_prep_vs_readout_single_step(raw_data_or_analysis, use_multiclass=False)
     if model_kind == "single":
         y = np.asarray(analysis["readout_fidelity"], dtype=float)
         x = np.asarray(analysis["prep_fidelity"], dtype=float)
-        xlabel = "Prep fidelity"
+        xlabel = "NV$^{-}$ prep fidelity"
         ylabel = "Readout fidelity"
     else:
         x = np.asarray(analysis["prep_fidelity_any_ref"], dtype=float)
@@ -949,11 +949,12 @@ def plot_prep_vs_readout_single_step(raw_data_or_analysis, use_multiclass=False)
     if np.any(good):
         txt = (
             f"N good = {int(np.sum(good))}\n"
-            f"median x = {np.nanmedian(x[good]):.3f}\n"
-            f"median y = {np.nanmedian(y[good]):.3f}"
+            f"median NV- preparation fidelity = {np.nanmedian(x[good]):.3f}\n"
+            f"median readout fidelity = {np.nanmedian(y[good]):.3f}\n"
+            f"mean NV- preparation fidelity = {np.nanmean(x[good]):.3f}\n"
+            f"mean readout fidelity = {np.nanmean(y[good]):.3f}"
         )
         kpl.anchored_text(ax, txt, kpl.Loc.LOWER_RIGHT, size=kpl.Size.SMALL)
-
     return fig, ax
 
 
@@ -979,6 +980,7 @@ def plot_histograms_red_green(sig_counts, ref_counts, density=True, ax=None):
         density=density,
         label="Reference / fitted",
     )
+
 
     ax.set_xlabel("Integrated counts")
     ax.set_ylabel("Probability" if density else "Number of occurrences")
@@ -1356,7 +1358,7 @@ if __name__ == "__main__":
     # =============================================================================
     # User settings
     # =============================================================================
-    # FILE_ID = "2026_07_10-12_06_57-qnami-nv0_2026_02_20"
+    # FILE_ID = "2026_07_10-12_06_57-qnami-nv0_2026_02_20"  ## 814 working NVs 200ms readout
     # FILE_ID = "2026_07_10-16_57_47-qnami-nv0_2026_02_20", ## 814 working NVs 200ms readout
     # FILE_ID = "2026_07_13-17_00_15-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
     # FILE_ID = "2026_07_14-13_06_11-qnami-nv0_2026_02_20", ## 814 working NVs 100ms readout
@@ -1368,13 +1370,43 @@ if __name__ == "__main__":
     # FILE_ID = "2026_07_20-16_19_40-qnami-nv0_2026_02_20", ## 631 working NVs 1000ms readout
     # FILE_ID = "2026_07_20-17_04_32-qnami-nv0_2026_02_20", ## 631 working NVs 1000ms readout
     # FILE_ID = "2026_07_21-15_39_42-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
-    FILE_ID = "2026_07_21-16_08_28-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_07_21-16_08_28-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_07_22-16_28_38-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_07_22-16_56_52-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_07_22-17_30_06-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_07_22-21_22_04-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_07_22-22_20_35-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_04-13_21_07-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_04-16_25_34-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_08-15_17_54-qnami-nv0_2026_02_20" ## 415 working NVs 500ms readout
+    # FILE_ID = "2026_08_08-16_00_34-qnami-nv0_2026_02_20" ## 415 working NVs 500ms readout
+    # FILE_ID = "2026_08_08-16_44_44-qnami-nv0_2026_02_20" ## 415 working NVs 500ms readout
+    # FILE_ID = "2026_08_08-17_21_48-qnami-nv0_2026_02_20" ## 402 working NVs 500ms readout
+    # FILE_ID = "2026_08_08-18_15_06-qnami-nv0_2026_02_20" ## 404 working NVs 500ms readout
+    # FILE_ID = "2026_08_08-18_48_51-qnami-nv0_2026_02_20" ## 402 working NVs 500ms readout
+    # FILE_ID = "2026_08_08-19_19_02-qnami-nv0_2026_02_20" ## 366 working NVs 500ms readout
+    # FILE_ID = "2026_08_08-20_30_31-qnami-nv0_2026_02_20" ## 366 working NVs 500ms readout
+    # FILE_ID = "2026_08_08-22_18_32-qnami-nv0_2026_02_20" ## 351 working NVs 500ms readout
+    # FILE_ID = "2026_08_08-22_52_19-qnami-nv0_2026_02_20" ## 366 working NVs 500ms readout
+    # FILE_ID = "2026_08_11-17_19_57-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_11-18_07_37-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_11-18_48_10-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_11-19_24_34-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_12-12_07_04-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_12-17_14_34-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_12-17_57_58-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_12-19_07_49-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_12-21_37_43-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    FILE_ID = "2026_08_12-22_13_55-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
     
     # SAVED_ANALYSIS_FILE_ID = "2026_07_15-19_48_48-single_step_charge_hist_single_cpu_2026_07_15-19_42_19-qnami-nv0_2026_02_20"
-    SAVED_ANALYSIS_FILE_ID = "2026_07_21-16_11_27-single_step_charge_hist_single_cpu_2026_07_21-16_08_28-qnami-nv0_2026_02_20"
+    # SAVED_ANALYSIS_FILE_ID = "2026_07_21-16_11_27-single_step_charge_hist_single_cpu_2026_07_21-16_08_28-qnami-nv0_2026_02_20"
+    # SAVED_ANALYSIS_FILE_ID = "2026_08_08-20_07_48-single_step_charge_hist_single_cpu_2026_08_08-19_19_02-qnami-nv0_2026_02_20"
+    SAVED_ANALYSIS_FILE_ID = "2026_08_12-17_24_52-single_step_charge_hist_single_cpu_2026_08_12-17_14_34-qnami-nv0_2026_02_20"
+    # SAVED_ANALYSIS_FILE_ID = "2026_08_12-18_01_24-single_step_charge_hist_single_cpu_2026_08_12-17_57_58-qnami-nv0_2026_02_20"
+    # SAVED_ANALYSIS_FILE_ID = "2026_08_12-20_33_59-single_step_charge_hist_single_cpu_2026_08_12-19_07_49-qnami-nv0_2026_02_20"
  
-    RUN_NEW_PROCESSING =False
-
+    RUN_NEW_PROCESSING = True
     MODEL_KIND = "single"
     BACKEND = "cpu"
 

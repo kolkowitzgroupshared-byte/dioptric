@@ -105,10 +105,10 @@ config |= {
         "VirtualSigGens": {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_3",
-                "uwave_power": 10, #dbm
-                "frequency": 2.8215,#2.5316,#2.8214, #GHz
-                "rabi_period":182.6, #192.7, #ns
-                "pi_pulse": 91.3, #96.4, #ns
+                "uwave_power": 7, #dbm
+                "frequency": 2.8323,#2.5316,#2.8214, #GHz
+                "rabi_period":153.4, #192.7, #ns
+                "pi_pulse":76.7, #96.4, #ns
                 "pi_on_2_pulse": 54, #Half of pi pulse, for use in Ramsey and SE
             },
             # sig gen 1 is iq molulated
@@ -132,7 +132,7 @@ config |= {
             },
             tisapph_laser: {
                 # "delay": 0,
-                "delay": 1000, #1000ns, Characterize by Yael on the NV setup
+                "delay": 1100, 
                 "mod_mode": ModMode.DIGITAL,
                 "positioner": CoordsKey.PIXEL,
             },
@@ -146,7 +146,7 @@ config |= {
             },
             VirtualLaserKey.SINGLET_DRIVE: {
                 "physical_name": tisapph_laser,
-                "duration": 100e3,  # this is a placeholder
+                "duration": 10e6,  # this is a placeholder
             },
 
             VirtualLaserKey.SPIN_READOUT: {
@@ -204,7 +204,7 @@ config |= {
                 "control_mode": PosControlMode.STEP,
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
-                "optimize_range": 0.01,
+                "optimize_range": 0.008,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
@@ -254,6 +254,7 @@ config |= {
             # analog (for the yellow AOM amplitude)
             "ao_laser_OPTO_589_am": 0,  # yellow analog modulation
             "do_laser_TISAPPH_dm":3,  # Tisapph TTL modulation
+            "do_pd_gate":5,
         },
         "Tagger": {
             "di_clock": 1,

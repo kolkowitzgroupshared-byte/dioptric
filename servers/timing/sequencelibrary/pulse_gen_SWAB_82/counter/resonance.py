@@ -284,6 +284,8 @@ def get_seq(pulse_streamer, config, args):
     #     (readout_ns, LOW),
     #     (meas_buffer + uwave_delay, LOW),  # sig
     # ]
+    # mw_train  = [(int(period), HIGH)]
+
     mw_train  = [(int(period/2), LOW), (int(period/2), HIGH)]
     seq.setDigital(do_sig_gen_gate, mw_train)
 
@@ -317,7 +319,7 @@ if __name__ == "__main__":
 
     cfg = common.get_config_dict()
     # args = [5000,300, 0, "IMAGING", None]
-    args = [300, 0, "IMAGING", None]
+    args = [10e6, 0, "IMAGING", None]
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])
     seq.plot()

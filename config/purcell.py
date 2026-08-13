@@ -42,14 +42,14 @@ calibration_coords_pixel = [
     [17.982, 41.943],
 ]
 calibration_coords_green = [
-    [73.706, 115.441],
-    [100.717, 68.88],
-    [126.987, 127.759],
+    [73.722, 115.434],
+    [100.73, 68.865],
+    [127.007, 127.72],
 ]
 calibration_coords_red = [
-    [47.236, 81.343],
-    [69.592, 43.985],
-    [90.641, 92.498],
+    [47.279, 81.37],
+    [69.653, 44.01],
+    [90.369, 92.197],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -152,6 +152,11 @@ config |= {
             # "slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz"
             # "slmsuite/nv_blob_detection/nv_blob_814nvs_reordered_inside_dmd.npz"
             "slmsuite/nv_blob_detection/nv_blob_631nvs_reordered_inside_dmd.npz"
+            # "slmsuite/nv_blob_detection/nv_blob_415nvs_reordered_inside_dmd.npz"
+            # "slmsuite/nv_blob_detection/nv_blob_404nvs_reordered_inside_dmd.npz"
+            # "slmsuite/nv_blob_detection/nv_blob_402nvs_reordered_inside_dmd.npz"
+            # "slmsuite/nv_blob_detection/nv_blob_366nvs_reordered_inside_dmd.npz"
+            # "slmsuite/nv_blob_detection/nv_blob_351nvs_reordered_inside_dmd.npz"
         ),
         "slm_fourier_calib_path": (
             "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00015.h5"
@@ -216,7 +221,7 @@ config |= {
         "em_gain": 5000,
         # "em_gain": 10,
         "temp": -60,
-        "timeout": 60e3,  # ms
+        "timeout": 30e3,  # ms
         # "timeout": -1,  # No timeout
         # Readout mode specifies EM vs conventional, as well as vertical and horizontal readout frequencies.
         # See camera server file for details
@@ -1047,11 +1052,15 @@ opx_config = {
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.25},
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.3513},
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.3513},# 1176NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2923},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2623},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2133},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.1972},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.1972}, ## 631NVs
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.1710}, ## 415NVs
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.1693}, ## 402NVs
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.160}, ## 366NVs
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.1582}, ## 404NVs
         "yellow_spin_pol": {"type": "constant", "sample": 0.22},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other

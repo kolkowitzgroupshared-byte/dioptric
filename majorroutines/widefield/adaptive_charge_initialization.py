@@ -41,6 +41,7 @@ import numpy as np
 from matplotlib.animation import PillowWriter, FuncAnimation
 from matplotlib.ticker import MaxNLocator
 from scipy.optimize import curve_fit
+from scipy.ndimage import gaussian_filter
 
 from majorroutines.widefield import base_routine
 from utils import widefield
@@ -48,6 +49,7 @@ from utils import data_manager as dm
 from utils import kplotlib as kpl
 from utils import tool_belt as tb
 from utils.constants import VirtualLaserKey
+
 
 # =============================================================================
 # Basic helpers
@@ -445,59 +447,153 @@ def make_dmd_block_confirmed_charge_prep_fn(
 
 def make_dmd_all_on_charge_prep_fn(
     num_nvs,
+    dmd_indices=None,
     dmd_radius_px=8,
     dmd_plane=230,
     use_dmd=True,
     dmd_settle_s=0.001,
     verbose=True,
+    profile_records=None,
 ):
     """
-    DMD-control baseline.
+    Matched control for dmd_block_confirmed.
 
-    DMD is always pass-all / block-none.
-    OPX target list is exactly the old conditional method:
-        target NVs that were not NV- in previous readout.
+    Same persistent-confirmation and OPX target logic, but the DMD always
+    passes every loaded NV spot. Confirmed NVs are never blocked.
     """
+
+    dmd_indices = _prepare_dmd_indices(
+        num_nvs,
+        dmd_indices,
+    )
 
     pulse_gen = tb.get_server_pulse_gen()
     dmd = tb.get_server_dmd() if use_dmd else None
-    run_counter = {"run_ind": -1}
 
-    def charge_prep_fn(rep_ind, nv_list, initial_states_list=None):
+    confirmed_nvm = np.zeros(
+        num_nvs,
+        dtype=bool,
+    )
+
+    run_counter = {
+        "run_ind": -1,
+    }
+
+    def charge_prep_fn(
+        rep_ind,
+        nv_list,
+        initial_states_list=None,
+    ):
+        nonlocal confirmed_nvm
+
+        # --------------------------------------------------------------
+        # Start of run
+        # --------------------------------------------------------------
         if rep_ind == 0:
-            run_counter["run_ind"] += 1
+            if rep_ind == 0:
+                run_counter["run_ind"] += 1
+                confirmed_nvm[:] = False
 
-            _dmd_pass_all_block_none(
-                dmd=dmd,
-                dmd_radius_px=dmd_radius_px,
-                dmd_plane=dmd_plane,
-                use_dmd=use_dmd,
-                dmd_settle_s=dmd_settle_s,
-            )
+                # Full white/pass DMD background.
+                # No confirmed NVs are blocked.
+                _dmd_pass_all_block_none(
+                    dmd=dmd,
+                    dmd_radius_px=dmd_radius_px,
+                    dmd_plane=dmd_plane,
+                    use_dmd=use_dmd,
+                    dmd_settle_s=dmd_settle_s,
+                )
+
+            if profile_records is not None:
+                profile_records.append(
+                    {
+                        "mode": "dmd_all_on",
+                        "run_ind": int(
+                            run_counter["run_ind"]
+                        ),
+                        "rep_ind": int(rep_ind),
+                        "phase": "rep0_start",
+                        "newly_confirmed": 0,
+                        "confirmed": 0,
+                        "active": int(num_nvs),
+                        "dmd_changed": True,
+                    }
+                )
 
             if verbose:
                 print(
-                    f"[DMD all-on] run {run_counter['run_ind']}, "
-                    f"rep {rep_ind}: pass all, no charge prep"
+                    f"[DMD all-on persistent] "
+                    f"run {run_counter['run_ind']}, rep 0: "
+                    f"full pass background; no NVs blocked"
                 )
 
             return
 
+        # --------------------------------------------------------------
+        # Persistent confirmation: same as dmd_block_confirmed
+        # --------------------------------------------------------------
         if initial_states_list is not None:
-            states = np.asarray(initial_states_list, dtype=bool)
-            target_mask = ~states
+            states = np.asarray(
+                initial_states_list,
+                dtype=bool,
+            )
+
+            active_before = ~confirmed_nvm
+
+            newly_confirmed = (
+                active_before
+                & states
+            )
+
+            confirmed_nvm[
+                newly_confirmed
+            ] = True
+
         else:
-            target_mask = np.ones(num_nvs, dtype=bool)
+            newly_confirmed = np.zeros(
+                num_nvs,
+                dtype=bool,
+            )
+
+        # Only still-unconfirmed NVs receive charge polarization.
+        active_mask = ~confirmed_nvm
 
         pulse_gen.insert_input_stream(
             "_cache_target_list",
-            target_mask.astype(bool).tolist(),
+            active_mask.astype(bool).tolist(),
         )
+
+        if profile_records is not None:
+            profile_records.append(
+                {
+                    "mode": "dmd_all_on",
+                    "run_ind": int(
+                        run_counter["run_ind"]
+                    ),
+                    "rep_ind": int(rep_ind),
+                    "phase": "normal_feedback",
+                    "newly_confirmed": int(
+                        np.sum(newly_confirmed)
+                    ),
+                    "confirmed": int(
+                        np.sum(confirmed_nvm)
+                    ),
+                    "active": int(
+                        np.sum(active_mask)
+                    ),
+                    "dmd_changed": False,
+                }
+            )
 
         if verbose:
             print(
-                f"[DMD all-on] run {run_counter['run_ind']}, rep {rep_ind}: "
-                f"target={int(np.sum(target_mask))}/{num_nvs}"
+                f"[DMD all-on persistent] "
+                f"run {run_counter['run_ind']}, "
+                f"rep {rep_ind}: "
+                f"new={np.sum(newly_confirmed)}, "
+                f"confirmed={np.sum(confirmed_nvm)}/{num_nvs}, "
+                f"initialize={np.sum(active_mask)}/{num_nvs}, "
+                "DMD passes all spots"
             )
 
     return charge_prep_fn
@@ -671,12 +767,12 @@ def reconstruct_confirmed_history(raw_data, mode="old"):
     
     raw_states = counts > thresholds[:, None, None]
 
-    if mode in ["old", "dmd_all_on"]:
+    if mode == "old":
         confirmed_history = raw_states.copy()
         newly_confirmed_history = raw_states.copy()
         active_history = ~raw_states.copy()
 
-    elif mode == "dmd_block_confirmed":
+    elif mode in ["dmd_all_on", "dmd_block_confirmed"]:
         confirmed_history = np.zeros((num_nvs, num_runs, num_reps), dtype=bool)
         newly_confirmed_history = np.zeros((num_nvs, num_runs, num_reps), dtype=bool)
         active_history = np.zeros((num_nvs, num_runs, num_reps), dtype=bool)
@@ -1347,7 +1443,16 @@ def analyze_and_plot_final_check(
     # ------------------------------------------------------------------
     # Plot only the per-run summary
     # ------------------------------------------------------------------
+    mode_labels = {
+        "old": "Standard conditional initialization",
+        "dmd_all_on": "DMD all-on control",
+        "dmd_block_confirmed": "DMD blocks confirmed NVs",
+    }
 
+    mode_label = mode_labels.get(
+        mode,
+        str(mode).replace("_", " "),
+    )
     fig, ax = plt.subplots(
         figsize=(7.5, 5.5),
     )
@@ -1429,7 +1534,8 @@ def analyze_and_plot_final_check(
     )
 
     fig.suptitle(
-        "Adaptive initialization: independent final verification",
+        f"Adaptive initialization: independent final verification\n"
+        f"Mode: {mode_label}",
         fontsize=15,
     )
 
@@ -1627,189 +1733,270 @@ def save_avg_rep_images(raw_data, file_path, reps_to_save=None, clim=None):
     return saved_figs
 
 
-def save_blink_gif(
+
+def save_non_cumulative_movie(
     raw_data,
     file_path,
-    max_reps=20,
+    max_reps=None,
     clim=None,
     interval_ms=250,
+    subtract_background=True,
+    background_percentile=5,
+    bg_smooth_sigma=2.0,
+    frame_smooth_sigma=0.0,
+    contrast_percentiles=(90.0, 99.8),
 ):
     """
-    Save clean blink GIF over rep/attempt index.
+    Save a non-cumulative movie of the measured camera images.
 
-    No cumulative logic.
-    No artificial bright patches.
-    Just raw camera frames averaged over runs.
+    Each frame is the actual image at one repetition, averaged over runs.
 
-    Requires:
-        raw_data["img_arrays"]
+    No cumulative initialization logic is applied.
+    No bright NV patches are inserted.
+    No previous charge state is preserved.
 
-    img_arrays expected shape:
-        [exp, run, step, rep, y, x]
+    Expected image shape
+    --------------------
+        raw_data["img_arrays"]:
+            [exp, run, step, rep, y, x]
+
+    Parameters
+    ----------
+    max_reps:
+        Maximum number of repetitions included.
+
+        Use num_reps_analysis to exclude the final-check frame.
+        Use num_reps_total to include the final-check frame.
+        Use None to include every saved frame.
+
+    subtract_background:
+        If True, subtract a smooth pixel-wise low-percentile background.
+
+    Returns
+    -------
+    Path or None
+        Saved GIF path.
     """
 
     if "img_arrays" not in raw_data:
-        print("No img_arrays in raw_data. Skipping GIF.")
+        print("No img_arrays found. Skipping non-cumulative movie.")
         return None
 
     file_path = Path(file_path)
 
-    img_arrays = np.asarray(raw_data["img_arrays"], dtype=float)
-
-    # [run, rep, y, x]
-    imgs = img_arrays[0, :, 0, :, :, :]
-
-    num_runs, num_reps = imgs.shape[:2]
-    num_frames = min(num_reps, max_reps)
-
-    # Average over runs for each rep.
-    avg_imgs = np.nanmean(imgs[:, :num_frames], axis=0)  # [rep, y, x]
-
-    if clim is None:
-        vmin = np.nanpercentile(avg_imgs, 80)
-        vmax = np.nanpercentile(avg_imgs, 99.8)
-    else:
-        vmin, vmax = clim
-
-    fig, ax = plt.subplots()
-    ax.set_axis_off()
-
-    im = ax.imshow(avg_imgs[0], vmin=vmin, vmax=vmax)
-    title = ax.set_title(f"rep 0, avg over {num_runs} runs")
-
-    def update(rep_ind):
-        im.set_data(avg_imgs[rep_ind])
-        title.set_text(f"rep {rep_ind}, avg over {num_runs} runs")
-        return [im, title]
-
-    anim = FuncAnimation(
-        fig,
-        update,
-        frames=num_frames,
-        interval=interval_ms,
-        blit=False,
+    img_arrays = np.asarray(
+        raw_data["img_arrays"],
+        dtype=float,
     )
 
-    stem = file_path.stem if file_path.suffix else file_path.name
-    gif_path = file_path.with_name(f"{stem}-blink-avg-over-runs.gif")
+    if img_arrays.ndim != 6:
+        raise ValueError(
+            "Expected img_arrays shape "
+            "[exp, run, step, rep, y, x]; "
+            f"received {img_arrays.shape}."
+        )
 
-    fps = max(1, int(1000 / interval_ms))
-    anim.save(str(gif_path), writer=PillowWriter(fps=fps))
+    # imgs shape: [run, rep, y, x]
+    imgs = img_arrays[
+        0,
+        :,
+        0,
+        :,
+        :,
+        :,
+    ]
 
-    plt.close(fig)
+    num_runs, num_reps, _, _ = imgs.shape
 
-    print("Saved raw-frame blink GIF:", gif_path)
-    return gif_path
+    if max_reps is None:
+        num_frames = num_reps
+    else:
+        num_frames = min(
+            num_reps,
+            max(1, int(max_reps)),
+        )
 
+    # Average the actual camera image over runs at each repetition.
+    # Shape: [rep, y, x]
+    # Average actual camera images over runs.
+    avg_imgs = np.nanmean(
+        imgs[:, :num_frames],
+        axis=0,
+    )  # [rep, y, x]
 
-from scipy.ndimage import gaussian_filter
+    movie_imgs = avg_imgs.copy()
 
-def save_blink_gif(
-    raw_data,
-    file_path,
-    max_reps=20,
-    clim=None,
-    interval_ms=250,
-    background_percentile=5,
-    bg_smooth_sigma=2,
-    frame_smooth_sigma=0,
-    contrast_percentiles=(50, 99.8),
-    subtract_background=True,
-):
-    """
-    Save clean blink GIF over rep/attempt index.
-
-    No cumulative logic.
-    No artificial bright patches.
-
-    Movie frame:
-        average over runs at each rep
-        optionally subtract smooth low-percentile background
-
-    img_arrays expected shape:
-        [exp, run, step, rep, y, x]
-    """
-
-    if "img_arrays" not in raw_data:
-        print("No img_arrays in raw_data. Skipping GIF.")
-        return None
-
-    file_path = Path(file_path)
-
-    img_arrays = np.asarray(raw_data["img_arrays"], dtype=float)
-
-    # [run, rep, y, x]
-    imgs = img_arrays[0, :, 0, :, :, :]
-
-    num_runs, num_reps = imgs.shape[:2]
-    num_frames = min(num_reps, max_reps)
-
-    # Average over runs for each rep.
-    avg_imgs = np.nanmean(imgs[:, :num_frames], axis=0)  # [rep, y, x]
+    # --------------------------------------------------------------
+    # 1. Static background subtraction across repetitions
+    # --------------------------------------------------------------
 
     if subtract_background:
-        # Pixel-wise low-percentile background across reps.
-        bg_img = np.nanpercentile(
+        static_background = np.nanpercentile(
             avg_imgs,
             background_percentile,
             axis=0,
         )
 
         if bg_smooth_sigma is not None and bg_smooth_sigma > 0:
-            bg_img = gaussian_filter(bg_img, bg_smooth_sigma)
+            static_background = gaussian_filter(
+                static_background,
+                float(bg_smooth_sigma),
+            )
 
-        movie_imgs = avg_imgs - bg_img[None, :, :]
-        movie_imgs[movie_imgs < 0] = 0
-    else:
-        movie_imgs = avg_imgs.copy()
+        movie_imgs = (
+            movie_imgs
+            - static_background[None, :, :]
+        )
 
-    if frame_smooth_sigma is not None and frame_smooth_sigma > 0:
+    # --------------------------------------------------------------
+    # 2. Remove smooth spatial illumination from every frame
+    # --------------------------------------------------------------
+
+    spatial_background_sigma = 8.0
+
+    for rep_ind in range(num_frames):
+        smooth_background = gaussian_filter(
+            movie_imgs[rep_ind],
+            spatial_background_sigma,
+        )
+
+        movie_imgs[rep_ind] = (
+            movie_imgs[rep_ind]
+            - smooth_background
+        )
+
+    # Remove negative background fluctuations.
+    movie_imgs = np.maximum(
+        movie_imgs,
+        0.0,
+    )
+
+    # --------------------------------------------------------------
+    # 3. Slightly smooth the NV spots
+    # --------------------------------------------------------------
+
+    spot_smoothing_sigma = 0.7
+
+    if spot_smoothing_sigma > 0:
         for rep_ind in range(num_frames):
             movie_imgs[rep_ind] = gaussian_filter(
                 movie_imgs[rep_ind],
-                frame_smooth_sigma,
+                spot_smoothing_sigma,
             )
 
-    if clim is None:
-        vmin = np.nanpercentile(movie_imgs, contrast_percentiles[0])
-        vmax = np.nanpercentile(movie_imgs, contrast_percentiles[1])
+    # --------------------------------------------------------------
+    # 4. Use one global contrast range
+    # --------------------------------------------------------------
 
-        if vmax <= vmin:
-            vmin = np.nanpercentile(movie_imgs, 1)
-            vmax = np.nanpercentile(movie_imgs, 99.8)
+    if clim is None:
+        vmin = float(
+            np.nanpercentile(
+                movie_imgs,
+                contrast_percentiles[0],
+            )
+        )
+        vmax = float(
+            np.nanpercentile(
+                movie_imgs,
+                contrast_percentiles[1],
+            )
+        )
+
+        if not np.isfinite(vmin) or not np.isfinite(vmax) or vmax <= vmin:
+            vmin = float(np.nanpercentile(movie_imgs, 80.0))
+            vmax = float(np.nanpercentile(movie_imgs, 99.9))
     else:
-        vmin, vmax = clim
+        vmin, vmax = map(float, clim)
+    # --------------------------------------------------------------
+    # Animation
+    # --------------------------------------------------------------
 
     fig, ax = plt.subplots()
     ax.set_axis_off()
 
-    im = ax.imshow(movie_imgs[0], vmin=vmin, vmax=vmax)
-    title = ax.set_title(f"rep 0, avg over {num_runs} runs")
+    im = ax.imshow(
+        movie_imgs[0],
+        origin="upper",
+        vmin=vmin,
+        vmax=vmax,
+    )
+
+    title = ax.set_title(
+        f"Attempt 0 | averaged over {num_runs} runs"
+    )
+
+    final_check_rep_ind = raw_data.get(
+        "final_check_rep_ind",
+        None,
+    )
 
     def update(rep_ind):
-        im.set_data(movie_imgs[rep_ind])
-        title.set_text(f"rep {rep_ind}, avg over {num_runs} runs")
-        return [im, title]
+        im.set_data(
+            movie_imgs[rep_ind]
+        )
 
-    anim = FuncAnimation(
+        if (
+            final_check_rep_ind is not None
+            and rep_ind == int(final_check_rep_ind)
+        ):
+            frame_label = (
+                f"Final check, rep {rep_ind}"
+            )
+        else:
+            frame_label = (
+                f"Attempt {rep_ind}"
+            )
+
+        title.set_text(
+            f"{frame_label} | averaged over {num_runs} runs"
+        )
+
+        return im, title
+
+    animation = FuncAnimation(
         fig,
         update,
         frames=num_frames,
-        interval=interval_ms,
+        interval=int(interval_ms),
         blit=False,
     )
 
-    stem = file_path.stem if file_path.suffix else file_path.name
-    gif_path = file_path.with_name(f"{stem}-clean-bgsub-blink.gif")
+    stem = (
+        file_path.stem
+        if file_path.suffix
+        else file_path.name
+    )
 
-    fps = max(1, int(1000 / interval_ms))
-    anim.save(str(gif_path), writer=PillowWriter(fps=fps))
+    suffix = (
+        "non-cumulative-bgsub"
+        if subtract_background
+        else "non-cumulative-raw"
+    )
+
+    gif_path = file_path.with_name(
+        f"{stem}-{suffix}.gif"
+    )
+
+    fps = max(
+        1,
+        round(1000 / interval_ms),
+    )
+
+    animation.save(
+        str(gif_path),
+        writer=PillowWriter(
+            fps=fps,
+        ),
+    )
 
     plt.close(fig)
 
-    print("Saved clean background-subtracted GIF:", gif_path)
-    return gif_path
+    print(
+        "Saved non-cumulative movie:",
+        gif_path,
+    )
 
+    return gif_path
 
 def _try_get_nv_img_xy(nv):
     """
@@ -2019,33 +2206,84 @@ def save_cumulative_initialized_movie(
 
     coords_xy = _coerce_img_coords(nv_list, img_coords=img_coords)
 
-    feedback = reconstruct_confirmed_history(raw_data, mode=mode)
+    feedback = reconstruct_confirmed_history(
+        raw_data,
+        mode=mode,
+    )
 
-    raw_states = np.asarray(feedback["raw_states"], dtype=bool)
-    confirmed_history = np.asarray(feedback["confirmed_history"], dtype=bool)
+    raw_states = np.asarray(
+        feedback["raw_states"],
+        dtype=bool,
+    )
+    confirmed_history = np.asarray(
+        feedback["confirmed_history"],
+        dtype=bool,
+    )
 
-    # Force cumulative behavior for movie visualization.
-    # Shape: [nv, run, rep]
-    confirmed_cumulative = np.maximum.accumulate(confirmed_history, axis=2)
+    # raw_states and confirmed_history contain only initialization reps.
+    num_state_runs = raw_states.shape[1]
+    num_state_reps = raw_states.shape[2]
 
-    # Fraction confirmed across runs for every NV and rep.
-    # Shape: [nv, rep]
-    confirmed_prob = np.mean(confirmed_cumulative[:, :, :num_frames], axis=1)
+    if num_state_runs != num_runs:
+        raise ValueError(
+            "Run-count mismatch between images and reconstructed states: "
+            f"images={num_runs}, states={num_state_runs}."
+        )
 
-    # Average image over runs for each rep.
-    # Shape: [rep, y, x]
-    avg_imgs = np.nanmean(imgs[:, :num_frames], axis=0)
+    # Exclude the extra final-check image from the cumulative-init movie.
+    available_reps = min(
+        num_reps,
+        num_state_reps,
+    )
 
-    # Dim/background image. This prevents already-blocked NVs from disappearing.
+    if max_reps is None:
+        num_frames = available_reps
+    else:
+        num_frames = min(
+            available_reps,
+            int(max_reps),
+        )
+
+    # Use only reps represented in raw_states.
+    imgs_for_states = imgs[
+        :,
+        :num_state_reps,
+        :,
+        :,
+    ]
+
+    confirmed_cumulative = np.maximum.accumulate(
+        confirmed_history,
+        axis=2,
+    )
+
+    confirmed_prob = np.mean(
+        confirmed_cumulative[:, :, :num_frames],
+        axis=1,
+    )
+
+    avg_imgs = np.nanmean(
+        imgs_for_states[:, :num_frames],
+        axis=0,
+    )
+
     background_img = np.nanpercentile(
         avg_imgs,
         background_percentile,
         axis=0,
     )
 
-    # Flatten run/rep for building bright patches.
-    flat_imgs = imgs.reshape(num_runs * num_reps, img_h, img_w)
-    flat_raw_states = raw_states.reshape(num_nvs, num_runs * num_reps)
+    # Flatten only matching run/rep dimensions.
+    flat_imgs = imgs_for_states.reshape(
+        num_runs * num_state_reps,
+        img_h,
+        img_w,
+    )
+
+    flat_raw_states = raw_states.reshape(
+        num_nvs,
+        num_runs * num_state_reps,
+    )
 
     # Fallback image if an NV never crosses threshold.
     mean_img = np.nanmean(flat_imgs, axis=0)
@@ -2325,11 +2563,13 @@ def main(
     elif mode == "dmd_all_on":
         charge_prep_fn = make_dmd_all_on_charge_prep_fn(
             num_nvs=num_nvs,
+            dmd_indices=dmd_indices,
             dmd_radius_px=dmd_radius_px,
             dmd_plane=dmd_plane,
             use_dmd=True,
             dmd_settle_s=dmd_settle_s,
             verbose=verbose,
+            profile_records=feedback_profile_records,
         )
 
     elif mode == "dmd_block_confirmed":
@@ -2517,19 +2757,36 @@ def main(
     #     except Exception:
     #         print("Could not save avg rep images:")
     #         print(traceback.format_exc())
+    
+
 
     if save_images and save_movie:
         try:
-            save_blink_gif(
+            save_non_cumulative_movie(
                 raw_data,
                 file_path,
-                max_reps=min(num_reps, 20),
-                clim=None,
-                interval_ms=250,
+                max_reps=num_reps_total,
+                subtract_background=True,
             )
         except Exception:
             print("Could not save blink GIF:")
             print(traceback.format_exc())
+            
+        try:   
+            analyze_and_plot_final_check(
+                raw_data,
+                mode=raw_data.get(
+                    "mode",
+                    "dmd_block_confirmed",
+                ),
+                borderline_window_counts=1.0,
+                save_data=False,
+                save_fig=True,
+            )
+        except Exception:
+            print("Could not save blink final check:")
+            print(traceback.format_exc())
+    
 
     tb.reset_cfm()
 
@@ -3287,7 +3544,10 @@ if __name__ == "__main__":
     # Example plotting existing file:
     raw_data = dm.get_raw_data(
         # file_stem="2026_07_19-01_02_13-qnami-nv0_2026_02_20-dmd_block_confirmed", 
-        file_stem = "2026_07_21-16_15_53-qnami-nv0_2026_02_20-dmd_block_confirmed",
+        # file_stem = "2026_07_21-16_15_53-qnami-nv0_2026_02_20-dmd_block_confirmed",
+        # file_stem = "2026_07_19-21_29_05-qnami-nv0_2026_02_20-dmd_block_confirmed",
+        file_stem = "2026_08_04-13_30_16-qnami-nv0_2026_02_20-dmd_all_on",
+        # file_stem = "2026_08_04-13_31_58-qnami-nv0_2026_02_20-dmd_block_confirmed",
         load_npz=True)
 
     timestamp = raw_data["timestamp"]
@@ -3313,7 +3573,6 @@ if __name__ == "__main__":
         ),
         # Separately flag losses within five counts of threshold.
         borderline_window_counts=1.0,
-
         save_data=False,
         save_fig=True,
     )
@@ -3324,7 +3583,7 @@ if __name__ == "__main__":
     # feedback_profile = plot_feedback_profile_summary(raw_data)
     # file_path = dm.get_file_path(__file__, timestamp, "feedback-profile")
     # dm.save_figure(feedback_profile, _append_to_file_path(file_path, "feedback-profile"))
-    kpl.show(block=True)
+    # kpl.show(block=True)
     
     # save_blink_gif(
     # raw_data,
@@ -3353,6 +3612,17 @@ if __name__ == "__main__":
     #     frame_smooth_sigma=0,
     #     contrast_percentiles=(60, 99.8),
     #     )
+    
+    # save_non_cumulative_movie(
+    #     raw_data,
+    #     file_path,
+    #     max_reps=10,
+    #     interval_ms=1000,
+    #     subtract_background=True,
+    #     background_percentile=5,
+    #     bg_smooth_sigma=0.0,
+    #     contrast_percentiles=(85, 99.9),
+    # )
     # save_blink_gif(
     #     raw_data,
     #     file_path,
@@ -3368,7 +3638,7 @@ if __name__ == "__main__":
     #     max_reps=100,
     #     patch_radius=2,
     #     clim=None,
-    #     interval_ms=500,
+    #     interval_ms=1000,
     #     probability_weight=True,
     #     bright_gain=1.0,
     # )

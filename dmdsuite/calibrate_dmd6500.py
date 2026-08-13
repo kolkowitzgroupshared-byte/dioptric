@@ -360,9 +360,30 @@ def scan_dmd_axis_for_spots_onpass(
 
     drops = np.asarray(drops, dtype=np.float32)
     scan_vals = np.asarray(scan_vals, dtype=np.float32)
+    
     best_indices = np.argmax(drops, axis=0)
-    best_positions = positions[best_indices].astype(np.float32)
+    argmax_positions = positions[best_indices].astype(np.float32)
+    
+    (
+        fit_positions,
+        spot_fwhm,
+        spot_sigma,
+        fit_params,
+        fit_center_errors,
+        fit_r2,
+    ) = fit_widths_from_drop_curves(
+        positions=positions,
+        drops=drops,
+        stripe_width=stripe_width,
+    )
 
+    # Use argmax as a fallback if a fit fails.
+    best_positions = np.where(
+        np.isfinite(fit_positions),
+        fit_positions,
+        argmax_positions,
+    ).astype(np.float32)
+    
     raw = {
         "axis": axis,
         "positions": positions,
@@ -374,9 +395,26 @@ def scan_dmd_axis_for_spots_onpass(
         "pass_image": np.asarray(img_pass),
         "pass_vals": pass_vals,
         "scan_vals": scan_vals,
-        "scan_images": _maybe_stack_images(scan_images) if save_scan_images else None,
+        "scan_images": (
+            _maybe_stack_images(scan_images)
+            if save_scan_images
+            else None
+        ),
         "drops": drops,
+
+        # Discrete estimate
         "best_indices": best_indices.astype(np.int32),
+        "argmax_positions": argmax_positions,
+
+        # Fitted estimate
+        "fit_positions": fit_positions,
+        "fit_center_errors": fit_center_errors,
+        "fit_params": fit_params,
+        "fit_r2": fit_r2,
+        "spot_fwhm": spot_fwhm,
+        "spot_sigma": spot_sigma,
+
+        # Coordinate actually returned to the calibration
         "best_positions": best_positions,
     }
 
@@ -429,27 +467,202 @@ def plot_camera_points(img, points=None, labels=None, title="Camera image", show
     _show_nonblocking(fig, show=show)
     return fig
 
+def stripe_gaussian_drop(
+    position,
+    offset,
+    amplitude,
+    center,
+    sigma,
+    stripe_width,
+):
+    """
+    Fraction of a 1D Gaussian spot blocked by a finite-width stripe.
 
-def plot_response_curves(positions, responses, title="DMD scan", show=False):
-    positions = np.asarray(positions, dtype=np.float32)
-    responses = np.asarray(responses, dtype=np.float32)
+    center:
+        DMD coordinate of the optical spot.
+
+    sigma:
+        Gaussian spot width projected onto the scanned DMD axis.
+    """
+    from scipy.special import erf
+
+    position = np.asarray(position, dtype=np.float64)
+
+    left = (
+        position - center + stripe_width / 2
+    ) / (np.sqrt(2) * sigma)
+
+    right = (
+        position - center - stripe_width / 2
+    ) / (np.sqrt(2) * sigma)
+
+    return offset + amplitude * 0.5 * (
+        erf(left) - erf(right)
+    )
+
+def plot_response_curves(
+    positions,
+    responses,
+    title="DMD scan",
+    stripe_width=None,
+    fit_params=None,
+    fit_positions=None,
+    fit_center_errors=None,
+    fit_r2=None,
+    argmax_positions=None,
+    show=False,
+):
+    """
+    Plot raw drop measurements and optional finite-stripe Gaussian fits.
+    """
+    positions = np.asarray(positions, dtype=np.float64)
+    responses = np.asarray(responses, dtype=np.float64)
+
     if responses.ndim == 1:
         responses = responses[:, None]
 
-    fig, ax = plt.subplots(figsize=(8, 4))
-    nspots = responses.shape[1]
+    if fit_params is not None:
+        fit_params = np.asarray(fit_params, dtype=np.float64)
 
-    for i in range(nspots):
-        ax.plot(positions, responses[:, i], "-o", label=f"spot {i}")
+    if fit_positions is not None:
+        fit_positions = np.asarray(fit_positions, dtype=np.float64)
 
-    ax.set_xlabel("DMD scan position")
-    ax.set_ylabel("fractional intensity drop")
+    if fit_center_errors is not None:
+        fit_center_errors = np.asarray(
+            fit_center_errors,
+            dtype=np.float64,
+        )
+
+    if fit_r2 is not None:
+        fit_r2 = np.asarray(fit_r2, dtype=np.float64)
+
+    if argmax_positions is not None:
+        argmax_positions = np.asarray(
+            argmax_positions,
+            dtype=np.float64,
+        )
+
+    fig, ax = plt.subplots(figsize=(9, 5))
+
+    dense_positions = np.linspace(
+        positions.min(),
+        positions.max(),
+        2000,
+    )
+
+    num_spots = responses.shape[1]
+
+    for i in range(num_spots):
+        # Plot measured points first.
+        data_line = ax.plot(
+            positions,
+            responses[:, i],
+            "o",
+            markersize=4,
+            label=None,
+        )[0]
+
+        plot_color = data_line.get_color()
+
+        valid_fit = (
+            stripe_width is not None
+            and fit_params is not None
+            and i < len(fit_params)
+            and np.all(np.isfinite(fit_params[i]))
+        )
+
+        if valid_fit:
+            offset, amplitude, center, sigma = fit_params[i]
+
+            fitted_curve = stripe_gaussian_drop(
+                dense_positions,
+                offset,
+                amplitude,
+                center,
+                sigma,
+                stripe_width,
+            )
+
+            if (
+                fit_center_errors is not None
+                and i < len(fit_center_errors)
+                and np.isfinite(fit_center_errors[i])
+            ):
+                center_text = (
+                    f"{center:.2f} ± "
+                    f"{fit_center_errors[i]:.2f}"
+                )
+            else:
+                center_text = f"{center:.2f}"
+
+            if (
+                fit_r2 is not None
+                and i < len(fit_r2)
+                and np.isfinite(fit_r2[i])
+            ):
+                quality_text = f", R²={fit_r2[i]:.3f}"
+            else:
+                quality_text = ""
+
+            ax.plot(
+                dense_positions,
+                fitted_curve,
+                "-",
+                linewidth=2,
+                color=plot_color,
+                label=(
+                    f"spot {i}: center={center_text} px"
+                    f"{quality_text}"
+                ),
+            )
+
+            # Mark the fitted DMD coordinate.
+            ax.axvline(
+                center,
+                linestyle="--",
+                linewidth=1,
+                color=plot_color,
+                alpha=0.7,
+            )
+
+        else:
+            ax.plot(
+                [],
+                [],
+                "o",
+                color=plot_color,
+                label=f"spot {i}: data only",
+            )
+
+        # Optional marker for the old discrete argmax estimate.
+        if (
+            argmax_positions is not None
+            and i < len(argmax_positions)
+            and np.isfinite(argmax_positions[i])
+        ):
+            argmax_x = argmax_positions[i]
+            argmax_index = int(
+                np.argmin(np.abs(positions - argmax_x))
+            )
+
+            ax.plot(
+                argmax_x,
+                responses[argmax_index, i],
+                "x",
+                markersize=8,
+                color=plot_color,
+            )
+
+    ax.set_xlabel("DMD stripe-center position [mirrors]")
+    ax.set_ylabel("Fractional intensity drop")
     ax.set_title(title)
-    ax.legend()
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.25)
+
     fig.tight_layout()
     _show_nonblocking(fig, show=show)
-    return fig
 
+    return fig
 
 def plot_affine_check(data, show=False):
     tri_cam_pts = _arr(data.get("tri_cam_pts"))
@@ -475,56 +688,110 @@ def plot_affine_check(data, show=False):
 
 def process_and_plot(data, show=False):
     """
-    Generate all diagnostic plots from a saved raw-data dictionary.
+    Generate diagnostic plots from a saved raw-data dictionary.
 
-    This is intentionally separated from acquisition so you can later do:
-        data = dm.get_raw_data(file_id=...)
-        figs = process_and_plot(data, show=True)
+    This function supports both:
+        1. New scan data containing fitted-curve information.
+        2. Older scan data containing only positions and drop values.
+
+    Example
+    -------
+    data = load_raw_data_npz_compressed(npz_path)
+    figs = process_and_plot(data, show=True)
     """
     figs = []
 
-    if data.get("img_zero") is not None and data.get("zero_cam_xy") is not None:
+    def append_scan_plot(scan_key, title):
+        """Create and append one DMD scan-response plot."""
+        scan = data.get(scan_key)
+
+        if scan is None:
+            return
+
+        positions = scan.get("positions")
+        drops = scan.get("drops")
+
+        if positions is None or drops is None:
+            print(
+                f"Skipping {scan_key}: "
+                "missing positions or drop data."
+            )
+            return
+
+        fig = plot_response_curves(
+            positions=positions,
+            responses=drops,
+            stripe_width=scan.get("stripe_width"),
+            fit_params=scan.get("fit_params"),
+            fit_positions=scan.get("fit_positions"),
+            fit_center_errors=scan.get("fit_center_errors"),
+            fit_r2=scan.get("fit_r2"),
+            argmax_positions=scan.get("argmax_positions"),
+            title=title,
+            show=show,
+        )
+
+        if fig is not None:
+            figs.append(fig)
+
+    # ------------------------------------------------------------------
+    # Zero-order camera image
+    # ------------------------------------------------------------------
+    img_zero = data.get("img_zero")
+    zero_cam_xy = data.get("zero_cam_xy")
+
+    if img_zero is not None and zero_cam_xy is not None:
         figs.append(
             plot_camera_points(
-                data["img_zero"],
-                points=data["zero_cam_xy"],
+                img=img_zero,
+                points=zero_cam_xy,
                 labels=["0th"],
                 title="0th-order / reference beam centroid",
                 show=show,
             )
         )
 
-    if data.get("zero_x") is not None:
-        figs.append(
-            plot_response_curves(
-                data["zero_x"]["positions"],
-                data["zero_x"]["drops"],
-                title="0th-order DMD x scan",
-                show=show,
-            )
-        )
+    # ------------------------------------------------------------------
+    # Zero-order DMD scans
+    # ------------------------------------------------------------------
+    append_scan_plot(
+        scan_key="zero_x",
+        title="0th-order DMD x scan",
+    )
 
-    if data.get("zero_y") is not None:
-        figs.append(
-            plot_response_curves(
-                data["zero_y"]["positions"],
-                data["zero_y"]["drops"],
-                title="0th-order DMD y scan",
-                show=show,
-            )
-        )
+    append_scan_plot(
+        scan_key="zero_y",
+        title="0th-order DMD y scan",
+    )
 
-    if data.get("img_triangle") is not None and data.get("tri_cam_pts") is not None:
-        tri_pts = _arr(data["tri_cam_pts"])
-        labels = [str(ind) for ind in range(len(tri_pts))]
-        if data.get("zero_cam_xy") is not None:
-            points = np.vstack([_arr(data["zero_cam_xy"]), tri_pts])
-            labels = ["0th"] + labels
+    # ------------------------------------------------------------------
+    # Triangle camera image
+    # ------------------------------------------------------------------
+    img_triangle = data.get("img_triangle")
+    tri_cam_pts = data.get("tri_cam_pts")
+
+    if img_triangle is not None and tri_cam_pts is not None:
+        tri_cam_pts = _arr(tri_cam_pts)
+
+        if tri_cam_pts.ndim == 1:
+            tri_cam_pts = tri_cam_pts[None, :]
+
+        triangle_labels = [
+            f"spot {index}"
+            for index in range(len(tri_cam_pts))
+        ]
+
+        if zero_cam_xy is not None:
+            zero_point = _arr(zero_cam_xy).reshape(1, 2)
+            points = np.vstack([zero_point, tri_cam_pts])
+            labels = ["0th"] + triangle_labels
         else:
-            points = tri_pts
+            points = tri_cam_pts
+            labels = triangle_labels
+
         figs.append(
             plot_camera_points(
-                data["img_triangle"],
+                img=img_triangle,
                 points=points,
                 labels=labels,
                 title="Triangle calibration spots",
@@ -532,29 +799,29 @@ def process_and_plot(data, show=False):
             )
         )
 
-    if data.get("triangle_x") is not None:
-        figs.append(
-            plot_response_curves(
-                data["triangle_x"]["positions"],
-                data["triangle_x"]["drops"],
-                title="Triangle DMD x scan",
-                show=show,
-            )
-        )
+    # ------------------------------------------------------------------
+    # Triangle DMD scans
+    # ------------------------------------------------------------------
+    append_scan_plot(
+        scan_key="triangle_x",
+        title="Triangle DMD x scan",
+    )
 
-    if data.get("triangle_y") is not None:
-        figs.append(
-            plot_response_curves(
-                data["triangle_y"]["positions"],
-                data["triangle_y"]["drops"],
-                title="Triangle DMD y scan",
-                show=show,
-            )
-        )
+    append_scan_plot(
+        scan_key="triangle_y",
+        title="Triangle DMD y scan",
+    )
 
-    fig = plot_affine_check(data, show=show)
-    if fig is not None:
-        figs.append(fig)
+    # ------------------------------------------------------------------
+    # Affine-transformation diagnostic
+    # ------------------------------------------------------------------
+    affine_fig = plot_affine_check(
+        data,
+        show=show,
+    )
+
+    if affine_fig is not None:
+        figs.append(affine_fig)
 
     return figs
 
@@ -1142,72 +1409,153 @@ def do_thorcam_hardware_roi_with_yellow(
 
 def fit_widths_from_drop_curves(positions, drops, stripe_width):
     """
-    Estimate spot FWHM from black-stripe drop curves.
+    Fit each blocking-stripe response.
 
-    positions: DMD stripe positions
-    drops: shape [num_positions, num_spots]
-    stripe_width: black stripe width in DMD mirrors
+    Returns
+    -------
+    centers : array
+        Fitted DMD coordinates.
 
-    Returns:
-        centers, fwhm_spot, sigma_spot
+    fwhms : array
+        FWHM of the underlying Gaussian spot along the scanned axis.
+
+    sigmas : array
+        Gaussian sigma values.
+
+    fit_params : array, shape [num_spots, 4]
+        Columns are [offset, amplitude, center, sigma].
+
+    center_errors : array
+        One-standard-deviation uncertainties from the covariance matrix.
+
+    fit_r2 : array
+        Coefficient of determination for each fit.
     """
     from scipy.optimize import curve_fit
-    from scipy.special import erf
 
-    positions = np.asarray(positions, dtype=np.float32)
-    drops = np.asarray(drops, dtype=np.float32)
+    positions = np.asarray(positions, dtype=np.float64)
+    drops = np.asarray(drops, dtype=np.float64)
 
     if drops.ndim == 1:
         drops = drops[:, None]
 
-    def stripe_gaussian(p, offset, amp, center, sigma):
-        # Gaussian spot convolved with a finite-width blocking stripe.
-        a = (p - center + stripe_width / 2) / (np.sqrt(2) * sigma)
-        b = (p - center - stripe_width / 2) / (np.sqrt(2) * sigma)
-        return offset + amp * 0.5 * (erf(a) - erf(b))
+    num_spots = drops.shape[1]
 
-    centers = []
-    sigmas = []
-    fwhms = []
+    centers = np.full(num_spots, np.nan, dtype=np.float32)
+    sigmas = np.full(num_spots, np.nan, dtype=np.float32)
+    fwhms = np.full(num_spots, np.nan, dtype=np.float32)
 
-    for i in range(drops.shape[1]):
+    fit_params = np.full(
+        (num_spots, 4),
+        np.nan,
+        dtype=np.float32,
+    )
+
+    center_errors = np.full(
+        num_spots,
+        np.nan,
+        dtype=np.float32,
+    )
+
+    fit_r2 = np.full(
+        num_spots,
+        np.nan,
+        dtype=np.float32,
+    )
+
+    def model(position, offset, amplitude, center, sigma):
+        return stripe_gaussian_drop(
+            position,
+            offset,
+            amplitude,
+            center,
+            sigma,
+            stripe_width,
+        )
+
+    for i in range(num_spots):
         y = drops[:, i]
 
-        offset0 = float(np.min(y))
-        amp0 = float(np.max(y) - np.min(y))
+        offset0 = float(np.percentile(y, 10))
+        amplitude0 = float(np.max(y) - offset0)
         center0 = float(positions[np.argmax(y)])
-        sigma0 = 20.0
+
+        # A moderate initial estimate. The fit will refine it.
+        sigma0 = max(float(stripe_width) / 2, 2.0)
 
         try:
-            popt, _ = curve_fit(
-                stripe_gaussian,
+            popt, pcov = curve_fit(
+                model,
                 positions,
                 y,
-                p0=[offset0, amp0, center0, sigma0],
+                p0=[
+                    offset0,
+                    amplitude0,
+                    center0,
+                    sigma0,
+                ],
                 bounds=(
-                    [-0.2, 0.0, positions.min(), 0.5],
-                    [1.5, 2.0, positions.max(), 500.0],
+                    [
+                        -0.2,
+                        0.0,
+                        positions.min(),
+                        0.5,
+                    ],
+                    [
+                        1.2,
+                        2.0,
+                        positions.max(),
+                        500.0,
+                    ],
                 ),
-                maxfev=10000,
+                maxfev=20000,
             )
 
-            offset, amp, center, sigma = popt
-            fwhm = 2.355 * sigma
+            offset, amplitude, center, sigma = popt
+            y_fit = model(positions, *popt)
+
+            residual_sum = np.sum((y - y_fit) ** 2)
+            total_sum = np.sum((y - np.mean(y)) ** 2)
+
+            if total_sum > 0:
+                r_squared = 1.0 - residual_sum / total_sum
+            else:
+                r_squared = np.nan
+
+            if (
+                pcov is not None
+                and pcov.shape == (4, 4)
+                and np.isfinite(pcov[2, 2])
+                and pcov[2, 2] >= 0
+            ):
+                center_error = np.sqrt(pcov[2, 2])
+            else:
+                center_error = np.nan
+
+            centers[i] = center
+            sigmas[i] = sigma
+            fwhms[i] = 2.35482 * sigma
+            fit_params[i] = popt
+            center_errors[i] = center_error
+            fit_r2[i] = r_squared
+
+            print(
+                f"Spot {i}: center={center:.3f} ± "
+                f"{center_error:.3f} DMD px, "
+                f"sigma={sigma:.3f} px, "
+                f"R²={r_squared:.4f}"
+            )
 
         except Exception as exc:
-            print(f"Fit failed for spot {i}:", exc)
-            center = np.nan
-            sigma = np.nan
-            fwhm = np.nan
-
-        centers.append(center)
-        sigmas.append(sigma)
-        fwhms.append(fwhm)
+            print(f"Fit failed for spot {i}: {exc}")
 
     return (
-        np.asarray(centers, dtype=np.float32),
-        np.asarray(fwhms, dtype=np.float32),
-        np.asarray(sigmas, dtype=np.float32),
+        centers,
+        fwhms,
+        sigmas,
+        fit_params,
+        center_errors,
+        fit_r2,
     )
 
 def main(

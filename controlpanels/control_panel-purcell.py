@@ -279,10 +279,11 @@ def do_adaptive_charge_initialization(nv_list):
         num_reps=10,
         num_runs=4,
         mode="dmd_block_confirmed",
+        # mode="dmd_all_on",
         dmd_indices=None,      # full nv_list, DMD index = nv_list index
         dmd_radius_px=8,
         dmd_plane=230,
-        confirm_margin_counts=0.0,
+        confirm_margin_counts=1.0,
         save_images=True,
         save_images_avg_reps=False,
         save_data=True,
@@ -338,16 +339,20 @@ def do_charge_state_particle_memory(nv_list):
     
 def do_charge_state_particle_memory_wait_sweep(nv_list):
     wait_plan = [
-        (0, 100),
-        (10, 100),
-        (30, 100),
-        (60, 100),
-        (180, 75),
-        (300, 75),
-        (600, 50),
-        (1200, 25),
+        # (0, 20),
+        # (10, 20),
+        # (30, 20),
+        # (60, 20),
+        # (180, 20),
+        # (300, 20),
+        # (600, 20),
+        # (1200, 20),
+        # (1800, 20),
+        (3600, 12),
+        (3600, 12),
+        (3600, 12),
+        (3600, 12),
     ]
-
     results = {}
 
     for dark_wait_s, num_runs in wait_plan:
@@ -530,8 +535,8 @@ def do_optimize_green(nv_sig):
 
 def do_optimize_red(nv_sig, ref_nv_sig):
     opti_coords = []
-    axes_list = [Axes.X, Axes.Y]
-    # axes_list = [Axes.Y, Axes.X]
+    # axes_list = [Axes.X, Axes.Y]
+    axes_list = [Axes.Y, Axes.X]
     # shuffle(axes_list)
     for ind in range(1):
         axes = axes_list[ind]
@@ -1606,19 +1611,19 @@ def do_opx_constant_ac():
     # )
     # opx.constant_ac([1])  # Just laser
     # Green
-    # opx.constant_ac(
-    #     [4],  # Digital channels
-    #     [3, 4],  # Analog channels
-    #     [0.08, 0.08],  # Analog voltages
-    #     [101.0, 101.0],  # Analog frequencies
-    # )
-    # Green + red
     opx.constant_ac(
-        [4, 1],  # Digital channels
-        [3, 4, 2, 6],  # Analog channels
-        [0.08, 0.08, 0.08, 0.08],  # Analog voltages;
-        [126.958, 127.769, 90.817, 92.654],
+        [4],  # Digital channels
+        [3, 4],  # Analog channels
+        [0.02, 0.02],  # Analog voltages
+        [101.0, 101.0],  # Analog frequencies
     )
+    # Green + red
+    # opx.constant_ac(
+    #     [4, 1],  # Digital channels
+    #     [3, 4, 2, 6],  # Analog channels
+    #     [0.08, 0.08, 0.08, 0.08],  # Analog voltages;
+    #     [126.958, 127.769, 90.817, 92.654],
+    # )
     # green_coords_list = [
     #     [97.763, 98.184],
     #     [73.727, 115.462],
@@ -1839,7 +1844,7 @@ if __name__ == "__main__":
     date_str = "2026_02_20"
     sample_coords = [-1.20, -0.75]
     z_coord = -1.7
-    # z_coord = -4.2
+    # z_coord = -4.1
     
     config = common.get_config_dict()
     file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
@@ -1893,16 +1898,16 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.735, 98.153],
-    #     [73.706, 115.441],
-    #     [100.717, 68.88],
-    #     [126.987, 127.759],
+    #     [97.743, 98.152],
+    #     [73.722, 115.434],
+    #     [100.73, 68.865],
+    #     [127.007, 127.72],
     # ]
     # red_coords_list = [
-    #     [66.963, 67.767],
-    #     [47.236, 81.343],
-    #     [69.592, 43.985],
-    #     [90.641, 92.498],
+    #     [66.935, 67.73],
+    #     [47.279, 81.37],
+    #     [69.653, 44.01],
+    #     [90.369, 92.197],
     # ]
     
     analysis_data = dm.get_raw_data(
@@ -1920,7 +1925,17 @@ if __name__ == "__main__":
         # file_stem = "2026_07_16-22_53_11-single_step_charge_hist_single_cpu_2026_07_16-22_48_08-qnami-nv0_2026_02_20", 
         # file_stem = "2026_07_19-00_47_30-single_step_charge_hist_single_cpu_2026_07_19-00_17_00-qnami-nv0_2026_02_20",
         # file_stem = "2026_07_20-17_07_53-single_step_charge_hist_single_cpu_2026_07_20-17_04_32-qnami-nv0_2026_02_20",
-        file_stem = "2026_07_21-16_11_27-single_step_charge_hist_single_cpu_2026_07_21-16_08_28-qnami-nv0_2026_02_20",
+        # file_stem = "2026_07_21-16_11_27-single_step_charge_hist_single_cpu_2026_07_21-16_08_28-qnami-nv0_2026_02_20",
+        # file_stem = "2026_07_23-00_37_58-single_step_charge_hist_single_cpu_2026_07_22-22_20_35-qnami-nv0_2026_02_20",
+        # file_stem = "2026_08_04-13_25_01-single_step_charge_hist_single_cpu_2026_08_04-13_21_07-qnami-nv0_2026_02_20",
+        # file_stem = "2026_08_04-16_28_51-single_step_charge_hist_single_cpu_2026_08_04-16_25_34-qnami-nv0_2026_02_20",
+        # file_stem = "2026_08_08-16_47_43-single_step_charge_hist_single_cpu_2026_08_08-16_44_44-qnami-nv0_2026_02_20",
+        # file_stem = "2026_08_08-17_24_56-single_step_charge_hist_single_cpu_2026_08_08-17_21_48-qnami-nv0_2026_02_20",
+        # file_stem = "2026_08_08-21_33_29-single_step_charge_hist_single_cpu_2026_08_08-20_30_31-qnami-nv0_2026_02_20",
+        # file_stem = "2026_08_08-22_54_51-single_step_charge_hist_single_cpu_2026_08_08-22_52_19-qnami-nv0_2026_02_20",
+        # file_stem= "2026_08_11-17_25_05-single_step_charge_hist_single_cpu_2026_08_11-17_19_57-qnami-nv0_2026_02_20",
+        # file_stem ="2026_08_11-21_53_16-single_step_charge_hist_single_cpu_2026_08_11-19_24_34-qnami-nv0_2026_02_20",
+        file_stem ="2026_08_12-23_18_49-single_step_charge_hist_single_cpu_2026_08_12-22_13_55-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
@@ -1985,7 +2000,7 @@ if __name__ == "__main__":
     num_nvs = len(pixel_coords_list)
     # threshold_list = [None] * num_nvs
     scc_duration_list = [88] * num_nvs
-    pol_duration_list = [2000] * num_nvs
+    pol_duration_list = [10000] * num_nvs
 
     # -------------------------------------------
     # amplitudes
@@ -2032,7 +2047,7 @@ if __name__ == "__main__":
             pulse_amps={
                 VirtualLaserKey.SCC: scc_amp_list[ind],
                 VirtualLaserKey.ION: scc_amp_list[ind],
-                # VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
+                VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
             },
         )
         nv_list.append(nv_sig)
@@ -2087,7 +2102,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)     
+        do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list: 
@@ -2166,7 +2181,7 @@ if __name__ == "__main__":
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
         # do_optimize_readout_amp(nv_list)
-        do_optimize_readout_amp_repeated_readout(nv_list)
+        # do_optimize_readout_amp_repeated_readout(nv_list)
         # do_optimize_pol_duration(nv_list)
     
         # do_optimize_readout_duration(nv_list)
