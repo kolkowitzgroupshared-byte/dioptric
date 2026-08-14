@@ -356,6 +356,7 @@ def do_charge_state_particle_memory_wait_sweep(nv_list):
     results = {}
 
     for dark_wait_s, num_runs in wait_plan:
+        do_widefield_image_sample(nv_sig, 50)     
         label = f"source_off_wait_{dark_wait_s:g}s"
 
         print(
@@ -385,7 +386,7 @@ def do_charge_state_particle_memory_wait_sweep(nv_list):
             save_fig=True,
             verbose=True,
         )
-
+        
     return results
     
     
@@ -1935,7 +1936,8 @@ if __name__ == "__main__":
         # file_stem = "2026_08_08-22_54_51-single_step_charge_hist_single_cpu_2026_08_08-22_52_19-qnami-nv0_2026_02_20",
         # file_stem= "2026_08_11-17_25_05-single_step_charge_hist_single_cpu_2026_08_11-17_19_57-qnami-nv0_2026_02_20",
         # file_stem ="2026_08_11-21_53_16-single_step_charge_hist_single_cpu_2026_08_11-19_24_34-qnami-nv0_2026_02_20",
-        file_stem ="2026_08_12-23_18_49-single_step_charge_hist_single_cpu_2026_08_12-22_13_55-qnami-nv0_2026_02_20",
+        # file_stem ="2026_08_12-23_18_49-single_step_charge_hist_single_cpu_2026_08_12-22_13_55-qnami-nv0_2026_02_20",
+        file_stem = "2026_08_13-14_09_16-single_step_charge_hist_single_cpu_2026_08_13-14_04_07-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
@@ -2102,7 +2104,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_widefield_image_sample(nv_sig, 50)     
+        # do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list: 
@@ -2164,7 +2166,7 @@ if __name__ == "__main__":
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
-        # do_charge_state_particle_memory_wait_sweep(nv_list)
+        do_charge_state_particle_memory_wait_sweep(nv_list)
         # do_charge_state_measurement_backaction(nv_list)
         
         # do_dmd_crosstalk_matrix(
