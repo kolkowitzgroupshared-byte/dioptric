@@ -339,7 +339,7 @@ def do_charge_state_particle_memory(nv_list):
     
 def do_charge_state_particle_memory_wait_sweep(nv_list):
     wait_plan = [
-        # (0, 20),
+        (0, 8000),
         # (10, 20),
         # (30, 20),
         # (60, 20),
@@ -348,10 +348,10 @@ def do_charge_state_particle_memory_wait_sweep(nv_list):
         # (600, 20),
         # (1200, 20),
         # (1800, 20),
-        (3600, 12),
-        (3600, 12),
-        (3600, 12),
-        (3600, 12),
+        # (3600, 12),
+        # (3600, 12),
+        # (3600, 12),
+        # (3600, 12),
     ]
     results = {}
 
@@ -1937,7 +1937,8 @@ if __name__ == "__main__":
         # file_stem= "2026_08_11-17_25_05-single_step_charge_hist_single_cpu_2026_08_11-17_19_57-qnami-nv0_2026_02_20",
         # file_stem ="2026_08_11-21_53_16-single_step_charge_hist_single_cpu_2026_08_11-19_24_34-qnami-nv0_2026_02_20",
         # file_stem ="2026_08_12-23_18_49-single_step_charge_hist_single_cpu_2026_08_12-22_13_55-qnami-nv0_2026_02_20",
-        file_stem = "2026_08_13-14_09_16-single_step_charge_hist_single_cpu_2026_08_13-14_04_07-qnami-nv0_2026_02_20",
+        # file_stem = "2026_08_13-14_09_16-single_step_charge_hist_single_cpu_2026_08_13-14_04_07-qnami-nv0_2026_02_20",
+        file_stem = "2026_08_16-00_51_03-single_step_charge_hist_single_cpu_2026_08_15-21_54_52-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
@@ -2166,7 +2167,7 @@ if __name__ == "__main__":
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
-        do_charge_state_particle_memory_wait_sweep(nv_list)
+        # do_charge_state_particle_memory_wait_sweep(nv_list)
         # do_charge_state_measurement_backaction(nv_list)
         
         # do_dmd_crosstalk_matrix(
