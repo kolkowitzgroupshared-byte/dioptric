@@ -287,126 +287,598 @@ def _draw_file_boundaries(
             )
 
 
-def plot_nv_minus_by_run_separate_reps(
-    file_stems,
-    selected_waits_s=None,
-    rep_inds=(11, 12),
-    rep_labels=None,
-    exclude_nv_inds=None,
-    show_fraction=False,
-    ncols=3,
-    verbose=True,
-    back_to_back=True,
-    mark_file_boundaries=True,
-    show_rep_comparison=True,
-    show_difference=True,
-    show_retention=True,
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+# =============================================================================
+# Small helpers
+# =============================================================================
+
+def _robust_zscore(values):
+    """
+    Median/MAD robust z-score.
+    """
+    values = np.asarray(values, dtype=float)
+
+    med = np.nanmedian(values)
+    mad = np.nanmedian(
+        np.abs(values - med)
+    )
+
+    sigma = 1.4826 * mad
+
+    if not np.isfinite(sigma) or sigma <= 0:
+        return np.full(values.shape, np.nan), med, sigma
+
+    z = (values - med) / sigma
+
+    return z, med, sigma
+
+
+def _local_nv_centroid(
+    img,
+    x0,
+    y0,
+    radius_px=5,
 ):
     """
-    Plot run-by-run NV- population for one or more rep indices.
+    Background-subtracted intensity centroid around one known NV position.
+    """
 
-    For sequential files acquired back-to-back, ``back_to_back=True`` preserves
-    the supplied file order and concatenates all runs onto one global run axis.
+    img = np.asarray(img, dtype=float)
 
-    This keeps the original function name and return structure:
-        dataset_results, figures
+    x0 = float(x0)
+    y0 = float(y0)
+    r = int(round(radius_px))
 
-    Parameters
-    ----------
-    file_stems : sequence of str
-        Raw particle-memory dataset file stems, in acquisition order.
+    xc = int(round(x0))
+    yc = int(round(y0))
 
-    selected_waits_s : sequence or None
-        Optional dark-wait filter. Duplicate wait times are retained, which is
-        important for repeated 3600 s datasets acquired back-to-back.
+    x_min = max(0, xc - r)
+    x_max = min(img.shape[1], xc + r + 1)
 
-    rep_inds : sequence of int
-        Rep indices to inspect. For the present experiment use (11, 12).
+    y_min = max(0, yc - r)
+    y_max = min(img.shape[0], yc + r + 1)
 
-    rep_labels : dict or None
-        Human-readable labels keyed by rep index.
+    if x_min >= x_max or y_min >= y_max:
+        return None
 
-    exclude_nv_inds : sequence or None
-        Original NV indices to exclude.
+    patch = img[
+        y_min:y_max,
+        x_min:x_max,
+    ].astype(float)
 
-    show_fraction : bool
-        False -> plot number of NV-.
-        True  -> plot fraction of retained NVs classified as NV-.
+    # Robust local background estimate.
+    bg = np.nanpercentile(
+        patch,
+        30,
+    )
 
-    ncols : int
-        Used only when ``back_to_back=False`` to reproduce the old subplot view.
+    weights = patch - bg
+    weights[
+        (~np.isfinite(weights))
+        | (weights < 0)
+    ] = 0
 
-    back_to_back : bool
-        True -> concatenate files in the supplied order onto a global run axis.
-        False -> retain the older one-subplot-per-file behavior.
+    total = np.sum(weights)
 
-    mark_file_boundaries : bool
-        Draw dashed vertical lines and timestamp labels between files.
+    if total <= 0:
+        return None
 
-    show_rep_comparison : bool
-        Add one overlay figure containing all requested reps.
+    yy, xx = np.indices(
+        patch.shape,
+        dtype=float,
+    )
 
-    show_difference : bool
-        For exactly two reps, add rep_final - rep_initial versus global run.
+    xx += x_min
+    yy += y_min
 
-    show_retention : bool
-        For exactly two reps, add rep_final / rep_initial versus global run.
+    cx = np.sum(xx * weights) / total
+    cy = np.sum(yy * weights) / total
+
+    return (
+        float(cx),
+        float(cy),
+        float(total),
+    )
+
+
+def _estimate_run_drift_from_bright_nvs(
+    img11,
+    img12,
+    coords_xy,
+    counts11,
+    counts12,
+    thresholds,
+    bright_margin_counts=5.0,
+    roi_radius_px=5,
+    max_reference_nvs=200,
+):
+    """
+    Estimate rep11 -> rep12 drift from NVs that remain confidently bright.
+
+    This deliberately DOES NOT use full-frame cross-correlation.
+
+    Only NVs confidently NV- in BOTH rep11 and rep12 are considered.
+    """
+
+    coords_xy = np.asarray(
+        coords_xy,
+        dtype=float,
+    )
+
+    counts11 = np.asarray(
+        counts11,
+        dtype=float,
+    )
+
+    counts12 = np.asarray(
+        counts12,
+        dtype=float,
+    )
+
+    thresholds = np.asarray(
+        thresholds,
+        dtype=float,
+    )
+
+    # Stable bright reference NVs.
+    ref_mask = (
+        (counts11 > thresholds + bright_margin_counts)
+        & (counts12 > thresholds + bright_margin_counts)
+        & np.isfinite(counts11)
+        & np.isfinite(counts12)
+    )
+
+    ref_inds = np.where(ref_mask)[0]
+
+    if len(ref_inds) == 0:
+        return {
+            "dx_px": np.nan,
+            "dy_px": np.nan,
+            "magnitude_px": np.nan,
+            "scatter_px": np.nan,
+            "num_reference_nvs": 0,
+            "reference_nv_inds": np.array([], dtype=int),
+            "dx_each": np.array([]),
+            "dy_each": np.array([]),
+        }
+
+    # Prefer brightest stable NVs.
+    brightness_score = np.minimum(
+        counts11[ref_inds] - thresholds[ref_inds],
+        counts12[ref_inds] - thresholds[ref_inds],
+    )
+
+    order = np.argsort(
+        brightness_score
+    )[::-1]
+
+    ref_inds = ref_inds[
+        order[:max_reference_nvs]
+    ]
+
+    dx_list = []
+    dy_list = []
+    used_inds = []
+
+    for nv_ind in ref_inds:
+
+        x0, y0 = coords_xy[nv_ind]
+
+        cent11 = _local_nv_centroid(
+            img11,
+            x0,
+            y0,
+            radius_px=roi_radius_px,
+        )
+
+        cent12 = _local_nv_centroid(
+            img12,
+            x0,
+            y0,
+            radius_px=roi_radius_px,
+        )
+
+        if cent11 is None or cent12 is None:
+            continue
+
+        x11, y11, sig11 = cent11
+        x12, y12, sig12 = cent12
+
+        if sig11 <= 0 or sig12 <= 0:
+            continue
+
+        dx_list.append(
+            x12 - x11
+        )
+
+        dy_list.append(
+            y12 - y11
+        )
+
+        used_inds.append(
+            nv_ind
+        )
+
+    dx_arr = np.asarray(
+        dx_list,
+        dtype=float,
+    )
+
+    dy_arr = np.asarray(
+        dy_list,
+        dtype=float,
+    )
+
+    used_inds = np.asarray(
+        used_inds,
+        dtype=int,
+    )
+
+    if len(dx_arr) < 3:
+        return {
+            "dx_px": np.nan,
+            "dy_px": np.nan,
+            "magnitude_px": np.nan,
+            "scatter_px": np.nan,
+            "num_reference_nvs": len(dx_arr),
+            "reference_nv_inds": used_inds,
+            "dx_each": dx_arr,
+            "dy_each": dy_arr,
+        }
+
+    # Initial robust center.
+    med_dx = np.nanmedian(dx_arr)
+    med_dy = np.nanmedian(dy_arr)
+
+    radial_residual = np.sqrt(
+        (dx_arr - med_dx) ** 2
+        + (dy_arr - med_dy) ** 2
+    )
+
+    med_res = np.nanmedian(
+        radial_residual
+    )
+
+    mad_res = np.nanmedian(
+        np.abs(
+            radial_residual
+            - med_res
+        )
+    )
+
+    robust_sigma = (
+        1.4826 * mad_res
+    )
+
+    if (
+        np.isfinite(robust_sigma)
+        and robust_sigma > 0
+    ):
+        good = (
+            radial_residual
+            <= med_res
+            + 4.0 * robust_sigma
+        )
+    else:
+        good = np.ones(
+            len(dx_arr),
+            dtype=bool,
+        )
+
+    dx_final = np.nanmedian(
+        dx_arr[good]
+    )
+
+    dy_final = np.nanmedian(
+        dy_arr[good]
+    )
+
+    magnitude = np.sqrt(
+        dx_final ** 2
+        + dy_final ** 2
+    )
+
+    residual_final = np.sqrt(
+        (dx_arr[good] - dx_final) ** 2
+        + (dy_arr[good] - dy_final) ** 2
+    )
+
+    scatter = np.nanmedian(
+        residual_final
+    )
+
+    return {
+        "dx_px": float(dx_final),
+        "dy_px": float(dy_final),
+        "magnitude_px": float(magnitude),
+        "scatter_px": float(scatter),
+        "num_reference_nvs": int(np.sum(good)),
+        "reference_nv_inds": used_inds[good],
+        "dx_each": dx_arr[good],
+        "dy_each": dy_arr[good],
+    }
+
+
+def _integrate_single_nv(
+    img,
+    x0,
+    y0,
+    radius_px=3.0,
+    bg_inner_px=5.0,
+    bg_outer_px=8.0,
+):
+    """
+    Aperture-integrated, locally background-subtracted NV signal.
+    """
+
+    img = np.asarray(
+        img,
+        dtype=float,
+    )
+
+    x0 = float(x0)
+    y0 = float(y0)
+
+    bound = int(
+        np.ceil(bg_outer_px)
+    )
+
+    xc = int(round(x0))
+    yc = int(round(y0))
+
+    x_min = max(
+        0,
+        xc - bound,
+    )
+
+    x_max = min(
+        img.shape[1],
+        xc + bound + 1,
+    )
+
+    y_min = max(
+        0,
+        yc - bound,
+    )
+
+    y_max = min(
+        img.shape[0],
+        yc + bound + 1,
+    )
+
+    if x_min >= x_max or y_min >= y_max:
+        return np.nan, np.nan
+
+    patch = img[
+        y_min:y_max,
+        x_min:x_max,
+    ]
+
+    yy, xx = np.indices(
+        patch.shape,
+        dtype=float,
+    )
+
+    xx += x_min
+    yy += y_min
+
+    rr = np.sqrt(
+        (xx - x0) ** 2
+        + (yy - y0) ** 2
+    )
+
+    signal_mask = (
+        rr <= radius_px
+    )
+
+    bg_mask = (
+        (rr >= bg_inner_px)
+        & (rr <= bg_outer_px)
+    )
+
+    if (
+        np.sum(signal_mask) == 0
+        or np.sum(bg_mask) == 0
+    ):
+        return np.nan, np.nan
+
+    bg = np.nanmedian(
+        patch[bg_mask]
+    )
+
+    signal = (
+        np.nansum(
+            patch[signal_mask]
+        )
+        - bg
+        * np.sum(signal_mask)
+    )
+
+    return (
+        float(signal),
+        float(bg),
+    )
+
+
+def _raw_image_ratio_for_run(
+    img11,
+    img12,
+    coords_xy,
+    reference_inds,
+    drift_dx=0.0,
+    drift_dy=0.0,
+):
+    """
+    Compare raw image integrated NV brightness between rep11 and rep12.
+
+    rep12 aperture is shifted by the measured drift.
+    """
+
+    ratios = []
+    bg_changes = []
+
+    for nv_ind in reference_inds:
+
+        x0, y0 = coords_xy[nv_ind]
+
+        sig11, bg11 = _integrate_single_nv(
+            img11,
+            x0,
+            y0,
+        )
+
+        sig12, bg12 = _integrate_single_nv(
+            img12,
+            x0 + drift_dx,
+            y0 + drift_dy,
+        )
+
+        if (
+            np.isfinite(sig11)
+            and np.isfinite(sig12)
+            and sig11 > 0
+        ):
+            ratios.append(
+                sig12 / sig11
+            )
+
+        if (
+            np.isfinite(bg11)
+            and np.isfinite(bg12)
+        ):
+            bg_changes.append(
+                bg12 - bg11
+            )
+
+    if len(ratios) == 0:
+        median_ratio = np.nan
+    else:
+        median_ratio = float(
+            np.nanmedian(ratios)
+        )
+
+    if len(bg_changes) == 0:
+        median_bg_change = np.nan
+    else:
+        median_bg_change = float(
+            np.nanmedian(
+                bg_changes
+            )
+        )
+
+    return (
+        median_ratio,
+        median_bg_change,
+        np.asarray(
+            ratios,
+            dtype=float,
+        ),
+    )
+
+
+# =============================================================================
+# Main analysis
+# =============================================================================
+
+def analyze_nv_memory_back_to_back(
+    file_stems,
+    selected_waits_s=None,
+    rep_initial=11,
+    rep_final=12,
+    exclude_nv_inds=None,
+    img_coords=None,
+
+    bright_margin_counts=5.0,
+
+    calculate_drift=True,
+    drift_roi_radius_px=5,
+    max_drift_nvs=200,
+
+    mark_file_boundaries=True,
+    annotate_top_n=5,
+    verbose=True,
+):
+    """
+    Back-to-back particle-memory analysis.
+
+    Key quantities are TRUE state transitions, not only changes in total NV-
+    population.
+
+    For every run:
+        initial_nvm
+        final_nvm
+        lost       = NV- at rep11 -> NV0 at rep12
+        gained     = NV0 at rep11 -> NV- at rep12
+        retained   = NV- at both reps
+        loss_fraction
+        true_retention
+        net_change
+        robust anomaly scores
+        rep11->rep12 image drift
+        raw-image brightness ratio
+        local camera-background change
 
     Returns
     -------
-    dataset_results : list of dict
-        Per-file values plus global run indices.
-
+    result : dict
     figures : dict
-        Integer keys contain one figure per rep.
-        Additional keys may include "comparison", "difference", and "retention".
     """
 
-    file_stems = list(file_stems)
-    rep_inds = tuple(int(rep_ind) for rep_ind in rep_inds)
-
-    if len(rep_inds) == 0:
-        raise ValueError("rep_inds cannot be empty.")
-
-    if rep_labels is None:
-        rep_labels = {rep_ind: f"rep {rep_ind}" for rep_ind in rep_inds}
-    else:
-        rep_labels = {
-            rep_ind: rep_labels.get(rep_ind, f"rep {rep_ind}")
-            for rep_ind in rep_inds
-        }
+    file_stems = list(
+        file_stems
+    )
 
     if exclude_nv_inds is None:
-        exclude_nv_inds = np.array([], dtype=int)
+        exclude_nv_inds = np.array(
+            [],
+            dtype=int,
+        )
     else:
         exclude_nv_inds = np.unique(
-            np.asarray(exclude_nv_inds, dtype=int)
+            np.asarray(
+                exclude_nv_inds,
+                dtype=int,
+            )
         )
 
-    selected_waits_arr = None
     if selected_waits_s is not None:
-        selected_waits_arr = np.asarray(
+        selected_waits_s = np.asarray(
             selected_waits_s,
             dtype=float,
         )
 
-    # ------------------------------------------------------------------
-    # Load files in the order supplied.
-    # DO NOT sort by dark_wait_s: repeated 3600 s files are sequential data.
-    # ------------------------------------------------------------------
-    dataset_results = []
-    global_run_offset = 0
+    datasets = []
 
-    for file_ind, file_stem in enumerate(file_stems):
+    global_offset = 0
+
+    # =====================================================================
+    # Load every file in acquisition order
+    # =====================================================================
+
+    for file_ind, file_stem in enumerate(
+        file_stems
+    ):
+
         raw_data = dm.get_raw_data(
             file_stem=file_stem,
             load_npz=True,
         )
 
-        wait_s = float(raw_data["dark_wait_s"])
+        wait_s = float(
+            raw_data["dark_wait_s"]
+        )
 
-        if selected_waits_arr is not None:
-            if not np.any(np.isclose(wait_s, selected_waits_arr)):
+        if selected_waits_s is not None:
+
+            if not np.any(
+                np.isclose(
+                    wait_s,
+                    selected_waits_s,
+                )
+            ):
                 continue
 
         counts_all = np.asarray(
@@ -416,526 +888,1435 @@ def plot_nv_minus_by_run_separate_reps(
 
         if counts_all.ndim != 5:
             raise ValueError(
-                "Expected counts[exp, nv, run, step, rep], "
-                f"got {counts_all.shape} for {file_stem}"
+                f"Expected counts[exp,nv,run,step,rep], "
+                f"got {counts_all.shape}"
             )
 
-        # [exp, nv, run, step, rep] -> [nv, run, rep]
-        counts = counts_all[0, :, :, 0, :]
-        num_nvs, num_runs, num_reps = counts.shape
+        counts = counts_all[
+            0,
+            :,
+            :,
+            0,
+            :,
+        ]
+
+        num_nvs, num_runs, num_reps = (
+            counts.shape
+        )
+
+        if not (
+            0 <= rep_initial < num_reps
+            and
+            0 <= rep_final < num_reps
+        ):
+            raise ValueError(
+                f"Invalid reps for {file_stem}: "
+                f"{rep_initial}, {rep_final}; "
+                f"num_reps={num_reps}"
+            )
 
         if "analysis_thresholds" in raw_data:
+
             thresholds = np.asarray(
-                raw_data["analysis_thresholds"],
+                raw_data[
+                    "analysis_thresholds"
+                ],
                 dtype=float,
             )
+
         elif "thresholds" in raw_data:
+
             thresholds = np.asarray(
                 raw_data["thresholds"],
                 dtype=float,
             )
+
         else:
             raise ValueError(
-                f"No thresholds found in {file_stem}."
+                f"No thresholds found in {file_stem}"
             )
 
-        if thresholds.shape != (num_nvs,):
-            raise ValueError(
-                f"Threshold shape mismatch in {file_stem}: "
-                f"{thresholds.shape} vs {(num_nvs,)}"
-            )
+        # --------------------------------------------------------------
+        # Keep mask
+        # --------------------------------------------------------------
 
-        keep_mask = np.ones(num_nvs, dtype=bool)
-        valid_excluded = exclude_nv_inds[
-            (exclude_nv_inds >= 0)
-            & (exclude_nv_inds < num_nvs)
-        ]
-        keep_mask[valid_excluded] = False
-
-        counts_kept = counts[keep_mask, :, :]
-        thresholds_kept = thresholds[keep_mask]
-        num_kept_nvs = int(np.sum(keep_mask))
-
-        if num_kept_nvs == 0:
-            raise ValueError(
-                f"No NVs remain after exclusions for {file_stem}."
-            )
-
-        nvm_mask = (
-            counts_kept
-            > thresholds_kept[:, None, None]
+        keep = np.ones(
+            num_nvs,
+            dtype=bool,
         )
 
-        rep_counts = {}
-        for rep_ind in rep_inds:
-            if not (0 <= rep_ind < num_reps):
-                raise ValueError(
-                    f"Requested rep {rep_ind} is outside "
-                    f"[0, {num_reps - 1}] for {file_stem}."
-                )
-
-            values = np.sum(
-                nvm_mask[:, :, rep_ind],
-                axis=0,
-            ).astype(float)
-
-            if show_fraction:
-                values = values / float(num_kept_nvs)
-
-            rep_counts[rep_ind] = values
-
-        global_run_inds = (
-            global_run_offset
-            + np.arange(num_runs, dtype=int)
-        )
-
-        file_timestamp = _parse_file_stem_timestamp(file_stem)
-
-        dataset_results.append(
-            {
-                "file_ind": int(file_ind),
-                "file_stem": file_stem,
-                "file_timestamp": file_timestamp,
-                "dark_wait_s": wait_s,
-                "num_runs": int(num_runs),
-                "num_reps": int(num_reps),
-                "num_nvs": int(num_nvs),
-                "num_kept_nvs": int(num_kept_nvs),
-                "rep_counts": rep_counts,
-                "global_run_inds": global_run_inds,
-                "global_run_start": int(global_run_offset),
-                "global_run_stop": int(global_run_offset + num_runs),
-            }
-        )
-
-        global_run_offset += num_runs
-
-    if not dataset_results:
-        raise ValueError("No matching datasets were loaded.")
-
-    # Warn if supplied filenames are not chronological.
-    parsed_times = [
-        dataset["file_timestamp"]
-        for dataset in dataset_results
-    ]
-    finite_times = [
-        timestamp
-        for timestamp in parsed_times
-        if timestamp is not None
-    ]
-    if (
-        verbose
-        and len(finite_times) == len(parsed_times)
-        and any(
-            parsed_times[ind] > parsed_times[ind + 1]
-            for ind in range(len(parsed_times) - 1)
-        )
-    ):
-        print(
-            "Warning: FILE_STEMS are not in chronological order. "
-            "The back-to-back plot preserves the supplied order."
-        )
-
-    figures = {}
-
-    # ------------------------------------------------------------------
-    # Back-to-back mode: one continuous figure per rep.
-    # ------------------------------------------------------------------
-    if back_to_back:
-        all_global_runs = np.concatenate(
-            [
-                dataset["global_run_inds"]
-                for dataset in dataset_results
+        valid_excluded = (
+            exclude_nv_inds[
+                (exclude_nv_inds >= 0)
+                & (exclude_nv_inds < num_nvs)
             ]
         )
 
-        all_rep_values = {
-            rep_ind: np.concatenate(
-                [
-                    np.asarray(
-                        dataset["rep_counts"][rep_ind],
-                        dtype=float,
-                    )
-                    for dataset in dataset_results
-                ]
-            )
-            for rep_ind in rep_inds
-        }
+        keep[
+            valid_excluded
+        ] = False
 
-        ylabel = (
-            "NV$^-$ fraction"
-            if show_fraction
-            else "Number of NV$^-$"
+        counts = counts[
+            keep,
+            :,
+            :,
+        ]
+
+        thresholds = thresholds[
+            keep
+        ]
+
+        original_nv_inds = np.arange(
+            num_nvs
+        )[keep]
+
+        num_kept = len(
+            thresholds
         )
 
-        for rep_ind in rep_inds:
-            fig, ax = plt.subplots(
-                figsize=(12.5, 4.8)
-            )
+        # --------------------------------------------------------------
+        # Coordinates
+        # --------------------------------------------------------------
 
-            values = all_rep_values[rep_ind]
+        coords_xy = None
 
-            ax.plot(
-                all_global_runs,
-                values,
-                "o-",
-                markersize=4,
-                linewidth=1.2,
-                label=rep_labels[rep_ind],
-            )
+        try:
 
-            # Per-file mean segments make slow changes easier to see.
-            for dataset in dataset_results:
-                x = dataset["global_run_inds"]
-                y = np.asarray(
-                    dataset["rep_counts"][rep_ind],
+            if img_coords is not None:
+
+                coords_tmp = np.asarray(
+                    img_coords,
                     dtype=float,
                 )
-                ax.hlines(
-                    np.nanmean(y),
-                    x[0] - 0.35,
-                    x[-1] + 0.35,
-                    linestyles="--",
-                    linewidth=1.0,
-                    color="0.25",
-                    alpha=0.55,
-                )
 
-            if mark_file_boundaries:
-                _draw_file_boundaries(
-                    ax,
-                    dataset_results,
-                    annotate=True,
-                )
+            else:
 
-            ax.set_xlabel("Global run index")
-            ax.set_ylabel(ylabel)
-            ax.set_title(
-                "Back-to-back NV$^-$ population: "
-                f"{rep_labels[rep_ind]}"
-            )
-            ax.grid(True, alpha=0.25)
-            ax.legend()
-
-            if show_fraction:
-                ax.set_ylim(0.0, 1.02)
-
-            fig.tight_layout()
-            figures[rep_ind] = fig
-
-        # --------------------------------------------------------------
-        # Overlay rep comparison.
-        # --------------------------------------------------------------
-        if show_rep_comparison:
-            fig, ax = plt.subplots(
-                figsize=(12.5, 5.0)
-            )
-
-            for rep_ind in rep_inds:
-                ax.plot(
-                    all_global_runs,
-                    all_rep_values[rep_ind],
-                    "o-",
-                    markersize=4,
-                    linewidth=1.2,
-                    label=rep_labels[rep_ind],
-                )
-
-            if mark_file_boundaries:
-                _draw_file_boundaries(
-                    ax,
-                    dataset_results,
-                    annotate=True,
-                )
-
-            ax.set_xlabel("Global run index")
-            ax.set_ylabel(ylabel)
-            ax.set_title(
-                "Back-to-back immediate vs delayed NV$^-$ population"
-            )
-            ax.grid(True, alpha=0.25)
-            ax.legend()
-
-            if show_fraction:
-                ax.set_ylim(0.0, 1.02)
-
-            fig.tight_layout()
-            figures["comparison"] = fig
-
-        # --------------------------------------------------------------
-        # Two-rep derived quantities.
-        # --------------------------------------------------------------
-        if len(rep_inds) == 2:
-            rep_initial, rep_final = rep_inds
-            initial = all_rep_values[rep_initial]
-            final = all_rep_values[rep_final]
-
-            difference = final - initial
-
-            if show_difference:
-                fig, ax = plt.subplots(
-                    figsize=(12.5, 4.8)
-                )
-                ax.axhline(
-                    0.0,
-                    color="0.25",
-                    linestyle="--",
-                    linewidth=1.0,
-                )
-                ax.plot(
-                    all_global_runs,
-                    difference,
-                    "o-",
-                    markersize=4,
-                    linewidth=1.2,
-                )
-
-                if mark_file_boundaries:
-                    _draw_file_boundaries(
-                        ax,
-                        dataset_results,
-                        annotate=True,
-                    )
-
-                ax.set_xlabel("Global run index")
-                ax.set_ylabel(
-                    "Δ NV$^-$ fraction"
-                    if show_fraction
-                    else "Δ number of NV$^-$"
-                )
-                ax.set_title(
-                    f"{rep_labels[rep_final]} "
-                    f"− {rep_labels[rep_initial]}"
-                )
-                ax.grid(True, alpha=0.25)
-                fig.tight_layout()
-                figures["difference"] = fig
-
-            if show_retention:
-                retention = np.full(
-                    initial.shape,
-                    np.nan,
+                coords_tmp = np.asarray(
+                    _coerce_img_coords(
+                        raw_data["nv_list"],
+                        img_coords=None,
+                    ),
                     dtype=float,
                 )
-                good = initial > 0
-                retention[good] = (
-                    final[good]
-                    / initial[good]
-                )
 
-                fig, ax = plt.subplots(
-                    figsize=(12.5, 4.8)
-                )
-                ax.axhline(
-                    1.0,
-                    color="0.25",
-                    linestyle="--",
-                    linewidth=1.0,
-                )
-                ax.plot(
-                    all_global_runs,
-                    retention,
-                    "o-",
-                    markersize=4,
-                    linewidth=1.2,
-                )
+            if len(coords_tmp) == num_nvs:
+                coords_xy = coords_tmp[
+                    keep
+                ]
 
-                if mark_file_boundaries:
-                    _draw_file_boundaries(
-                        ax,
-                        dataset_results,
-                        annotate=True,
-                    )
+        except Exception:
+            coords_xy = None
 
-                ax.set_xlabel("Global run index")
-                ax.set_ylabel(
-                    f"rep {rep_final} / rep {rep_initial}"
-                )
-                ax.set_title(
-                    "Back-to-back NV$^-$ retention"
-                )
-                ax.grid(True, alpha=0.25)
-                fig.tight_layout()
-                figures["retention"] = fig
+        # --------------------------------------------------------------
+        # Charge states
+        # --------------------------------------------------------------
 
-        # Save useful concatenated arrays in a summary entry.
-        for dataset in dataset_results:
-            dataset["back_to_back"] = True
+        c11 = counts[
+            :,
+            :,
+            rep_initial,
+        ]
 
-    # ------------------------------------------------------------------
-    # Legacy mode: one subplot per file, one figure per rep.
-    # ------------------------------------------------------------------
-    else:
-        num_panels = len(dataset_results)
-        ncols_use = min(
-            max(1, int(ncols)),
-            num_panels,
-        )
-        nrows = int(
-            np.ceil(num_panels / ncols_use)
+        c12 = counts[
+            :,
+            :,
+            rep_final,
+        ]
+
+        state11 = (
+            c11
+            > thresholds[:, None]
         )
 
-        for rep_ind in rep_inds:
-            fig, axes = plt.subplots(
-                nrows,
-                ncols_use,
-                figsize=(
-                    5.2 * ncols_use,
-                    3.8 * nrows,
-                ),
-                sharey=True,
-            )
-            axes = np.atleast_1d(
-                axes
-            ).ravel()
+        state12 = (
+            c12
+            > thresholds[:, None]
+        )
 
-            for panel_ind, dataset in enumerate(dataset_results):
-                ax = axes[panel_ind]
-                yvals = np.asarray(
-                    dataset["rep_counts"][rep_ind],
-                    dtype=float,
-                )
-                run_inds = np.arange(
-                    dataset["num_runs"]
-                )
+        retained_mask = (
+            state11
+            & state12
+        )
 
-                ax.bar(
-                    run_inds,
-                    yvals,
-                    alpha=0.75,
-                )
+        lost_mask = (
+            state11
+            & (~state12)
+        )
 
-                mean_val = float(
-                    np.nanmean(yvals)
-                )
-                std_val = (
-                    float(np.nanstd(yvals, ddof=1))
-                    if len(yvals) > 1
-                    else 0.0
-                )
+        gained_mask = (
+            (~state11)
+            & state12
+        )
 
-                ax.axhline(
-                    mean_val,
-                    linestyle="--",
-                    linewidth=1.4,
-                    color="k",
-                    alpha=0.7,
-                )
+        initial_nvm = np.sum(
+            state11,
+            axis=0,
+        ).astype(float)
 
-                ax.set_title(
-                    f"wait = {dataset['dark_wait_s']:g} s\n"
-                    f"mean = {mean_val:.2f}, std = {std_val:.2f}",
-                    fontsize=10,
-                )
-                ax.set_xlabel("Run index")
-                ax.set_ylabel(
-                    "NV$^-$ fraction"
-                    if show_fraction
-                    else "Number of NV$^-$"
-                )
-                ax.grid(
-                    True,
-                    axis="y",
-                    alpha=0.25,
-                )
+        final_nvm = np.sum(
+            state12,
+            axis=0,
+        ).astype(float)
 
-                if show_fraction:
-                    ax.set_ylim(0.0, 1.02)
+        retained = np.sum(
+            retained_mask,
+            axis=0,
+        ).astype(float)
 
-            for ax in axes[num_panels:]:
-                ax.axis("off")
+        lost = np.sum(
+            lost_mask,
+            axis=0,
+        ).astype(float)
 
-            fig.suptitle(
-                "Run-by-run NV$^-$ population: "
-                f"{rep_labels[rep_ind]}",
-                fontsize=14,
-            )
-            fig.tight_layout(
-                rect=[0, 0, 1, 0.94]
-            )
-            figures[rep_ind] = fig
+        gained = np.sum(
+            gained_mask,
+            axis=0,
+        ).astype(float)
 
-    # ------------------------------------------------------------------
-    # Text summary.
-    # ------------------------------------------------------------------
-    if verbose:
-        print("\n" + "=" * 90)
-        print("BACK-TO-BACK NV- POPULATION SUMMARY")
-        print("=" * 90)
+        # TRUE loss probability.
+        loss_fraction = np.full(
+            num_runs,
+            np.nan,
+        )
 
-        for dataset_ind, dataset in enumerate(dataset_results):
-            timestamp_label = _format_file_boundary_label(
-                dataset["file_stem"],
-                dataset_ind,
-            ).replace("\n", " ")
+        good_initial = (
+            initial_nvm > 0
+        )
 
-            print(
-                f"\nFile {dataset_ind + 1}: {timestamp_label} | "
-                f"wait={dataset['dark_wait_s']:g} s | "
-                f"global runs "
-                f"{dataset['global_run_start']}..."
-                f"{dataset['global_run_stop'] - 1}"
-            )
+        loss_fraction[
+            good_initial
+        ] = (
+            lost[good_initial]
+            / initial_nvm[good_initial]
+        )
 
-            for rep_ind in rep_inds:
-                values = np.asarray(
-                    dataset["rep_counts"][rep_ind],
-                    dtype=float,
-                )
-                print(
-                    f"  {rep_labels[rep_ind]}: "
-                    f"mean={np.nanmean(values):.3f}, "
-                    f"std="
-                    f"{np.nanstd(values, ddof=1) if len(values) > 1 else 0.0:.3f}, "
-                    f"min={np.nanmin(values):.3f}, "
-                    f"max={np.nanmax(values):.3f}"
-                )
+        # TRUE retention.
+        true_retention = np.full(
+            num_runs,
+            np.nan,
+        )
 
-        if len(rep_inds) == 2:
-            rep_initial, rep_final = rep_inds
-            initial = np.concatenate(
-                [
-                    np.asarray(
-                        dataset["rep_counts"][rep_initial],
-                        dtype=float,
-                    )
-                    for dataset in dataset_results
-                ]
-            )
-            final = np.concatenate(
-                [
-                    np.asarray(
-                        dataset["rep_counts"][rep_final],
-                        dtype=float,
-                    )
-                    for dataset in dataset_results
-                ]
-            )
+        true_retention[
+            good_initial
+        ] = (
+            retained[
+                good_initial
+            ]
+            / initial_nvm[
+                good_initial
+            ]
+        )
 
-            difference = final - initial
-            good = initial > 0
-            retention = np.full(
-                initial.shape,
-                np.nan,
+        # For reference:
+        net_change = (
+            final_nvm
+            - initial_nvm
+        )
+
+        # --------------------------------------------------------------
+        # Within-file robust anomaly score
+        # --------------------------------------------------------------
+
+        (
+            local_z,
+            local_med,
+            local_sigma,
+        ) = _robust_zscore(
+            loss_fraction
+        )
+
+        # --------------------------------------------------------------
+        # Raw-image technical diagnostics
+        # --------------------------------------------------------------
+
+        drift_dx = np.full(
+            num_runs,
+            np.nan,
+        )
+
+        drift_dy = np.full(
+            num_runs,
+            np.nan,
+        )
+
+        drift_mag = np.full(
+            num_runs,
+            np.nan,
+        )
+
+        drift_scatter = np.full(
+            num_runs,
+            np.nan,
+        )
+
+        drift_nrefs = np.zeros(
+            num_runs,
+            dtype=int,
+        )
+
+        raw_brightness_ratio = np.full(
+            num_runs,
+            np.nan,
+        )
+
+        raw_background_change = np.full(
+            num_runs,
+            np.nan,
+        )
+
+        has_images = (
+            "img_arrays" in raw_data
+        )
+
+        if (
+            calculate_drift
+            and has_images
+            and coords_xy is not None
+        ):
+
+            img_arrays = np.asarray(
+                raw_data[
+                    "img_arrays"
+                ],
                 dtype=float,
             )
-            retention[good] = final[good] / initial[good]
 
-            print("\nCombined:")
-            print(
-                f"  total runs = {len(initial)}"
+            if img_arrays.ndim == 6:
+
+                for run_ind in range(
+                    num_runs
+                ):
+
+                    img11 = img_arrays[
+                        0,
+                        run_ind,
+                        0,
+                        rep_initial,
+                        :,
+                        :,
+                    ]
+
+                    img12 = img_arrays[
+                        0,
+                        run_ind,
+                        0,
+                        rep_final,
+                        :,
+                        :,
+                    ]
+
+                    drift = (
+                        _estimate_run_drift_from_bright_nvs(
+                            img11=img11,
+                            img12=img12,
+                            coords_xy=coords_xy,
+                            counts11=c11[:, run_ind],
+                            counts12=c12[:, run_ind],
+                            thresholds=thresholds,
+                            bright_margin_counts=
+                                bright_margin_counts,
+                            roi_radius_px=
+                                drift_roi_radius_px,
+                            max_reference_nvs=
+                                max_drift_nvs,
+                        )
+                    )
+
+                    drift_dx[
+                        run_ind
+                    ] = drift[
+                        "dx_px"
+                    ]
+
+                    drift_dy[
+                        run_ind
+                    ] = drift[
+                        "dy_px"
+                    ]
+
+                    drift_mag[
+                        run_ind
+                    ] = drift[
+                        "magnitude_px"
+                    ]
+
+                    drift_scatter[
+                        run_ind
+                    ] = drift[
+                        "scatter_px"
+                    ]
+
+                    drift_nrefs[
+                        run_ind
+                    ] = drift[
+                        "num_reference_nvs"
+                    ]
+
+                    refs = drift[
+                        "reference_nv_inds"
+                    ]
+
+                    if len(refs) > 0:
+
+                        (
+                            ratio,
+                            bg_change,
+                            _,
+                        ) = _raw_image_ratio_for_run(
+                            img11,
+                            img12,
+                            coords_xy,
+                            reference_inds=refs,
+                            drift_dx=drift[
+                                "dx_px"
+                            ],
+                            drift_dy=drift[
+                                "dy_px"
+                            ],
+                        )
+
+                        raw_brightness_ratio[
+                            run_ind
+                        ] = ratio
+
+                        raw_background_change[
+                            run_ind
+                        ] = bg_change
+
+        # --------------------------------------------------------------
+        # Global run coordinates
+        # --------------------------------------------------------------
+
+        global_runs = (
+            global_offset
+            + np.arange(
+                num_runs,
+                dtype=int,
             )
-            print(
-                f"  mean Δ(rep {rep_final} - rep {rep_initial}) = "
-                f"{np.nanmean(difference):.3f}"
+        )
+
+        datasets.append(
+            {
+                "file_ind":
+                    file_ind,
+
+                "file_stem":
+                    file_stem,
+
+                "dark_wait_s":
+                    wait_s,
+
+                "num_runs":
+                    num_runs,
+
+                "num_kept_nvs":
+                    num_kept,
+
+                "global_runs":
+                    global_runs,
+
+                "global_start":
+                    int(
+                        global_offset
+                    ),
+
+                "global_stop":
+                    int(
+                        global_offset
+                        + num_runs
+                    ),
+
+                "original_nv_inds":
+                    original_nv_inds,
+
+                "initial_nvm":
+                    initial_nvm,
+
+                "final_nvm":
+                    final_nvm,
+
+                "retained":
+                    retained,
+
+                "lost":
+                    lost,
+
+                "gained":
+                    gained,
+
+                "loss_fraction":
+                    loss_fraction,
+
+                "true_retention":
+                    true_retention,
+
+                "net_change":
+                    net_change,
+
+                "local_loss_z":
+                    local_z,
+
+                "drift_dx":
+                    drift_dx,
+
+                "drift_dy":
+                    drift_dy,
+
+                "drift_mag":
+                    drift_mag,
+
+                "drift_scatter":
+                    drift_scatter,
+
+                "drift_nrefs":
+                    drift_nrefs,
+
+                "raw_brightness_ratio":
+                    raw_brightness_ratio,
+
+                "raw_background_change":
+                    raw_background_change,
+            }
+        )
+
+        global_offset += (
+            num_runs
+        )
+
+    if len(datasets) == 0:
+        raise ValueError(
+            "No matching datasets."
+        )
+
+    # =====================================================================
+    # Concatenate back-to-back
+    # =====================================================================
+
+    def cat(key):
+        return np.concatenate(
+            [
+                np.asarray(
+                    d[key]
+                )
+                for d in datasets
+            ]
+        )
+
+    global_runs = cat(
+        "global_runs"
+    ).astype(int)
+
+    initial_nvm = cat(
+        "initial_nvm"
+    )
+
+    final_nvm = cat(
+        "final_nvm"
+    )
+
+    retained = cat(
+        "retained"
+    )
+
+    lost = cat(
+        "lost"
+    )
+
+    gained = cat(
+        "gained"
+    )
+
+    loss_fraction = cat(
+        "loss_fraction"
+    )
+
+    true_retention = cat(
+        "true_retention"
+    )
+
+    net_change = cat(
+        "net_change"
+    )
+
+    local_loss_z = cat(
+        "local_loss_z"
+    )
+
+    drift_dx = cat(
+        "drift_dx"
+    )
+
+    drift_dy = cat(
+        "drift_dy"
+    )
+
+    drift_mag = cat(
+        "drift_mag"
+    )
+
+    drift_scatter = cat(
+        "drift_scatter"
+    )
+
+    raw_brightness_ratio = cat(
+        "raw_brightness_ratio"
+    )
+
+    raw_background_change = cat(
+        "raw_background_change"
+    )
+
+    # =====================================================================
+    # Global robust anomaly score
+    # =====================================================================
+
+    (
+        global_loss_z,
+        global_loss_med,
+        global_loss_sigma,
+    ) = _robust_zscore(
+        loss_fraction
+    )
+
+    # Empirical one-sided probability for EVERY run.
+    empirical_p = np.full(
+        len(loss_fraction),
+        np.nan,
+    )
+
+    for ind in range(
+        len(loss_fraction)
+    ):
+
+        if not np.isfinite(
+            loss_fraction[ind]
+        ):
+            continue
+
+        others = np.delete(
+            loss_fraction,
+            ind,
+        )
+
+        others = others[
+            np.isfinite(others)
+        ]
+
+        empirical_p[ind] = (
+            1
+            + np.sum(
+                others
+                >= loss_fraction[ind]
             )
-            print(
-                f"  median retention rep {rep_final}/rep {rep_initial} = "
-                f"{np.nanmedian(retention):.4f}"
+        ) / (
+            len(others)
+            + 1
+        )
+
+    # =====================================================================
+    # File/run metadata
+    # =====================================================================
+
+    file_index = np.concatenate(
+        [
+            np.full(
+                d["num_runs"],
+                d["file_ind"],
+                dtype=int,
+            )
+            for d in datasets
+        ]
+    )
+
+    local_run = np.concatenate(
+        [
+            np.arange(
+                d["num_runs"],
+                dtype=int,
+            )
+            for d in datasets
+        ]
+    )
+
+    # =====================================================================
+    # Identify strongest anomalous runs
+    # =====================================================================
+
+    finite_loss = np.where(
+        np.isfinite(
+            loss_fraction
+        )
+    )[0]
+
+    anomaly_order = finite_loss[
+        np.argsort(
+            loss_fraction[
+                finite_loss
+            ]
+        )[::-1]
+    ]
+
+    top_inds = anomaly_order[
+        :min(
+            annotate_top_n,
+            len(anomaly_order),
+        )
+    ]
+
+    # =====================================================================
+    # Boundary helper
+    # =====================================================================
+
+    def draw_boundaries(ax):
+
+        if not mark_file_boundaries:
+            return
+
+        for dataset_ind, d in enumerate(
+            datasets[:-1]
+        ):
+
+            boundary = (
+                d["global_stop"]
+                - 0.5
             )
 
-    return dataset_results, figures
+            ax.axvline(
+                boundary,
+                linestyle="--",
+                linewidth=0.8,
+                alpha=0.45,
+            )
 
+        # Label each dataset approximately at its center.
+        for dataset_ind, d in enumerate(
+            datasets
+        ):
+
+            center = (
+                d["global_start"]
+                + d["global_stop"]
+                - 1
+            ) / 2
+
+            label = (
+                f"file {dataset_ind + 1}\n"
+                f"{d['file_stem'][:19]}"
+            )
+
+            ax.text(
+                center,
+                1.01,
+                label,
+                transform=ax.get_xaxis_transform(),
+                ha="center",
+                va="bottom",
+                fontsize=7,
+            )
+
+    # =====================================================================
+    # FIGURE 1:
+    # Rep11 and rep12 population
+    # =====================================================================
+
+    figures = {}
+
+    fig, ax = plt.subplots(
+        figsize=(14, 5)
+    )
+
+    ax.plot(
+        global_runs,
+        initial_nvm,
+        "o-",
+        markersize=3.5,
+        linewidth=1,
+        label=f"rep {rep_initial}",
+    )
+
+    ax.plot(
+        global_runs,
+        final_nvm,
+        "o-",
+        markersize=3.5,
+        linewidth=1,
+        label=f"rep {rep_final}",
+    )
+
+    draw_boundaries(ax)
+
+    ax.set_xlabel(
+        "Global run index"
+    )
+
+    ax.set_ylabel(
+        "Number of NV$^-$"
+    )
+
+    ax.set_title(
+        "Back-to-back 3600 s measurements"
+    )
+
+    ax.grid(
+        alpha=0.2
+    )
+
+    ax.legend()
+
+    fig.tight_layout()
+
+    figures[
+        "population"
+    ] = fig
+
+    # =====================================================================
+    # FIGURE 2:
+    # TRUE transition statistics
+    # =====================================================================
+
+    fig, axes = plt.subplots(
+        2,
+        1,
+        figsize=(14, 8),
+        sharex=True,
+    )
+
+    ax = axes[0]
+
+    ax.plot(
+        global_runs,
+        lost,
+        "o-",
+        markersize=3.5,
+        label="NV- → NV0 lost",
+    )
+
+    ax.plot(
+        global_runs,
+        gained,
+        "o-",
+        markersize=3.5,
+        label="NV0 → NV- gained",
+    )
+
+    draw_boundaries(ax)
+
+    ax.set_ylabel(
+        "Number of NVs"
+    )
+
+    ax.set_title(
+        "Actual charge-state transitions"
+    )
+
+    ax.grid(
+        alpha=0.2
+    )
+
+    ax.legend()
+
+    ax = axes[1]
+
+    ax.plot(
+        global_runs,
+        100 * loss_fraction,
+        "o-",
+        markersize=3.5,
+    )
+
+    ax.axhline(
+        100 * global_loss_med,
+        linestyle="--",
+        linewidth=1,
+        label=(
+            "global median "
+            f"{100*global_loss_med:.1f}%"
+        ),
+    )
+
+    for ind in top_inds:
+
+        ax.annotate(
+            (
+                f"G{global_runs[ind]}\n"
+                f"F{file_index[ind]+1}:R{local_run[ind]}"
+            ),
+            (
+                global_runs[ind],
+                100
+                * loss_fraction[ind],
+            ),
+            xytext=(0, 8),
+            textcoords="offset points",
+            ha="center",
+            fontsize=8,
+        )
+
+    draw_boundaries(ax)
+
+    ax.set_xlabel(
+        "Global run index"
+    )
+
+    ax.set_ylabel(
+        "NV$^-$ → NV$^0$ loss (%)"
+    )
+
+    ax.set_title(
+        "Loss fraction — primary rare-event statistic"
+    )
+
+    ax.grid(
+        alpha=0.2
+    )
+
+    ax.legend()
+
+    fig.tight_layout()
+
+    figures[
+        "transitions"
+    ] = fig
+
+    # =====================================================================
+    # FIGURE 3:
+    # True retention and anomaly significance
+    # =====================================================================
+
+    fig, axes = plt.subplots(
+        2,
+        1,
+        figsize=(14, 8),
+        sharex=True,
+    )
+
+    axes[0].plot(
+        global_runs,
+        true_retention,
+        "o-",
+        markersize=3.5,
+    )
+
+    axes[0].axhline(
+        1.0,
+        linestyle="--",
+        linewidth=1,
+    )
+
+    draw_boundaries(
+        axes[0]
+    )
+
+    axes[0].set_ylabel(
+        "True retention"
+    )
+
+    axes[0].set_title(
+        "P(NV$^-$ at rep12 | NV$^-$ at rep11)"
+    )
+
+    axes[0].grid(
+        alpha=0.2
+    )
+
+    axes[1].plot(
+        global_runs,
+        global_loss_z,
+        "o-",
+        markersize=3.5,
+        label="global robust z",
+    )
+
+    axes[1].plot(
+        global_runs,
+        local_loss_z,
+        ".-",
+        markersize=3,
+        alpha=0.7,
+        label="within-file robust z",
+    )
+
+    axes[1].axhline(
+        3,
+        linestyle="--",
+        linewidth=1,
+        alpha=0.6,
+    )
+
+    axes[1].axhline(
+        5,
+        linestyle="--",
+        linewidth=1,
+        alpha=0.6,
+    )
+
+    draw_boundaries(
+        axes[1]
+    )
+
+    axes[1].set_xlabel(
+        "Global run index"
+    )
+
+    axes[1].set_ylabel(
+        "Robust z-score"
+    )
+
+    axes[1].set_title(
+        "How unusual is each run?"
+    )
+
+    axes[1].grid(
+        alpha=0.2
+    )
+
+    axes[1].legend()
+
+    fig.tight_layout()
+
+    figures[
+        "anomaly"
+    ] = fig
+
+    # =====================================================================
+    # FIGURE 4:
+    # Drift for every run
+    # =====================================================================
+
+    if np.any(
+        np.isfinite(
+            drift_mag
+        )
+    ):
+
+        fig, axes = plt.subplots(
+            2,
+            1,
+            figsize=(14, 8),
+            sharex=True,
+        )
+
+        ax = axes[0]
+
+        ax.plot(
+            global_runs,
+            drift_dx,
+            ".-",
+            label="dx",
+        )
+
+        ax.plot(
+            global_runs,
+            drift_dy,
+            ".-",
+            label="dy",
+        )
+
+        ax.axhline(
+            0,
+            linestyle="--",
+            linewidth=1,
+        )
+
+        draw_boundaries(
+            ax
+        )
+
+        ax.set_ylabel(
+            "Shift (camera px)"
+        )
+
+        ax.set_title(
+            "Rep11 → rep12 drift from stable bright NVs"
+        )
+
+        ax.grid(
+            alpha=0.2
+        )
+
+        ax.legend()
+
+        ax = axes[1]
+
+        ax.plot(
+            global_runs,
+            drift_mag,
+            "o-",
+            markersize=3.5,
+        )
+
+        draw_boundaries(
+            ax
+        )
+
+        ax.set_xlabel(
+            "Global run index"
+        )
+
+        ax.set_ylabel(
+            "|drift| (camera px)"
+        )
+
+        ax.set_title(
+            "Drift magnitude"
+        )
+
+        ax.grid(
+            alpha=0.2
+        )
+
+        fig.tight_layout()
+
+        figures[
+            "drift"
+        ] = fig
+
+    # =====================================================================
+    # FIGURE 5:
+    # Technical readout diagnostics
+    # =====================================================================
+
+    if np.any(
+        np.isfinite(
+            raw_brightness_ratio
+        )
+    ):
+
+        fig, axes = plt.subplots(
+            2,
+            1,
+            figsize=(14, 8),
+            sharex=True,
+        )
+
+        ax = axes[0]
+
+        ax.plot(
+            global_runs,
+            raw_brightness_ratio,
+            "o-",
+            markersize=3.5,
+        )
+
+        ax.axhline(
+            1,
+            linestyle="--",
+            linewidth=1,
+        )
+
+        draw_boundaries(
+            ax
+        )
+
+        ax.set_ylabel(
+            "Raw rep12 / rep11"
+        )
+
+        ax.set_title(
+            "Raw-image brightness of stable bright NVs\n"
+            "(drift-corrected aperture integration)"
+        )
+
+        ax.grid(
+            alpha=0.2
+        )
+
+        ax = axes[1]
+
+        ax.plot(
+            global_runs,
+            raw_background_change,
+            "o-",
+            markersize=3.5,
+        )
+
+        ax.axhline(
+            0,
+            linestyle="--",
+            linewidth=1,
+        )
+
+        draw_boundaries(
+            ax
+        )
+
+        ax.set_xlabel(
+            "Global run index"
+        )
+
+        ax.set_ylabel(
+            "Δ local camera background"
+        )
+
+        ax.set_title(
+            "Rep12 − rep11 camera background"
+        )
+
+        ax.grid(
+            alpha=0.2
+        )
+
+        fig.tight_layout()
+
+        figures[
+            "technical"
+        ] = fig
+
+    # =====================================================================
+    # FIGURE 6:
+    # Does large charge loss correlate with drift / brightness?
+    # =====================================================================
+
+    fig, axes = plt.subplots(
+        1,
+        2,
+        figsize=(12, 5)
+    )
+
+    good = (
+        np.isfinite(loss_fraction)
+        & np.isfinite(drift_mag)
+    )
+
+    axes[0].scatter(
+        drift_mag[good],
+        100 * loss_fraction[good],
+        s=25,
+        alpha=0.65,
+    )
+
+    for ind in top_inds:
+
+        if (
+            np.isfinite(
+                drift_mag[ind]
+            )
+        ):
+            axes[0].annotate(
+                f"G{global_runs[ind]}",
+                (
+                    drift_mag[ind],
+                    100
+                    * loss_fraction[ind],
+                ),
+                xytext=(5, 5),
+                textcoords="offset points",
+                fontsize=8,
+            )
+
+    axes[0].set_xlabel(
+        "Drift magnitude (px)"
+    )
+
+    axes[0].set_ylabel(
+        "NV$^-$ → NV$^0$ loss (%)"
+    )
+
+    axes[0].set_title(
+        "Is charge loss correlated with drift?"
+    )
+
+    axes[0].grid(
+        alpha=0.2
+    )
+
+    good = (
+        np.isfinite(loss_fraction)
+        & np.isfinite(
+            raw_brightness_ratio
+        )
+    )
+
+    axes[1].scatter(
+        raw_brightness_ratio[
+            good
+        ],
+        100
+        * loss_fraction[
+            good
+        ],
+        s=25,
+        alpha=0.65,
+    )
+
+    axes[1].axvline(
+        1,
+        linestyle="--",
+        linewidth=1,
+    )
+
+    for ind in top_inds:
+
+        if np.isfinite(
+            raw_brightness_ratio[
+                ind
+            ]
+        ):
+            axes[1].annotate(
+                f"G{global_runs[ind]}",
+                (
+                    raw_brightness_ratio[
+                        ind
+                    ],
+                    100
+                    * loss_fraction[
+                        ind
+                    ],
+                ),
+                xytext=(5, 5),
+                textcoords="offset points",
+                fontsize=8,
+            )
+
+    axes[1].set_xlabel(
+        "Raw rep12 / rep11 brightness"
+    )
+
+    axes[1].set_ylabel(
+        "NV$^-$ → NV$^0$ loss (%)"
+    )
+
+    axes[1].set_title(
+        "Is charge loss correlated with readout intensity?"
+    )
+
+    axes[1].grid(
+        alpha=0.2
+    )
+
+    fig.tight_layout()
+
+    figures[
+        "correlations"
+    ] = fig
+
+    # =====================================================================
+    # Results
+    # =====================================================================
+
+    result = {
+        "datasets":
+            datasets,
+
+        "global_run":
+            global_runs,
+
+        "file_index":
+            file_index,
+
+        "local_run":
+            local_run,
+
+        "initial_nvm":
+            initial_nvm,
+
+        "final_nvm":
+            final_nvm,
+
+        "retained":
+            retained,
+
+        "lost":
+            lost,
+
+        "gained":
+            gained,
+
+        "net_change":
+            net_change,
+
+        "loss_fraction":
+            loss_fraction,
+
+        "true_retention":
+            true_retention,
+
+        "global_loss_z":
+            global_loss_z,
+
+        "local_loss_z":
+            local_loss_z,
+
+        "empirical_p":
+            empirical_p,
+
+        "drift_dx":
+            drift_dx,
+
+        "drift_dy":
+            drift_dy,
+
+        "drift_mag":
+            drift_mag,
+
+        "drift_scatter":
+            drift_scatter,
+
+        "raw_brightness_ratio":
+            raw_brightness_ratio,
+
+        "raw_background_change":
+            raw_background_change,
+
+        "top_anomaly_inds":
+            top_inds,
+    }
+
+    # =====================================================================
+    # Print top anomalous runs
+    # =====================================================================
+
+    if verbose:
+
+        print(
+            "\n"
+            + "=" * 100
+        )
+
+        print(
+            "TOP NV- -> NV0 LOSS EVENTS"
+        )
+
+        print(
+            "=" * 100
+        )
+
+        header = (
+            "Global  File  Local   "
+            "Init   Final   Lost   Gain   "
+            "Loss%   Zglob   Zfile   p_emp   "
+            "dx(px)   dy(px)   |d|(px)   Raw12/11"
+        )
+
+        print(
+            header
+        )
+
+        print(
+            "-" * len(header)
+        )
+
+        for ind in top_inds:
+
+            print(
+                f"{global_runs[ind]:6d}  "
+                f"{file_index[ind]+1:4d}  "
+                f"{local_run[ind]:5d}   "
+                f"{initial_nvm[ind]:4.0f}   "
+                f"{final_nvm[ind]:5.0f}   "
+                f"{lost[ind]:4.0f}   "
+                f"{gained[ind]:4.0f}   "
+                f"{100*loss_fraction[ind]:6.2f}   "
+                f"{global_loss_z[ind]:5.2f}   "
+                f"{local_loss_z[ind]:5.2f}   "
+                f"{empirical_p[ind]:6.4f}   "
+                f"{drift_dx[ind]:6.3f}   "
+                f"{drift_dy[ind]:6.3f}   "
+                f"{drift_mag[ind]:7.3f}   "
+                f"{raw_brightness_ratio[ind]:8.3f}"
+            )
+
+    return result, figures
 
 def _estimate_integer_shift_2d(
     img_ref: np.ndarray,
@@ -3823,21 +5204,32 @@ if __name__ == "__main__":
     # elsewhere in your analysis.
     EXCLUDE_NV_INDS = None
 
-    rep_stats, rep_figs = plot_nv_minus_by_run_separate_reps(
+    analysis_3600, figs_3600 = analyze_nv_memory_back_to_back(
         FILE_STEMS,
-        selected_waits_s=SELECTED_WAITS_S,
-        rep_inds=REP_INDS,
-        rep_labels=REP_LABELS,
-        exclude_nv_inds=EXCLUDE_NV_INDS,
-        show_fraction=False,
-        verbose=True,
-        back_to_back=True,
+
+        selected_waits_s=[3600],
+
+        rep_initial=11,
+        rep_final=12,
+
+        exclude_nv_inds=None,
+
+        bright_margin_counts=5.0,
+
+        calculate_drift=True,
+        drift_roi_radius_px=5,
+        max_drift_nvs=200,
+
         mark_file_boundaries=True,
-        show_rep_comparison=True,
-        show_difference=True,
-        show_retention=True,
+
+        # Label the five strongest loss events.
+        annotate_top_n=5,
+
+        verbose=True,
     )
 
+    kpl.show(block=True)
+    sys.exit()
     # ==================================================================
     # Optional raw-image inspection of one local run in one file
     # ==================================================================
@@ -3912,7 +5304,7 @@ if __name__ == "__main__":
     # "2026_07_24-08_56_35-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1200s-wait-1200s",
     # ]
     
-    # FILE_STEMS = [
+    FILE_STEMS = [
     # "2026_07_24-21_43_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_0s-wait-0s",
     # "2026_07_24-22_27_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_10s-wait-10s",
     # "2026_07_24-23_44_20-qnami-nv0_2026_02_20-particle-memory-source_off_wait_30s-wait-30s",
@@ -3922,24 +5314,24 @@ if __name__ == "__main__":
     # "2026_07_25-21_07_06-qnami-nv0_2026_02_20-particle-memory-source_off_wait_600s-wait-600s",
     # "2026_07_26-05_34_29-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1200s-wait-1200s",
     # "2026_07_26-18_11_11-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1800s-wait-1800s",
-    # "2026_07_27-19_18_59-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
-    # ]
-    
-    FILE_STEMS = [
-    "2026_08_08-23_11_09-qnami-nv0_2026_02_20-particle-memory-source_off_wait_0s-wait-0s",
-    "2026_08_08-23_19_25-qnami-nv0_2026_02_20-particle-memory-source_off_wait_10s-wait-10s",
-    "2026_08_08-23_34_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_30s-wait-30s",
-    "2026_08_08-23_59_13-qnami-nv0_2026_02_20-particle-memory-source_off_wait_60s-wait-60s",
-    "2026_08_09-01_04_06-qnami-nv0_2026_02_20-particle-memory-source_off_wait_180s-wait-180s",
-    "2026_08_09-02_49_00-qnami-nv0_2026_02_20-particle-memory-source_off_wait_300s-wait-300s",
-    "2026_08_09-06_13_54-qnami-nv0_2026_02_20-particle-memory-source_off_wait_600s-wait-600s",
-    "2026_08_09-12_58_47-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1200s-wait-1200s",
-    "2026_08_09-23_03_43-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1800s-wait-1800s",
+    "2026_07_27-19_18_59-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
     ]
+    
+    # FILE_STEMS = [
+    # "2026_08_08-23_11_09-qnami-nv0_2026_02_20-particle-memory-source_off_wait_0s-wait-0s",
+    # "2026_08_08-23_19_25-qnami-nv0_2026_02_20-particle-memory-source_off_wait_10s-wait-10s",
+    # "2026_08_08-23_34_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_30s-wait-30s",
+    # "2026_08_08-23_59_13-qnami-nv0_2026_02_20-particle-memory-source_off_wait_60s-wait-60s",
+    # "2026_08_09-01_04_06-qnami-nv0_2026_02_20-particle-memory-source_off_wait_180s-wait-180s",
+    # "2026_08_09-02_49_00-qnami-nv0_2026_02_20-particle-memory-source_off_wait_300s-wait-300s",
+    # "2026_08_09-06_13_54-qnami-nv0_2026_02_20-particle-memory-source_off_wait_600s-wait-600s",
+    # "2026_08_09-12_58_47-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1200s-wait-1200s",
+    # "2026_08_09-23_03_43-qnami-nv0_2026_02_20-particle-memory-source_off_wait_1800s-wait-1800s",
+    # ]
 
-    FILE_STEMS = [
-     "2026_07_27-19_18_59-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
-        ]
+    # FILE_STEMS = [
+    #  "2026_07_27-19_18_59-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
+    #     ]
     
     FILE_STEMS = [
     "2026_08_13-11_33_24-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
