@@ -1899,16 +1899,16 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.764, 98.133],
-    #     [73.74, 115.423],
-    #     [100.753, 68.871],
-    #     [127.004, 127.73],
+    #     [97.749, 98.147],
+    #     [73.725, 115.44],
+    #     [100.743, 68.878],
+    #     [126.995, 127.74],
     # ]
     # red_coords_list = [
-    #     [66.952, 67.715],
-    #     [47.294, 81.362],
-    #     [69.672, 44.015],
-    #     [90.367, 92.205],
+    #     [66.94, 67.726],
+    #     [47.281, 81.375],
+    #     [69.664, 44.02],
+    #     [90.359, 92.213],
     # ]
     
     analysis_data = dm.get_raw_data(
@@ -1940,7 +1940,8 @@ if __name__ == "__main__":
         # file_stem = "2026_08_13-14_09_16-single_step_charge_hist_single_cpu_2026_08_13-14_04_07-qnami-nv0_2026_02_20",
         # file_stem = "2026_08_16-00_51_03-single_step_charge_hist_single_cpu_2026_08_15-21_54_52-qnami-nv0_2026_02_20",
         # file_stem= "2026_08_17-16_13_17-single_step_charge_hist_single_cpu_2026_08_17-15_36_41-qnami-nv0_2026_02_20",
-        file_stem = "2026_08_17-17_19_50-single_step_charge_hist_single_cpu_2026_08_17-16_44_11-qnami-nv0_2026_02_20",
+        # file_stem = "2026_08_18-12_45_35-single_step_charge_hist_single_cpu_2026_08_18-12_42_18-qnami-nv0_2026_02_20",
+        file_stem = "2026_08_18-13_18_23-single_step_charge_hist_single_cpu_2026_08_18-13_13_16-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
@@ -2004,6 +2005,7 @@ if __name__ == "__main__":
     # sys.exit()
     num_nvs = len(pixel_coords_list)
     # threshold_list = [None] * num_nvs
+    ion_duration_list = [600] * num_nvs
     scc_duration_list = [88] * num_nvs
     pol_duration_list = [1000] * num_nvs
 
@@ -2047,11 +2049,12 @@ if __name__ == "__main__":
             threshold=threshold_list[ind],
             pulse_durations={
                 VirtualLaserKey.SCC: scc_duration_list[ind],
+                VirtualLaserKey.ION: ion_duration_list[ind],
                 VirtualLaserKey.CHARGE_POL: pol_duration_list[ind],
             },
             pulse_amps={
                 VirtualLaserKey.SCC: scc_amp_list[ind],
-                # VirtualLaserKey.ION: scc_amp_list[ind],
+                VirtualLaserKey.ION: scc_amp_list[ind],  
                 VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
             },
         )
@@ -2165,7 +2168,7 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        do_charge_state_histograms(nv_list)
+        # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
@@ -2186,7 +2189,7 @@ if __name__ == "__main__":
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
         # do_optimize_readout_amp(nv_list)
-        # do_optimize_readout_amp_repeated_readout(nv_list)
+        do_optimize_readout_amp_repeated_readout(nv_list)
         # do_optimize_pol_duration(nv_list)
     
         # do_optimize_readout_duration(nv_list)

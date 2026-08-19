@@ -371,9 +371,9 @@ data_spot_weight = dm.get_raw_data(
 # spot_weights = data_spot_weight["optimal_weights"]
 spot_weights  = data_spot_weight["slm_amplitude_weight"]
 
-# spot_weights = curve_extreme_weights_simple(
-#         spot_weights, scaling_factor=2.0
-#     )
+spot_weights = curve_extreme_weights_simple(
+        spot_weights, scaling_factor=1.0
+    )
 spot_weights = np.array(spot_weights)
 
 # If weights are 2D, choose one row/column as needed.
@@ -434,13 +434,13 @@ def compute_and_write_nvs_phase():
         shape=(4096, 2048),
         spot_vectors=thorcam_coords_xy,
         basis="ij",
-        spot_amp=spot_weights,
+        # spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally
     hologram.optimize(
         "WGS-Kim",
-        maxiter=30,
+        maxiter=50,
         feedback="computational_spot",
         stat_groups=["computational_spot"],
     )
