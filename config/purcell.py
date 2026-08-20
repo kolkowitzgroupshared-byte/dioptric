@@ -1056,7 +1056,7 @@ opx_config = {
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2923},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2623},  ## 814NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2133}, ## 631NVs
-        "yellow_charge_readout": {"type": "constant", "sample": 0.1972}, ## 631NVs
+        "yellow_charge_readout": {"type": "constant", "sample": 0.2043}, ## 631NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1710}, ## 415NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1693}, ## 402NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.160}, ## 366NVs

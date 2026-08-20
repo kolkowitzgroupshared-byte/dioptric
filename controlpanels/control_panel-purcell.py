@@ -339,7 +339,11 @@ def do_charge_state_particle_memory(nv_list):
     
 def do_charge_state_particle_memory_wait_sweep(nv_list):
     wait_plan = [
-        (0, 8000),
+        (0, 4000),
+        (0, 4000),
+        (60, 2000),
+        (60, 2000),
+        (60, 2000),
         # (10, 20),
         # (30, 20),
         # (60, 20),
@@ -1941,7 +1945,8 @@ if __name__ == "__main__":
         # file_stem = "2026_08_16-00_51_03-single_step_charge_hist_single_cpu_2026_08_15-21_54_52-qnami-nv0_2026_02_20",
         # file_stem= "2026_08_17-16_13_17-single_step_charge_hist_single_cpu_2026_08_17-15_36_41-qnami-nv0_2026_02_20",
         # file_stem = "2026_08_18-12_45_35-single_step_charge_hist_single_cpu_2026_08_18-12_42_18-qnami-nv0_2026_02_20",
-        file_stem = "2026_08_18-13_18_23-single_step_charge_hist_single_cpu_2026_08_18-13_13_16-qnami-nv0_2026_02_20",
+        # file_stem = "2026_08_18-13_18_23-single_step_charge_hist_single_cpu_2026_08_18-13_13_16-qnami-nv0_2026_02_20",
+        file_stem = "2026_08_20-00_00_35-single_step_charge_hist_single_cpu_2026_08_19-23_56_37-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
@@ -2110,7 +2115,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)     
+        do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list: 
@@ -2172,7 +2177,7 @@ if __name__ == "__main__":
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
-        # do_charge_state_particle_memory_wait_sweep(nv_list)
+        do_charge_state_particle_memory_wait_sweep(nv_list)
         # do_charge_state_measurement_backaction(nv_list)
         
         # do_dmd_crosstalk_matrix(
@@ -2189,7 +2194,7 @@ if __name__ == "__main__":
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
         # do_optimize_readout_amp(nv_list)
-        do_optimize_readout_amp_repeated_readout(nv_list)
+        # do_optimize_readout_amp_repeated_readout(nv_list)
         # do_optimize_pol_duration(nv_list)
     
         # do_optimize_readout_duration(nv_list)
