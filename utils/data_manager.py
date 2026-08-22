@@ -147,7 +147,7 @@ def save_raw_data(raw_data, file_path, keys_to_compress=None):
     file_path_txt = file_path.with_suffix(".txt")
 
     # Work with a copy of the raw data to avoid mutation
-    raw_data = copy.deepcopy(raw_data)
+    # raw_data = copy.deepcopy(raw_data)
 
     # Compress numpy arrays to linked file
     try:

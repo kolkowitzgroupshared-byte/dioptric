@@ -339,11 +339,12 @@ def do_charge_state_particle_memory(nv_list):
     
 def do_charge_state_particle_memory_wait_sweep(nv_list):
     wait_plan = [
-        (0, 4000),
-        (0, 4000),
-        (60, 2000),
-        (60, 2000),
-        (60, 2000),
+        (0, 2000),
+        (0, 2000),
+        # (0, 4000),
+        # (60, 2000),
+        # (60, 2000),
+        # (60, 2000),
         # (10, 20),
         # (30, 20),
         # (60, 20),
@@ -2115,7 +2116,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_widefield_image_sample(nv_sig, 50)     
+        # do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list: 
@@ -2173,11 +2174,11 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        # do_charge_state_histograms(nv_list)
+        do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
-        do_charge_state_particle_memory_wait_sweep(nv_list)
+        # do_charge_state_particle_memory_wait_sweep(nv_list)
         # do_charge_state_measurement_backaction(nv_list)
         
         # do_dmd_crosstalk_matrix(
