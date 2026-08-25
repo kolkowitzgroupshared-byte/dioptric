@@ -1675,10 +1675,10 @@ def main(
                 show=True,
             )
 
-        input(
-            "\nStep 2: Now write the SLM triangle pattern and keep it held. "
-            "Press Enter here when triangle spots are visible..."
-        )
+        # input(
+        #     "\nStep 2: Now write the SLM triangle pattern and keep it held. "
+        #     "Press Enter here when triangle spots are visible..."
+        # )
 
         triangle_data = calibrate_triangle_onpass(
             dmd=dmd,
@@ -1764,13 +1764,17 @@ if __name__ == "__main__":
         yellow_channel=7,
         yellow_amp=0.045,
     )
-    # take a quick image
+    
+    
+    ### take a quick image
+    
     # do_thorcam_hardware_roi_with_yellow(
     # label="full-image-test",
     # exposure=0.0001,
     # yellow_amp=0.04,
     # roi_xywh=None,
     # )
+
     # do_thorcam_hardware_roi_with_yellow(``
     #     label="hardware-roi-test",
     #     exposure=0.0001,
@@ -1778,3 +1782,5 @@ if __name__ == "__main__":
     #     yellow_amp=0.08,
     #     roi_xywh=(500, 350, 500, 500),
     # )
+    
+    kpl.show(block=True)

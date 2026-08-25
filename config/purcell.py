@@ -32,19 +32,15 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
-# calibration_coords_pixel = [[367.181, 25.354], [229.35, 379.51], [34.93, 44.916]]
-# calibration_coords_green = [[70.546, 130.492],[101.628, 69.147],[130.573, 132.308]]
-# calibration_coords_red = [[41.956, 88.653],[69.523, 40.383],[90.96, 93.205]]
-
 calibration_coords_pixel = [
     [319.015, 83.106], 
     [192.998, 353.981], 
     [17.982, 41.943],
 ]
 calibration_coords_green = [
-    [73.725, 115.44],
-    [100.743, 68.878],
-    [126.995, 127.74],
+    [73.721, 115.441],
+    [100.739, 68.876],
+    [126.948, 127.756],
 ]
 calibration_coords_red = [
     [47.281, 81.375],

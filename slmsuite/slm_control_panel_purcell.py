@@ -460,7 +460,7 @@ def compute_and_write_nvs_phase():
     # cam_plot()
     
 def write_pre_computed_nvs_phase():
-    phase = np.load("slmsuite\computed_phase\slm_phase_631nvs_20260812_164723.npy")
+    phase = np.load("slmsuite\computed_phase\slm_phase_631nvs_20260825_123354.npy")
     slm.write(phase, settle=True)
     # cam_plot()
 

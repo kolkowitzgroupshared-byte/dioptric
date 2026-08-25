@@ -339,10 +339,10 @@ def do_charge_state_particle_memory(nv_list):
     
 def do_charge_state_particle_memory_wait_sweep(nv_list):
     wait_plan = [
-        (0, 2000),
-        (0, 2000),
+        # (0, 2000),
+        # (0, 2000),
         # (0, 4000),
-        # (60, 2000),
+        (30, 2000),
         # (60, 2000),
         # (60, 2000),
         # (10, 20),
@@ -1904,10 +1904,10 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.749, 98.147],
-    #     [73.725, 115.44],
-    #     [100.743, 68.878],
-    #     [126.995, 127.74],
+    #     [97.744, 98.15],
+    #     [73.721, 115.441],
+    #     [100.739, 68.876],
+    #     [126.948, 127.756],
     # ]
     # red_coords_list = [
     #     [66.94, 67.726],
@@ -1947,7 +1947,8 @@ if __name__ == "__main__":
         # file_stem= "2026_08_17-16_13_17-single_step_charge_hist_single_cpu_2026_08_17-15_36_41-qnami-nv0_2026_02_20",
         # file_stem = "2026_08_18-12_45_35-single_step_charge_hist_single_cpu_2026_08_18-12_42_18-qnami-nv0_2026_02_20",
         # file_stem = "2026_08_18-13_18_23-single_step_charge_hist_single_cpu_2026_08_18-13_13_16-qnami-nv0_2026_02_20",
-        file_stem = "2026_08_20-00_00_35-single_step_charge_hist_single_cpu_2026_08_19-23_56_37-qnami-nv0_2026_02_20",
+        # file_stem = "2026_08_20-00_00_35-single_step_charge_hist_single_cpu_2026_08_19-23_56_37-qnami-nv0_2026_02_20",
+        file_stem =  "2026_08_21-22_22_23-single_step_charge_hist_single_cpu_2026_08_21-22_18_24-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
@@ -2178,7 +2179,7 @@ if __name__ == "__main__":
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
-        # do_charge_state_particle_memory_wait_sweep(nv_list)
+        # do_charge_state_particle_memorys_wait_sweep(nv_list)
         # do_charge_state_measurement_backaction(nv_list)
         
         # do_dmd_crosstalk_matrix(
