@@ -366,14 +366,15 @@ data_spot_weight = dm.get_raw_data(
     # file_stem="2026_07_18-23_11_48-reoptimized_slm_score_survival_focused_2026_07_18-11_10_09-qnami-nv0_2026_02_20"
     # file_stem="2026_07_22-15_53_45-reoptimized_slm_score_survival_focused_2026_07_22-04_39_34-qnami-nv0_2026_02_20"
     # file_stem="2026_08_05-14_57_39-reoptimized_slm_score_survival_focused_2026_08_05-04_43_20-qnami-nv0_2026_02_20"
-    "2026_08_12-16_41_26-reoptimized_slm_score_survival_focused_2026_08_12-10_12_17-qnami-nv0_2026_02_20" ### 631NVs
+    # "2026_08_12-16_41_26-reoptimized_slm_score_survival_focused_2026_08_12-10_12_17-qnami-nv0_2026_02_20" ### 631NVs
+    "2026_08_19-22_37_18-reoptimized_slm_score_survival_focused_2026_08_19-02_30_47-qnami-nv0_2026_02_20" ## 631NVs 
 )
 # spot_weights = data_spot_weight["optimal_weights"]
 spot_weights  = data_spot_weight["slm_amplitude_weight"]
 
-spot_weights = curve_extreme_weights_simple(
-        spot_weights, scaling_factor=2.0
-    )
+# spot_weights = curve_extreme_weights_simple(
+#         spot_weights, scaling_factor=1.0
+#     )
 spot_weights = np.array(spot_weights)
 
 # If weights are 2D, choose one row/column as needed.
@@ -440,7 +441,7 @@ def compute_and_write_nvs_phase():
     # Precondition computationally
     hologram.optimize(
         "WGS-Kim",
-        maxiter=30,
+        maxiter=50,
         feedback="computational_spot",
         stat_groups=["computational_spot"],
     )
@@ -459,7 +460,7 @@ def compute_and_write_nvs_phase():
     # cam_plot()
     
 def write_pre_computed_nvs_phase():
-    phase = np.load("slmsuite\computed_phase\slm_phase_631nvs_20260812_164723.npy")
+    phase = np.load("slmsuite\computed_phase\slm_phase_631nvs_20260825_123354.npy")
     slm.write(phase, settle=True)
     # cam_plot()
 

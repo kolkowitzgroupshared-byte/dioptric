@@ -1400,9 +1400,15 @@ if __name__ == "__main__":
     # FILE_ID = "2026_08_12-22_13_55-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
     # FILE_ID = "2026_08_13-14_04_07-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
     # FILE_ID = "2026_08_15-21_54_52-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
-    # FILE_ID = "2026_08_17-15_36_41-qnami-nv0_2026_02_20"    ## 631 working NVs 500ms readout
-    FILE_ID = "2026_08_17-16_44_11-qnami-nv0_2026_02_20"    ## 631 working NVs 500ms readout
-    
+    # FILE_ID = "2026_08_17-15_36_41-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_17-16_44_11-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_18-12_42_18-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_18-13_13_16-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_19-23_56_37-qnami-nv0_2026_02_20" ## 631 working NVs 500ms readout
+    # FILE_ID = "2026_08_21-22_18_24-qnami-nv0_2026_02_20"   ## 631 working NVs 500ms readout
+    FILE_ID = "2026_08_25-10_44_20-qnami-nv0_2026_02_20"   ## 631 working NVs 500ms readout
+
+
     # SAVED_ANALYSIS_FILE_ID = "2026_07_15-19_48_48-single_step_charge_hist_single_cpu_2026_07_15-19_42_19-qnami-nv0_2026_02_20"
     # SAVED_ANALYSIS_FILE_ID = "2026_07_21-16_11_27-single_step_charge_hist_single_cpu_2026_07_21-16_08_28-qnami-nv0_2026_02_20"
     # SAVED_ANALYSIS_FILE_ID = "2026_08_08-20_07_48-single_step_charge_hist_single_cpu_2026_08_08-19_19_02-qnami-nv0_2026_02_20"
@@ -1413,6 +1419,8 @@ if __name__ == "__main__":
  
  
     RUN_NEW_PROCESSING = True
+    
+    
     MODEL_KIND = "single"
     BACKEND = "cpu"
 

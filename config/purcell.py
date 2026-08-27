@@ -32,24 +32,20 @@ red_laser = "laser_COBO_638"
 green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
-# calibration_coords_pixel = [[367.181, 25.354], [229.35, 379.51], [34.93, 44.916]]
-# calibration_coords_green = [[70.546, 130.492],[101.628, 69.147],[130.573, 132.308]]
-# calibration_coords_red = [[41.956, 88.653],[69.523, 40.383],[90.96, 93.205]]
-
 calibration_coords_pixel = [
     [319.015, 83.106], 
     [192.998, 353.981], 
     [17.982, 41.943],
 ]
 calibration_coords_green = [
-    [73.74, 115.423],
-    [100.753, 68.871],
-    [127.004, 127.73],
+    [73.721, 115.441],
+    [100.739, 68.876],
+    [126.948, 127.756],
 ]
 calibration_coords_red = [
-    [47.294, 81.362],
-    [69.672, 44.015],
-    [90.367, 92.205],
+    [47.281, 81.375],
+    [69.664, 44.02],
+    [90.359, 92.213],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -1056,7 +1052,7 @@ opx_config = {
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2923},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2623},  ## 814NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2133}, ## 631NVs
-        "yellow_charge_readout": {"type": "constant", "sample": 0.1972}, ## 631NVs
+        "yellow_charge_readout": {"type": "constant", "sample": 0.2043}, ## 631NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1710}, ## 415NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1693}, ## 402NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.160}, ## 366NVs
