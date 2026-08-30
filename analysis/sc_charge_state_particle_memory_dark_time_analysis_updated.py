@@ -49,24 +49,43 @@ from utils import kplotlib as kpl
 # USER CONFIGURATION
 # =============================================================================
 
-# Analyze 0-s, 30-s, and 60-s source-off measurements.
+# Analyze source-off measurements at 0 s, 30 s, 60 s, and 90 s.
 #
-# "npz_path_override" should normally remain None. Set it only if automatic
-# Dioptric NAS/search-index resolution cannot locate that dataset.
+# A dataset may contain either:
+#   * one file stem as a string, OR
+#   * multiple SAME-CONDITION file stems as a tuple/list.
+#
+# If multiple stems are supplied, their runs are APPENDED FIRST and then one
+# common analysis is performed. This is the intended mode for the two 90-s
+# acquisitions below. Each source file keeps its own saved NV thresholds and
+# its own local-run identity; reference scrambling is constrained within each
+# acquisition boundary.
+#
+# "npz_path_override" should normally remain None. For a multi-file dataset
+# you may instead provide "npz_path_overrides" as a list/tuple matching the
+# file stems, if automatic Dioptric NAS/search-index resolution cannot locate
+# the files.
 DATASETS = [
+    # {
+    #     "label": "dark_wait_0s",
+    #     "file_stem": (
+    #         "2026_08_20-16_37_57-qnami-nv0_2026_02_20-"
+    #         "particle-memory-source_off_wait_0s-wait-0s"
+    #     ),
+    #     "npz_path_override": None,
+    #     # For a fair comparison with the shorter wait-time datasets, analyze
+    #     # only the first 2000 shots/runs from the 0-s acquisition.
+    #     "max_runs": 2008,
+    # },
     {
-        "label": "dark_wait_0s",
+        "label": "dark_wait_15s",
         "file_stem": (
-            "2026_08_20-16_37_57-qnami-nv0_2026_02_20-"
-            "particle-memory-source_off_wait_0s-wait-0s"
+            "2026_08_30-07_39_05-qnami-nv0_2026_02_20-"
+            "particle-memory-source_off_wait_15s-wait-15s"
         ),
         "npz_path_override": None,
-        # For a fair comparison with the shorter wait-time datasets, analyze
-        # only the first 2000 shots/runs from the 0-s acquisition.
-        "max_runs": 3300,
     },
     {
-        
         "label": "dark_wait_30s",
         "file_stem": (
             "2026_08_26-19_38_50-qnami-nv0_2026_02_20-"
@@ -74,23 +93,33 @@ DATASETS = [
         ),
         "npz_path_override": None,
     },
-    {
-        "label": "dark_wait_60s",
-        "file_stem": (
-            "2026_08_23-16_00_17-qnami-nv0_2026_02_20-"
-            "particle-memory-source_off_wait_60s-wait-60s"
-        ),
-        "npz_path_override": None,
-    },
+    # {
+    #     "label": "dark_wait_60s",
+    #     "file_stem": (
+    #         "2026_08_23-16_00_17-qnami-nv0_2026_02_20-"
+    #         "particle-memory-source_off_wait_60s-wait-60s"
+    #     ),
+    #     "npz_path_override": None,
+    # },
+    # {
+    #     "label": "dark_wait_90s",
+    #     "file_stem": (
+    #         "2026_08_28-02_08_41-qnami-nv0_2026_02_20-"
+    #         "particle-memory-source_off_wait_90s-wait-90s",
+    #         "2026_08_29-07_13_32-qnami-nv0_2026_02_20-"
+    #         "particle-memory-source_off_wait_90s-wait-90s"
+    #     ),
+    #     "npz_path_override": None,
+    # },
 
 ]
 
-# These measurements are at DIFFERENT wait times under source-off
-# conditions: 0 s, 30 s, and 60 s. Analyze each file separately and make
-# direct comparison plots across all three wait times.
+# Different WAIT CONDITIONS are compared separately. Multiple acquisitions
+# belonging to the SAME wait condition are appended first and represented by
+# one combined result in the cross-wait comparison.
 CALCULATE_POOLED_SOURCE_OFF = True
 MAKE_COMPARISON_PLOTS = True
-ALSO_RUN_APPENDED_ANALYSIS = False  # MUST remain False: 0 s / 30 s / 60 s are different conditions
+ALSO_RUN_APPENDED_ANALYSIS = False  # MUST remain False: different wait conditions are analyzed separately
 
 # Do not make the old curve_fit Poisson histogram the primary model. The
 # reference Poisson estimate is lambda = mean(K), exactly as in charge_monitor.py.
@@ -182,7 +211,7 @@ CALCULATE_TRIAL_CORRECTED_POISSON_SIGMA = True
 CALCULATE_REFERENCE_POISSON = True
 SCRAMBLE_SHIFT_PER_NV = 10
 
-SCRIPT_VERSION = "BIGFILE_CLEAN_STREAM_V19H_0S_FIRST2000_OBSERVED_SEPARATE_2026-08-27"
+SCRIPT_VERSION = "BIGFILE_CLEAN_STREAM_V20_SAME_CONDITION_MULTI_FILE_APPEND_2026-08-29"
 
 
 # =============================================================================
@@ -2608,7 +2637,7 @@ def _make_figures(result):
         # ax.set_yscale("log")
         ax.set_title(
             "Distribution of per-run charge transition fraction\n"
-            f"dark_wait_60s"
+            f"dark_wait_30s"
         )
         ax.grid(alpha=0.2)
         ax.legend()
@@ -3476,13 +3505,26 @@ def _make_figures(result):
 
 
 # =============================================================================
-# Append-first combined 0-s analysis
+# Append-first combined same-condition analysis
 # =============================================================================
 
 
-def analyze_appended_particle_memory_files(datasets):
+def analyze_appended_particle_memory_files(
+    datasets,
+    combined_label=None,
+):
     """
-    Append all runs from same-condition datasets FIRST, then perform ONE analysis.
+    Append all runs from SAME-CONDITION datasets FIRST, then perform ONE analysis.
+
+    Parameters
+    ----------
+    datasets : sequence of dict
+        One entry per source acquisition. Each entry must contain one string
+        file_stem. Optional max_runs is applied to that source acquisition
+        before appending.
+    combined_label : str or None
+        Label assigned to the appended result. If None, an automatic label is
+        created from the first source label.
 
     Important details
     -----------------
@@ -3497,8 +3539,15 @@ def analyze_appended_particle_memory_files(datasets):
       combined analysis remains bounded-RAM and avoids decompressing both giant
       image members just to establish the statistical null.
     """
+    if combined_label is None:
+        if datasets:
+            combined_label = f"{datasets[0].get('label', 'dataset')}_appended"
+        else:
+            combined_label = "appended_same_condition"
+    combined_label = str(combined_label)
+
     print("\n" + "=" * 132)
-    print("APPEND-FIRST SOURCE-OFF 0-s ANALYSIS")
+    print(f"APPEND-FIRST SAME-CONDITION ANALYSIS: {combined_label}")
     print("=" * 132)
 
     parts = []
@@ -3534,6 +3583,23 @@ def analyze_appended_particle_memory_files(datasets):
         coords_xy = _coerce_img_coords(nv_list)
 
         num_nvs, num_runs_part = c11.shape
+
+        # Optional per-source truncation is applied BEFORE appending.
+        max_runs_part = dataset.get("max_runs")
+        if max_runs_part is not None:
+            max_runs_part = int(max_runs_part)
+            if max_runs_part <= 0:
+                raise ValueError(f"{label}: max_runs must be positive or None.")
+            use_num_runs = min(max_runs_part, num_runs_part)
+            if use_num_runs < num_runs_part:
+                print(
+                    f"[append] {label}: using first "
+                    f"{use_num_runs}/{num_runs_part} runs",
+                    flush=True,
+                )
+                c11 = c11[:, :use_num_runs]
+                c12 = c12[:, :use_num_runs]
+                num_runs_part = use_num_runs
 
         if first_num_nvs is None:
             first_num_nvs = num_nvs
@@ -3589,6 +3655,7 @@ def analyze_appended_particle_memory_files(datasets):
                 "c12": c12,
                 "thresholds": threshold_matrix,
                 "num_runs": int(num_runs_part),
+                "max_runs_requested": max_runs_part,
                 "global_start": int(global_start),
                 "global_stop": int(global_stop),
             }
@@ -3597,6 +3664,19 @@ def analyze_appended_particle_memory_files(datasets):
 
     if not parts:
         raise ValueError("No datasets supplied.")
+
+    # Refuse to append acquisitions from different physical wait conditions.
+    wait_values = np.asarray([p["dark_wait_s"] for p in parts], dtype=float)
+    finite_waits = wait_values[np.isfinite(wait_values)]
+    if finite_waits.size == 0:
+        combined_dark_wait_s = np.nan
+    else:
+        combined_dark_wait_s = float(np.median(finite_waits))
+        if np.nanmax(np.abs(finite_waits - combined_dark_wait_s)) > 1e-6:
+            raise ValueError(
+                "Refusing to append acquisitions with different dark waits: "
+                + ", ".join(f"{v:g} s" for v in finite_waits)
+            )
 
     # ------------------------------------------------------------------
     # APPEND FIRST
@@ -3794,11 +3874,12 @@ def analyze_appended_particle_memory_files(datasets):
     }
 
     result = {
-        "file_stem": "APPENDED-source_off_wait_0s",
-        "dataset_label": "APPENDED source-off 0 s",
+        "file_stem": f"APPENDED-{combined_label}",
+        "dataset_label": combined_label,
         "npz_path": [p["npz_path"] for p in parts],
         "source_parts": parts,
-        "dark_wait_s": 0.0,
+        "num_source_files": int(len(parts)),
+        "dark_wait_s": combined_dark_wait_s,
         "run": runs,
         "dataset_id_by_run": dataset_id_by_run,
         "local_run_by_global": local_run_by_global,
@@ -6261,9 +6342,9 @@ def _comparison_summary_and_figures(results):
 
                 if log_scale:
                     ax.set_yscale("log")
-                    ax.set_title(title + "\\nlog y")
+                    ax.set_title(title + "\\nlog y",fontsize=13)
                 else:
-                    ax.set_title(title + "\\nlinear y")
+                    ax.set_title(title + "\\nlinear y",fontsize=13)
 
                 ax.set_xlabel("NV- -> NV0 transitions per run")
                 ax.set_ylabel("Probability mass")
@@ -6272,7 +6353,7 @@ def _comparison_summary_and_figures(results):
 
         fig.suptitle(
             "Characteristic distribution fits: Poisson vs beta-binomial",
-            fontsize=13,
+            fontsize=18,
         )
         fig.tight_layout(rect=(0, 0, 1, 0.965))
         figures["comparison_characteristic_distribution_fits"] = fig
@@ -6442,31 +6523,120 @@ def _comparison_summary_and_figures(results):
     return comparison, figures
 
 
+
+# =============================================================================
+# Same-condition multi-file dataset helpers
+# =============================================================================
+
+
+def _dataset_file_stems(dataset):
+    """Return one or more configured file stems as a list of strings."""
+    stems = dataset.get("file_stem")
+    if isinstance(stems, (list, tuple)):
+        out = [str(v) for v in stems]
+    else:
+        out = [str(stems)]
+    if not out or any(not v.strip() for v in out):
+        raise ValueError(
+            f"Dataset {dataset.get('label', '<unnamed>')} has an empty file_stem."
+        )
+    return out
+
+
+def _dataset_npz_overrides(dataset, num_files):
+    """Return one optional NPZ override per source acquisition."""
+    if num_files == 1:
+        return [dataset.get("npz_path_override")]
+
+    overrides = dataset.get("npz_path_overrides", None)
+    if overrides is None:
+        maybe = dataset.get("npz_path_override", None)
+        if maybe is None:
+            return [None] * num_files
+        if isinstance(maybe, (list, tuple)):
+            overrides = maybe
+        else:
+            raise ValueError(
+                f"Dataset {dataset.get('label', '<unnamed>')} has {num_files} "
+                "file stems. Use npz_path_overrides with one entry per file, "
+                "or leave the override as None."
+            )
+
+    overrides = list(overrides)
+    if len(overrides) != num_files:
+        raise ValueError(
+            f"Dataset {dataset.get('label', '<unnamed>')}: "
+            f"{len(overrides)} overrides for {num_files} files."
+        )
+    return overrides
+
+
+def _same_condition_source_parts(dataset):
+    """Expand one logical condition into one source dictionary per file."""
+    stems = _dataset_file_stems(dataset)
+    overrides = _dataset_npz_overrides(dataset, len(stems))
+    base_label = str(dataset["label"])
+
+    parts = []
+    for ind, (stem, override) in enumerate(zip(stems, overrides), start=1):
+        parts.append(
+            {
+                "label": (
+                    base_label if len(stems) == 1
+                    else f"{base_label}_part{ind}"
+                ),
+                "file_stem": stem,
+                "npz_path_override": override,
+                # If present, max_runs applies to EACH source file before append.
+                "max_runs": dataset.get("max_runs"),
+            }
+        )
+    return parts
+
 if __name__ == "__main__":
     kpl.init_kplotlib()
 
     individual_analyses = []
     individual_figures = {}
 
-    # 1) Analyze each measurement separately.
+    # 1) Analyze each WAIT CONDITION.
+    #
+    # Single-file entries use the normal analysis. If file_stem is a tuple/list,
+    # all files are repeated acquisitions of the SAME wait condition: runs are
+    # appended FIRST and then one common analysis is performed.
     for dataset_ind, dataset in enumerate(DATASETS, start=1):
         print("\n" + "#" * 140)
         print(
-            f"INDIVIDUAL DATASET {dataset_ind}/{len(DATASETS)}: "
+            f"WAIT-CONDITION DATASET {dataset_ind}/{len(DATASETS)}: "
             f"{dataset['label']}"
         )
         print("#" * 140)
 
-        analysis_i, figures_i = analyze_big_particle_memory_file(
-            file_stem=dataset["file_stem"],
-            npz_path_override=dataset.get("npz_path_override"),
-            dataset_label=dataset["label"],
-            max_runs=dataset.get("max_runs"),
-        )
+        source_parts = _same_condition_source_parts(dataset)
+
+        if len(source_parts) == 1:
+            part = source_parts[0]
+            analysis_i, figures_i = analyze_big_particle_memory_file(
+                file_stem=part["file_stem"],
+                npz_path_override=part.get("npz_path_override"),
+                dataset_label=dataset["label"],
+                max_runs=part.get("max_runs"),
+            )
+        else:
+            print(
+                f"[same-condition append] {dataset['label']}: "
+                f"{len(source_parts)} source acquisitions",
+                flush=True,
+            )
+            analysis_i, figures_i = analyze_appended_particle_memory_files(
+                source_parts,
+                combined_label=dataset["label"],
+            )
+
         individual_analyses.append(analysis_i)
         individual_figures[dataset["label"]] = figures_i
 
-    # 2) Build direct comparison plots between the two acquisition times.
+    # 2) Build direct comparison plots across wait conditions.
     comparison = None
     comparison_figures = {}
     if MAKE_COMPARISON_PLOTS and len(individual_analyses) >= 2:
@@ -6474,16 +6644,15 @@ if __name__ == "__main__":
             individual_analyses
         )
 
-    # 3) Optional appended analysis remains available in the file, but it is
-    # not recommended for 0-s versus 60-s because these are different wait conditions.
+    # 3) Never append DIFFERENT wait conditions together. Same-condition
+    # repeats (such as the two 90-s acquisitions) were already appended above.
     appended_analysis = None
     appended_figures = {}
-    if ALSO_RUN_APPENDED_ANALYSIS and len(DATASETS) >= 2:
-        print("\n" + "#" * 140)
-        print("OPTIONAL APPENDED ANALYSIS (DISABLED BY DEFAULT FOR 0-s vs 60-s)")
-        print("#" * 140)
-        appended_analysis, appended_figures = analyze_appended_particle_memory_files(
-            DATASETS
+    if ALSO_RUN_APPENDED_ANALYSIS:
+        raise ValueError(
+            "ALSO_RUN_APPENDED_ANALYSIS must remain False when DATASETS contains "
+            "different dark-wait conditions. Same-condition multi-file entries "
+            "are appended automatically in step 1."
         )
 
     # Convenient interactive handles.

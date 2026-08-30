@@ -3848,15 +3848,316 @@ def compare_datasets(results):
 
 if __name__ == "__main__":
     kpl.init_kplotlib()
-    datasets = base.DATASETS if DATASETS is None else DATASETS
+    # datasets = base.DATASETS if DATASETS is None else DATASETS
 
-    results = []
-    for dataset in datasets:
-        results.append(analyze_dataset(dataset))
+    # results = []
+    # for dataset in datasets:
+    #     results.append(analyze_dataset(dataset))
 
-    comparison_figure = compare_datasets(results)
+    # comparison_figure = compare_datasets(results)
 
-    analyses = results
-    analysis = results[-1] if results else None
+    # analyses = results
+    # analysis = results[-1] if results else None
 
-    kpl.show(block=True)
+    # kpl.show(block=True)
+
+
+import numpy as np
+from utils import data_manager as dm
+
+
+FILE_STEMS = [
+    (
+        "2026_08_20-16_37_57-qnami-nv0_2026_02_20-"
+        "particle-memory-source_off_wait_0s-wait-0s"
+    ),
+    (
+        "2026_08_26-19_38_50-qnami-nv0_2026_02_20-"
+        "particle-memory-source_off_wait_30s-wait-30s"
+    ),
+    (
+        "2026_08_23-16_00_17-qnami-nv0_2026_02_20-"
+        "particle-memory-source_off_wait_60s-wait-60s"
+    ),
+]
+
+
+KEYWORDS = (
+    "time",
+    "timestamp",
+    "duration",
+    "elapsed",
+    "wait",
+    "drift",
+    "run",
+    "rep",
+    "callback",
+)
+
+
+def recursive_timing_inspect(
+    obj,
+    path="raw",
+    depth=0,
+    max_depth=5,
+    max_list_items=3,
+):
+    """Print timing-like metadata recursively without dumping huge arrays."""
+
+    if depth > max_depth:
+        return
+
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            new_path = f"{path}.{key}"
+            key_lower = str(key).lower()
+
+            if any(tag in key_lower for tag in KEYWORDS):
+                if isinstance(value, np.ndarray):
+                    print(
+                        f"{new_path}: "
+                        f"ndarray shape={value.shape}, dtype={value.dtype}"
+                    )
+
+                elif isinstance(value, (list, tuple)):
+                    print(
+                        f"{new_path}: "
+                        f"{type(value).__name__}, len={len(value)}"
+                    )
+
+                elif isinstance(value, dict):
+                    print(
+                        f"{new_path}: dict, keys={list(value.keys())[:10]}"
+                    )
+
+                else:
+                    print(f"{new_path}: {value}")
+
+            # Do not recurse into arrays.
+            if not isinstance(value, np.ndarray):
+                recursive_timing_inspect(
+                    value,
+                    path=new_path,
+                    depth=depth + 1,
+                    max_depth=max_depth,
+                    max_list_items=max_list_items,
+                )
+
+    elif isinstance(obj, (list, tuple)):
+        for ind, value in enumerate(obj[:max_list_items]):
+            recursive_timing_inspect(
+                value,
+                path=f"{path}[{ind}]",
+                depth=depth + 1,
+                max_depth=max_depth,
+                max_list_items=max_list_items,
+            )
+
+
+for stem in FILE_STEMS:
+
+    print("\n")
+    print("=" * 110)
+    print(stem)
+    print("=" * 110)
+
+    raw = dm.get_raw_data(
+        file_stem=stem,
+        load_npz=False,   # IMPORTANT: metadata only
+    )
+
+    # ------------------------------------------------------------------
+    # Basic saved timing
+    # ------------------------------------------------------------------
+    nominal_wait = float(raw.get("dark_wait_s", np.nan))
+    experiment_wall_s = float(raw.get("experiment_wall_s", np.nan))
+
+    phase_records = raw.get("phase_records", [])
+    feedback_records = raw.get("feedback_records", [])
+
+    # Infer number of runs
+    num_runs = raw.get("num_runs", None)
+
+    if num_runs is None:
+        run_inds = []
+
+        for rec in phase_records:
+            if isinstance(rec, dict) and "run_ind" in rec:
+                run_inds.append(int(rec["run_ind"]))
+
+        for rec in feedback_records:
+            if isinstance(rec, dict) and "run_ind" in rec:
+                run_inds.append(int(rec["run_ind"]))
+
+        if run_inds:
+            num_runs = max(run_inds) + 1
+
+    # ------------------------------------------------------------------
+    # Phase-record timing
+    # ------------------------------------------------------------------
+    dark_records = [
+        rec
+        for rec in phase_records
+        if isinstance(rec, dict)
+        and rec.get("phase") == "dark_exposure"
+    ]
+
+    verify_records = [
+        rec
+        for rec in phase_records
+        if isinstance(rec, dict)
+        and rec.get("phase") == "initial_verification"
+    ]
+
+    actual_waits = np.asarray(
+        [
+            rec.get("actual_wait_s", np.nan)
+            for rec in dark_records
+        ],
+        dtype=float,
+    )
+
+    callback_waits = np.asarray(
+        [
+            rec.get("wait_callback_s", np.nan)
+            for rec in dark_records
+        ],
+        dtype=float,
+    )
+
+    verify_callbacks = np.asarray(
+        [
+            rec.get("callback_s", np.nan)
+            for rec in verify_records
+        ],
+        dtype=float,
+    )
+
+    actual_waits = actual_waits[np.isfinite(actual_waits)]
+    callback_waits = callback_waits[np.isfinite(callback_waits)]
+    verify_callbacks = verify_callbacks[np.isfinite(verify_callbacks)]
+
+    # ------------------------------------------------------------------
+    # Adaptive-feedback timing
+    # ------------------------------------------------------------------
+    feedback_total = np.asarray(
+        [
+            rec.get("total_callback_s", np.nan)
+            for rec in feedback_records
+            if isinstance(rec, dict)
+        ],
+        dtype=float,
+    )
+
+    feedback_dmd = np.asarray(
+        [
+            rec.get("dmd_s", np.nan)
+            for rec in feedback_records
+            if isinstance(rec, dict)
+        ],
+        dtype=float,
+    )
+
+    feedback_opx = np.asarray(
+        [
+            rec.get("opx_s", np.nan)
+            for rec in feedback_records
+            if isinstance(rec, dict)
+        ],
+        dtype=float,
+    )
+
+    feedback_total = feedback_total[np.isfinite(feedback_total)]
+    feedback_dmd = feedback_dmd[np.isfinite(feedback_dmd)]
+    feedback_opx = feedback_opx[np.isfinite(feedback_opx)]
+
+    # ------------------------------------------------------------------
+    # Summary
+    # ------------------------------------------------------------------
+    print(f"nominal dark_wait_s: {nominal_wait}")
+
+    print(f"num_runs: {num_runs}")
+
+    print(f"experiment_wall_s: {experiment_wall_s}")
+
+    if num_runs is not None and np.isfinite(experiment_wall_s):
+        cycle_s = experiment_wall_s / int(num_runs)
+
+        print(
+            f"average total cycle / run: "
+            f"{cycle_s:.6f} s"
+        )
+    else:
+        cycle_s = np.nan
+
+    if actual_waits.size:
+        print(
+            "actual dark wait: "
+            f"{np.mean(actual_waits):.6f} +/- "
+            f"{np.std(actual_waits):.6f} s"
+        )
+
+    if callback_waits.size:
+        print(
+            "dark callback total: "
+            f"{np.mean(callback_waits):.6f} +/- "
+            f"{np.std(callback_waits):.6f} s"
+        )
+
+    if verify_callbacks.size:
+        print(
+            "initial-verification callback: "
+            f"{np.mean(verify_callbacks):.6f} +/- "
+            f"{np.std(verify_callbacks):.6f} s"
+        )
+
+    if (
+        np.isfinite(cycle_s)
+        and actual_waits.size
+    ):
+        print(
+            "average non-dark cycle overhead: "
+            f"{cycle_s - np.mean(actual_waits):.6f} s"
+        )
+
+    if feedback_total.size:
+        print(
+            "adaptive callback total: "
+            f"{np.mean(feedback_total):.6f} +/- "
+            f"{np.std(feedback_total):.6f} s"
+        )
+
+    if feedback_dmd.size:
+        print(
+            "adaptive DMD time: "
+            f"{np.mean(feedback_dmd):.6f} +/- "
+            f"{np.std(feedback_dmd):.6f} s"
+        )
+
+    if feedback_opx.size:
+        print(
+            "adaptive OPX-stream time: "
+            f"{np.mean(feedback_opx):.6f} +/- "
+            f"{np.std(feedback_opx):.6f} s"
+        )
+
+    # ------------------------------------------------------------------
+    # Print the first few phase records explicitly
+    # ------------------------------------------------------------------
+    print("\nFirst few phase_records:")
+    for rec in phase_records[:6]:
+        print(rec)
+
+    print("\nFirst few feedback_records:")
+    for rec in feedback_records[:6]:
+        print(rec)
+
+    # ------------------------------------------------------------------
+    # Search for any additional hidden timing/drift metadata
+    # ------------------------------------------------------------------
+    print("\nRecursive timing/drift metadata:")
+    recursive_timing_inspect(
+        raw,
+        max_depth=5,
+        max_list_items=3,
+    )

@@ -50,46 +50,68 @@ from utils import kplotlib as kpl
 # USER CONFIGURATION
 # =============================================================================
 
-# Analyze one 0-s-wait source-off measurement and one 60-s-wait
-# source-off measurement.
+# Analyze source-off measurements grouped by PHYSICAL WAIT CONDITION.
 #
-# "npz_path_override" should normally remain None. Set it only if automatic
-# Dioptric NAS/search-index resolution cannot locate that dataset.
+# Each logical DATASETS entry may contain one or many independent acquisitions.
+# Multiple files belonging to the SAME wait condition are appended along the
+# run axis FIRST and then analyzed as one population.
+#
+# Preferred configuration:
+#     "file_stems": ["stem_1", "stem_2", ...]
+#     "npz_path_overrides": None
+#
+# Backward compatibility is retained for the old single "file_stem" key.
 DATASETS = [
     {
         "label": "source_off_0s",
-        "file_stem": (
-            "2026_08_20-16_37_57-qnami-nv0_2026_02_20-"
-            "particle-memory-source_off_wait_0s-wait-0s"
-        ),
-        "npz_path_override": None,
-    },
-    {
 
-        "label": "source_off_60s",
-        "file_stem": (
-            "2026_08_23-16_00_17-qnami-nv0_2026_02_20-"
-            "particle-memory-source_off_wait_60s-wait-60s"
-        ),
-        "npz_path_override": None,
+        # Put ALL acquisitions taken at this same physical wait condition here.
+        # One file is fine; add additional stems as more data are acquired.
+        "file_stems": [
+            "2026_08_20-16_37_57-qnami-nv0_2026_02_20-"
+            "particle-memory-source_off_wait_0s-wait-0s",
+        ],
+
+        # Normally leave None.  If explicit paths are needed, provide one path
+        # per file stem, e.g. ["G:/.../file1.npz", "G:/.../file2.npz"].
+        "npz_path_overrides": None,
     },
+
     {
-        
         "label": "source_off_30s",
-        "file_stem": (
+        "file_stems": [
             "2026_08_26-19_38_50-qnami-nv0_2026_02_20-"
-            "particle-memory-source_off_wait_30s-wait-30s"
-        ),
-        "npz_path_override": None,
+            "particle-memory-source_off_wait_30s-wait-30s",
+        ],
+        "npz_path_overrides": None,
+    },
+
+    {
+        "label": "source_off_60s",
+        "file_stems": [
+            "2026_08_23-16_00_17-qnami-nv0_2026_02_20-"
+            "particle-memory-source_off_wait_60s-wait-60s",
+        ],
+        "npz_path_overrides": None,
+    },
+
+    {
+        "label": "source_off_90s",
+        "file_stems": [
+            "2026_08_28-02_08_41-qnami-nv0_2026_02_20-"
+            "particle-memory-source_off_wait_90s-wait-90s",
+            "2026_08_29-07_13_32-qnami-nv0_2026_02_20-"
+            "particle-memory-source_off_wait_90s-wait-90s",
+        ],
+        "npz_path_overrides": None,
     },
 ]
 
-# These two measurements are at DIFFERENT wait times under source-off
-# conditions: one 0-s wait and one 60-s wait. In V15 we analyze each file
-# separately and make direct comparison plots.
+# Different WAIT CONDITIONS remain separate in the comparison.  Only repeated
+# acquisitions of the SAME wait condition are appended together.
 CALCULATE_POOLED_SOURCE_OFF = True
 MAKE_COMPARISON_PLOTS = True
-ALSO_RUN_APPENDED_ANALYSIS = False  # MUST remain False: 0 s and 60 s are different conditions
+ALSO_RUN_APPENDED_ANALYSIS = False  # keep False: same-wait appending is automatic below
 
 # Do not make the old curve_fit Poisson histogram the primary model. The
 # reference Poisson estimate is lambda = mean(K), exactly as in charge_monitor.py.
@@ -358,7 +380,105 @@ CALCULATE_TRIAL_CORRECTED_POISSON_SIGMA = True
 CALCULATE_REFERENCE_POISSON = True
 SCRAMBLE_SHIFT_PER_NV = 10
 
-SCRIPT_VERSION = "BIGFILE_CLEAN_STREAM_V23D_CUMULATIVE_G_AND_OVERLAY_2026-08-26"
+SCRIPT_VERSION = "BIGFILE_CLEAN_STREAM_V24_MULTI_FILE_PER_WAIT_APPEND_2026-08-29"
+
+
+
+# =============================================================================
+# Same-condition multi-file dataset helpers
+# =============================================================================
+
+
+def _dataset_source_entries(dataset):
+    """
+    Expand one logical wait-condition entry into one source-acquisition dict
+    per physical file.
+
+    Preferred:
+        {
+            "label": "source_off_90s",
+            "file_stems": ["stem_a", "stem_b"],
+            "npz_path_overrides": None,
+        }
+
+    Backward-compatible:
+        {"label": "...", "file_stem": "stem_a", "npz_path_override": None}
+    """
+    if "file_stems" in dataset:
+        stems = dataset["file_stems"]
+    else:
+        stems = dataset.get("file_stem")
+
+    if isinstance(stems, (list, tuple)):
+        stems = list(stems)
+    else:
+        stems = [stems]
+
+    stems = [str(stem) for stem in stems if stem is not None]
+    if not stems:
+        raise ValueError(
+            f"{dataset.get('label', '<unnamed>')}: no file stems configured."
+        )
+
+    overrides = dataset.get("npz_path_overrides", None)
+
+    if overrides is None:
+        old_override = dataset.get("npz_path_override", None)
+        if isinstance(old_override, (list, tuple)):
+            overrides = list(old_override)
+        elif old_override is None:
+            overrides = [None] * len(stems)
+        elif len(stems) == 1:
+            overrides = [old_override]
+        else:
+            raise ValueError(
+                f"{dataset.get('label', '<unnamed>')}: multiple file stems "
+                "require npz_path_overrides=[...] or no overrides."
+            )
+    else:
+        if not isinstance(overrides, (list, tuple)):
+            if len(stems) == 1:
+                overrides = [overrides]
+            else:
+                raise ValueError(
+                    f"{dataset.get('label', '<unnamed>')}: "
+                    "npz_path_overrides must have one entry per file."
+                )
+        else:
+            overrides = list(overrides)
+
+    if len(overrides) != len(stems):
+        raise ValueError(
+            f"{dataset.get('label', '<unnamed>')}: "
+            f"{len(stems)} file stems but {len(overrides)} NPZ overrides."
+        )
+
+    base_label = str(dataset.get("label", "dataset"))
+    out = []
+
+    for source_ind, (stem, override) in enumerate(
+        zip(stems, overrides),
+        start=1,
+    ):
+        out.append(
+            {
+                "label": (
+                    base_label
+                    if len(stems) == 1
+                    else f"{base_label}_part{source_ind}"
+                ),
+                "file_stem": stem,
+                "npz_path_override": override,
+                "source_ind": source_ind - 1,
+            }
+        )
+
+    return out
+
+
+def _dataset_num_sources(dataset):
+    """Number of physical acquisition files in one logical wait condition."""
+    return len(_dataset_source_entries(dataset))
 
 
 # =============================================================================
@@ -2782,9 +2902,15 @@ def _make_figures(result):
         ax.set_xlabel("NV- -> NV0 transition fraction per run (%)")
         ax.set_ylabel("Number of runs")
         # ax.set_yscale("log")
+        wait_s = float(result.get("dark_wait_s", np.nan))
+        wait_text = (
+            f"{wait_s:g} s wait"
+            if np.isfinite(wait_s)
+            else str(result.get("dataset_label", "dataset"))
+        )
         ax.set_title(
             "Distribution of per-run charge transition fraction\n"
-            f"0 s wait"
+            + wait_text
         )
         ax.grid(alpha=0.2)
         ax.legend()
@@ -3652,7 +3778,10 @@ def _make_figures(result):
 # =============================================================================
 
 
-def analyze_appended_particle_memory_files(datasets):
+def analyze_appended_particle_memory_files(
+    datasets,
+    combined_label=None,
+):
     """
     Append all runs from same-condition datasets FIRST, then perform ONE analysis.
 
@@ -3669,8 +3798,15 @@ def analyze_appended_particle_memory_files(datasets):
       combined analysis remains bounded-RAM and avoids decompressing both giant
       image members just to establish the statistical null.
     """
+    if combined_label is None:
+        combined_label = (
+            str(datasets[0].get("label", "same_condition"))
+            if datasets
+            else "same_condition"
+        )
+
     print("\n" + "=" * 132)
-    print("APPEND-FIRST SOURCE-OFF 0-s ANALYSIS")
+    print(f"APPEND-FIRST SAME-CONDITION ANALYSIS: {combined_label}")
     print("=" * 132)
 
     parts = []
@@ -3769,6 +3905,24 @@ def analyze_appended_particle_memory_files(datasets):
 
     if not parts:
         raise ValueError("No datasets supplied.")
+
+    wait_values = np.asarray(
+        [p["dark_wait_s"] for p in parts],
+        dtype=float,
+    )
+    finite_waits = wait_values[np.isfinite(wait_values)]
+
+    if finite_waits.size == 0:
+        combined_dark_wait_s = np.nan
+    else:
+        combined_dark_wait_s = float(np.median(finite_waits))
+        if np.nanmax(
+            np.abs(finite_waits - combined_dark_wait_s)
+        ) > 1e-6:
+            raise ValueError(
+                "Refusing to append files with different dark waits: "
+                + ", ".join(f"{v:g} s" for v in finite_waits)
+            )
 
     # ------------------------------------------------------------------
     # APPEND FIRST
@@ -3927,6 +4081,21 @@ def analyze_appended_particle_memory_files(datasets):
         else None
     )
 
+    # Full V20/V21/V22/V23 counts-only spatial analysis on the COMBINED
+    # same-wait population.  The legacy circular-shift component receives
+    # dataset_id_by_run so no temporal roll crosses a source-file boundary.
+    v20_spatial_event_model = None
+    if CALCULATE_V20_SPATIAL_EVENT_MODEL:
+        v20_spatial_event_model = _analyze_v20_spatial_event_model(
+            coords_xy=reference_coords,
+            charge=charge,
+            good_run_mask=quality["good_run_mask"],
+            poisson_result=poisson_result,
+            dark_wait_s=combined_dark_wait_s,
+            dataset_label=str(combined_label),
+            run_group_ids=dataset_id_by_run,
+        )
+
     primary_robust_mask = (
         quality["good_run_mask"]
         & np.isfinite(charge["loss_z"])
@@ -3966,11 +4135,12 @@ def analyze_appended_particle_memory_files(datasets):
     }
 
     result = {
-        "file_stem": "APPENDED-source_off_wait_0s",
-        "dataset_label": "APPENDED source-off 0 s",
+        "file_stem": f"APPENDED-{combined_label}",
+        "dataset_label": str(combined_label),
         "npz_path": [p["npz_path"] for p in parts],
         "source_parts": parts,
-        "dark_wait_s": 0.0,
+        "num_source_files": int(len(parts)),
+        "dark_wait_s": combined_dark_wait_s,
         "run": runs,
         "dataset_id_by_run": dataset_id_by_run,
         "local_run_by_global": local_run_by_global,
@@ -4000,6 +4170,14 @@ def analyze_appended_particle_memory_files(datasets):
     }
 
     figures = _make_figures(result)
+
+    if CALCULATE_V20_SPATIAL_EVENT_MODEL:
+        figures.update(_make_v20_spatial_figures(result))
+
+    figures = _annotate_per_dataset_figures(
+        figures,
+        result,
+    )
 
     # Add dataset-boundary marks to run-index figures where practical.
     boundaries = [p["global_stop"] for p in parts[:-1]]
@@ -4038,7 +4216,7 @@ def analyze_appended_particle_memory_files(datasets):
     )
 
     if reference_poisson is not None and reference_poisson.get("success", False):
-        print("\nREFERENCE POISSON AFTER APPENDING BOTH 0-s FILES")
+        print(f"\nREFERENCE POISSON AFTER APPENDING {len(parts)} SAME-CONDITION FILE(S)")
         print("-" * 132)
         print(
             f"lambda=<K>={reference_poisson['lambda']:.4f}; "
@@ -4846,6 +5024,7 @@ def _v20_scrambled_correlation_null(
     p_marginal,
     sampled_pairs,
     rng,
+    run_group_ids=None,
 ):
     """
     Multi-scramble null for rho(d).
@@ -4860,11 +5039,24 @@ def _v20_scrambled_correlation_null(
     if sampled_pairs is None:
         return {"success": False}
 
-    sg = np.asarray(switch_mask, dtype=bool)[:, good_run_mask]
-    eg = np.asarray(evaluable_mask, dtype=bool)[:, good_run_mask]
+    good_run_mask = np.asarray(good_run_mask, dtype=bool)
+    good_inds = np.where(good_run_mask)[0]
+
+    sg = np.asarray(switch_mask, dtype=bool)[:, good_inds]
+    eg = np.asarray(evaluable_mask, dtype=bool)[:, good_inds]
     p = np.asarray(p_marginal, dtype=float)
 
     num_nvs, num_runs = sg.shape
+
+    if run_group_ids is None:
+        good_group_ids = np.zeros(num_runs, dtype=int)
+    else:
+        run_group_ids = np.asarray(run_group_ids)
+        if run_group_ids.shape != good_run_mask.shape:
+            raise ValueError(
+                "run_group_ids must have one value per original run."
+            )
+        good_group_ids = run_group_ids[good_inds]
     pair_i = sampled_pairs["pair_i"]
     pair_j = sampled_pairs["pair_j"]
     pair_bin = sampled_pairs["bin"]
@@ -4875,12 +5067,31 @@ def _v20_scrambled_correlation_null(
     ss = np.empty_like(sg)
     ee = np.empty_like(eg)
 
-    for scramble_ind in range(int(V20_CORR_SCRAMBLES)):
-        shifts = rng.integers(0, max(num_runs, 1), size=num_nvs)
+    unique_groups = np.unique(good_group_ids)
 
-        for nv_ind, shift in enumerate(shifts):
-            ss[nv_ind] = np.roll(sg[nv_ind], int(shift))
-            ee[nv_ind] = np.roll(eg[nv_ind], int(shift))
+    for scramble_ind in range(int(V20_CORR_SCRAMBLES)):
+        # Do not circularly roll one acquisition into another.  For every NV,
+        # choose an independent shift INSIDE each physical source file.
+        for group_id in unique_groups:
+            cols = np.where(good_group_ids == group_id)[0]
+            if cols.size == 0:
+                continue
+
+            shifts = rng.integers(
+                0,
+                max(int(cols.size), 1),
+                size=num_nvs,
+            )
+
+            for nv_ind, shift in enumerate(shifts):
+                ss[nv_ind, cols] = np.roll(
+                    sg[nv_ind, cols],
+                    int(shift),
+                )
+                ee[nv_ind, cols] = np.roll(
+                    eg[nv_ind, cols],
+                    int(shift),
+                )
 
         weighted_sum = np.zeros(nb, dtype=float)
         total_weight = np.zeros(nb, dtype=float)
@@ -7586,6 +7797,7 @@ def _analyze_v20_spatial_event_model(
     poisson_result,
     dark_wait_s,
     dataset_label,
+    run_group_ids=None,
 ):
     rng = np.random.default_rng(
         int(V20_RANDOM_SEED)
@@ -7672,6 +7884,7 @@ def _analyze_v20_spatial_event_model(
         p_marginal,
         sampled_pairs,
         rng,
+        run_group_ids=run_group_ids,
     )
 
     corr_fit = _v20_fit_correlation_length(
@@ -9241,8 +9454,7 @@ def _condition_display_label(result):
 
 def _annotate_per_dataset_figures(figures, result):
     """
-    Add an unambiguous 0-s / 60-s condition badge to every figure produced
-    for a single dataset.
+    Add an unambiguous dark-wait condition badge to every per-condition figure.
 
     This is deliberately figure-level rather than axis-level, so multi-panel
     figures are labeled once and exported PDFs remain self-identifying when
@@ -9456,6 +9668,7 @@ def analyze_big_particle_memory_file(
                 if dataset_label is not None
                 else str(file_stem)
             ),
+            run_group_ids=None,
         )
 
     primary_robust_mask = (
@@ -10218,7 +10431,7 @@ def _good_values(result, key):
 
 def _comparison_summary_and_figures(results):
     """
-    Compare source-off measurements acquired with 0-s and 60-s dark waits.
+    Compare source-off measurements across all configured dark waits.
 
     Produces:
       * overlaid transition-fraction histograms and tail curves
@@ -10356,7 +10569,7 @@ def _comparison_summary_and_figures(results):
     # Print comparison summary.
     # ------------------------------------------------------------------
     print("\n" + "=" * 140)
-    print("COMPARISON OF SOURCE-OFF MEASUREMENTS: 0-s WAIT vs 60-s WAIT")
+    print("COMPARISON OF SOURCE-OFF MEASUREMENTS ACROSS DARK WAITS")
     print("=" * 140)
     print(
         "Dataset                           GoodRuns   Mean lost   Mean loss%   "
@@ -11057,7 +11270,7 @@ def _comparison_summary_and_figures(results):
         axes[1].grid(alpha=0.2)
         axes[1].legend(fontsize=8)
 
-        fig.suptitle("V20: 0-s versus 60-s spatial correlation")
+        fig.suptitle("V20: spatial correlation across dark-wait conditions")
         fig.tight_layout(rect=(0, 0, 1, 0.95))
         figures["v20_comparison_spatial_correlation"] = fig
 
@@ -11743,24 +11956,44 @@ if __name__ == "__main__":
     individual_analyses = []
     individual_figures = {}
 
-    # 1) Analyze each measurement separately.
+    # 1) Analyze each PHYSICAL WAIT CONDITION.
+    #
+    # If one logical condition contains multiple source files, concatenate the
+    # runs FIRST and then run one common statistical/spatial analysis.
     for dataset_ind, dataset in enumerate(DATASETS, start=1):
         print("\n" + "#" * 140)
         print(
-            f"INDIVIDUAL DATASET {dataset_ind}/{len(DATASETS)}: "
+            f"WAIT-CONDITION DATASET {dataset_ind}/{len(DATASETS)}: "
             f"{dataset['label']}"
         )
         print("#" * 140)
 
-        analysis_i, figures_i = analyze_big_particle_memory_file(
-            file_stem=dataset["file_stem"],
-            npz_path_override=dataset.get("npz_path_override"),
-            dataset_label=dataset["label"],
-        )
+        source_entries = _dataset_source_entries(dataset)
+
+        if len(source_entries) == 1:
+            source = source_entries[0]
+
+            analysis_i, figures_i = analyze_big_particle_memory_file(
+                file_stem=source["file_stem"],
+                npz_path_override=source.get("npz_path_override"),
+                dataset_label=dataset["label"],
+            )
+        else:
+            print(
+                f"[same-wait append] {dataset['label']}: "
+                f"{len(source_entries)} physical source files",
+                flush=True,
+            )
+
+            analysis_i, figures_i = analyze_appended_particle_memory_files(
+                source_entries,
+                combined_label=dataset["label"],
+            )
+
         individual_analyses.append(analysis_i)
         individual_figures[dataset["label"]] = figures_i
 
-    # 2) Build direct comparison plots between the two acquisition times.
+    # 2) Build direct comparison plots across the physical wait conditions.
     comparison = None
     comparison_figures = {}
     if MAKE_COMPARISON_PLOTS and len(individual_analyses) >= 2:
@@ -11768,16 +12001,16 @@ if __name__ == "__main__":
             individual_analyses
         )
 
-    # 3) Optional appended analysis remains available in the file, but it is
-    # not recommended for 0-s versus 60-s because these are different wait conditions.
+    # 3) Do NOT append different wait conditions together.
+    # Same-condition repetition has already been handled automatically above.
     appended_analysis = None
     appended_figures = {}
-    if ALSO_RUN_APPENDED_ANALYSIS and len(DATASETS) >= 2:
-        print("\n" + "#" * 140)
-        print("OPTIONAL APPENDED ANALYSIS (DISABLED BY DEFAULT FOR 0-s vs 60-s)")
-        print("#" * 140)
-        appended_analysis, appended_figures = analyze_appended_particle_memory_files(
-            DATASETS
+
+    if ALSO_RUN_APPENDED_ANALYSIS:
+        raise ValueError(
+            "ALSO_RUN_APPENDED_ANALYSIS must remain False when DATASETS "
+            "contains different dark-wait conditions. Repeated files within "
+            "one wait condition are already appended automatically."
         )
 
     # Convenient interactive handles.
