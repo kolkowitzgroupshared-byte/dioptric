@@ -2702,9 +2702,12 @@ def main(
     keys_to_compress = ["counts", "thresholds", "dmd_indices"]
     if save_images and "img_arrays" in raw_data:
         keys_to_compress.append("img_arrays")
+    
+    # raw_data_for_save = raw_data.copy()
+    raw_data_for_save = copy.deepcopy(raw_data)
 
     dm.save_raw_data(
-        raw_data,
+        raw_data_for_save,
         file_path,
         keys_to_compress=keys_to_compress,
     )
