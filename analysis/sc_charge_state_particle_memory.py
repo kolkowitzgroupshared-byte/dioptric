@@ -1174,12 +1174,7 @@ def analyze_nv_memory_back_to_back(
             and coords_xy is not None
         ):
 
-            img_arrays = np.asarray(
-                raw_data[
-                    "img_arrays"
-                ],
-                dtype=float,
-            )
+            img_arrays = raw_data["img_arrays"]
 
             if img_arrays.ndim == 6:
 
@@ -5184,30 +5179,30 @@ if __name__ == "__main__":
     # ==================================================================
     # Back-to-back 3600 s datasets
     # ==================================================================
+    # FILE_STEMS = [
+    #     # "2026_08_13-11_33_24-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
+    #     # "2026_08_14-02_16_30-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
+    #     # "2026_08_14-14_19_56-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
+    #     # "2026_08_15-02_23_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
+    #     # "2026_08_15-14_26_42-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
+    # ]
+
+    ## 4000 measurement 11GB
     FILE_STEMS = [
-        "2026_08_13-11_33_24-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
-        "2026_08_14-02_16_30-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
-        "2026_08_14-14_19_56-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
-        "2026_08_15-02_23_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
-        "2026_08_15-14_26_42-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
+    "2026_08_20-16_37_57-qnami-nv0_2026_02_20-particle-memory-source_off_wait_0s-wait-0s"
     ]
-
-    SELECTED_WAITS_S = [3600]
-
+    
+    SELECTED_WAITS_S = [0]
     REP_INDS = (11, 12)
     REP_LABELS = {
         11: "rep 11: immediate final check",
-        12: "rep 12: after 3600 s dark wait",
+        12: "rep 12: after 0 s dark wait",
     }
-
-    # Set this to BAD_NV_INDS if you want the same exclusion list used
-    # elsewhere in your analysis.
-    EXCLUDE_NV_INDS = None
 
     analysis_3600, figs_3600 = analyze_nv_memory_back_to_back(
         FILE_STEMS,
 
-        selected_waits_s=[3600],
+        selected_waits_s=SELECTED_WAITS_S,
 
         rep_initial=11,
         rep_final=12,
@@ -5216,7 +5211,7 @@ if __name__ == "__main__":
 
         bright_margin_counts=5.0,
 
-        calculate_drift=True,
+        calculate_drift=False,
         drift_roi_radius_px=5,
         max_drift_nvs=200,
 
@@ -5333,15 +5328,19 @@ if __name__ == "__main__":
     #  "2026_07_27-19_18_59-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
     #     ]
     
+    # FILE_STEMS = [
+    # "2026_08_13-11_33_24-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
+    # "2026_08_14-02_16_30-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
+    # "2026_08_14-14_19_56-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
+    # "2026_08_15-02_23_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
+    # "2026_08_15-14_26_42-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s"
+    # ]
+
     FILE_STEMS = [
-    "2026_08_13-11_33_24-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
-    "2026_08_14-02_16_30-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
-    "2026_08_14-14_19_56-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
-    "2026_08_15-02_23_19-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s",
-    "2026_08_15-14_26_42-qnami-nv0_2026_02_20-particle-memory-source_off_wait_3600s-wait-3600s"
+    "2026_08_20-16_37_57-qnami-nv0_2026_02_20-particle-memory-source_off_wait_0s-wait-0s"
     ]
     selected_waits_s = [
-        # 0,
+        0,
         # 10,
         # 30,
         # 60,
@@ -5350,27 +5349,27 @@ if __name__ == "__main__":
         # 600,
         # 1200,
         # 3600,
-        3600,
+        # 3600,
     ]
 
 
-    rep_stats, rep_figs = plot_nv_minus_by_run_separate_reps(
-        FILE_STEMS,
-        selected_waits_s=[3600],
-        rep_inds=(11, 12),
-        rep_labels={
-            11: "rep 11: immediate final check",
-            12: "rep 12: after 3600 s dark wait",
-        },
-        exclude_nv_inds=None,
-        show_fraction=False,
-        verbose=True,
-        back_to_back=True,
-        mark_file_boundaries=True,
-        show_rep_comparison=True,
-        show_difference=True,
-        show_retention=True,
-    )
+    # rep_stats, rep_figs = plot_nv_minus_by_run_separate_reps(
+    #     FILE_STEMS,
+    #     selected_waits_s=[3600],
+    #     rep_inds=(11, 12),
+    #     rep_labels={
+    #         11: "rep 11: immediate final check",
+    #         12: "rep 12: after 3600 s dark wait",
+    #     },
+    #     exclude_nv_inds=None,
+    #     show_fraction=False,
+    #     verbose=True,
+    #     back_to_back=True,
+    #     mark_file_boundaries=True,
+    #     show_rep_comparison=True,
+    #     show_difference=True,
+    #     show_retention=True,
+    # )
     # rep_stats, rep_figs = plot_nv_minus_by_run_separate_reps(
     #     FILE_STEMS,
     #     selected_waits_s=selected_waits_s,
@@ -5387,20 +5386,19 @@ if __name__ == "__main__":
 
 
     # Inspect specific run
-    # run_ind = 7
+    run_ind = 7
 
-    # result, fig = plot_rep11_rep12_images_for_run(
-    #     file_stem=FILE_STEMS[0],
-    #     run_ind=run_ind,
-    #     rep_inds=(11, 12),
-    #     exclude_nv_inds=None,
-    #     show_all_nv_circles=False,
-    #     circle_radius_px=2.0,
-    #     verbose=True,
-    # )
+    result, fig = plot_rep11_rep12_images_for_run(
+        file_stem=FILE_STEMS[0],
+        run_ind=run_ind,
+        rep_inds=(11, 12),
+        exclude_nv_inds=None,
+        show_all_nv_circles=False,
+        circle_radius_px=2.0,
+        verbose=True,
+    )
     
 
-    
     # diag, figs = diagnose_run(
     #     file_stem=FILE_STEMS[0],
     #     run_ind=7,
@@ -5700,8 +5698,6 @@ if __name__ == "__main__":
         BAD_NV_INDS,
     )
 
-
-
     # ------------------------------------------------------------------
     # Fit every retained NV
     # ------------------------------------------------------------------
@@ -5717,7 +5713,6 @@ if __name__ == "__main__":
             verbose=True,
         )
     )
-
 
     # ------------------------------------------------------------------
     # Remove poor fits and extreme lifetime outliers
