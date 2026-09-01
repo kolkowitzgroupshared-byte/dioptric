@@ -339,12 +339,12 @@ def do_charge_state_particle_memory(nv_list):
     
 def do_charge_state_particle_memory_wait_sweep(nv_list):
     wait_plan = [
+        (0, 2000),
         # (0, 2000),
-        # (0, 2000),
-        (15, 2000),
+        # (15, 2000),
         # (30, 2000),
         # (90, 1000),
-        (45, 2000),
+        # (45, 2000),
         # (90, 1000),
         # (120, 1000),
         # (180, 20),
