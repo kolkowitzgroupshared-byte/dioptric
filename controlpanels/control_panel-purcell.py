@@ -339,17 +339,15 @@ def do_charge_state_particle_memory(nv_list):
     
 def do_charge_state_particle_memory_wait_sweep(nv_list):
     wait_plan = [
-        (0, 2000),
         # (0, 2000),
         # (15, 2000),
         # (30, 2000),
-        # (90, 1000),
         # (45, 2000),
+        # (0, 2000),
+        # (60, 2000),
         # (90, 1000),
-        # (120, 1000),
-        # (180, 20),
-        # (300, 20),
-        # (600, 20),
+        (120, 1000),
+        (120, 1000),
     ]
     results = {}
 
@@ -1841,9 +1839,9 @@ if __name__ == "__main__":
     sample_name = "qnami"
     magnet_angle = 90
     date_str = "2026_02_20"
-    sample_coords = [-1.20, -0.75]
-    z_coord = -1.7
-    # z_coord = -4.1
+    sample_coords = [-1.20, -1.2]
+    z_coord = 0.0
+    # z_coord = -2.8
     
     config = common.get_config_dict()
     file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
@@ -1897,16 +1895,16 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.748, 98.134],
-    #     [73.727, 115.405],
-    #     [100.731, 68.86],
-    #     [126.985, 127.732],
+    #     [97.751, 98.145],
+    #     [73.73, 115.429],
+    #     [100.731, 68.87],
+    #     [126.966, 127.743],
     # ]
     # red_coords_list = [
     #     [66.94, 67.726],
     #     [47.281, 81.375],
     #     [69.664, 44.02],
-    #     [90.359, 92.213],
+    #     [90.359, 92.213], 
     # ]
     
     analysis_data = dm.get_raw_data(
@@ -1943,7 +1941,9 @@ if __name__ == "__main__":
         # file_stem = "2026_08_20-00_00_35-single_step_charge_hist_single_cpu_2026_08_19-23_56_37-qnami-nv0_2026_02_20",
         # file_stem =  "2026_08_21-22_22_23-single_step_charge_hist_single_cpu_2026_08_21-22_18_24-qnami-nv0_2026_02_20",
         # file_stem= "2026_08_25-18_40_38-single_step_charge_hist_single_cpu_2026_08_25-18_08_58-qnami-nv0_2026_02_20",
-        file_stem = "2026_08_29-15_06_55-single_step_charge_hist_single_cpu_2026_08_29-15_03_28-qnami-nv0_2026_02_20",
+        # file_stem = "2026_08_29-15_06_55-single_step_charge_hist_single_cpu_2026_08_29-15_03_28-qnami-nv0_2026_02_20",
+        # file_stem = "2026_09_01-16_53_59-single_step_charge_hist_single_cpu_2026_09_01-16_50_13-qnami-nv0_2026_02_20",
+        file_stem = "2026_09_03-18_15_43-single_step_charge_hist_single_cpu_2026_09_03-17_45_41-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
