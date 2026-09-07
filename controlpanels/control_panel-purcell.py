@@ -339,15 +339,15 @@ def do_charge_state_particle_memory(nv_list):
     
 def do_charge_state_particle_memory_wait_sweep(nv_list):
     wait_plan = [
-        # (0, 2000),
+        (0, 2000),
         # (15, 2000),
         # (30, 2000),
         # (45, 2000),
         # (0, 2000),
         # (60, 2000),
         # (90, 1000),
-        (120, 1000),
-        (120, 1000),
+        (75, 1000),
+        (75, 1000),
     ]
     results = {}
 
@@ -384,7 +384,67 @@ def do_charge_state_particle_memory_wait_sweep(nv_list):
         )
         
     return results
-    
+
+def do_charge_state_particle_memory_wait_interleaved(nv_list):
+
+    waits = (0, 15, 45)
+    num_per_wait_per_batch = 300   # 501 total runs per saved batch
+    num_batches = 5               # 5010 total runs
+
+    results = []
+
+    for batch_ind in range(num_batches):
+        do_widefield_image_sample(nv_sig, 50)
+
+        wait_schedule_s = widefield.make_interleaved_wait_schedule(
+            wait_values_s=waits,
+            num_per_wait=num_per_wait_per_batch,
+        )
+
+        print(
+            f"\nBatch {batch_ind + 1}/{num_batches}: "
+            f"{len(wait_schedule_s)} total runs"
+        )
+
+        raw_data = charge_state_particle_memory.main(
+            nv_list,
+
+            num_init_reps=11,
+            num_runs=len(wait_schedule_s),
+
+            dark_wait_schedule_s=wait_schedule_s,
+
+            mode="dmd_block_confirmed",
+
+            dmd_indices=None,
+            dmd_radius_px=8,
+            dmd_plane=230,
+
+            confirm_margin_counts=1.0,
+
+            take_initial_check=True,
+            block_all_during_wait=True,
+
+            exposure_label=(
+                f"source_off_interleaved_0_15_45s_"
+                f"batch_{batch_ind + 1:02d}"
+            ),
+
+            initial_event_margin_counts=1.0,
+            final_event_margin_counts=1.0,
+
+            cluster_radius_px=None,
+            min_cluster_size=2,
+
+            save_images=False,
+            save_data=True,
+            save_fig=True,
+            verbose=True,
+        )
+
+        results.append(raw_data)
+
+    return results
     
 def do_charge_state_measurement_backaction(nv_list):
     charge_state_measurement_backaction.main(
@@ -1895,10 +1955,10 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.751, 98.145],
-    #     [73.73, 115.429],
-    #     [100.731, 68.87],
-    #     [126.966, 127.743],
+    #     [97.712, 98.151],
+    #     [73.692, 115.438],
+    #     [100.686, 68.886],
+    #     [126.91, 127.755],
     # ]
     # red_coords_list = [
     #     [66.94, 67.726],
@@ -1943,7 +2003,8 @@ if __name__ == "__main__":
         # file_stem= "2026_08_25-18_40_38-single_step_charge_hist_single_cpu_2026_08_25-18_08_58-qnami-nv0_2026_02_20",
         # file_stem = "2026_08_29-15_06_55-single_step_charge_hist_single_cpu_2026_08_29-15_03_28-qnami-nv0_2026_02_20",
         # file_stem = "2026_09_01-16_53_59-single_step_charge_hist_single_cpu_2026_09_01-16_50_13-qnami-nv0_2026_02_20",
-        file_stem = "2026_09_03-18_15_43-single_step_charge_hist_single_cpu_2026_09_03-17_45_41-qnami-nv0_2026_02_20",
+        # file_stem = "2026_09_03-18_15_43-single_step_charge_hist_single_cpu_2026_09_03-17_45_41-qnami-nv0_2026_02_20",
+        file_stem = "2026_09_06-13_51_32-single_step_charge_hist_single_cpu_2026_09_06-13_46_16-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
@@ -2174,7 +2235,8 @@ if __name__ == "__main__":
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
-        do_charge_state_particle_memory_wait_sweep(nv_list)
+        # do_charge_state_particle_memory_wait_sweep(nv_list)
+        do_charge_state_particle_memory_wait_interleaved(nv_list)
         # do_charge_state_measurement_backaction(nv_list)
         
         # do_dmd_crosstalk_matrix(

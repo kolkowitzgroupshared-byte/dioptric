@@ -365,6 +365,7 @@ def make_particle_memory_charge_prep_fn(
     initial_check_rep_ind: Optional[int],
     final_readout_rep_ind: int,
     dark_wait_s: float,
+    dark_wait_schedule_s=None,      # NEW
     dmd_radius_px: int = 8,
     dmd_plane: int = 230,
     dmd_settle_s: float = 0.001,
@@ -385,6 +386,12 @@ def make_particle_memory_charge_prep_fn(
     dmd = tb.get_server_dmd() if use_dmd else None
     all_false = np.zeros(num_nvs, dtype=bool).tolist()
     run_counter = {"run_ind": -1}
+    
+    if dark_wait_schedule_s is not None:
+        dark_wait_schedule_s = np.asarray(
+            dark_wait_schedule_s,
+            dtype=float,
+        )
 
     def wrapped(rep_ind, nv_list, initial_states_list=None):
         if rep_ind == 0:
@@ -425,6 +432,13 @@ def make_particle_memory_charge_prep_fn(
         # The callback for the final rep runs after the initial verification
         # count has been received. Keep the OPX paused during the exposure.
         if rep_ind == final_readout_rep_ind:
+            if dark_wait_schedule_s is None:
+                requested_wait_s = float(dark_wait_s)
+            else:
+                requested_wait_s = float(
+                    dark_wait_schedule_s[run_ind]
+                )
+                
             initial_state_from_previous_rep = (
                 None
                 if initial_states_list is None
@@ -459,16 +473,16 @@ def make_particle_memory_charge_prep_fn(
             wait_t0 = time.perf_counter()
 
             try:
-                if exposure_start_fn is not None:
-                    exposure_start_fn()
-                    source_started = True
-
+                print(
+                    f"[dark exposure] run {run_ind}: start, "
+                    f"requested={requested_wait_s:.3f}s, "
+                    f"initial NV- from previous readout={num_initial_nvm}"
+                )
                 actual_wait_s = _wait_with_progress(
-                    dark_wait_s,
+                    requested_wait_s,
                     status_interval_s=wait_status_interval_s,
                     verbose=verbose,
                 )
-
             finally:
                 if exposure_stop_fn is not None and source_started:
                     exposure_stop_fn()
@@ -498,7 +512,7 @@ def make_particle_memory_charge_prep_fn(
                         "run_ind": run_ind,
                         "rep_ind": int(rep_ind),
                         "phase": "dark_exposure",
-                        "requested_wait_s": float(dark_wait_s),
+                        "requested_wait_s": requested_wait_s,
                         "actual_wait_s": float(actual_wait_s),
                         "wait_callback_s": wait_callback_s,
                         "num_initial_nvm_from_callback": num_initial_nvm,
@@ -1013,6 +1027,7 @@ def main(
     num_init_reps: int = 10,
     num_runs: int = 10,
     dark_wait_s: float = 300.0,
+    dark_wait_schedule_s: Optional[Sequence[float]] = None,  # NEW
     mode: str = "dmd_block_confirmed",
     dmd_indices: Optional[Sequence[int]] = None,
     dmd_radius_px: int = 8,
@@ -1051,6 +1066,48 @@ def main(
 
     num_init_reps = int(num_init_reps)
     num_runs = int(num_runs)
+
+    if num_runs < 1:
+        raise ValueError("num_runs must be positive.")
+
+    # --------------------------------------------------------------
+    # Build one dark-wait value for every run
+    # --------------------------------------------------------------
+    if dark_wait_schedule_s is None:
+        if float(dark_wait_s) < 0:
+            raise ValueError("dark_wait_s cannot be negative.")
+
+        dark_wait_schedule_s = np.full(
+            num_runs,
+            float(dark_wait_s),
+            dtype=float,
+        )
+
+    else:
+        dark_wait_schedule_s = np.asarray(
+            dark_wait_schedule_s,
+            dtype=float,
+        )
+
+        if dark_wait_schedule_s.shape != (num_runs,):
+            raise ValueError(
+                f"dark_wait_schedule_s must have shape ({num_runs},), "
+                f"got {dark_wait_schedule_s.shape}."
+            )
+
+        if np.any(~np.isfinite(dark_wait_schedule_s)):
+            raise ValueError(
+                "dark_wait_schedule_s contains non-finite values."
+            )
+
+        if np.any(dark_wait_schedule_s < 0):
+            raise ValueError(
+                "dark_wait_schedule_s cannot contain negative waits."
+            )
+
+    dark_wait_values_s = np.unique(dark_wait_schedule_s)
+    is_interleaved = len(dark_wait_values_s) > 1
+    
     num_steps = 1
     num_nvs = len(nv_list)
 
@@ -1118,6 +1175,7 @@ def main(
         initial_check_rep_ind=initial_check_rep_ind,
         final_readout_rep_ind=final_readout_rep_ind,
         dark_wait_s=dark_wait_s,
+        dark_wait_schedule_s=dark_wait_schedule_s,  # NEW
         dmd_radius_px=dmd_radius_px,
         dmd_plane=dmd_plane,
         dmd_settle_s=dmd_settle_s,
@@ -1201,6 +1259,9 @@ def main(
             "initial_state_rep_ind": int(initial_state_rep_ind),
             "final_readout_rep_ind": int(final_readout_rep_ind),
             "dark_wait_s": float(dark_wait_s),
+            "dark_wait_schedule_s": dark_wait_schedule_s,
+            "dark_wait_values_s": dark_wait_values_s,
+            "is_interleaved_dark_wait": bool(is_interleaved),
             "exposure_label": str(exposure_label),
             "block_all_during_wait": bool(block_all_during_wait),
             "analysis_thresholds": analysis_thresholds,
