@@ -38,14 +38,14 @@ calibration_coords_pixel = [
     [17.982, 41.943],
 ]
 calibration_coords_green = [
-    [73.692, 115.438],
-    [100.686, 68.886],
-    [126.91, 127.755],
+    [73.627, 115.449],
+    [100.653, 68.881],
+    [126.854, 127.749],
 ]
 calibration_coords_red = [
-    [47.281, 81.375],
-    [69.664, 44.02],
-    [90.359, 92.213],  
+    [47.202, 81.381],
+    [69.591, 44.021],
+    [90.245, 92.218],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -185,17 +185,17 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_0",
                 "uwave_power": 11.0,
-                "frequency": 2.7752,
+                "frequency": 2.7604,
                 "rabi_period": 192,
-                "pi_pulse": 96,
+                "pi_pulse": 112,
                 "pi_on_2_pulse": 64,
             },
             1: {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
-                "frequency": 2.8137,
+                "frequency": 2.8076,
                 "rabi_period": 256,
-                "pi_pulse": 128,
+                "pi_pulse": 112,
                 "pi_on_2_pulse": 64,
             },
             2: {
@@ -306,9 +306,9 @@ config |= {
             VirtualLaserKey.WIDEFIELD_CHARGE_READOUT: {
                 "physical_name": yellow_laser,
                 # "duration": 1e9,
-                "duration": 500e6,
+                # "duration": 500e6,
                 # "duration": 100e6,
-                # "duration": 50e6,
+                "duration": 50e6,
                 # "duration": 24e6,  # for red calibration
             },
             # LaserKey.WIDEFIELD_CHARGE_READOUT: {"physical_name": yellow_laser, "duration": 100e6},
@@ -1050,9 +1050,9 @@ opx_config = {
         "yellow_imaging": {"type": "constant", "sample": 0.25},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3513},# 1176NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2923},
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.2623},  ## 814NVs
+        "yellow_charge_readout": {"type": "constant", "sample": 0.2623},  ## 814NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2133}, ## 631NVs
-        "yellow_charge_readout": {"type": "constant", "sample": 0.2043}, ## 631NVs
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.2043}, ## 631NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1710}, ## 415NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1693}, ## 402NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.160}, ## 366NVs

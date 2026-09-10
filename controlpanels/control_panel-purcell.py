@@ -386,7 +386,6 @@ def do_charge_state_particle_memory_wait_sweep(nv_list):
     return results
 
 def do_charge_state_particle_memory_wait_interleaved(nv_list):
-
     waits = (0, 15, 45)
     num_per_wait_per_batch = 300   # 501 total runs per saved batch
     num_batches = 5               # 5010 total runs
@@ -436,7 +435,7 @@ def do_charge_state_particle_memory_wait_interleaved(nv_list):
             cluster_radius_px=None,
             min_cluster_size=2,
 
-            save_images=False,
+            save_images=True,
             save_data=True,
             save_fig=True,
             verbose=True,
@@ -1027,7 +1026,7 @@ def do_rabi(nv_list):
     max_tau = 480 + min_tau
     num_steps = 31
     num_reps = 10
-    num_runs = 400
+    num_runs = 200
     # num_runs = 5
     uwave_ind_list = [0, 1]
     # uwave_ind_list = [2]
@@ -1955,16 +1954,16 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.712, 98.151],
-    #     [73.692, 115.438],
-    #     [100.686, 68.886],
-    #     [126.91, 127.755],
+    #     [97.675, 98.153],
+    #     [73.627, 115.449],
+    #     [100.653, 68.881],
+    #     [126.854, 127.749],
     # ]
     # red_coords_list = [
-    #     [66.94, 67.726],
-    #     [47.281, 81.375],
-    #     [69.664, 44.02],
-    #     [90.359, 92.213], 
+    #     [66.88, 67.73],
+    #     [47.202, 81.381],
+    #     [69.591, 44.021],
+    #     [90.245, 92.218],
     # ]
     
     analysis_data = dm.get_raw_data(
@@ -2236,7 +2235,7 @@ if __name__ == "__main__":
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
         # do_charge_state_particle_memory_wait_sweep(nv_list)
-        do_charge_state_particle_memory_wait_interleaved(nv_list)
+        # do_charge_state_particle_memory_wait_interleaved(nv_list)
         # do_charge_state_measurement_backaction(nv_list)
         
         # do_dmd_crosstalk_matrix(
@@ -2252,7 +2251,7 @@ if __name__ == "__main__":
 
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
-        # do_optimize_readout_amp(nv_list)
+        do_optimize_readout_amp(nv_list)
         # do_optimize_readout_amp_repeated_readout(nv_list)
         # do_optimize_pol_duration(nv_list)
     
