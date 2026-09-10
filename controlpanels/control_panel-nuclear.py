@@ -170,7 +170,7 @@ def do_lifetime_caf_single_shot(th_sig):
     lifetime_caf_single_shot.main(
         nv_sig=th_sig,
         apd_indices=[0],
-        readout_times=[0, 1500, 2000],  # delay, excitation, detection
+        readout_times=[0, 1500, 500],  # delay, excitation, detection
         filter_pos=[3, 0],
         num_reps=200000,
         num_runs=1000,
@@ -633,15 +633,15 @@ if __name__ == "__main__":
 
     try:
         # do_move_slider(1, 0)
-        # do_pulse_streamer_constant(
-        # digital_channels=(1,),
-        # run_while_active=do_two_slider_moves(),  # do_power_monitor
-        # )
+        do_pulse_streamer_constant(
+            digital_channels=(1,),
+            run_while_active=None,  # do_power_monitor
+        )
         # ^leave the comma at the end or it will complain
         # do_power_monitor()
         # do_stationary_count(th_sig, disable_opt=True)
         # do_lifetime_measurement(th_sig)
-        do_lifetime_caf_single_shot(th_sig)
+        # do_lifetime_caf_single_shot(th_sig)
         # do_lifetime_caf_recovery(th_sig)
         # do_th_lifetime_measurement(th_sig)
         # do_awg_test()

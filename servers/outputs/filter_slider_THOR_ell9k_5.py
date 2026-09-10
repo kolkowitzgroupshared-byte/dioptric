@@ -63,9 +63,12 @@ class FilterSliderThorEll9k(LabradServer):
         time.sleep(0.1)
         self.slider.write("0s1".encode())
         time.sleep(0.1)
+        self.current_pos = None
 
     @setting(0, pos="i")
     def set_filter(self, c, pos):
+        if self.current_pos == pos:
+            return
         cmd = self.move_commands[pos]
         for attempt in range(3):
             try:
@@ -82,6 +85,7 @@ class FilterSliderThorEll9k(LabradServer):
                     if not res:
                         continue
                     if "0GS" not in res.decode(errors="replace"):
+                        self.current_pos = pos
                         return
             except serial.SerialException as e:
                 if attempt == 2:
