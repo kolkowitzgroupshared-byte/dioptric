@@ -596,6 +596,10 @@ if __name__ == "__main__":
     
     ##qnami array sample 1277
     file_stem = ["2026_03_28-07_59_17-qnami-nv0_2026_02_20"]  ### loop     
+    
+    ##qnami array sample 1277
+    file_stem = ["2026_09_08-20_08_21-qnami-nv0_2026_02_20"]  ### loop     
+         
 
     ##qnami array sample 631
     file_stem = ["2026_09_08-20_08_21-qnami-nv0_2026_02_20"]  ### loop    

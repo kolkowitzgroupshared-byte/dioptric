@@ -50,10 +50,10 @@ if len(pixel_coords_list) >= 3:
     # New pixel coordinate for which we want to find the corresponding red coordinate
     new_pixel_coord = np.array(
     [       
-        [97.749, 98.147],
-        [73.725, 115.44],
-        [100.743, 68.878],
-        [126.995, 127.74],
+        [97.676, 98.164],
+        [73.652, 115.454],
+        [100.655, 68.9],
+        [126.908, 127.762],
     ],
         dtype=np.float32,
     )
@@ -92,10 +92,10 @@ else:
     # New pixel coordinates to transform
     new_pixel_coord = np.array(
         [
-            [97.744, 98.15],
-            [73.721, 115.441],
-            [100.739, 68.876],
-            [126.948, 127.756],
+            [97.712, 98.151],
+            [73.692, 115.438],
+            [100.686, 68.886],
+            [126.91, 127.755],
         ],
         dtype=np.float32,
     )

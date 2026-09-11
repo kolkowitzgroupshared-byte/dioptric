@@ -817,6 +817,26 @@ def charge_state_mle(nv_list, img_array):
 
     return states
 
+def make_interleaved_wait_schedule(
+    wait_values_s,
+    num_per_wait,
+    seed=None,
+):
+    rng = np.random.default_rng(seed)
+
+    wait_values_s = np.asarray(
+        wait_values_s,
+        dtype=float,
+    )
+
+    schedule = []
+
+    for _ in range(int(num_per_wait)):
+        block = wait_values_s.copy()
+        rng.shuffle(block)
+        schedule.extend(block)
+
+    return np.asarray(schedule, dtype=float)
 
 # def calc_snr(sig_counts, ref_counts):
 #     """Calculate SNR for a single shot"""

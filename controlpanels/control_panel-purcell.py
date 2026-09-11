@@ -339,24 +339,15 @@ def do_charge_state_particle_memory(nv_list):
     
 def do_charge_state_particle_memory_wait_sweep(nv_list):
     wait_plan = [
+        (0, 2000),
+        # (15, 2000),
+        # (30, 2000),
+        # (45, 2000),
         # (0, 2000),
-        # (0, 2000),
-        # (0, 4000),
-        (30, 2000),
         # (60, 2000),
-        # (60, 2000),
-        # (10, 20),
-        # (30, 20),
-        # (60, 20),
-        # (180, 20),
-        # (300, 20),
-        # (600, 20),
-        # (1200, 20),
-        # (1800, 20),
-        # (3600, 12),
-        # (3600, 12),
-        # (3600, 12),
-        # (3600, 12),
+        # (90, 1000),
+        (75, 1000),
+        (75, 1000),
     ]
     results = {}
 
@@ -393,7 +384,66 @@ def do_charge_state_particle_memory_wait_sweep(nv_list):
         )
         
     return results
-    
+
+def do_charge_state_particle_memory_wait_interleaved(nv_list):
+    waits = (0, 15, 45)
+    num_per_wait_per_batch = 300   # 501 total runs per saved batch
+    num_batches = 5               # 5010 total runs
+
+    results = []
+
+    for batch_ind in range(num_batches):
+        do_widefield_image_sample(nv_sig, 50)
+
+        wait_schedule_s = widefield.make_interleaved_wait_schedule(
+            wait_values_s=waits,
+            num_per_wait=num_per_wait_per_batch,
+        )
+
+        print(
+            f"\nBatch {batch_ind + 1}/{num_batches}: "
+            f"{len(wait_schedule_s)} total runs"
+        )
+
+        raw_data = charge_state_particle_memory.main(
+            nv_list,
+
+            num_init_reps=11,
+            num_runs=len(wait_schedule_s),
+
+            dark_wait_schedule_s=wait_schedule_s,
+
+            mode="dmd_block_confirmed",
+
+            dmd_indices=None,
+            dmd_radius_px=8,
+            dmd_plane=230,
+
+            confirm_margin_counts=1.0,
+
+            take_initial_check=True,
+            block_all_during_wait=True,
+
+            exposure_label=(
+                f"source_off_interleaved_0_15_45s_"
+                f"batch_{batch_ind + 1:02d}"
+            ),
+
+            initial_event_margin_counts=1.0,
+            final_event_margin_counts=1.0,
+
+            cluster_radius_px=None,
+            min_cluster_size=2,
+
+            save_images=True,
+            save_data=True,
+            save_fig=True,
+            verbose=True,
+        )
+
+        results.append(raw_data)
+
+    return results
     
 def do_charge_state_measurement_backaction(nv_list):
     charge_state_measurement_backaction.main(
@@ -844,7 +894,7 @@ def do_resonance(nv_list):
     freq_range = 0.260
     num_steps = 45
     num_reps = 4
-    num_runs = 300
+    num_runs = 400
     freqs = calculate_freqs(freq_center, freq_range, num_steps)
     ##
     # Remove duplicates and sort
@@ -976,7 +1026,7 @@ def do_rabi(nv_list):
     max_tau = 480 + min_tau
     num_steps = 31
     num_reps = 10
-    num_runs = 400
+    num_runs = 300
     # num_runs = 5
     uwave_ind_list = [0, 1]
     # uwave_ind_list = [2]
@@ -1848,9 +1898,9 @@ if __name__ == "__main__":
     sample_name = "qnami"
     magnet_angle = 90
     date_str = "2026_02_20"
-    sample_coords = [-1.20, -0.75]
-    z_coord = -1.7
-    # z_coord = -4.1
+    sample_coords = [-1.20, -1.2]
+    z_coord = 0.0
+    # z_coord = -2.8
     
     config = common.get_config_dict()
     file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
@@ -1904,16 +1954,16 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.744, 98.15],
-    #     [73.721, 115.441],
-    #     [100.739, 68.876],
-    #     [126.948, 127.756],
+    #     [97.676, 98.164],
+    #     [73.652, 115.454],
+    #     [100.655, 68.9],
+    #     [126.908, 127.762],
     # ]
     # red_coords_list = [
-    #     [66.94, 67.726],
-    #     [47.281, 81.375],
-    #     [69.664, 44.02],
-    #     [90.359, 92.213],
+    #     [66.88, 67.739],
+    #     [47.222, 81.385],
+    #     [69.592, 44.037],
+    #     [90.288, 92.23],
     # ]
     
     analysis_data = dm.get_raw_data(
@@ -1948,7 +1998,13 @@ if __name__ == "__main__":
         # file_stem = "2026_08_18-12_45_35-single_step_charge_hist_single_cpu_2026_08_18-12_42_18-qnami-nv0_2026_02_20",
         # file_stem = "2026_08_18-13_18_23-single_step_charge_hist_single_cpu_2026_08_18-13_13_16-qnami-nv0_2026_02_20",
         # file_stem = "2026_08_20-00_00_35-single_step_charge_hist_single_cpu_2026_08_19-23_56_37-qnami-nv0_2026_02_20",
-        file_stem =  "2026_08_21-22_22_23-single_step_charge_hist_single_cpu_2026_08_21-22_18_24-qnami-nv0_2026_02_20",
+        # file_stem =  "2026_08_21-22_22_23-single_step_charge_hist_single_cpu_2026_08_21-22_18_24-qnami-nv0_2026_02_20",
+        # file_stem= "2026_08_25-18_40_38-single_step_charge_hist_single_cpu_2026_08_25-18_08_58-qnami-nv0_2026_02_20",
+        # file_stem = "2026_08_29-15_06_55-single_step_charge_hist_single_cpu_2026_08_29-15_03_28-qnami-nv0_2026_02_20",
+        # file_stem = "2026_09_01-16_53_59-single_step_charge_hist_single_cpu_2026_09_01-16_50_13-qnami-nv0_2026_02_20",
+        # file_stem = "2026_09_03-18_15_43-single_step_charge_hist_single_cpu_2026_09_03-17_45_41-qnami-nv0_2026_02_20",
+        # file_stem = "2026_09_06-13_51_32-single_step_charge_hist_single_cpu_2026_09_06-13_46_16-qnami-nv0_2026_02_20",
+        file_stem = "2026_09_10-21_27_12-single_step_charge_hist_single_cpu_2026_09_10-21_14_01-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
@@ -2175,11 +2231,12 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        do_charge_state_histograms(nv_list)
+        # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
-        # do_charge_state_particle_memorys_wait_sweep(nv_list)
+        # do_charge_state_particle_memory_wait_sweep(nv_list)
+        # do_charge_state_particle_memory_wait_interleaved(nv_list)
         # do_charge_state_measurement_backaction(nv_list)
         
         # do_dmd_crosstalk_matrix(
@@ -2230,9 +2287,9 @@ if __name__ == "__main__":
         # do_calibrate_iq_delay(nv_list)
         # do_rabi(nv_list)
         # do_power_rabi(nv_list)
-        # do_resonance(nv_list)
+        do_resonance(nv_list)
         # do_optimize_pol_duration(nv_list)
-        # do_rabi(nv_list)
+        do_rabi(nv_list)
         # do_deer_hahn(nv_list)
         # do_deer_hahn_rabi(nv_list)
         # do_resonance_zoom(nv_list)
