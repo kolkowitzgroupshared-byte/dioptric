@@ -894,7 +894,7 @@ def do_resonance(nv_list):
     freq_range = 0.260
     num_steps = 45
     num_reps = 4
-    num_runs = 300
+    num_runs = 400
     freqs = calculate_freqs(freq_center, freq_range, num_steps)
     ##
     # Remove duplicates and sort
@@ -1026,7 +1026,7 @@ def do_rabi(nv_list):
     max_tau = 480 + min_tau
     num_steps = 31
     num_reps = 10
-    num_runs = 200
+    num_runs = 300
     # num_runs = 5
     uwave_ind_list = [0, 1]
     # uwave_ind_list = [2]
@@ -1954,16 +1954,16 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.675, 98.153],
-    #     [73.627, 115.449],
-    #     [100.653, 68.881],
-    #     [126.854, 127.749],
+    #     [97.676, 98.164],
+    #     [73.652, 115.454],
+    #     [100.655, 68.9],
+    #     [126.908, 127.762],
     # ]
     # red_coords_list = [
-    #     [66.88, 67.73],
-    #     [47.202, 81.381],
-    #     [69.591, 44.021],
-    #     [90.245, 92.218],
+    #     [66.88, 67.739],
+    #     [47.222, 81.385],
+    #     [69.592, 44.037],
+    #     [90.288, 92.23],
     # ]
     
     analysis_data = dm.get_raw_data(
@@ -2003,7 +2003,8 @@ if __name__ == "__main__":
         # file_stem = "2026_08_29-15_06_55-single_step_charge_hist_single_cpu_2026_08_29-15_03_28-qnami-nv0_2026_02_20",
         # file_stem = "2026_09_01-16_53_59-single_step_charge_hist_single_cpu_2026_09_01-16_50_13-qnami-nv0_2026_02_20",
         # file_stem = "2026_09_03-18_15_43-single_step_charge_hist_single_cpu_2026_09_03-17_45_41-qnami-nv0_2026_02_20",
-        file_stem = "2026_09_06-13_51_32-single_step_charge_hist_single_cpu_2026_09_06-13_46_16-qnami-nv0_2026_02_20",
+        # file_stem = "2026_09_06-13_51_32-single_step_charge_hist_single_cpu_2026_09_06-13_46_16-qnami-nv0_2026_02_20",
+        file_stem = "2026_09_10-21_27_12-single_step_charge_hist_single_cpu_2026_09_10-21_14_01-qnami-nv0_2026_02_20",
         load_npz=True,
     )
     # print (analysis_data.keys())
@@ -2251,7 +2252,7 @@ if __name__ == "__main__":
 
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
-        do_optimize_readout_amp(nv_list)
+        # do_optimize_readout_amp(nv_list)
         # do_optimize_readout_amp_repeated_readout(nv_list)
         # do_optimize_pol_duration(nv_list)
     
@@ -2286,9 +2287,9 @@ if __name__ == "__main__":
         # do_calibrate_iq_delay(nv_list)
         # do_rabi(nv_list)
         # do_power_rabi(nv_list)
-        # do_resonance(nv_list)
+        do_resonance(nv_list)
         # do_optimize_pol_duration(nv_list)
-        # do_rabi(nv_list)
+        do_rabi(nv_list)
         # do_deer_hahn(nv_list)
         # do_deer_hahn_rabi(nv_list)
         # do_resonance_zoom(nv_list)

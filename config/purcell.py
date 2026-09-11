@@ -38,14 +38,14 @@ calibration_coords_pixel = [
     [17.982, 41.943],
 ]
 calibration_coords_green = [
-    [73.627, 115.449],
-    [100.653, 68.881],
-    [126.854, 127.749],
+    [73.652, 115.454],
+    [100.655, 68.9],
+    [126.908, 127.762],
 ]
 calibration_coords_red = [
-    [47.202, 81.381],
-    [69.591, 44.021],
-    [90.245, 92.218],
+    [47.222, 81.385],
+    [69.592, 44.037],
+    [90.288, 92.23],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -1050,7 +1050,8 @@ opx_config = {
         "yellow_imaging": {"type": "constant", "sample": 0.25},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3513},# 1176NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2923},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.2623},  ## 814NVs
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.2911},  ## 631NVs 50ms
+        "yellow_charge_readout": {"type": "constant", "sample": 0.3311},  ## 631NVs 50ms
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2133}, ## 631NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2043}, ## 631NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1710}, ## 415NVs
