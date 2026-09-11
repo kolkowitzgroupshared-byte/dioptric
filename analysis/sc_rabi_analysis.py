@@ -14,13 +14,9 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import math
-import seaborn as sns
 from joblib import Parallel, delayed
-from numpy.linalg import lstsq
 from scipy.optimize import curve_fit, least_squares
-from scipy.stats import pearsonr
 
-from utils import _cloud_box as box_cloud
 from utils import data_manager as dm
 from utils import kplotlib as kpl
 from utils import widefield as widefield
@@ -600,6 +596,9 @@ if __name__ == "__main__":
     
     ##qnami array sample 1277
     file_stem = ["2026_03_28-07_59_17-qnami-nv0_2026_02_20"]  ### loop     
+
+    ##qnami array sample 631
+    file_stem = ["2026_09_08-20_08_21-qnami-nv0_2026_02_20"]  ### loop    
 
     data = dm.get_raw_data(file_stem=file_stem, load_npz=True, use_cache=False)
     nv_list = data["nv_list"]

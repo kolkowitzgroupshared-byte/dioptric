@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Spatial carrier-event analysis V7C with multi-file-per-wait appending, full-FOV support diagnostics, broad/common-mode + localized point/line decomposition, explicit spatial-resolution classification, and event-wise fixed-K morphology-null calibration.
+Spatial carrier-event analysis V10 with multi-file-per-wait appending, full-FOV support diagnostics, broad/common-mode + localized point/line decomposition, explicit spatial-resolution classification, event-wise fixed-K morphology-null calibration, and explicit event-coordinate/path visualization.
 
 WHY THIS IS A SEPARATE SCRIPT
 -----------------------------
@@ -143,6 +143,17 @@ with g_i point-like or line-like.  This separates a whole-field/common-mode
 event contribution from an additional localized/track-associated enhancement
 without replacing the original pure uniform/point/line analysis.
 
+V8 additions:
+- parallelizes original event-model fits and additive event-model fits across
+  CPU threads;
+- parallelizes trajectory bootstrap replicas and trajectory-angle null replicas;
+- adds geometry-specific point-vs-line null calibration using
+  DeltaAIC_line-point = AIC(point) - AIC(line);
+- prints the broad-term DeltaAIC versus the corresponding pure localized model;
+- applies BH, Holm, and Bonferroni corrections across the family of
+  event-wise morphology-null tests that were actually run;
+- adds a compact primary-event diagnostic table to the text summary.
+
 V7C performance note:
 - exact fixed-K morphology-null simulations are parallelized across CPU
   processes in chunks;
@@ -223,7 +234,7 @@ import importlib
 import math
 import os
 import re
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -233,6 +244,8 @@ from scipy.optimize import minimize, minimize_scalar
 from scipy.sparse import coo_matrix
 from scipy.special import logsumexp
 from scipy.spatial import ConvexHull
+
+from utils import data_manager as dm
 
 try:
     from threadpoolctl import threadpool_limits
@@ -244,13 +257,15 @@ except Exception:
 # USER CONFIGURATION
 # =============================================================================
 
-WANTED_WAITS_S = (0.0, 30.0, 60.0, 90.0)
+WANTED_WAITS_S = (0.0, 15.0, 30.0, 45.0, 60.0, 90.0)
 ALLOW_MISSING_WAITS = True
 
 # Apples-to-apples primary data selection.
 MAX_RUNS_BY_WAIT = {
     0.0: 2008,
+    15.0: None,
     30.0: None,
+    45.0: None,
     60.0: None,
     90.0: None,
 }
@@ -422,6 +437,29 @@ ADDITIVE_MORPH_NULL_LEAVE_CPUS_FREE = 1
 # This is important when using process parallelism.
 ADDITIVE_MORPH_NULL_LIMIT_BLAS_THREADS_PER_PROCESS = 1
 
+# ---------------------------------------------------------------------------
+# Additional CPU parallelism (V8)
+# ---------------------------------------------------------------------------
+#
+# The ordinary per-event spatial fits and additive fits are independent.
+# Thread-level parallelism avoids repeatedly pickling the full dataset on
+# Windows.  The heavy morphology null remains process-parallel.
+PARALLEL_EVENT_MODEL_FITS = True
+EVENT_MODEL_FIT_MAX_WORKERS = 8
+
+# Trajectory bootstrap and trajectory-angle-null replicas are also independent.
+PARALLEL_TRAJECTORY_RESAMPLING = True
+TRAJECTORY_RESAMPLING_MAX_WORKERS = 8
+
+# Geometry-specific point-vs-line calibration under the same broad-only null.
+RUN_GEOMETRY_SPECIFIC_NULL = True
+GEOMETRY_SPECIFIC_NULL_ALPHA = 0.05
+
+# Multiple-testing correction across the morphology-null tests that are
+# actually run (the resolved AIC-screened candidate family).
+APPLY_MORPHOLOGY_TEST_FAMILY_CORRECTIONS = True
+MORPHOLOGY_FAMILY_ALPHA = 0.05
+
 # 250 nulls gives a minimum attainable Monte-Carlo p of 1/251 ~= 0.00398.
 # Increase to 1000 or 5000 for publication-quality tail probabilities after
 # the candidate definition and model are frozen.
@@ -502,22 +540,177 @@ MAX_MODEL_EVENTS_PER_WAIT_PER_CUT = 50
 MAX_EVENT_MAPS_PER_WAIT = 12
 
 # ---------------------------------------------------------------------------
+# V10 event-coordinate / point-vs-line visualization
+# ---------------------------------------------------------------------------
+# V10 no longer privileges a line in the primary event figure.  For every
+# plotted event, show the raw measured NV map plus BOTH point and line hypotheses
+# (prefer the broad+local versions when available).
+PLOT_BOTH_POINT_AND_LINE_ON_EVENT_MAPS = True
+
+# Show L_eff and 2*L_eff guide contours for both point and line models.
+EVENT_MAP_POINT_RING_MULTIPLES = (1.0, 2.0)
+EVENT_MAP_LINE_BAND_MULTIPLES = (1.0, 2.0)
+
+# Plot geometry / readability.  The array pitch is ~2.6 um, so markers are kept
+# deliberately smaller than one lattice spacing on the rendered coordinate map.
+EVENT_MAP_BASE_MARKER_SIZE = 7.0
+EVENT_MAP_SWITCHED_MARKER_SIZE = 18.0
+EVENT_MAP_MODEL_MARKER_SIZE = 8.0
+
+# V10B: measured switches must stay visible on top of probability maps.
+EVENT_MAP_SWITCHED_FACE_COLOR = 'red'
+EVENT_MAP_SWITCHED_EDGE_COLOR = 'white'
+EVENT_MAP_SWITCHED_EDGE_WIDTH = 0.75
+EVENT_MAP_SWITCHED_ZORDER = 10
+EVENT_MAP_AXIS_PADDING_FRACTION = 0.06
+EVENT_MAP_FIGSIZE = (13.2, 11.0)
+
+# Label switched NVs with their NV index.  Leave False for dense events; the
+# coordinate CSV written by V10 gives exact x/y values without cluttering plots.
+EVENT_MAP_ANNOTATE_SWITCHED_NV_INDICES = False
+
+# For inferential trajectory analysis, do NOT accept the old pure-model AIC
+# label alone.  Require a resolved broad+line morphology that survives the
+# event-wise broad-only morphology null and specifically beats point geometry.
+TRAJECTORY_REQUIRE_MORPHOLOGY_NULL_SUPPORT = True
+TRAJECTORY_REQUIRE_GEOMETRY_LINE_SUPPORT = True
+
+# Write exact per-NV coordinates plus broad, point, and line model predictions
+# for the primary event maps so every plotted point can be audited numerically.
+WRITE_PRIMARY_EVENT_NV_COORDINATES = True
+
+# ---------------------------------------------------------------------------
 # Output
 # ---------------------------------------------------------------------------
 
-SAVE_OUTPUTS = False
+SAVE_OUTPUTS = True
 SHOW_FIGURES = True
+
+# Primary save backend: Dioptric data_manager.
+# One processed-analysis data file is written with dm.save_raw_data(), and
+# every figure is written with dm.save_figure() using a unique descriptive dm path.
+SAVE_DM_DATA = True
+SAVE_DM_FIGURES = True
+DM_SAVE_NAME = "spatial-carrier-analysis-v10f"
+
+# Optional legacy flat-file export.  Leave False for normal use.
+SAVE_LEGACY_CSV = False
 OUTPUT_DIR = Path("analysis_output") / "spatial_carrier_analysis"
 EVENT_MAP_DIR = OUTPUT_DIR / "event_maps"
 TRAJECTORY_DIR = OUTPUT_DIR / "trajectory"
+
+_DM_TIMESTAMP = None
+_DM_BASE_FILE_PATH = None
+_DM_USED_FIGURE_NAMES = {}
 
 
 # =============================================================================
 # GENERIC HELPERS
 # =============================================================================
 
+def _sanitize_dm_name_part(value: str) -> str:
+    """Return a filesystem-safe descriptive name component for dm output."""
+    text = str(value).strip()
+    for old, new in ((" ", "-"), ("/", "-"), ("\\", "-"), (":", "-")):
+        text = text.replace(old, new)
+    while "--" in text:
+        text = text.replace("--", "-")
+    return text.strip("-_") or "figure"
+
+
+def _append_to_file_path(file_path, suffix: str) -> Path:
+    """
+    Append a suffix *before* the extension.
+
+    Important: dm.get_file_path() returns a path ending in ``.txt``.  Appending
+    text after that extension (``name.txt-suffix``) is unsafe because
+    dm.save_figure() later calls ``with_suffix('.png')`` and would collapse all
+    such names back to ``name.png``.
+    """
+    file_path = Path(file_path)
+    suffix = _sanitize_dm_name_part(suffix)
+    return file_path.with_name(
+        f"{file_path.stem}-{suffix}{file_path.suffix}"
+    )
+
+
+def _json_safe(obj):
+    """Recursively convert NumPy objects to dm/JSON-friendly Python objects."""
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, np.generic):
+        return obj.item()
+    if isinstance(obj, Path):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {str(key): _json_safe(val) for key, val in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(val) for val in obj]
+    return obj
+
+
+def _initialize_dm_save_context():
+    """Create one timestamp/base path for V10D analysis data; figures share the timestamp but use unique names."""
+    global _DM_TIMESTAMP, _DM_BASE_FILE_PATH
+
+    if not SAVE_OUTPUTS:
+        return None
+
+    if _DM_BASE_FILE_PATH is None:
+        _DM_TIMESTAMP = dm.get_time_stamp()
+        _DM_BASE_FILE_PATH = dm.get_file_path(
+            __file__,
+            _DM_TIMESTAMP,
+            DM_SAVE_NAME,
+        )
+        print(f"[dm save] base path: {_DM_BASE_FILE_PATH}")
+
+    return _DM_BASE_FILE_PATH
+
+
+def _dm_figure_path(suffix: str):
+    """Return a unique dm path for one figure using the shared analysis timestamp."""
+    _initialize_dm_save_context()
+    if _DM_TIMESTAMP is None:
+        return None
+
+    clean_suffix = _sanitize_dm_name_part(suffix)
+    requested_name = f"{DM_SAVE_NAME}-{clean_suffix}"
+
+    # Protect against an accidental repeated suffix in the analysis code.
+    count = _DM_USED_FIGURE_NAMES.get(requested_name, 0) + 1
+    _DM_USED_FIGURE_NAMES[requested_name] = count
+    if count > 1:
+        requested_name = f"{requested_name}-{count:02d}"
+        print(
+            f"[dm save] duplicate figure suffix detected; "
+            f"using unique name: {requested_name}"
+        )
+
+    # Use dm.get_file_path directly for every figure.  This guarantees the
+    # descriptive suffix occurs before '.txt', so dm.save_figure() converts
+    # it to the corresponding unique '.png' path without overwriting others.
+    return dm.get_file_path(
+        __file__,
+        _DM_TIMESTAMP,
+        requested_name,
+    )
+
+
+def _save_figure_dm(fig, suffix: str):
+    """Save one figure through Dioptric data_manager with a unique filename."""
+    if not (SAVE_OUTPUTS and SAVE_DM_FIGURES) or fig is None:
+        return None
+
+    path = _dm_figure_path(suffix)
+    dm.save_figure(fig, path)
+    print(f"[dm save] figure: {Path(path).with_suffix('.png').name}")
+    return path
+
+
 def _write_csv(path, rows):
-    if not SAVE_OUTPUTS or not rows:
+    """Optional legacy CSV export; dm.save_raw_data is the primary backend."""
+    if not (SAVE_OUTPUTS and SAVE_LEGACY_CSV) or not rows:
         return
 
     path = Path(path)
@@ -538,10 +731,14 @@ def _write_csv(path, rows):
 
 
 def _ensure_output_dirs():
-    if SAVE_OUTPUTS:
+    # dm creates/manages its own output hierarchy.  Local directories are only
+    # needed when explicit legacy CSV export is requested.
+    if SAVE_OUTPUTS and SAVE_LEGACY_CSV:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         EVENT_MAP_DIR.mkdir(parents=True, exist_ok=True)
         TRAJECTORY_DIR.mkdir(parents=True, exist_ok=True)
+
+    _initialize_dm_save_context()
 
 
 def _safe_divide(num, den):
@@ -794,6 +991,7 @@ def _select_dataset_configs(phen):
     for target in WANTED_WAITS_S:
         physical_sources = []
         parent_labels = []
+        seen_file_stems = set()
 
         for cfg in source:
             try:
@@ -817,7 +1015,17 @@ def _select_dataset_configs(phen):
             )
 
             # Reindex sources across ALL configs at this same wait.
+            # V10 also protects against accidentally listing the identical
+            # physical acquisition twice in base.DATASETS.
             for source_cfg in expanded:
+                stem = str(source_cfg["file_stem"])
+                if stem in seen_file_stems:
+                    print(
+                        f"[dataset selection] duplicate physical acquisition "
+                        f"ignored at wait={target:g} s: {stem}"
+                    )
+                    continue
+                seen_file_stems.add(stem)
                 source_cfg["_spatial_source_ind"] = len(physical_sources)
                 physical_sources.append(source_cfg)
 
@@ -3272,6 +3480,19 @@ def _fit_event_additive_models(
         ),
         "morphology_null_supported": 0,
         "morphology_null_note": "",
+        "observed_line_vs_point_delta_AIC": np.nan,
+        "geometry_specific_kind": "none",
+        "geometry_specific_p_value": np.nan,
+        "geometry_specific_null_p05": np.nan,
+        "geometry_specific_null_p95": np.nan,
+        "geometry_specific_supported": 0,
+        "morphology_family_bh_q": np.nan,
+        "morphology_family_holm_p": np.nan,
+        "morphology_family_bonferroni_p": np.nan,
+        "morphology_wait_bh_q": np.nan,
+        "morphology_wait_holm_p": np.nan,
+        "morphology_family_reject_bh": 0,
+        "morphology_wait_reject_bh": 0,
         "additive_best_AIC": float(
             best["AIC"]
         ),
@@ -3409,6 +3630,7 @@ def _fit_additive_family_from_arrays(
             "line": line,
             "best_localized": None,
             "max_delta_AIC": np.nan,
+            "line_vs_point_delta_AIC": np.nan,
         }
 
     best_localized = min(
@@ -3421,12 +3643,21 @@ def _fit_additive_family_from_arrays(
         - best_localized["AIC"]
     )
 
+    if point is not None and line is not None:
+        # Positive => line has lower AIC than point and is therefore preferred.
+        line_vs_point_delta_AIC = float(
+            point["AIC"] - line["AIC"]
+        )
+    else:
+        line_vs_point_delta_AIC = np.nan
+
     return {
         "broad": broad,
         "point": point,
         "line": line,
         "best_localized": best_localized,
         "max_delta_AIC": max_delta_AIC,
+        "line_vs_point_delta_AIC": line_vs_point_delta_AIC,
     }
 
 
@@ -3468,6 +3699,21 @@ def _resolve_additive_morph_null_workers():
             int(
                 ADDITIVE_MORPH_NULL_NUM_SIMS
             ),
+        ),
+    )
+
+
+
+def _resolve_thread_workers(max_workers, n_tasks):
+    """Resolve a conservative thread count for independent CPU-heavy tasks."""
+    n_tasks = max(1, int(n_tasks))
+    cpu_total = int(os.cpu_count() or 1)
+    return max(
+        1,
+        min(
+            int(max_workers),
+            n_tasks,
+            max(1, cpu_total - 1),
         ),
     )
 
@@ -3544,6 +3790,11 @@ def _additive_morph_null_worker_chunk(
         np.nan,
         dtype=float,
     )
+    null_line_vs_point = np.full(
+        n_sims,
+        np.nan,
+        dtype=float,
+    )
 
     # If threadpoolctl is present, force numerical libraries to one thread per
     # process so N worker processes do not each spawn N BLAS threads.
@@ -3588,8 +3839,17 @@ def _additive_morph_null_worker_chunk(
             null_T[sim_ind] = float(
                 null_fit["max_delta_AIC"]
             )
+            null_line_vs_point[sim_ind] = float(
+                null_fit.get(
+                    "line_vs_point_delta_AIC",
+                    np.nan,
+                )
+            )
 
-    return null_T
+    return {
+        "max_delta_AIC": null_T,
+        "line_vs_point_delta_AIC": null_line_vs_point,
+    }
 
 
 
@@ -3646,6 +3906,12 @@ def _calibrate_single_additive_morphology_null(
             "null_p99": np.nan,
             "p_value": np.nan,
             "supported": False,
+            "observed_line_vs_point_delta_AIC": np.nan,
+            "geometry_specific_kind": "none",
+            "geometry_specific_p_value": np.nan,
+            "geometry_specific_null_p05": np.nan,
+            "geometry_specific_null_p95": np.nan,
+            "geometry_specific_supported": 0,
             "note": "fixed-K null not defined for K=0 or K=N",
         }
 
@@ -3659,6 +3925,12 @@ def _calibrate_single_additive_morphology_null(
     )
     T_obs = float(
         observed["max_delta_AIC"]
+    )
+    line_vs_point_obs = float(
+        observed.get(
+            "line_vs_point_delta_AIC",
+            np.nan,
+        )
     )
 
     # Broad-only probabilities used to generate the exact conditional null.
@@ -3732,16 +4004,28 @@ def _calibrate_single_additive_morphology_null(
                 )
             )
 
-        chunks = [
-            np.asarray(
-                fut.result(),
-                dtype=float,
-            )
+        chunk_results = [
+            fut.result()
             for fut in futures
         ]
 
         null_T = np.concatenate(
-            chunks
+            [
+                np.asarray(
+                    r["max_delta_AIC"],
+                    dtype=float,
+                )
+                for r in chunk_results
+            ]
+        )
+        null_line_vs_point = np.concatenate(
+            [
+                np.asarray(
+                    r["line_vs_point_delta_AIC"],
+                    dtype=float,
+                )
+                for r in chunk_results
+            ]
         )
 
     else:
@@ -3754,7 +4038,7 @@ def _calibrate_single_additive_morphology_null(
             )
         )
 
-        null_T = (
+        serial_result = (
             _additive_morph_null_worker_chunk(
                 coords,
                 p_dark,
@@ -3763,6 +4047,14 @@ def _calibrate_single_additive_morphology_null(
                 n_nulls,
                 serial_seed,
             )
+        )
+        null_T = np.asarray(
+            serial_result["max_delta_AIC"],
+            dtype=float,
+        )
+        null_line_vs_point = np.asarray(
+            serial_result["line_vs_point_delta_AIC"],
+            dtype=float,
         )
 
     finite = null_T[np.isfinite(null_T)]
@@ -3776,6 +4068,12 @@ def _calibrate_single_additive_morphology_null(
             "null_p99": np.nan,
             "p_value": np.nan,
             "supported": False,
+            "observed_line_vs_point_delta_AIC": np.nan,
+            "geometry_specific_kind": "none",
+            "geometry_specific_p_value": np.nan,
+            "geometry_specific_null_p05": np.nan,
+            "geometry_specific_null_p95": np.nan,
+            "geometry_specific_supported": 0,
             "note": "no finite morphology-null statistics",
         }
 
@@ -3786,6 +4084,79 @@ def _calibrate_single_additive_morphology_null(
         (1 + exceed)
         / (1 + finite.size)
     )
+
+    # --------------------------------------------------------------
+    # Geometry-specific point-vs-line calibration.
+    #
+    # Delta_LP = AIC(point) - AIC(line):
+    #   positive -> line preferred
+    #   negative -> point preferred
+    #
+    # This uses the SAME broad-only null realizations, so there is no
+    # additional expensive simulation pass.
+    # --------------------------------------------------------------
+    finite_lp = null_line_vs_point[
+        np.isfinite(null_line_vs_point)
+    ]
+
+    geometry_kind = "none"
+    geometry_p = np.nan
+    geometry_null_p95 = np.nan
+    geometry_null_p05 = np.nan
+    geometry_supported = False
+
+    if (
+        RUN_GEOMETRY_SPECIFIC_NULL
+        and finite_lp.size > 0
+        and np.isfinite(line_vs_point_obs)
+    ):
+        geometry_null_p95 = float(
+            np.quantile(finite_lp, 0.95)
+        )
+        geometry_null_p05 = float(
+            np.quantile(finite_lp, 0.05)
+        )
+
+        best_localized = observed.get(
+            "best_localized",
+            None,
+        )
+        best_model_name = (
+            best_localized.get("model", "")
+            if best_localized is not None
+            else ""
+        )
+
+        if best_model_name == "broad_plus_line_exp":
+            geometry_kind = "line_over_point"
+            geometry_p = float(
+                (
+                    1
+                    + np.sum(
+                        finite_lp
+                        >= line_vs_point_obs
+                    )
+                )
+                / (1 + finite_lp.size)
+            )
+        elif best_model_name == "broad_plus_point_exp":
+            geometry_kind = "point_over_line"
+            geometry_p = float(
+                (
+                    1
+                    + np.sum(
+                        finite_lp
+                        <= line_vs_point_obs
+                    )
+                )
+                / (1 + finite_lp.size)
+            )
+
+        geometry_supported = bool(
+            np.isfinite(geometry_p)
+            and geometry_p
+            <= GEOMETRY_SPECIFIC_NULL_ALPHA
+        )
 
     return {
         "num_sims": int(finite.size),
@@ -3802,6 +4173,22 @@ def _calibrate_single_additive_morphology_null(
         "p_value": p_mc,
         "supported": bool(
             p_mc <= ADDITIVE_MORPH_NULL_ALPHA
+        ),
+        "observed_line_vs_point_delta_AIC": float(
+            line_vs_point_obs
+        ),
+        "geometry_specific_kind": geometry_kind,
+        "geometry_specific_p_value": float(
+            geometry_p
+        ) if np.isfinite(geometry_p) else np.nan,
+        "geometry_specific_null_p05": float(
+            geometry_null_p05
+        ) if np.isfinite(geometry_null_p05) else np.nan,
+        "geometry_specific_null_p95": float(
+            geometry_null_p95
+        ) if np.isfinite(geometry_null_p95) else np.nan,
+        "geometry_specific_supported": int(
+            geometry_supported
         ),
         "note": (
             "exact fixed-K conditional broad-only null; "
@@ -3983,6 +4370,54 @@ def _run_additive_morphology_null_calibration(
             ] = str(
                 result["note"]
             )
+            row[
+                "observed_line_vs_point_delta_AIC"
+            ] = float(
+                result.get(
+                    "observed_line_vs_point_delta_AIC",
+                    np.nan,
+                )
+            )
+            row[
+                "geometry_specific_kind"
+            ] = str(
+                result.get(
+                    "geometry_specific_kind",
+                    "none",
+                )
+            )
+            row[
+                "geometry_specific_p_value"
+            ] = float(
+                result.get(
+                    "geometry_specific_p_value",
+                    np.nan,
+                )
+            )
+            row[
+                "geometry_specific_null_p05"
+            ] = float(
+                result.get(
+                    "geometry_specific_null_p05",
+                    np.nan,
+                )
+            )
+            row[
+                "geometry_specific_null_p95"
+            ] = float(
+                result.get(
+                    "geometry_specific_null_p95",
+                    np.nan,
+                )
+            )
+            row[
+                "geometry_specific_supported"
+            ] = int(
+                result.get(
+                    "geometry_specific_supported",
+                    0,
+                )
+            )
 
             if result["supported"]:
                 if (
@@ -4007,12 +4442,39 @@ def _run_additive_morphology_null_calibration(
                     "broad_plus_resolved_localized_not_null_significant"
                 )
 
+            broad_delta = float(
+                row.get(
+                    "AIC_improvement_vs_corresponding_pure_localized",
+                    np.nan,
+                )
+            )
+            geom_p = float(
+                row.get(
+                    "geometry_specific_p_value",
+                    np.nan,
+                )
+            )
+            geom_text = (
+                f"{geom_p:.5f}"
+                if np.isfinite(geom_p)
+                else "n/a"
+            )
+            broad_text = (
+                f"{broad_delta:.3f}"
+                if np.isfinite(broad_delta)
+                else "n/a"
+            )
+
             print(
                 f"    Tobs="
                 f"{result['observed_max_delta_AIC']:.3f}; "
                 f"null95={result['null_p95']:.3f}; "
-                f"p={result['p_value']:.5f}; "
-                f"supported={result['supported']}",
+                f"p_morph={result['p_value']:.5f}; "
+                f"supported={result['supported']}; "
+                f"DeltaAIC(line-point)="
+                f"{row['observed_line_vs_point_delta_AIC']:.3f}; "
+                f"p_geometry={geom_text}; "
+                f"broad-term DeltaAIC vs pure-local={broad_text}",
                 flush=True,
             )
 
@@ -4029,6 +4491,208 @@ def _run_additive_morphology_null_calibration(
                 cancel_futures=False,
             )
 
+
+
+
+def _bh_adjust(pvals):
+    """Benjamini-Hochberg adjusted q-values, preserving original order."""
+    p = np.asarray(pvals, dtype=float)
+    out = np.full(p.shape, np.nan, dtype=float)
+    finite_inds = np.where(np.isfinite(p))[0]
+    if finite_inds.size == 0:
+        return out
+
+    pv = p[finite_inds]
+    order = np.argsort(pv)
+    ranked = pv[order]
+    m = len(ranked)
+
+    q_ranked = ranked * m / np.arange(1, m + 1)
+    q_ranked = np.minimum.accumulate(q_ranked[::-1])[::-1]
+    q_ranked = np.clip(q_ranked, 0.0, 1.0)
+
+    inv = np.empty_like(order)
+    inv[order] = np.arange(m)
+    out[finite_inds] = q_ranked[inv]
+    return out
+
+
+def _holm_adjust(pvals):
+    """Holm family-wise adjusted p-values, preserving original order."""
+    p = np.asarray(pvals, dtype=float)
+    out = np.full(p.shape, np.nan, dtype=float)
+    finite_inds = np.where(np.isfinite(p))[0]
+    if finite_inds.size == 0:
+        return out
+
+    pv = p[finite_inds]
+    order = np.argsort(pv)
+    ranked = pv[order]
+    m = len(ranked)
+
+    adj_ranked = (m - np.arange(m)) * ranked
+    adj_ranked = np.maximum.accumulate(adj_ranked)
+    adj_ranked = np.clip(adj_ranked, 0.0, 1.0)
+
+    inv = np.empty_like(order)
+    inv[order] = np.arange(m)
+    out[finite_inds] = adj_ranked[inv]
+    return out
+
+
+def _apply_morphology_family_corrections(
+    additive_summary_rows,
+):
+    """
+    Correct the event-wise morphology-null p-values across the tests that were
+    actually performed.
+
+    Important:
+      this is a correction across the RESOLVED AIC-SCREENED null-tested family.
+      It does not magically remove the earlier AIC/resolution screening step.
+      A fully prospective all-candidate family null would be more expensive.
+    """
+    if (
+        not APPLY_MORPHOLOGY_TEST_FAMILY_CORRECTIONS
+        or not additive_summary_rows
+    ):
+        return
+
+    tested = [
+        r
+        for r in additive_summary_rows
+        if int(
+            r.get(
+                "morphology_null_num_sims",
+                0,
+            )
+        ) > 0
+        and np.isfinite(
+            float(
+                r.get(
+                    "morphology_null_p_value",
+                    np.nan,
+                )
+            )
+        )
+    ]
+
+    if not tested:
+        return
+
+    p = np.asarray(
+        [
+            float(
+                r["morphology_null_p_value"]
+            )
+            for r in tested
+        ],
+        dtype=float,
+    )
+
+    q_bh = _bh_adjust(p)
+    p_holm = _holm_adjust(p)
+    p_bonf = np.minimum(
+        1.0,
+        p * len(p),
+    )
+
+    for row, q, ph, pb in zip(
+        tested,
+        q_bh,
+        p_holm,
+        p_bonf,
+    ):
+        row["morphology_family_bh_q"] = float(q)
+        row["morphology_family_holm_p"] = float(ph)
+        row[
+            "morphology_family_bonferroni_p"
+        ] = float(pb)
+        row[
+            "morphology_family_reject_bh"
+        ] = int(
+            np.isfinite(q)
+            and q
+            <= MORPHOLOGY_FAMILY_ALPHA
+        )
+
+    # Also report within-wait corrections because 60 s and 90 s are physically
+    # distinct exposure conditions.
+    waits = sorted(
+        {
+            float(r["dark_wait_s"])
+            for r in tested
+        }
+    )
+
+    for wait_s in waits:
+        sub = [
+            r
+            for r in tested
+            if abs(
+                float(r["dark_wait_s"])
+                - wait_s
+            ) < 1e-12
+        ]
+
+        p_sub = np.asarray(
+            [
+                float(
+                    r["morphology_null_p_value"]
+                )
+                for r in sub
+            ],
+            dtype=float,
+        )
+        q_sub = _bh_adjust(p_sub)
+        h_sub = _holm_adjust(p_sub)
+
+        for row, q, ph in zip(
+            sub,
+            q_sub,
+            h_sub,
+        ):
+            row[
+                "morphology_wait_bh_q"
+            ] = float(q)
+            row[
+                "morphology_wait_holm_p"
+            ] = float(ph)
+            row[
+                "morphology_wait_reject_bh"
+            ] = int(
+                np.isfinite(q)
+                and q
+                <= MORPHOLOGY_FAMILY_ALPHA
+            )
+
+    print(
+        f"[morphology family correction] "
+        f"tested family n={len(tested)}; "
+        f"BH q<={MORPHOLOGY_FAMILY_ALPHA:g}: "
+        f"{sum(int(r['morphology_family_reject_bh']) for r in tested)}/{len(tested)}",
+        flush=True,
+    )
+
+
+
+def _fit_additive_event_seeded(
+    ds,
+    run_ind,
+    cut,
+    seed,
+    original_rows,
+):
+    local_rng = np.random.default_rng(
+        int(seed)
+    )
+    return _fit_event_additive_models(
+        ds,
+        int(run_ind),
+        cut,
+        local_rng,
+        original_fit_rows=original_rows,
+    )
 
 
 def _fit_additive_models_for_cut(
@@ -4058,35 +4722,20 @@ def _fit_additive_models_for_cut(
             )
         ]
 
-    fit_rows = []
-    summary_rows = []
+    n_tasks = len(selected)
+    seeds = rng.integers(
+        0,
+        np.iinfo(np.uint32).max,
+        size=n_tasks,
+        dtype=np.uint32,
+    )
 
-    for idx, run_ind in enumerate(
-        selected,
-        start=1,
-    ):
-        identity = _source_identity_for_run(
-            ds,
-            int(run_ind),
-        )
+    original_by_run = {}
 
-        print(
-            f"[additive model fit] "
-            f"wait={ds['wait_s']:g}s "
-            f"cut={cut:.3f} "
-            f"event {idx}/{len(selected)} "
-            f"global_run="
-            f"{ds['original_run'][run_ind]} "
-            f"source="
-            f"{identity['source_file_ind']} "
-            f"local_run="
-            f"{identity['source_local_run']} "
-            f"Lambda="
-            f"{ds['lambda_h'][run_ind]:.4f}",
-            flush=True,
-        )
-
-        original_rows = [
+    for run_ind in selected:
+        original_by_run[
+            int(run_ind)
+        ] = [
             r
             for r in original_model_fit_rows
             if abs(
@@ -4102,22 +4751,173 @@ def _fit_additive_models_for_cut(
             ) == int(run_ind)
         ]
 
-        result = _fit_event_additive_models(
-            ds,
-            int(run_ind),
-            cut,
-            rng,
-            original_fit_rows=original_rows,
+    workers = (
+        _resolve_thread_workers(
+            EVENT_MODEL_FIT_MAX_WORKERS,
+            n_tasks,
         )
+        if PARALLEL_EVENT_MODEL_FITS
+        else 1
+    )
 
+    print(
+        f"[additive fit batch] wait={ds['wait_s']:g}s "
+        f"cut={cut:.3f}; events={n_tasks}; workers={workers}",
+        flush=True,
+    )
+
+    results = [None] * n_tasks
+
+    if workers > 1:
+        with ThreadPoolExecutor(
+            max_workers=workers
+        ) as pool:
+            future_map = {}
+
+            for idx, (
+                run_ind,
+                seed,
+            ) in enumerate(
+                zip(selected, seeds)
+            ):
+                fut = pool.submit(
+                    _fit_additive_event_seeded,
+                    ds,
+                    int(run_ind),
+                    cut,
+                    int(seed),
+                    original_by_run[
+                        int(run_ind)
+                    ],
+                )
+                future_map[fut] = (
+                    idx,
+                    int(run_ind),
+                )
+
+            for fut in as_completed(
+                future_map
+            ):
+                idx, run_ind = (
+                    future_map[fut]
+                )
+                results[idx] = fut.result()
+
+                identity = (
+                    _source_identity_for_run(
+                        ds,
+                        run_ind,
+                    )
+                )
+                print(
+                    f"[additive fit done] "
+                    f"wait={ds['wait_s']:g}s "
+                    f"cut={cut:.3f} "
+                    f"event {idx+1}/{n_tasks} "
+                    f"global_run="
+                    f"{ds['original_run'][run_ind]} "
+                    f"source="
+                    f"{identity['source_file_ind']} "
+                    f"Lambda="
+                    f"{ds['lambda_h'][run_ind]:.4f}",
+                    flush=True,
+                )
+    else:
+        for idx, (
+            run_ind,
+            seed,
+        ) in enumerate(
+            zip(selected, seeds)
+        ):
+            results[idx] = (
+                _fit_additive_event_seeded(
+                    ds,
+                    int(run_ind),
+                    cut,
+                    int(seed),
+                    original_by_run[
+                        int(run_ind)
+                    ],
+                )
+            )
+
+    fit_rows = []
+    summary_rows = []
+
+    for result in results:
         if result is None:
             continue
-
         rows, summary = result
         fit_rows.extend(rows)
         summary_rows.append(summary)
 
     return fit_rows, summary_rows
+
+
+def _scatter_observed_switched_nvs(
+    ax,
+    coords,
+    switched_mask,
+    *,
+    label=True,
+    size=None,
+):
+    """Draw the *measured* NV- -> NV0 switches for a DATA panel only.
+
+    The main event figure deliberately calls this helper only for Panel A.
+    To make the measured switches impossible to confuse with model probability
+    markers, each switched NV is drawn as a large filled red circle with a black
+    ``x`` on top.
+    """
+    coords = np.asarray(coords, dtype=float)
+    switched_mask = np.asarray(switched_mask, dtype=bool).reshape(-1)
+
+    if coords.ndim != 2 or coords.shape[1] != 2:
+        raise ValueError(f"Expected coords shape (N, 2); got {coords.shape}.")
+    if switched_mask.size != len(coords):
+        raise ValueError(
+            f"Switched-mask length {switched_mask.size} does not match "
+            f"coordinate count {len(coords)}."
+        )
+
+    n_switched = int(np.count_nonzero(switched_mask))
+    if n_switched == 0:
+        print("[event map warning] measured switched mask contains zero NVs", flush=True)
+        return None
+
+    switched_xy = coords[switched_mask]
+    marker_size = (
+        max(38.0, 2.2 * float(EVENT_MAP_SWITCHED_MARKER_SIZE))
+        if size is None
+        else float(size)
+    )
+
+    # Filled circle: makes the charge-state changes immediately visible.
+    circles = ax.scatter(
+        switched_xy[:, 0],
+        switched_xy[:, 1],
+        s=marker_size,
+        marker="o",
+        facecolors="red",
+        edgecolors="white",
+        linewidths=1.0,
+        zorder=50,
+        label=(f"measured NV- -> NV0 (n={n_switched})" if label else None),
+    )
+
+    # Black x overlay: remains visible on both light and colored backgrounds.
+    ax.scatter(
+        switched_xy[:, 0],
+        switched_xy[:, 1],
+        s=0.58 * marker_size,
+        marker="x",
+        c="black",
+        linewidths=0.8,
+        zorder=51,
+        label=None,
+    )
+
+    return circles
 
 
 def _plot_additive_event_map(
@@ -4127,256 +4927,141 @@ def _plot_additive_event_map(
     fit_rows,
 ):
     """
-    For a decisively broad+localized event, show:
-      1) observed switched NVs;
-      2) fitted LOCAL hazard enhancement;
-      3) fitted TOTAL conversion probability.
+    V10 best-additive-model diagnostic with square coordinate panels.
 
-    This is deliberately coordinate-only; no image pixels are loaded.
+    A = measured binary event.
+    B = fitted local hazard only.
+    C = fitted total broad+local switching probability.
+    D = fitted parameters / decomposition.
     """
-    if summary[
-        "additive_classification"
-    ] not in (
-        "broad_plus_resolved_point_aic_preferred",
-        "broad_plus_resolved_line_aic_preferred",
-        "broad_plus_resolved_point_null_supported",
-        "broad_plus_resolved_line_null_supported",
-        "broad_plus_resolved_localized_not_null_significant",
+    if summary['additive_classification'] not in (
+        'broad_plus_resolved_point_aic_preferred',
+        'broad_plus_resolved_line_aic_preferred',
+        'broad_plus_resolved_point_null_supported',
+        'broad_plus_resolved_line_null_supported',
+        'broad_plus_resolved_localized_not_null_significant',
     ):
         return None
 
-    best_model = summary[
-        "additive_best_model"
-    ]
-
-    best_row = next(
-        (
-            r
-            for r in fit_rows
-            if r["model"] == best_model
-        ),
-        None,
-    )
-
+    best_model = summary['additive_best_model']
+    best_row = next((r for r in fit_rows if r['model'] == best_model), None)
     if best_row is None:
         return None
 
-    eligible = ds["evaluable"][:, run_ind]
-    coords = ds["coords_um"][eligible]
-    y = ds["loss"][:, run_ind][
-        eligible
-    ].astype(bool)
-    p_dark = ds["p_i_dark"][
-        eligible
-    ]
+    eligible = np.asarray(ds['evaluable'][:, run_ind], dtype=bool)
+    coords = np.asarray(ds['coords_um'][eligible], dtype=float)
+    y = np.asarray(ds['loss'][:, run_ind][eligible], dtype=bool)
+    p_dark = np.asarray(ds['p_i_dark'][eligible], dtype=float)
 
-    p_total, global_lambda, local_lambda = (
-        _additive_probability_and_components(
-            coords,
-            p_dark,
-            best_row,
-        )
+    p_total, global_lambda, local_lambda = _additive_probability_and_components(
+        coords, p_dark, best_row
     )
 
     fig, axes = plt.subplots(
-        1,
-        3,
-        figsize=(16.2, 5.2),
+        2, 2,
+        figsize=EVENT_MAP_FIGSIZE,
+        constrained_layout=True,
     )
 
-    ax = axes[0]
+    ax = axes[0, 0]
     ax.scatter(
-        coords[:, 0],
-        coords[:, 1],
-        s=15,
-        alpha=0.25,
+        coords[:, 0], coords[:, 1],
+        s=EVENT_MAP_BASE_MARKER_SIZE,
+        c="0.70",
+        alpha=0.55,
+        edgecolors="none",
         label="evaluable NVs",
+        zorder=1,
     )
-    ax.scatter(
-        coords[y, 0],
-        coords[y, 1],
-        s=48,
-        marker="o",
-        facecolors="none",
-        linewidths=1.3,
-        label="NV- -> NV0",
-    )
-    ax.set_title("Observed event")
-    ax.legend(
-        fontsize=7,
-        loc="best",
-    )
+    k_map = int(np.count_nonzero(y))
+    _scatter_observed_switched_nvs(ax, coords, y, label=True)
+    ax.set_title(f'A. MEASURED event — {k_map} NV- -> NV0 switches')
+    ax.legend(fontsize=7, loc='best')
+    _apply_coordinate_axis_style(ax, coords)
 
-    ax = axes[1]
+    ax = axes[0, 1]
     sc_local = ax.scatter(
-        coords[:, 0],
-        coords[:, 1],
+        coords[:, 0], coords[:, 1],
         c=local_lambda,
-        s=24,
+        s=EVENT_MAP_MODEL_MARKER_SIZE,
     )
-    ax.scatter(
-        coords[y, 0],
-        coords[y, 1],
-        s=54,
-        marker="o",
-        facecolors="none",
-        linewidths=1.0,
-    )
-    cb = fig.colorbar(
-        sc_local,
-        ax=ax,
-        fraction=0.046,
-        pad=0.04,
-    )
-    cb.set_label(
-        "fitted local hazard"
-    )
-    ax.set_title(
-        "Localized / track-associated component"
-    )
+    cb = fig.colorbar(sc_local, ax=ax, fraction=0.046, pad=0.025)
+    cb.set_label('fitted localized hazard')
+    ax.set_title('B. LOCAL component only — model')
+    _apply_coordinate_axis_style(ax, coords)
 
-    ax = axes[2]
+    ax = axes[1, 0]
+    pmin = float(np.nanmin(p_total))
+    pmax = float(np.nanmax(p_total))
+    if pmax <= pmin:
+        pmax = pmin + 1e-12
     sc_total = ax.scatter(
-        coords[:, 0],
-        coords[:, 1],
+        coords[:, 0], coords[:, 1],
         c=p_total,
-        s=24,
+        s=EVENT_MAP_MODEL_MARKER_SIZE,
+        vmin=pmin,
+        vmax=pmax,
     )
-    ax.scatter(
-        coords[y, 0],
-        coords[y, 1],
-        s=54,
-        marker="o",
-        facecolors="none",
-        linewidths=1.0,
+    cb = fig.colorbar(sc_total, ax=ax, fraction=0.046, pad=0.025)
+    cb.set_label('P(NV- -> NV0 | broad+local model)')
+    ax.set_title('C. TOTAL broad + local prediction — model')
+    _apply_coordinate_axis_style(ax, coords)
+
+    # Put the fitted geometry on model panels only, never on raw panel A.
+    if best_model == 'broad_plus_point_exp':
+        _overlay_point_and_rings(axes[0, 1], best_row, label_prefix='best point center')
+        _overlay_point_and_rings(axes[1, 0], best_row, label_prefix='best point center')
+    elif best_model == 'broad_plus_line_exp':
+        _overlay_line_and_bands(axes[0, 1], coords, best_row, label_prefix='best line axis')
+        _overlay_line_and_bands(axes[1, 0], coords, best_row, label_prefix='best line axis')
+
+    ax = axes[1, 1]
+    ax.axis('off')
+    fg = float(summary.get('global_fraction_of_expected_excess', np.nan))
+    fl = float(summary.get('local_fraction_of_expected_excess', np.nan))
+    text = (
+        'D. BEST ADDITIVE MODEL\n\n'
+        f'model: {best_model}\n'
+        f'class: {summary["additive_classification"]}\n'
+        f'A_global: {float(summary.get("best_A_global", np.nan)):.5g}\n'
+        f'A_local:  {float(summary.get("best_A_local", np.nan)):.5g}\n'
+        f'L_eff:    {float(summary.get("best_L_eff_um", np.nan)):.3f} um\n'
+        f'dAIC vs broad-only: {float(summary.get("additive_AIC_improvement_vs_broad_only", np.nan)):.3f}\n'
+        f'broad/local expected excess: {100.0*fg:.1f}% / {100.0*fl:.1f}%\n'
+        f'morphology-null p: {float(summary.get("morphology_null_p_value", np.nan)):.5g}\n'
+        f'geometry-specific p: {float(summary.get("geometry_specific_p_value", np.nan)):.5g}\n'
     )
-    cb = fig.colorbar(
-        sc_total,
-        ax=ax,
-        fraction=0.046,
-        pad=0.04,
+    if best_model == 'broad_plus_point_exp':
+        text += (
+            f'point center: ({float(summary.get("best_x0_um", np.nan)):.2f}, '
+            f'{float(summary.get("best_y0_um", np.nan)):.2f}) um\n'
+        )
+    elif best_model == 'broad_plus_line_exp':
+        text += (
+            f'line axis: {float(summary.get("best_track_angle_deg_mod180", np.nan)):.2f} deg\n'
+            f'line offset: {float(summary.get("best_offset_um", np.nan)):.2f} um\n'
+        )
+    ax.text(
+        0.02, 0.98, text,
+        ha='left', va='top', transform=ax.transAxes,
+        fontsize=8.5, family='monospace', linespacing=1.35,
     )
-    cb.set_label(
-        "P(NV- -> NV0 | fitted model)"
-    )
-    ax.set_title(
-        "Broad + local total prediction"
-    )
-
-    # Overlay fitted geometry on all panels.
-    if (
-        best_model
-        == "broad_plus_point_exp"
-    ):
-        for ax in axes:
-            ax.scatter(
-                [best_row["x0_um"]],
-                [best_row["y0_um"]],
-                marker="x",
-                s=80,
-                linewidths=1.8,
-            )
-
-    elif (
-        best_model
-        == "broad_plus_line_exp"
-    ):
-        theta = float(
-            best_row["theta_rad"]
-        )
-        offset = float(
-            best_row["offset_um"]
-        )
-
-        center = np.mean(
-            coords,
-            axis=0,
-        )
-        tangent = np.array(
-            [
-                -math.sin(theta),
-                math.cos(theta),
-            ]
-        )
-        normal = np.array(
-            [
-                math.cos(theta),
-                math.sin(theta),
-            ]
-        )
-        line_center = (
-            center
-            + offset * normal
-        )
-        span = max(
-            np.ptp(coords[:, 0]),
-            np.ptp(coords[:, 1]),
-        )
-
-        p1 = (
-            line_center
-            - 1.2 * span * tangent
-        )
-        p2 = (
-            line_center
-            + 1.2 * span * tangent
-        )
-
-        for ax in axes:
-            ax.plot(
-                [p1[0], p2[0]],
-                [p1[1], p2[1]],
-                linestyle="--",
-                linewidth=1.4,
-            )
-
-    for ax in axes:
-        ax.set_aspect(
-            "equal",
-            adjustable="box",
-        )
-        ax.set_xlabel("x (um)")
-        ax.set_ylabel("y (um)")
-
-    fg = summary[
-        "global_fraction_of_expected_excess"
-    ]
-    fl = summary[
-        "local_fraction_of_expected_excess"
-    ]
 
     fig.suptitle(
-        f"{ds['wait_s']:g} s | "
-        f"run {int(ds['original_run'][run_ind])} | "
-        f"Lambda={ds['lambda_h'][run_ind]:.4f} | "
-        f"{summary['additive_classification']}\\n"
-        f"expected-excess fractions: "
-        f"broad={100.0*fg:.1f}%  "
-        f"local={100.0*fl:.1f}% | "
-        f"L_eff="
-        f"{summary['best_L_eff_um']:.1f} um | "
-        f"dAIC vs broad-only="
-        f"{summary['additive_AIC_improvement_vs_broad_only']:.2f}"
+        f"{ds['wait_s']:g} s | run {int(ds['original_run'][run_ind])} | "
+        f"Lambda={float(ds['lambda_h'][run_ind]):.4f} | best additive={best_model}",
+        fontsize=11,
     )
 
-    # tight_layout intentionally disabled (can conflict with these multi-axis figures)
-    if SAVE_OUTPUTS:
-        fig.savefig(
-            EVENT_MAP_DIR
-            / (
-                f"additive_broad_local_"
-                f"{ds['wait_s']:g}s_"
-                f"run_"
-                f"{int(ds['original_run'][run_ind]):04d}.png"
-            ),
-            dpi=190,
-            bbox_inches="tight",
-        )
+    _save_figure_dm(
+        fig,
+        f"additive-broad-local-{ds['wait_s']:g}s-"
+        f"run-{int(ds['original_run'][run_ind]):04d}",
+    )
 
     if CLOSE_EVENT_MAPS_IMMEDIATELY:
         plt.close(fig)
         return None
-
     return fig
 
 
@@ -4421,103 +5106,504 @@ def _model_probability_map(ds, run_ind, model_row):
     return eligible, p
 
 
-def _plot_event_map(ds, run_ind, summary, model_rows):
-    eligible = ds["evaluable"][:, run_ind]
-    lost = ds["loss"][:, run_ind]
-    coords = ds["coords_um"]
+def _square_coordinate_limits(coords, pad_fraction=None):
+    """Square x/y limits so one micron has the same visual scale on every panel."""
+    coords = np.asarray(coords, dtype=float)
+    if coords.size == 0:
+        return (-1.0, 1.0), (-1.0, 1.0)
 
-    best_row = next(
-        row for row in model_rows
-        if row["model"] == summary["best_model"]
+    xmin, ymin = np.nanmin(coords, axis=0)
+    xmax, ymax = np.nanmax(coords, axis=0)
+    cx = 0.5 * (xmin + xmax)
+    cy = 0.5 * (ymin + ymax)
+    span = max(float(xmax - xmin), float(ymax - ymin), 1.0)
+    if pad_fraction is None:
+        pad_fraction = EVENT_MAP_AXIS_PADDING_FRACTION
+    half = 0.5 * span * (1.0 + 2.0 * float(pad_fraction))
+    return (cx - half, cx + half), (cy - half, cy + half)
+
+
+def _apply_coordinate_axis_style(ax, coords):
+    """Apply identical square limits and true equal-coordinate aspect."""
+    xlim, ylim = _square_coordinate_limits(coords)
+    ax.set_xlim(*xlim)
+    ax.set_ylim(*ylim)
+    ax.set_aspect('equal', adjustable='box')
+    ax.set_box_aspect(1)
+    ax.set_xlabel('x (um)')
+    ax.set_ylabel('y (um)')
+
+
+def _line_axis_geometry(coords, theta, offset, span_scale=1.10):
+    """Return a convenient 2D representation of the fitted projected line."""
+    coords = np.asarray(coords, dtype=float)
+    theta = float(theta)
+    offset = float(offset)
+
+    center = np.mean(coords, axis=0)
+    tangent = np.array([-math.sin(theta), math.cos(theta)], dtype=float)
+    normal = np.array([math.cos(theta), math.sin(theta)], dtype=float)
+    line_center = center + offset * normal
+
+    span = span_scale * max(
+        float(np.ptp(coords[:, 0])) if len(coords) else 0.0,
+        float(np.ptp(coords[:, 1])) if len(coords) else 0.0,
+        25.0,
+    )
+    p1 = line_center - span * tangent
+    p2 = line_center + span * tangent
+    return line_center, tangent, normal, p1, p2
+
+
+def _overlay_line_and_bands(ax, coords, line_row, *, label_prefix='line fit'):
+    """
+    Overlay the fitted projected line and transverse L_eff guide bands.
+
+    IMPORTANT: this is a MODEL FIT, not a directly observed particle track.
+    """
+    if line_row is None:
+        return
+
+    theta = float(line_row['theta_rad'])
+    offset = float(line_row['offset_um'])
+    L_eff = float(line_row.get('L_eff_um', np.nan))
+
+    line_center, tangent, normal, p1, p2 = _line_axis_geometry(
+        coords, theta, offset
     )
 
-    fig, ax = plt.subplots(figsize=(8.0, 6.7))
+    ax.plot(
+        [p1[0], p2[0]], [p1[1], p2[1]],
+        linestyle='--', linewidth=1.45, label=label_prefix,
+    )
+
+    if np.isfinite(L_eff) and L_eff > 0:
+        for mult in EVENT_MAP_LINE_BAND_MULTIPLES:
+            mult = float(mult)
+            for sign in (-1.0, 1.0):
+                shift = sign * mult * L_eff * normal
+                q1 = p1 + shift
+                q2 = p2 + shift
+                ax.plot(
+                    [q1[0], q2[0]], [q1[1], q2[1]],
+                    linestyle=':' if mult <= 1.0 else '-.',
+                    linewidth=0.65,
+                    alpha=0.50 if mult <= 1.0 else 0.30,
+                )
 
     ax.scatter(
-        coords[eligible, 0],
-        coords[eligible, 1],
-        s=16,
-        alpha=0.28,
-        label="evaluable NVs",
+        [line_center[0]], [line_center[1]],
+        marker='x', s=34, linewidths=1.1, label='line anchor',
     )
+
+
+def _overlay_point_and_rings(ax, point_row, *, label_prefix='point fit'):
+    """Overlay fitted point center and L_eff / 2L_eff guide rings."""
+    if point_row is None:
+        return
+
+    x0 = float(point_row['x0_um'])
+    y0 = float(point_row['y0_um'])
+    L_eff = float(point_row.get('L_eff_um', np.nan))
 
     ax.scatter(
-        coords[lost, 0],
-        coords[lost, 1],
-        s=44,
-        marker="o",
-        facecolors="none",
-        linewidths=1.4,
-        label="NV- -> NV0",
+        [x0], [y0], marker='x', s=38, linewidths=1.2,
+        label=label_prefix,
     )
 
-    if summary["best_model"] == "point_exp":
-        ax.scatter(
-            [best_row["x0_um"]],
-            [best_row["y0_um"]],
-            marker="x",
-            s=90,
-            linewidths=2.0,
-            label="best point source",
+    if np.isfinite(L_eff) and L_eff > 0:
+        phi = np.linspace(0.0, 2.0 * math.pi, 240)
+        for mult in EVENT_MAP_POINT_RING_MULTIPLES:
+            r = float(mult) * L_eff
+            ax.plot(
+                x0 + r * np.cos(phi),
+                y0 + r * np.sin(phi),
+                linestyle=':' if float(mult) <= 1.0 else '-.',
+                linewidth=0.65,
+                alpha=0.50 if float(mult) <= 1.0 else 0.30,
+            )
+
+
+def _line_probability_from_fit_row(coords, p_dark, line_row):
+    """Return total p, total Lambda, and localized line Lambda for pure/additive line fits."""
+    if line_row is None:
+        n = len(coords)
+        nan = np.full(n, np.nan, dtype=float)
+        return nan.copy(), nan.copy(), nan.copy()
+
+    theta = float(line_row['theta_rad'])
+    offset = float(line_row['offset_um'])
+    local_lambda = _line_lambda(
+        coords,
+        float(line_row.get('A_local', line_row.get('A', np.nan))),
+        float(line_row['L_eff_um']),
+        theta,
+        offset,
+    )
+
+    if str(line_row.get('model', '')) == 'broad_plus_line_exp':
+        total_lambda = float(line_row.get('A_global', 0.0)) + local_lambda
+    else:
+        total_lambda = local_lambda
+
+    p_total = _event_probability_from_lambda(p_dark, total_lambda)
+    return p_total, total_lambda, local_lambda
+
+
+def _point_probability_from_fit_row(coords, p_dark, point_row):
+    """Return total p, total Lambda, local point Lambda, and radius for pure/additive point fits."""
+    if point_row is None:
+        n = len(coords)
+        nan = np.full(n, np.nan, dtype=float)
+        return nan.copy(), nan.copy(), nan.copy(), nan.copy()
+
+    x0 = float(point_row['x0_um'])
+    y0 = float(point_row['y0_um'])
+    local_lambda = _point_lambda(
+        coords,
+        float(point_row.get('A_local', point_row.get('A', np.nan))),
+        x0,
+        y0,
+        float(point_row['L_eff_um']),
+    )
+
+    if str(point_row.get('model', '')) == 'broad_plus_point_exp':
+        total_lambda = float(point_row.get('A_global', 0.0)) + local_lambda
+    else:
+        total_lambda = local_lambda
+
+    p_total = _event_probability_from_lambda(p_dark, total_lambda)
+    radius = np.sqrt((coords[:, 0] - x0) ** 2 + (coords[:, 1] - y0) ** 2)
+    return p_total, total_lambda, local_lambda, radius
+
+
+def _broad_probability_from_fit_row(p_dark, broad_row):
+    if broad_row is None:
+        return np.full(len(p_dark), np.nan, dtype=float)
+    A0 = float(broad_row.get('A_global', broad_row.get('A', np.nan)))
+    lam = np.full(len(p_dark), A0, dtype=float)
+    return _event_probability_from_lambda(p_dark, lam)
+
+
+def _model_row_text(row, broad_aic=None):
+    """Compact parameter summary for the model-comparison panel."""
+    if row is None:
+        return 'not fitted'
+
+    model = str(row.get('model', ''))
+    aic = float(row.get('AIC', np.nan))
+    bic = float(row.get('BIC', np.nan))
+    if broad_aic is not None and np.isfinite(broad_aic) and np.isfinite(aic):
+        d = broad_aic - aic
+        delta_txt = f', dAIC_vs_broad={d:.2f}'
+    else:
+        delta_txt = ''
+
+    if model == 'uniform':
+        return f'A={float(row.get("A", np.nan)):.4g}, AIC={aic:.2f}, BIC={bic:.2f}'
+
+    if 'point' in model:
+        return (
+            f'A_global={float(row.get("A_global", 0.0)):.4g}, '
+            f'A_local={float(row.get("A_local", row.get("A", np.nan))):.4g}, '
+            f'L={float(row.get("L_eff_um", np.nan)):.2f} um\n'
+            f'center=({float(row.get("x0_um", np.nan)):.2f}, '
+            f'{float(row.get("y0_um", np.nan)):.2f}) um, '
+            f'AIC={aic:.2f}, BIC={bic:.2f}{delta_txt}'
         )
 
-    elif summary["best_model"] == "line_exp_proxy":
-        theta = float(best_row["theta_rad"])
-        offset = float(best_row["offset_um"])
-
-        center = np.mean(coords[eligible], axis=0)
-        tangent = np.array([-math.sin(theta), math.cos(theta)])
-        normal = np.array([math.cos(theta), math.sin(theta)])
-        line_center = center + offset * normal
-
-        span = max(
-            np.ptp(coords[eligible, 0]),
-            np.ptp(coords[eligible, 1]),
-        )
-        p1 = line_center - 1.2 * span * tangent
-        p2 = line_center + 1.2 * span * tangent
-
-        ax.plot(
-            [p1[0], p2[0]],
-            [p1[1], p2[1]],
-            linestyle="--",
-            linewidth=1.4,
-            label="best line proxy",
+    if 'line' in model:
+        theta = float(row.get('theta_rad', np.nan))
+        angle = math.degrees(_line_track_angle_from_normal(theta)) if np.isfinite(theta) else np.nan
+        return (
+            f'A_global={float(row.get("A_global", 0.0)):.4g}, '
+            f'A_local={float(row.get("A_local", row.get("A", np.nan))):.4g}, '
+            f'L={float(row.get("L_eff_um", np.nan)):.2f} um\n'
+            f'axis={angle:.2f} deg, offset={float(row.get("offset_um", np.nan)):.2f} um, '
+            f'AIC={aic:.2f}, BIC={bic:.2f}{delta_txt}'
         )
 
-    ax.set_aspect("equal", adjustable="box")
-    ax.set_xlabel("x (um)")
-    ax.set_ylabel("y (um)")
+    return f'AIC={aic:.2f}, BIC={bic:.2f}'
+
+
+def _primary_event_coordinate_rows(ds, run_ind, broad_row, point_row, line_row):
+    """Exact per-NV coordinates and BOTH point/line model predictions used by V10."""
+    eligible = np.asarray(ds['evaluable'][:, run_ind], dtype=bool)
+    inds = np.where(eligible)[0]
+    coords = np.asarray(ds['coords_um'][inds], dtype=float)
+    lost = np.asarray(ds['loss'][:, run_ind][inds], dtype=bool)
+    p_dark = np.asarray(ds['p_i_dark'][inds], dtype=float)
+
+    p_broad = _broad_probability_from_fit_row(p_dark, broad_row)
+    p_point, lam_point, local_point, radius = _point_probability_from_fit_row(
+        coords, p_dark, point_row
+    )
+    p_line, lam_line, local_line = _line_probability_from_fit_row(
+        coords, p_dark, line_row
+    )
+
+    if line_row is not None:
+        _, d_perp_signed = _track_coordinates(
+            coords, float(line_row['theta_rad']), float(line_row['offset_um'])
+        )
+    else:
+        d_perp_signed = np.full(len(coords), np.nan, dtype=float)
 
     identity = _source_identity_for_run(ds, run_ind)
+    rows = []
+    for j, nv_ind in enumerate(inds):
+        rows.append({
+            'dataset': ds['label'],
+            'dark_wait_s': float(ds['wait_s']),
+            'valid_run_ind': int(run_ind),
+            'original_run': int(ds['original_run'][run_ind]),
+            **identity,
+            'Lambda_h': float(ds['lambda_h'][run_ind]),
+            'K_loss': int(ds['K'][run_ind]),
+            'nv_index': int(nv_ind),
+            'x_um': float(coords[j, 0]),
+            'y_um': float(coords[j, 1]),
+            'loss_observed': int(lost[j]),
+            'p_dark': float(p_dark[j]),
+            'p_broad_model': float(p_broad[j]),
+            'r_point_um': float(radius[j]),
+            'lambda_point_total': float(lam_point[j]),
+            'lambda_point_local': float(local_point[j]),
+            'p_point_model': float(p_point[j]),
+            'd_perp_signed_um': float(d_perp_signed[j]),
+            'd_perp_abs_um': float(abs(d_perp_signed[j])) if np.isfinite(d_perp_signed[j]) else np.nan,
+            'lambda_line_total': float(lam_line[j]),
+            'lambda_line_local': float(local_line[j]),
+            'p_line_model': float(p_line[j]),
+        })
+    return rows
 
-    title = (
-        f"{ds['wait_s']:g} s | global run {ds['original_run'][run_ind]} | "
-        f"source {identity['source_file_ind']} local run "
-        f"{identity['source_local_run']} | "
-        f"K={ds['K'][run_ind]} | Lambda={ds['lambda_h'][run_ind]:.4f}\n"
-        f"best={summary['best_model']} | "
-        f"dAIC vs uniform={summary['best_AIC_improvement_vs_uniform']:.2f}"
+
+def _plot_event_map(
+    ds,
+    run_ind,
+    summary,
+    model_rows,
+    additive_fit_rows=None,
+    additive_summary=None,
+):
+    """
+    V10F PRIMARY EVENT MAP — model-neutral visualization.
+
+    Panel A: RAW measured binary event map only.
+    Panel B: broad+point (or pure point fallback) prediction + fitted point center.
+    Panel C: broad+line (or pure line fallback) prediction + fitted line/bands.
+    Panel D: explicit broad / point / line model comparison and fitted parameters.
+
+    Thus a line is never silently treated as the event.  Both point and line are
+    fit and shown, and the AIC/null machinery decides which interpretation wins.
+    """
+    eligible_full = np.asarray(ds['evaluable'][:, run_ind], dtype=bool)
+    inds = np.where(eligible_full)[0]
+    coords = np.asarray(ds['coords_um'][inds], dtype=float)
+    lost = np.asarray(ds['loss'][:, run_ind][inds], dtype=bool)
+    p_dark = np.asarray(ds['p_i_dark'][inds], dtype=float)
+
+    if inds.size < 2:
+        return None
+
+    additive_fit_rows = additive_fit_rows or []
+
+    # Prefer the physically richer additive fits.  Fall back to the original
+    # pure point/line fits only when the additive rows are unavailable.
+    broad_row = next(
+        (r for r in additive_fit_rows if r.get('model') == 'uniform'), None
     )
-    ax.set_title(title)
-    ax.legend(fontsize=8)
-    # tight_layout intentionally disabled (can conflict with these figures)
-    if SAVE_OUTPUTS:
-        path = (
-            EVENT_MAP_DIR
-            / (
-                f"event_{ds['wait_s']:g}s_run_"
-                f"{int(ds['original_run'][run_ind]):04d}.png"
-            )
+    point_row = next(
+        (r for r in additive_fit_rows if r.get('model') == 'broad_plus_point_exp'), None
+    )
+    line_row = next(
+        (r for r in additive_fit_rows if r.get('model') == 'broad_plus_line_exp'), None
+    )
+
+    if broad_row is None:
+        broad_row = next((r for r in model_rows if r.get('model') == 'uniform'), None)
+    if point_row is None:
+        point_row = next((r for r in model_rows if r.get('model') == 'point_exp'), None)
+    if line_row is None:
+        line_row = next((r for r in model_rows if r.get('model') == 'line_exp_proxy'), None)
+
+    p_point, _, _, _ = _point_probability_from_fit_row(coords, p_dark, point_row)
+    p_line, _, _ = _line_probability_from_fit_row(coords, p_dark, line_row)
+
+    finite_prob = np.concatenate([
+        p_point[np.isfinite(p_point)],
+        p_line[np.isfinite(p_line)],
+    ])
+    if finite_prob.size:
+        common_vmin = float(np.nanmin(finite_prob))
+        common_vmax = float(np.nanmax(finite_prob))
+        if common_vmax <= common_vmin:
+            common_vmax = common_vmin + 1e-12
+    else:
+        common_vmin, common_vmax = 0.0, 1.0
+
+    fig, axes = plt.subplots(
+        2, 2,
+        figsize=EVENT_MAP_FIGSIZE,
+        constrained_layout=True,
+    )
+
+    # --------------------------------------------------------------
+    # A: measured data only — no model geometry drawn.
+    # --------------------------------------------------------------
+    ax = axes[0, 0]
+    ax.scatter(
+        coords[:, 0], coords[:, 1],
+        s=EVENT_MAP_BASE_MARKER_SIZE,
+        c="0.70",
+        alpha=0.55,
+        edgecolors="none",
+        label="evaluable NVs",
+        zorder=1,
+    )
+
+    # IMPORTANT: measured switches are shown ONLY in Panel A.
+    k_map = int(np.count_nonzero(lost))
+    k_saved = int(ds["K"][run_ind])
+    if k_map != k_saved:
+        print(
+            f"[event map warning] wait={float(ds['wait_s']):g}s "
+            f"run={int(ds['original_run'][run_ind])}: "
+            f"Panel-A switched-mask count={k_map}, stored K={k_saved}",
+            flush=True,
         )
-        fig.savefig(path, dpi=190, bbox_inches="tight")
+    _scatter_observed_switched_nvs(ax, coords, lost, label=True)
+    if EVENT_MAP_ANNOTATE_SWITCHED_NV_INDICES:
+        for local_j in np.where(lost)[0]:
+            ax.annotate(
+                str(int(inds[local_j])),
+                (coords[local_j, 0], coords[local_j, 1]),
+                xytext=(2, 2), textcoords='offset points', fontsize=5.5,
+            )
+    ax.set_title(f'A. MEASURED event — {k_map} NV- -> NV0 switches')
+    ax.legend(fontsize=7, loc='best')
+    _apply_coordinate_axis_style(ax, coords)
+
+    # --------------------------------------------------------------
+    # B: point hypothesis.
+    # --------------------------------------------------------------
+    ax = axes[0, 1]
+    if point_row is not None and np.any(np.isfinite(p_point)):
+        sc_point = ax.scatter(
+            coords[:, 0], coords[:, 1],
+            c=p_point,
+            s=EVENT_MAP_MODEL_MARKER_SIZE,
+            vmin=common_vmin,
+            vmax=common_vmax,
+        )
+        _overlay_point_and_rings(
+            ax, point_row,
+            label_prefix=('broad+point center' if str(point_row.get('model')) == 'broad_plus_point_exp' else 'pure-point center'),
+        )
+        cb = fig.colorbar(sc_point, ax=ax, fraction=0.046, pad=0.025)
+        cb.set_label('P(NV- -> NV0 | point model)')
+        ax.legend(fontsize=6.5, loc='best')
+    else:
+        ax.text(0.5, 0.5, 'Point model not available', ha='center', va='center', transform=ax.transAxes)
+    ax.set_title('B. POINT hypothesis — model only')
+    _apply_coordinate_axis_style(ax, coords)
+
+    # --------------------------------------------------------------
+    # C: line hypothesis.
+    # --------------------------------------------------------------
+    ax = axes[1, 0]
+    if line_row is not None and np.any(np.isfinite(p_line)):
+        sc_line = ax.scatter(
+            coords[:, 0], coords[:, 1],
+            c=p_line,
+            s=EVENT_MAP_MODEL_MARKER_SIZE,
+            vmin=common_vmin,
+            vmax=common_vmax,
+        )
+        _overlay_line_and_bands(
+            ax, coords, line_row,
+            label_prefix=('broad+line axis' if str(line_row.get('model')) == 'broad_plus_line_exp' else 'pure-line axis'),
+        )
+        cb = fig.colorbar(sc_line, ax=ax, fraction=0.046, pad=0.025)
+        cb.set_label('P(NV- -> NV0 | line model)')
+        ax.legend(fontsize=6.5, loc='best')
+    else:
+        ax.text(0.5, 0.5, 'Line model not available', ha='center', va='center', transform=ax.transAxes)
+    ax.set_title('C. LINE hypothesis — model only')
+    _apply_coordinate_axis_style(ax, coords)
+
+    # --------------------------------------------------------------
+    # D: explicit model comparison / all fitted parameters.
+    # --------------------------------------------------------------
+    ax = axes[1, 1]
+    ax.axis('off')
+    broad_aic = float(broad_row.get('AIC', np.nan)) if broad_row is not None else np.nan
+
+    point_aic = float(point_row.get('AIC', np.nan)) if point_row is not None else np.nan
+    line_aic = float(line_row.get('AIC', np.nan)) if line_row is not None else np.nan
+    candidates = [('broad-only', broad_aic), ('broad+point', point_aic), ('broad+line', line_aic)]
+    finite_candidates = [(name, val) for name, val in candidates if np.isfinite(val)]
+    winner = min(finite_candidates, key=lambda x: x[1])[0] if finite_candidates else 'unavailable'
+
+    add_class = (
+        str(additive_summary.get('additive_classification', ''))
+        if additive_summary is not None else 'not available'
+    )
+    morph_p = (
+        float(additive_summary.get('morphology_null_p_value', np.nan))
+        if additive_summary is not None else np.nan
+    )
+    geom_p = (
+        float(additive_summary.get('geometry_specific_p_value', np.nan))
+        if additive_summary is not None else np.nan
+    )
+
+    text = (
+        'D. MODEL COMPARISON\n\n'
+        f'AIC winner: {winner}\n'
+        f'additive classification: {add_class}\n'
+        f'morphology-null p: {morph_p:.5g}\n'
+        f'geometry-specific p: {geom_p:.5g}\n\n'
+        'BROAD ONLY\n'
+        f'{_model_row_text(broad_row, None)}\n\n'
+        'BROAD + POINT\n'
+        f'{_model_row_text(point_row, broad_aic)}\n\n'
+        'BROAD + LINE\n'
+        f'{_model_row_text(line_row, broad_aic)}\n\n'
+        'A_global = whole-FOV/common hazard\n'
+        'A_local = localized extra hazard\n'
+        'L = fitted effective spatial scale'
+    )
+    ax.text(
+        0.02, 0.98, text,
+        ha='left', va='top',
+        transform=ax.transAxes,
+        fontsize=8.2,
+        family='monospace',
+        linespacing=1.35,
+    )
+
+    identity = _source_identity_for_run(ds, run_ind)
+    fig.suptitle(
+        f"{ds['wait_s']:g} s | global run {int(ds['original_run'][run_ind])} | "
+        f"source {identity['source_file_ind']} local {identity['source_local_run']} | "
+        f"K={int(ds['K'][run_ind])} | Lambda={float(ds['lambda_h'][run_ind]):.4f}\n"
+        'Raw data are panel A. Panels B/C are competing fitted hypotheses; '
+        'neither point nor line is assumed a priori.',
+        fontsize=11,
+    )
+
+    _save_figure_dm(
+        fig,
+        f"event-point-line-compare-{ds['wait_s']:g}s-"
+        f"run-{int(ds['original_run'][run_ind]):04d}",
+    )
 
     if CLOSE_EVENT_MAPS_IMMEDIATELY:
         plt.close(fig)
         return None
-
     return fig
-
 
 
 # =============================================================================
@@ -4751,16 +5837,10 @@ def _plot_jackknife_pair_correlation(
     )
     ax.legend(fontsize=8)
     # tight_layout intentionally disabled (can conflict with these figures)
-    if SAVE_OUTPUTS:
-        fig.savefig(
-            OUTPUT_DIR
-            / (
-                f"jackknife_pair_correlation_{ds['wait_s']:g}s_"
-                f"{_cut_token(cut)}.png"
-            ),
-            dpi=190,
-            bbox_inches="tight",
-        )
+    _save_figure_dm(
+        fig,
+        f"jackknife-pair-correlation-{ds['wait_s']:g}s-{_cut_token(cut)}",
+    )
 
     return fig
 
@@ -4984,6 +6064,89 @@ def _line_fit_local_bootstrap(
     }
 
 
+def _trajectory_bootstrap_one_rep(
+    coords,
+    p_dark,
+    logw,
+    dp,
+    K,
+    line_fit_row,
+    theta_hat,
+    rep,
+    seed,
+):
+    rng = np.random.default_rng(
+        int(seed)
+    )
+
+    selected = (
+        _sample_conditional_bernoulli_fixed_k(
+            logw,
+            dp,
+            K,
+            rng,
+        )
+    )
+    y_boot = selected.astype(float)
+
+    fit = _line_fit_local_bootstrap(
+        coords,
+        y_boot,
+        p_dark,
+        line_fit_row,
+        rng,
+    )
+
+    delta_theta, offset_sign = (
+        _signed_period_pi_difference(
+            fit["theta_rad"],
+            theta_hat,
+        )
+    )
+
+    aligned_offset = (
+        offset_sign
+        * float(
+            fit["offset_um"]
+        )
+    )
+
+    return {
+        "bootstrap_rep": int(rep),
+        "A": float(fit["A"]),
+        "L_eff_um": float(
+            fit["L_eff_um"]
+        ),
+        "theta_normal_rad_raw": float(
+            fit["theta_rad"]
+        ),
+        "theta_normal_delta_deg_aligned": float(
+            math.degrees(
+                delta_theta
+            )
+        ),
+        "offset_um_raw": float(
+            fit["offset_um"]
+        ),
+        "offset_um_aligned": float(
+            aligned_offset
+        ),
+        "track_angle_deg_raw": float(
+            math.degrees(
+                _line_track_angle_from_normal(
+                    fit["theta_rad"]
+                )
+            )
+        ),
+        "loglike": float(
+            fit["loglike"]
+        ),
+        "success": bool(
+            fit["success"]
+        ),
+    }
+
+
 def _trajectory_bootstrap_for_event(
     ds,
     run_ind,
@@ -4993,15 +6156,15 @@ def _trajectory_bootstrap_for_event(
     """
     Fixed-K bootstrap of a decisively line-like event.
 
-    The fitted line probabilities are conditioned on exactly the observed K
-    losses.  Each bootstrap map is therefore a spatial resampling at fixed
-    event magnitude.
+    V8 parallelizes independent bootstrap refits across CPU threads.
     """
     eligible = np.asarray(
         ds["evaluable"][:, run_ind],
         dtype=bool,
     )
-    inds = np.where(eligible)[0]
+    inds = np.where(
+        eligible
+    )[0]
 
     coords = np.asarray(
         ds["coords_um"][inds],
@@ -5016,7 +6179,9 @@ def _trajectory_bootstrap_for_event(
         dtype=float,
     )
 
-    K = int(np.sum(y_obs))
+    K = int(
+        np.sum(y_obs)
+    )
 
     lam = _line_lambda(
         coords,
@@ -5025,87 +6190,118 @@ def _trajectory_bootstrap_for_event(
         line_fit_row["theta_rad"],
         line_fit_row["offset_um"],
     )
-    p_line = _event_probability_from_lambda(
-        p_dark,
-        lam,
+    p_line = (
+        _event_probability_from_lambda(
+            p_dark,
+            lam,
+        )
     )
 
-    logw, dp = _conditional_bernoulli_log_dp(
-        p_line,
-        K,
+    logw, dp = (
+        _conditional_bernoulli_log_dp(
+            p_line,
+            K,
+        )
     )
 
-    theta_hat = float(line_fit_row["theta_rad"])
-    offset_hat = float(line_fit_row["offset_um"])
+    theta_hat = float(
+        line_fit_row["theta_rad"]
+    )
+
+    n_reps = int(
+        TRAJECTORY_BOOTSTRAP_REPS
+    )
+    seeds = rng.integers(
+        0,
+        np.iinfo(np.uint32).max,
+        size=n_reps,
+        dtype=np.uint32,
+    )
+
+    workers = (
+        _resolve_thread_workers(
+            TRAJECTORY_RESAMPLING_MAX_WORKERS,
+            n_reps,
+        )
+        if PARALLEL_TRAJECTORY_RESAMPLING
+        else 1
+    )
+
+    raw_rows = [None] * n_reps
+
+    if workers > 1:
+        with ThreadPoolExecutor(
+            max_workers=workers
+        ) as pool:
+            futures = {
+                pool.submit(
+                    _trajectory_bootstrap_one_rep,
+                    coords,
+                    p_dark,
+                    logw,
+                    dp,
+                    K,
+                    line_fit_row,
+                    theta_hat,
+                    rep,
+                    int(seeds[rep]),
+                ): rep
+                for rep in range(
+                    n_reps
+                )
+            }
+
+            for fut in as_completed(
+                futures
+            ):
+                rep = futures[fut]
+                raw_rows[rep] = (
+                    fut.result()
+                )
+    else:
+        for rep in range(
+            n_reps
+        ):
+            raw_rows[rep] = (
+                _trajectory_bootstrap_one_rep(
+                    coords,
+                    p_dark,
+                    logw,
+                    dp,
+                    K,
+                    line_fit_row,
+                    theta_hat,
+                    rep,
+                    int(seeds[rep]),
+                )
+            )
+
+    identity = _source_identity_for_run(
+        ds,
+        run_ind,
+    )
 
     boot_rows = []
 
-    for rep in range(int(TRAJECTORY_BOOTSTRAP_REPS)):
-        selected = _sample_conditional_bernoulli_fixed_k(
-            logw,
-            dp,
-            K,
-            rng,
+    for row in raw_rows:
+        boot_rows.append(
+            {
+                "dataset": ds["label"],
+                "dark_wait_s": float(
+                    ds["wait_s"]
+                ),
+                "valid_run_ind": int(
+                    run_ind
+                ),
+                "original_run": int(
+                    ds["original_run"][
+                        run_ind
+                    ]
+                ),
+                **identity,
+                **row,
+            }
         )
-        y_boot = selected.astype(float)
-
-        fit = _line_fit_local_bootstrap(
-            coords,
-            y_boot,
-            p_dark,
-            line_fit_row,
-            rng,
-        )
-
-        delta_theta, offset_sign = (
-            _signed_period_pi_difference(
-                fit["theta_rad"],
-                theta_hat,
-            )
-        )
-
-        aligned_offset = (
-            offset_sign * float(fit["offset_um"])
-        )
-
-        boot_rows.append({
-            "dataset": ds["label"],
-            "dark_wait_s": float(ds["wait_s"]),
-            "valid_run_ind": int(run_ind),
-            "original_run": int(
-                ds["original_run"][run_ind]
-            ),
-            **_source_identity_for_run(ds, run_ind),
-            "bootstrap_rep": int(rep),
-
-            "A": float(fit["A"]),
-            "L_eff_um": float(fit["L_eff_um"]),
-
-            "theta_normal_rad_raw": float(
-                fit["theta_rad"]
-            ),
-            "theta_normal_delta_deg_aligned": float(
-                math.degrees(delta_theta)
-            ),
-
-            "offset_um_raw": float(
-                fit["offset_um"]
-            ),
-            "offset_um_aligned": float(
-                aligned_offset
-            ),
-
-            "track_angle_deg_raw": float(
-                math.degrees(
-                    _line_track_angle_from_normal(
-                        fit["theta_rad"]
-                    )
-                )
-            ),
-
-            "loglike": float(fit["loglike"]),
-            "success": bool(fit["success"]),
-        })
 
     return boot_rows
 
@@ -5476,16 +6672,11 @@ def _plot_trajectory_transverse_profile(
     )
     ax.legend(fontsize=8)
     # tight_layout intentionally disabled (can conflict with these figures)
-    if SAVE_OUTPUTS:
-        fig.savefig(
-            TRAJECTORY_DIR
-            / (
-                f"trajectory_transverse_{ds['wait_s']:g}s_"
-                f"run_{int(ds['original_run'][run_ind]):04d}.png"
-            ),
-            dpi=190,
-            bbox_inches="tight",
-        )
+    _save_figure_dm(
+        fig,
+        f"trajectory-transverse-{ds['wait_s']:g}s-"
+        f"run-{int(ds['original_run'][run_ind]):04d}",
+    )
 
     plt.close(fig)
     return None
@@ -5497,115 +6688,293 @@ def _plot_trajectory_spatial_prediction(
     run_ind,
     line_fit_row,
 ):
-    """
-    Two-panel spatial plot for an event that preferred the line model.
-
-    Left: observed lost-NV pattern with the fitted projected trajectory overlay.
-    Right: fitted line-model per-NV event probabilities on the same coordinates.
-    """
-    eligible = np.asarray(ds["evaluable"][:, run_ind], dtype=bool)
+    """Trajectory-specific diagnostic with square coordinates and non-overlapping markers."""
+    eligible = np.asarray(ds['evaluable'][:, run_ind], dtype=bool)
     inds = np.where(eligible)[0]
     if inds.size < 2:
         return None
 
-    coords = np.asarray(ds["coords_um"][inds], dtype=float)
-    lost = np.asarray(ds["loss"][:, run_ind][inds], dtype=bool)
-    p_dark = np.asarray(ds["p_i_dark"][inds], dtype=float)
+    coords = np.asarray(ds['coords_um'][inds], dtype=float)
+    lost = np.asarray(ds['loss'][:, run_ind][inds], dtype=bool)
+    p_dark = np.asarray(ds['p_i_dark'][inds], dtype=float)
 
-    theta = float(line_fit_row["theta_rad"])
-    offset = float(line_fit_row["offset_um"])
-    lam = _line_lambda(
-        coords,
-        float(line_fit_row["A"]),
-        float(line_fit_row["L_eff_um"]),
-        theta,
-        offset,
+    theta = float(line_fit_row['theta_rad'])
+    offset = float(line_fit_row['offset_um'])
+    L_eff = float(line_fit_row['L_eff_um'])
+
+    # Use the same helper as the event maps so additive/pure line semantics are consistent.
+    p_model, _, _ = _line_probability_from_fit_row(coords, p_dark, line_fit_row)
+    _, d_perp_signed = _track_coordinates(coords, theta, offset)
+    d_abs = np.abs(d_perp_signed)
+    track_angle = math.degrees(_line_track_angle_from_normal(theta))
+
+    fig, axes = plt.subplots(
+        1, 3,
+        figsize=(16.0, 6.0),
+        constrained_layout=True,
     )
-    p_model = _event_probability_from_lambda(p_dark, lam)
-
-    center = np.mean(coords, axis=0)
-    tangent = np.array([-math.sin(theta), math.cos(theta)], dtype=float)
-    normal = np.array([math.cos(theta), math.sin(theta)], dtype=float)
-    line_center = center + offset * normal
-
-    span = 1.15 * max(
-        float(np.ptp(coords[:, 0])),
-        float(np.ptp(coords[:, 1])),
-        25.0,
-    )
-    p1 = line_center - span * tangent
-    p2 = line_center + span * tangent
-
-    track_angle = math.degrees(
-        _line_track_angle_from_normal(theta)
-    )
-
-    fig, axes = plt.subplots(1, 2, figsize=(12.8, 5.9), sharex=True, sharey=True)
 
     ax = axes[0]
-    ax.scatter(coords[:, 0], coords[:, 1], s=18, alpha=0.25, label='evaluable NVs')
     ax.scatter(
-        coords[lost, 0],
-        coords[lost, 1],
-        s=60,
-        marker='o',
-        facecolors='none',
-        linewidths=1.4,
-        label='observed NV- -> NV0',
+        coords[:, 0], coords[:, 1],
+        s=EVENT_MAP_BASE_MARKER_SIZE,
+        c="0.70",
+        alpha=0.55,
+        edgecolors="none",
+        label="evaluable NVs",
+        zorder=1,
     )
-    ax.plot([p1[0], p2[0]], [p1[1], p2[1]], '--', linewidth=1.6, label='fitted trajectory axis')
-    ax.scatter([line_center[0]], [line_center[1]], marker='x', s=70, linewidths=1.6, label='line anchor')
-    ax.set_title('Observed event pattern')
-    ax.set_xlabel('x (um)')
-    ax.set_ylabel('y (um)')
-    ax.set_aspect('equal', adjustable='box')
-    ax.legend(fontsize=8, loc='best')
+    _scatter_observed_switched_nvs(ax, coords, lost, label=True)
+    _overlay_line_and_bands(ax, coords, line_fit_row, label_prefix='fitted projected axis')
+    if EVENT_MAP_ANNOTATE_SWITCHED_NV_INDICES:
+        for local_j in np.where(lost)[0]:
+            ax.annotate(
+                str(int(inds[local_j])),
+                (coords[local_j, 0], coords[local_j, 1]),
+                xytext=(2, 2), textcoords='offset points', fontsize=5.5,
+            )
+    ax.set_title('DATA + fitted line hypothesis')
+    ax.legend(fontsize=6.5, loc='best')
+    _apply_coordinate_axis_style(ax, coords)
 
     ax = axes[1]
-    sc = ax.scatter(
-        coords[:, 0],
-        coords[:, 1],
+    sc_d = ax.scatter(
+        coords[:, 0], coords[:, 1],
+        c=d_abs,
+        s=EVENT_MAP_MODEL_MARKER_SIZE,
+    )
+    _overlay_line_and_bands(ax, coords, line_fit_row, label_prefix='fitted projected axis')
+    cb = fig.colorbar(sc_d, ax=ax, fraction=0.046, pad=0.025)
+    cb.set_label('absolute transverse distance (um)')
+    ax.set_title('GEOMETRY: distance to line — model view')
+    _apply_coordinate_axis_style(ax, coords)
+
+    ax = axes[2]
+    pmin = float(np.nanmin(p_model))
+    pmax = float(np.nanmax(p_model))
+    if not np.isfinite(pmax) or pmax <= pmin:
+        pmax = pmin + 1e-12
+    sc_p = ax.scatter(
+        coords[:, 0], coords[:, 1],
         c=p_model,
-        s=26,
-        cmap='viridis',
-        vmin=float(np.nanmin(p_model)),
-        vmax=float(np.nanmax(p_model)) if np.nanmax(p_model) > np.nanmin(p_model) else float(np.nanmin(p_model) + 1e-12),
+        s=EVENT_MAP_MODEL_MARKER_SIZE,
+        vmin=pmin,
+        vmax=pmax,
     )
-    ax.scatter(
-        coords[lost, 0],
-        coords[lost, 1],
-        s=62,
-        marker='o',
-        facecolors='none',
-        edgecolors='white',
-        linewidths=1.2,
-    )
-    ax.plot([p1[0], p2[0]], [p1[1], p2[1]], '--', linewidth=1.6)
-    ax.scatter([line_center[0]], [line_center[1]], marker='x', s=70, linewidths=1.6)
-    ax.set_title('Predicted trajectory-weighted probability')
-    ax.set_xlabel('x (um)')
-    ax.set_aspect('equal', adjustable='box')
-    cb = fig.colorbar(sc, ax=ax, fraction=0.046, pad=0.04)
-    cb.set_label('P(event | fitted line model)')
+    _overlay_line_and_bands(ax, coords, line_fit_row, label_prefix='fitted projected axis')
+    cb = fig.colorbar(sc_p, ax=ax, fraction=0.046, pad=0.025)
+    cb.set_label('P(NV- -> NV0 | fitted line model)')
+    ax.set_title('MODEL: line prediction — model view')
+    _apply_coordinate_axis_style(ax, coords)
 
     fig.suptitle(
-        f"{ds['wait_s']:g} s | original run {int(ds['original_run'][run_ind])} | "
-        f"Lambda={ds['lambda_h'][run_ind]:.4f} | track angle={track_angle:.1f} deg | "
-        f"L_eff={float(line_fit_row['L_eff_um']):.1f} um"
+        f"{ds['wait_s']:g} s | run {int(ds['original_run'][run_ind])} | "
+        f"Lambda={float(ds['lambda_h'][run_ind]):.4f} | "
+        f"projected axis={track_angle:.1f} deg | L_eff={L_eff:.1f} um\n"
+        'The measured NV- -> NV0 switches are shown only in the left DATA panel. The axis/bands and color fields in the other panels are model quantities.',
+        fontsize=10.5,
     )
-    # tight_layout intentionally disabled (can conflict with these figures)
-    if SAVE_OUTPUTS:
-        fig.savefig(
-            TRAJECTORY_DIR / (
-                f"trajectory_spatial_prediction_{ds['wait_s']:g}s_"
-                f"run_{int(ds['original_run'][run_ind]):04d}.png"
-            ),
-            dpi=190,
-            bbox_inches='tight',
-        )
+
+    _save_figure_dm(
+        fig,
+        f"trajectory-coords-switched-path-{ds['wait_s']:g}s-"
+        f"run-{int(ds['original_run'][run_ind]):04d}",
+    )
 
     plt.close(fig)
     return None
+
+
+def _trajectory_angle_null_one_rep(
+    ds,
+    run_ind,
+    observed_summary_row,
+    coords,
+    p_dark,
+    conditional_logw,
+    conditional_dp,
+    k_obs,
+    rep,
+    seed,
+):
+    rng = np.random.default_rng(
+        int(seed)
+    )
+
+    selected = (
+        _sample_conditional_bernoulli_fixed_k(
+            conditional_logw,
+            conditional_dp,
+            k_obs,
+            rng,
+        )
+    )
+    y = np.asarray(
+        selected,
+        dtype=float,
+    )
+
+    models = []
+
+    if FIT_UNIFORM_MODEL:
+        models.append(
+            _fit_uniform_model(
+                coords,
+                y,
+                p_dark,
+            )
+        )
+    if FIT_POINT_MODEL:
+        models.append(
+            _fit_point_model(
+                coords,
+                y,
+                p_dark,
+                rng,
+            )
+        )
+    if FIT_LINE_MODEL:
+        models.append(
+            _fit_line_model(
+                coords,
+                y,
+                p_dark,
+                rng,
+            )
+        )
+
+    models = sorted(
+        models,
+        key=lambda m: m["AIC"],
+    )
+
+    best = models[0]
+    uniform = next(
+        (
+            m
+            for m in models
+            if m["model"]
+            == "uniform"
+        ),
+        None,
+    )
+
+    improvement = (
+        float(
+            uniform["AIC"]
+            - best["AIC"]
+        )
+        if uniform is not None
+        else np.nan
+    )
+
+    if best["model"] == "uniform":
+        classification = (
+            "uniform_or_unresolved"
+        )
+    elif (
+        np.isfinite(improvement)
+        and improvement
+        >= LOCALIZED_DELTA_AIC_THRESHOLD
+    ):
+        classification = (
+            "point_localized_preferred"
+            if best["model"]
+            == "point_exp"
+            else "line_like_preferred"
+        )
+    else:
+        classification = (
+            "localized_not_decisive"
+        )
+
+    track_angle = (
+        math.degrees(
+            _line_track_angle_from_normal(
+                best["theta_rad"]
+            )
+        )
+        if (
+            best["model"]
+            == "line_exp_proxy"
+            and np.isfinite(
+                best["theta_rad"]
+            )
+        )
+        else np.nan
+    )
+
+    return {
+        "dataset": ds["label"],
+        "dark_wait_s": float(
+            ds["wait_s"]
+        ),
+        "lambda_cut": float(
+            TRAJECTORY_LAMBDA_H_CUT
+        ),
+        "valid_run_ind": int(
+            run_ind
+        ),
+        "original_run": int(
+            ds["original_run"][
+                run_ind
+            ]
+        ),
+        **_source_identity_for_run(
+            ds,
+            run_ind,
+        ),
+        "Lambda_h": float(
+            ds["lambda_h"][
+                run_ind
+            ]
+        ),
+        "observed_track_angle_deg_mod180": float(
+            observed_summary_row[
+                "track_angle_hat_deg_mod180"
+            ]
+        ),
+        "observed_L_eff_um": float(
+            observed_summary_row[
+                "L_eff_hat_um"
+            ]
+        ),
+        "null_rep": int(rep),
+        "K_loss": int(k_obs),
+        "best_model": best["model"],
+        "classification": classification,
+        "best_AIC": float(
+            best["AIC"]
+        ),
+        "uniform_AIC": (
+            float(
+                uniform["AIC"]
+            )
+            if uniform is not None
+            else np.nan
+        ),
+        "AIC_improvement_vs_uniform": improvement,
+        "line_like_preferred": int(
+            classification
+            == "line_like_preferred"
+        ),
+        "track_angle_deg_mod180": (
+            float(track_angle)
+            if np.isfinite(
+                track_angle
+            )
+            else np.nan
+        ),
+        "L_eff_um": (
+            float(
+                best["L_eff_um"]
+            )
+            if np.isfinite(
+                best["L_eff_um"]
+            )
+            else np.nan
+        ),
+    }
 
 
 def _trajectory_angle_null_for_event(
@@ -5617,77 +6986,113 @@ def _trajectory_angle_null_for_event(
     """
     Geometry-aware fixed-K null for a single line-like event.
 
-    Synthetic events are drawn from the fitted uniform-event conditional null,
-    preserving the observed K and evaluable NV set.  The same uniform / point /
-    line spatial fits are rerun on each synthetic event.
+    V8 parallelizes the independent null refits across CPU threads.
     """
-    payload = _prepare_uniform_event_payload(ds, run_ind)
+    payload = (
+        _prepare_uniform_event_payload(
+            ds,
+            run_ind,
+        )
+    )
+
     if payload is None:
         return []
 
-    inds = np.asarray(payload['eligible_indices'], dtype=int)
-    coords = np.asarray(ds['coords_um'][inds], dtype=float)
-    p_dark = np.asarray(ds['p_i_dark'][inds], dtype=float)
-    k_obs = int(payload['K_observed'])
+    inds = np.asarray(
+        payload[
+            "eligible_indices"
+        ],
+        dtype=int,
+    )
+    coords = np.asarray(
+        ds["coords_um"][inds],
+        dtype=float,
+    )
+    p_dark = np.asarray(
+        ds["p_i_dark"][inds],
+        dtype=float,
+    )
+    k_obs = int(
+        payload["K_observed"]
+    )
 
-    rows = []
-    for rep in range(int(TRAJECTORY_NULL_REPS_PER_EVENT)):
-        selected = _sample_conditional_bernoulli_fixed_k(
-            payload['conditional_logw'],
-            payload['conditional_dp'],
-            k_obs,
-            rng,
+    n_reps = int(
+        TRAJECTORY_NULL_REPS_PER_EVENT
+    )
+    seeds = rng.integers(
+        0,
+        np.iinfo(np.uint32).max,
+        size=n_reps,
+        dtype=np.uint32,
+    )
+
+    workers = (
+        _resolve_thread_workers(
+            TRAJECTORY_RESAMPLING_MAX_WORKERS,
+            n_reps,
         )
-        y = np.asarray(selected, dtype=float)
+        if PARALLEL_TRAJECTORY_RESAMPLING
+        else 1
+    )
 
-        models = []
-        if FIT_UNIFORM_MODEL:
-            models.append(_fit_uniform_model(coords, y, p_dark))
-        if FIT_POINT_MODEL:
-            models.append(_fit_point_model(coords, y, p_dark, rng))
-        if FIT_LINE_MODEL:
-            models.append(_fit_line_model(coords, y, p_dark, rng))
+    rows = [None] * n_reps
 
-        models = sorted(models, key=lambda m: m['AIC'])
-        best = models[0]
-        uniform = next((m for m in models if m['model'] == 'uniform'), None)
-        improvement = (float(uniform['AIC'] - best['AIC']) if uniform is not None else np.nan)
+    if workers > 1:
+        with ThreadPoolExecutor(
+            max_workers=workers
+        ) as pool:
+            futures = {
+                pool.submit(
+                    _trajectory_angle_null_one_rep,
+                    ds,
+                    run_ind,
+                    observed_summary_row,
+                    coords,
+                    p_dark,
+                    payload[
+                        "conditional_logw"
+                    ],
+                    payload[
+                        "conditional_dp"
+                    ],
+                    k_obs,
+                    rep,
+                    int(seeds[rep]),
+                ): rep
+                for rep in range(
+                    n_reps
+                )
+            }
 
-        if best['model'] == 'uniform':
-            classification = 'uniform_or_unresolved'
-        else:
-            if np.isfinite(improvement) and improvement >= LOCALIZED_DELTA_AIC_THRESHOLD:
-                classification = ('point_localized_preferred' if best['model'] == 'point_exp' else 'line_like_preferred')
-            else:
-                classification = 'localized_not_decisive'
-
-        track_angle = (
-            math.degrees(_line_track_angle_from_normal(best['theta_rad']))
-            if best['model'] == 'line_exp_proxy' and np.isfinite(best['theta_rad'])
-            else np.nan
-        )
-
-        rows.append({
-            'dataset': ds['label'],
-            'dark_wait_s': float(ds['wait_s']),
-            'lambda_cut': float(TRAJECTORY_LAMBDA_H_CUT),
-            'valid_run_ind': int(run_ind),
-            'original_run': int(ds['original_run'][run_ind]),
-            **_source_identity_for_run(ds, run_ind),
-            'Lambda_h': float(ds['lambda_h'][run_ind]),
-            'observed_track_angle_deg_mod180': float(observed_summary_row['track_angle_hat_deg_mod180']),
-            'observed_L_eff_um': float(observed_summary_row['L_eff_hat_um']),
-            'null_rep': int(rep),
-            'K_loss': int(k_obs),
-            'best_model': best['model'],
-            'classification': classification,
-            'best_AIC': float(best['AIC']),
-            'uniform_AIC': float(uniform['AIC']) if uniform is not None else np.nan,
-            'AIC_improvement_vs_uniform': improvement,
-            'line_like_preferred': int(classification == 'line_like_preferred'),
-            'track_angle_deg_mod180': float(track_angle) if np.isfinite(track_angle) else np.nan,
-            'L_eff_um': float(best['L_eff_um']) if np.isfinite(best['L_eff_um']) else np.nan,
-        })
+            for fut in as_completed(
+                futures
+            ):
+                rep = futures[fut]
+                rows[rep] = (
+                    fut.result()
+                )
+    else:
+        for rep in range(
+            n_reps
+        ):
+            rows[rep] = (
+                _trajectory_angle_null_one_rep(
+                    ds,
+                    run_ind,
+                    observed_summary_row,
+                    coords,
+                    p_dark,
+                    payload[
+                        "conditional_logw"
+                    ],
+                    payload[
+                        "conditional_dp"
+                    ],
+                    k_obs,
+                    rep,
+                    int(seeds[rep]),
+                )
+            )
 
     return rows
 
@@ -5726,15 +7131,11 @@ def _plot_trajectory_angle_null_hist(
     )
     ax.legend(fontsize=8)
     # tight_layout intentionally disabled (can conflict with these figures)
-    if SAVE_OUTPUTS:
-        fig.savefig(
-            TRAJECTORY_DIR / (
-                f"trajectory_angle_null_{ds['wait_s']:g}s_"
-                f"run_{int(ds['original_run'][run_ind]):04d}.png"
-            ),
-            dpi=190,
-            bbox_inches='tight',
-        )
+    _save_figure_dm(
+        fig,
+        f"trajectory-angle-null-{ds['wait_s']:g}s-"
+        f"run-{int(ds['original_run'][run_ind]):04d}",
+    )
 
     plt.close(fig)
     return None
@@ -5846,12 +7247,10 @@ def _trajectory_population_orientation_summary(
         )
         ax.legend(fontsize=8)
         # tight_layout intentionally disabled (can conflict with these figures)
-        if SAVE_OUTPUTS:
-            fig.savefig(
-                TRAJECTORY_DIR / f"trajectory_population_axial_null_{wait_s:g}s.png",
-                dpi=190,
-                bbox_inches='tight',
-            )
+        _save_figure_dm(
+            fig,
+            f"trajectory-population-axial-null-{wait_s:g}s",
+        )
         plt.close(fig)
 
     return out
@@ -5861,6 +7260,7 @@ def _run_trajectory_analysis(
     datasets,
     model_fit_rows,
     event_summary_rows,
+    additive_summary_rows=None,
 ):
     if not RUN_TRAJECTORY_ANALYSIS:
         return {
@@ -5878,20 +7278,53 @@ def _run_trajectory_analysis(
     trajectory_nv_rows = []
     trajectory_null_rows = []
 
+    additive_summary_rows = additive_summary_rows or []
+
     for ds in datasets:
+        # The old code used only classification == "line_like_preferred" from
+        # the pure model family.  V9 requires the stronger additive/null logic
+        # for inferential trajectory analysis.  Exploratory line overlays are
+        # still drawn on ordinary event maps for visual inspection.
+        supported_line_keys = set()
+        for ar in additive_summary_rows:
+            if abs(float(ar["dark_wait_s"]) - float(ds["wait_s"])) >= 1e-12:
+                continue
+            if abs(float(ar["lambda_cut"]) - float(TRAJECTORY_LAMBDA_H_CUT)) >= 1e-12:
+                continue
+
+            morph_ok = (
+                int(ar.get("morphology_null_supported", 0)) == 1
+                if TRAJECTORY_REQUIRE_MORPHOLOGY_NULL_SUPPORT
+                else True
+            )
+            geom_ok = (
+                int(ar.get("geometry_specific_supported", 0)) == 1
+                and str(ar.get("geometry_specific_kind", "")) == "line_over_point"
+                if TRAJECTORY_REQUIRE_GEOMETRY_LINE_SUPPORT
+                else True
+            )
+            class_ok = str(ar.get("additive_classification", "")) in (
+                "broad_plus_resolved_line_null_supported",
+                "broad_plus_resolved_line_aic_preferred",
+            )
+
+            if class_ok and morph_ok and geom_ok:
+                supported_line_keys.add(int(ar["valid_run_ind"]))
+
         candidates = [
             r
             for r in event_summary_rows
-            if abs(
-                r["dark_wait_s"] - ds["wait_s"]
-            ) < 1e-12
-            and abs(
-                r["lambda_cut"]
-                - TRAJECTORY_LAMBDA_H_CUT
-            ) < 1e-12
-            and r["classification"]
-            == "line_like_preferred"
+            if abs(r["dark_wait_s"] - ds["wait_s"]) < 1e-12
+            and abs(r["lambda_cut"] - TRAJECTORY_LAMBDA_H_CUT) < 1e-12
+            and int(r["valid_run_ind"]) in supported_line_keys
         ]
+
+        if not candidates:
+            print(
+                f"[trajectory] wait={ds['wait_s']:g}s: no line event passed "
+                "the required morphology + geometry support.  Exploratory "
+                "line overlays are still available in event_coords_path_*.png."
+            )
 
         for summary in candidates:
             run_ind = int(
@@ -6088,12 +7521,10 @@ def _plot_sensor_footprint(ds):
     )
     ax.legend(fontsize=8)
     # tight_layout intentionally disabled (can conflict with these figures)
-    if SAVE_OUTPUTS:
-        fig.savefig(
-            OUTPUT_DIR / f"sensor_footprint_{ds['wait_s']:g}s.png",
-            dpi=190,
-            bbox_inches="tight",
-        )
+    _save_figure_dm(
+        fig,
+        f"sensor-footprint-{ds['wait_s']:g}s",
+    )
 
     return fig
 
@@ -6200,16 +7631,10 @@ def _plot_pair_correlation(ds, cut, result, pair_geometry):
     ax_support.legend(fontsize=7)
 
     # tight_layout intentionally disabled (can conflict with these figures)
-    if SAVE_OUTPUTS:
-        fig.savefig(
-            OUTPUT_DIR
-            / (
-                f"pair_correlation_full_support_"
-                f"{ds['wait_s']:g}s_{_cut_token(cut)}.png"
-            ),
-            dpi=190,
-            bbox_inches="tight",
-        )
+    _save_figure_dm(
+        fig,
+        f"pair-correlation-full-support-{ds['wait_s']:g}s-{_cut_token(cut)}",
+    )
 
     return fig
 
@@ -6244,13 +7669,10 @@ def _plot_combined_pair_correlation(all_results, cut):
     )
     ax.legend()
     # tight_layout intentionally disabled (can conflict with these figures)
-    if SAVE_OUTPUTS:
-        fig.savefig(
-            OUTPUT_DIR
-            / f"pair_correlation_combined_{_cut_token(cut)}.png",
-            dpi=190,
-            bbox_inches="tight",
-        )
+    _save_figure_dm(
+        fig,
+        f"pair-correlation-combined-{_cut_token(cut)}",
+    )
 
     return fig
 
@@ -6307,13 +7729,10 @@ def _plot_model_preference(event_summary_rows, cut):
     )
     ax.legend(fontsize=8)
     # tight_layout intentionally disabled (can conflict with these figures)
-    if SAVE_OUTPUTS:
-        fig.savefig(
-            OUTPUT_DIR
-            / f"model_preference_{_cut_token(cut)}.png",
-            dpi=190,
-            bbox_inches="tight",
-        )
+    _save_figure_dm(
+        fig,
+        f"model-preference-{_cut_token(cut)}",
+    )
 
     return fig
 
@@ -6413,48 +7832,142 @@ def _pair_rows_from_result(ds, cut, result, geometry):
     return rows
 
 
+def _fit_spatial_event_seeded(
+    ds,
+    run_ind,
+    cut,
+    seed,
+):
+    local_rng = np.random.default_rng(
+        int(seed)
+    )
+    return _fit_event_spatial_models(
+        ds,
+        int(run_ind),
+        cut,
+        local_rng,
+    )
+
+
 def _fit_models_for_cut(ds, cut, rng):
-    selected = np.where(ds["lambda_h"] >= float(cut))[0]
+    selected = np.where(
+        ds["lambda_h"] >= float(cut)
+    )[0]
 
     if selected.size == 0:
         return [], []
 
-    # Highest-Lambda events first.
     selected = selected[
-        np.argsort(ds["lambda_h"][selected])[::-1]
+        np.argsort(
+            ds["lambda_h"][selected]
+        )[::-1]
     ]
 
     if MAX_MODEL_EVENTS_PER_WAIT_PER_CUT is not None:
-        selected = selected[: int(MAX_MODEL_EVENTS_PER_WAIT_PER_CUT)]
+        selected = selected[
+            : int(
+                MAX_MODEL_EVENTS_PER_WAIT_PER_CUT
+            )
+        ]
+
+    n_tasks = len(selected)
+    seeds = rng.integers(
+        0,
+        np.iinfo(np.uint32).max,
+        size=n_tasks,
+        dtype=np.uint32,
+    )
+
+    workers = (
+        _resolve_thread_workers(
+            EVENT_MODEL_FIT_MAX_WORKERS,
+            n_tasks,
+        )
+        if PARALLEL_EVENT_MODEL_FITS
+        else 1
+    )
+
+    print(
+        f"[model fit batch] wait={ds['wait_s']:g}s "
+        f"cut={cut:.3f}; events={n_tasks}; workers={workers}",
+        flush=True,
+    )
+
+    results = [None] * n_tasks
+
+    if workers > 1:
+        with ThreadPoolExecutor(
+            max_workers=workers
+        ) as pool:
+            future_map = {}
+
+            for idx, (
+                run_ind,
+                seed,
+            ) in enumerate(
+                zip(selected, seeds)
+            ):
+                fut = pool.submit(
+                    _fit_spatial_event_seeded,
+                    ds,
+                    int(run_ind),
+                    cut,
+                    int(seed),
+                )
+                future_map[fut] = (
+                    idx,
+                    int(run_ind),
+                )
+
+            for fut in as_completed(
+                future_map
+            ):
+                idx, run_ind = (
+                    future_map[fut]
+                )
+                results[idx] = fut.result()
+
+                identity = (
+                    _source_identity_for_run(
+                        ds,
+                        run_ind,
+                    )
+                )
+                print(
+                    f"[model fit done] "
+                    f"wait={ds['wait_s']:g}s "
+                    f"cut={cut:.3f} "
+                    f"event {idx+1}/{n_tasks} "
+                    f"global_run="
+                    f"{ds['original_run'][run_ind]} "
+                    f"source="
+                    f"{identity['source_file_ind']} "
+                    f"Lambda="
+                    f"{ds['lambda_h'][run_ind]:.4f}",
+                    flush=True,
+                )
+    else:
+        for idx, (
+            run_ind,
+            seed,
+        ) in enumerate(
+            zip(selected, seeds)
+        ):
+            results[idx] = (
+                _fit_spatial_event_seeded(
+                    ds,
+                    int(run_ind),
+                    cut,
+                    int(seed),
+                )
+            )
 
     fit_rows = []
     summary_rows = []
 
-    for idx, run_ind in enumerate(selected, start=1):
-        identity = _source_identity_for_run(
-            ds,
-            run_ind,
-        )
-
-        print(
-            f"[model fit] wait={ds['wait_s']:g}s cut={cut:.3f} "
-            f"event {idx}/{len(selected)} "
-            f"global_run={ds['original_run'][run_ind]} "
-            f"source={identity['source_file_ind']} "
-            f"local_run={identity['source_local_run']} "
-            f"Lambda={ds['lambda_h'][run_ind]:.4f}",
-            flush=True,
-        )
-
-        result = _fit_event_spatial_models(
-            ds,
-            int(run_ind),
-            cut,
-            rng,
-        )
+    for result in results:
         if result is None:
             continue
-
         rows, summary = result
         fit_rows.extend(rows)
         summary_rows.append(summary)
@@ -6473,7 +7986,7 @@ def _summary_text(
     trajectory_cluster_summary_rows,
 ):
     lines = []
-    lines.append("SPATIAL CARRIER-EVENT ANALYSIS V7C-PARALLEL-NULL")
+    lines.append("SPATIAL CARRIER-EVENT ANALYSIS V8-PARALLEL+GEOMETRY-NULL")
     lines.append("=" * 92)
     lines.append("")
     lines.append(
@@ -6879,6 +8392,92 @@ def _summary_text(
         )
         lines.append("")
 
+    lines.append("PRIMARY RESOLVED EVENT DIAGNOSTICS")
+    lines.append("-" * 92)
+    primary_tested = [
+        r
+        for r in additive_summary_rows
+        if abs(
+            float(r["lambda_cut"])
+            - 0.05
+        ) < 1e-12
+        and int(
+            r.get(
+                "morphology_null_num_sims",
+                0,
+            )
+        ) > 0
+    ]
+
+    if primary_tested:
+        for r in sorted(
+            primary_tested,
+            key=lambda x: (
+                float(
+                    x["dark_wait_s"]
+                ),
+                -float(
+                    x["Lambda_h"]
+                ),
+            ),
+        ):
+            pgeom = float(
+                r.get(
+                    "geometry_specific_p_value",
+                    np.nan,
+                )
+            )
+            qbh = float(
+                r.get(
+                    "morphology_family_bh_q",
+                    np.nan,
+                )
+            )
+            qwait = float(
+                r.get(
+                    "morphology_wait_bh_q",
+                    np.nan,
+                )
+            )
+            broad_delta = float(
+                r.get(
+                    "AIC_improvement_vs_corresponding_pure_localized",
+                    np.nan,
+                )
+            )
+
+            lines.append(
+                f"  {r['dark_wait_s']:g} s run "
+                f"{int(r['original_run'])} "
+                f"(source {int(r['source_file_ind'])}): "
+                f"{r['additive_best_model']}; "
+                f"L={r['best_L_eff_um']:.2f} um; "
+                f"p_morph={r['morphology_null_p_value']:.5f}; "
+                f"BHq_all={qbh:.5f}; "
+                f"BHq_wait={qwait:.5f}; "
+                f"DeltaAIC(line-point)="
+                f"{r['observed_line_vs_point_delta_AIC']:.3f}; "
+                f"p_geometry="
+                f"{pgeom:.5f}; "
+                f"broad-term DeltaAIC="
+                f"{broad_delta:.3f}; "
+                f"broad/local="
+                f"{100*r['global_fraction_of_expected_excess']:.1f}%/"
+                f"{100*r['local_fraction_of_expected_excess']:.1f}%."
+            )
+
+        lines.append(
+            "  Family corrections above apply to the resolved AIC-screened "
+            "events that were null-tested; they are not a fully prospective "
+            "all-candidate selection correction."
+        )
+    else:
+        lines.append(
+            "  No primary resolved events were morphology-null tested."
+        )
+
+    lines.append("")
+
     lines.append("LEAVE-ONE-EVENT-OUT ROBUSTNESS")
     lines.append("-" * 92)
 
@@ -7032,7 +8631,7 @@ def main():
     _ensure_output_dirs()
 
     print("\n" + "#" * 118)
-    print("SPATIAL CARRIER-EVENT ANALYSIS V7C-PARALLEL-NULL")
+    print("SPATIAL CARRIER-EVENT ANALYSIS V10C-DM-SAVE")
     print("#" * 118)
     print(
         "Raw charge transitions + NV coordinates only. "
@@ -7250,6 +8849,9 @@ def main():
         datasets,
         additive_summary_rows,
     )
+    _apply_morphology_family_corrections(
+        additive_summary_rows,
+    )
 
     _write_csv(
         OUTPUT_DIR
@@ -7341,6 +8943,7 @@ def main():
         datasets,
         model_fit_rows,
         event_summary_rows,
+        additive_summary_rows=additive_summary_rows,
     )
 
     trajectory_summary_rows = trajectory["summary_rows"]
@@ -7372,7 +8975,11 @@ def main():
 
     # ---------------------------------------------------------------------
     # Save event maps only for strongest events at the primary cut.
+    # V10 writes exact per-NV coordinates / switch flags plus broad, point, and
+    # line predictions for every one of these plotted events.
     # ---------------------------------------------------------------------
+    primary_event_nv_coordinate_rows = []
+
     for ds in datasets:
         sub = [
             r for r in event_summary_rows
@@ -7402,14 +9009,69 @@ def main():
             if not fit_rows:
                 continue
 
+            event_additive_fit_rows = [
+                r for r in additive_fit_rows
+                if abs(float(r["dark_wait_s"]) - float(ds["wait_s"])) < 1e-12
+                and abs(float(r["lambda_cut"]) - float(PRIMARY_LAMBDA_H_CUT)) < 1e-12
+                and int(r["valid_run_ind"]) == run_ind
+            ]
+            event_additive_summary = next(
+                (
+                    r for r in additive_summary_rows
+                    if abs(float(r["dark_wait_s"]) - float(ds["wait_s"])) < 1e-12
+                    and abs(float(r["lambda_cut"]) - float(PRIMARY_LAMBDA_H_CUT)) < 1e-12
+                    and int(r["valid_run_ind"]) == run_ind
+                ),
+                None,
+            )
+
+            broad_row = next(
+                (r for r in event_additive_fit_rows if r.get("model") == "uniform"),
+                None,
+            )
+            point_row = next(
+                (r for r in event_additive_fit_rows if r.get("model") == "broad_plus_point_exp"),
+                None,
+            )
+            line_row = next(
+                (r for r in event_additive_fit_rows if r.get("model") == "broad_plus_line_exp"),
+                None,
+            )
+
+            # Fallback to the pure point/line family only when additive rows are unavailable.
+            if broad_row is None:
+                broad_row = next((r for r in fit_rows if r.get("model") == "uniform"), None)
+            if point_row is None:
+                point_row = next((r for r in fit_rows if r.get("model") == "point_exp"), None)
+            if line_row is None:
+                line_row = next((r for r in fit_rows if r.get("model") == "line_exp_proxy"), None)
+
+            if WRITE_PRIMARY_EVENT_NV_COORDINATES:
+                primary_event_nv_coordinate_rows.extend(
+                    _primary_event_coordinate_rows(
+                        ds,
+                        run_ind,
+                        broad_row,
+                        point_row,
+                        line_row,
+                    )
+                )
+
             fig = _plot_event_map(
                 ds,
                 run_ind,
                 summary,
                 fit_rows,
+                additive_fit_rows=event_additive_fit_rows,
+                additive_summary=event_additive_summary,
             )
             if fig is not None:
                 figures.append(fig)
+
+    _write_csv(
+        OUTPUT_DIR / "spatial_primary_event_nv_coordinates.csv",
+        primary_event_nv_coordinate_rows,
+    )
 
     # ---------------------------------------------------------------------
     # Human-readable summary.
@@ -7428,17 +9090,86 @@ def main():
     print("\n")
     print(summary)
 
-    if SAVE_OUTPUTS:
-        with (
-            OUTPUT_DIR / "spatial_analysis_summary.txt"
-        ).open("w", encoding="utf-8") as f:
+    # ---------------------------------------------------------------------
+    # Save the complete processed analysis with Dioptric data_manager.
+    # ---------------------------------------------------------------------
+    dm_analysis_data = {
+        "timestamp": _DM_TIMESTAMP,
+        "analysis_name": DM_SAVE_NAME,
+        "analysis_version": "V10D-DM-UNIQUE-SAVES",
+        "source_script": Path(__file__).name,
+        "description": (
+            "Processed spatial carrier-event analysis. Raw img_arrays are not "
+            "included; source file stems and all derived tables are retained."
+        ),
+        "configuration": {
+            "wanted_waits_s": list(WANTED_WAITS_S),
+            "lambda_h_cuts": list(LAMBDA_H_CUTS),
+            "primary_lambda_h_cut": float(PRIMARY_LAMBDA_H_CUT),
+            "baseline_exclude_lambda_h": float(BASELINE_EXCLUDE_LAMBDA_H),
+            "baseline_prior_strength": float(BASELINE_PRIOR_STRENGTH),
+            "um_per_pixel": float(UM_PER_PIXEL),
+            "expected_array_pitch_um": float(EXPECTED_ARRAY_PITCH_UM),
+            "pair_bin_width_um": float(PAIR_BIN_WIDTH_UM),
+            "pair_primary_global_test_max_distance_um": float(
+                PAIR_PRIMARY_GLOBAL_TEST_MAX_DISTANCE_UM
+            ),
+            "pair_null_scrambles": int(PAIR_NULL_SCRAMBLES),
+            "additive_resolved_min_scale_um": float(
+                ADDITIVE_RESOLVED_MIN_SCALE_UM
+            ),
+            "additive_morph_null_num_sims": int(
+                ADDITIVE_MORPH_NULL_NUM_SIMS
+            ),
+            "trajectory_require_morphology_null_support": bool(
+                TRAJECTORY_REQUIRE_MORPHOLOGY_NULL_SUPPORT
+            ),
+            "trajectory_require_geometry_line_support": bool(
+                TRAJECTORY_REQUIRE_GEOMETRY_LINE_SUPPORT
+            ),
+        },
+        "source_files_by_wait": {
+            f"{float(ds['wait_s']):g}s": list(ds.get("file_stem", []))
+            if isinstance(ds.get("file_stem", []), (list, tuple))
+            else [str(ds.get("file_stem"))]
+            for ds in datasets
+        },
+        "dataset_summary": dataset_rows,
+        "field_of_view_summary": footprint_rows,
+        "uniform_residual_correlation": pair_rows,
+        "pair_correlation_jackknife": jackknife_rows,
+        "event_model_fits": model_fit_rows,
+        "event_summary": event_summary_rows,
+        "additive_broad_local_model_fits": additive_fit_rows,
+        "additive_broad_local_event_summary": additive_summary_rows,
+        "trajectory_summary": trajectory_summary_rows,
+        "trajectory_bootstrap": trajectory_bootstrap_rows,
+        "trajectory_nv_coordinates": trajectory_nv_rows,
+        "trajectory_angle_null": trajectory_null_rows,
+        "trajectory_population_orientation": trajectory_cluster_summary_rows,
+        "primary_event_nv_coordinates": primary_event_nv_coordinate_rows,
+        "analysis_summary_text": summary,
+    }
+
+    if SAVE_OUTPUTS and SAVE_DM_DATA:
+        dm.save_raw_data(
+            _json_safe(dm_analysis_data),
+            _initialize_dm_save_context(),
+        )
+        print(f"[dm save] processed analysis saved: {_DM_BASE_FILE_PATH}")
+
+    # Optional human-readable legacy summary alongside CSVs.
+    if SAVE_OUTPUTS and SAVE_LEGACY_CSV:
+        with (OUTPUT_DIR / "spatial_analysis_summary.txt").open(
+            "w", encoding="utf-8"
+        ) as f:
             f.write(summary)
             f.write("\n")
 
     print("\n" + "=" * 118)
-    print("OUTPUT DIRECTORY")
+    print("DATA-MANAGER OUTPUT")
     print("=" * 118)
-    print(OUTPUT_DIR.resolve())
+    print(_DM_BASE_FILE_PATH)
 
     if SHOW_FIGURES:
         plt.show(block=True)
@@ -7457,15 +9188,24 @@ def main():
         "additive_summary_rows": additive_summary_rows,
         "additive_resolved_min_scale_um": ADDITIVE_RESOLVED_MIN_SCALE_UM,
         "additive_morph_null_num_sims": ADDITIVE_MORPH_NULL_NUM_SIMS,
+        "dm_analysis_data": dm_analysis_data,
+        "dm_base_file_path": _DM_BASE_FILE_PATH,
         "additive_morph_null_alpha": ADDITIVE_MORPH_NULL_ALPHA,
         "additive_morph_null_parallel": RUN_ADDITIVE_MORPH_NULL_IN_PARALLEL,
         "additive_morph_null_workers": _resolve_additive_morph_null_workers(),
+        "parallel_event_model_fits": PARALLEL_EVENT_MODEL_FITS,
+        "event_model_fit_max_workers": EVENT_MODEL_FIT_MAX_WORKERS,
+        "parallel_trajectory_resampling": PARALLEL_TRAJECTORY_RESAMPLING,
+        "trajectory_resampling_max_workers": TRAJECTORY_RESAMPLING_MAX_WORKERS,
+        "geometry_specific_null": RUN_GEOMETRY_SPECIFIC_NULL,
+        "morphology_family_corrections": APPLY_MORPHOLOGY_TEST_FAMILY_CORRECTIONS,
         "jackknife_rows": jackknife_rows,
         "trajectory_summary_rows": trajectory_summary_rows,
         "trajectory_bootstrap_rows": trajectory_bootstrap_rows,
         "trajectory_nv_rows": trajectory_nv_rows,
         "trajectory_null_rows": trajectory_null_rows,
         "trajectory_cluster_summary_rows": trajectory_cluster_summary_rows,
+        "primary_event_nv_coordinate_rows": primary_event_nv_coordinate_rows,
         "figures": figures,
     }
 

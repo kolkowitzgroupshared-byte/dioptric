@@ -17,7 +17,7 @@ Important large-file behavior
 * only rep 11 / rep 12 count vectors plus small metadata/NV coordinates are used;
 * spatial-event maps are reconstructed from NV coordinates + charge transitions;
 * drift / brightness / image-correlation / raw-image diagnostics are skipped;
-* every figure explicitly calls fig.tight_layout().
+* every figure explicitly calls .
 
 Saved-array conventions
 -----------------------
@@ -64,17 +64,20 @@ from utils import kplotlib as kpl
 DATASETS = [
     {
         "label": "source_off_0s",
-
-        # Put ALL acquisitions taken at this same physical wait condition here.
-        # One file is fine; add additional stems as more data are acquired.
         "file_stems": [
             "2026_08_20-16_37_57-qnami-nv0_2026_02_20-"
             "particle-memory-source_off_wait_0s-wait-0s",
         ],
-
-        # Normally leave None.  If explicit paths are needed, provide one path
-        # per file stem, e.g. ["G:/.../file1.npz", "G:/.../file2.npz"].
         "npz_path_overrides": None,
+    },
+
+    {
+        "label": "dark_wait_15s",
+        "file_stem": (
+            "2026_08_30-07_39_05-qnami-nv0_2026_02_20-"
+            "particle-memory-source_off_wait_15s-wait-15s"
+        ),
+        "npz_path_override": None,
     },
 
     {
@@ -84,6 +87,15 @@ DATASETS = [
             "particle-memory-source_off_wait_30s-wait-30s",
         ],
         "npz_path_overrides": None,
+    },
+
+    {
+        "label": "dark_wait_45s",
+        "file_stem": (
+            "2026_08_31-16_48_17-qnami-nv0_2026_02_20-"
+            "particle-memory-source_off_wait_45s-wait-45s"
+        ),
+        "npz_path_override": None,
     },
 
     {
@@ -2822,7 +2834,7 @@ def _make_figures(result):
         axes[1].grid(alpha=0.2)
         axes[1].legend()
 
-        fig.tight_layout()
+        
         figures["run_quality_global_drop_rejection"] = fig
 
     # -------------------------------------------------------------------------
@@ -2860,7 +2872,7 @@ def _make_figures(result):
     axes[2].grid(alpha=0.2)
     axes[2].legend()
 
-    fig.tight_layout()
+    
     figures["charge_transitions_all_runs"] = fig
 
     # -------------------------------------------------------------------------
@@ -2915,7 +2927,7 @@ def _make_figures(result):
         ax.grid(alpha=0.2)
         ax.legend()
 
-        fig.tight_layout()
+        
         figures["transition_fraction_histogram"] = fig
 
     # -------------------------------------------------------------------------
@@ -2956,7 +2968,7 @@ def _make_figures(result):
     axes[1].set_title("Empirical rarity of each run")
     axes[1].grid(alpha=0.2)
 
-    fig.tight_layout()
+    
     figures["loss_anomaly_all_runs"] = fig
 
     # -------------------------------------------------------------------------
@@ -3103,7 +3115,6 @@ def _make_figures(result):
             "linear core + logarithmic tail",
             fontsize=13,
         )
-        fig.tight_layout(rect=(0, 0, 1, 0.965))
         figures["reference_poisson_linear_and_log"] = fig
 
         # ---------------------------------------------------------------------
@@ -3180,7 +3191,7 @@ def _make_figures(result):
                     fontsize=8,
                 )
 
-        fig.tight_layout()
+        
         figures["reference_poisson_threshold_rarity"] = fig
 
     # Keep the more detailed exposure-corrected Poisson fit from V9 as a
@@ -3254,7 +3265,7 @@ def _make_figures(result):
         axes[1].grid(alpha=0.2)
         axes[1].legend(fontsize=8)
 
-        fig.tight_layout()
+        
         figures["poisson_exposure_corrected_crosscheck"] = fig
 
     # -------------------------------------------------------------------------
@@ -3311,7 +3322,7 @@ def _make_figures(result):
         )
         axes[1].grid(alpha=0.2)
 
-        fig.tight_layout()
+        
         figures["poisson_sigma_outliers_all_runs"] = fig
 
     # -------------------------------------------------------------------------
@@ -3420,7 +3431,7 @@ def _make_figures(result):
     axes[1].grid(alpha=0.2)
     axes[1].legend(fontsize=8)
 
-    fig.tight_layout()
+    
     figures["sigma_threshold_outlier_counts_and_rarity"] = fig
 
     # -------------------------------------------------------------------------
@@ -3475,7 +3486,7 @@ def _make_figures(result):
         axes[1].grid(alpha=0.2)
         axes[1].legend()
 
-        fig.tight_layout()
+        
         figures["robust_and_spatial_z_histograms"] = fig
 
     # -------------------------------------------------------------------------
@@ -3531,7 +3542,7 @@ def _make_figures(result):
         axes[2].grid(alpha=0.2)
         axes[2].legend(ncol=2)
 
-        fig.tight_layout()
+        
         figures["spatial_correlation_all_runs"] = fig
 
     # -------------------------------------------------------------------------
@@ -3559,7 +3570,7 @@ def _make_figures(result):
         axes[2].set_title("Reference-NV drift consistency")
         axes[2].grid(alpha=0.2)
 
-        fig.tight_layout()
+        
         figures["drift_all_runs"] = fig
 
     # -------------------------------------------------------------------------
@@ -3586,7 +3597,7 @@ def _make_figures(result):
         axes[2].set_title("Downsampled rep11 / rep12 image similarity")
         axes[2].grid(alpha=0.2)
 
-        fig.tight_layout()
+        
         figures["readout_diagnostics_all_runs"] = fig
 
     # -------------------------------------------------------------------------
@@ -3619,7 +3630,7 @@ def _make_figures(result):
         axes[1].set_title(f"Transition excess vs drift\nPearson r={r_excess:.3f}")
         axes[1].grid(alpha=0.2)
 
-        fig.tight_layout()
+        
         figures["transition_probability_vs_drift_all_runs"] = fig
 
         result["transition_drift_pearson_r"] = r_raw
@@ -3698,7 +3709,7 @@ def _make_figures(result):
         axes[1, 0].axis("off")
         axes[1, 1].axis("off")
 
-    fig.tight_layout()
+    
     figures["artifact_correlation_checks"] = fig
 
     # -------------------------------------------------------------------------
@@ -3735,7 +3746,7 @@ def _make_figures(result):
             ax.grid(alpha=0.15)
             ax.legend(fontsize=7)
 
-        fig.tight_layout()
+        
         figures["top_event_maps"] = fig
 
     # -------------------------------------------------------------------------
@@ -3760,7 +3771,6 @@ def _make_figures(result):
             f"loss z={result['loss_z'][run_ind]:.2f}, "
             f"drift={result['drift_mag'][run_ind]:.3f} px"
         )
-        fig.tight_layout(rect=(0, 0, 1, 0.94))
         figures[f"candidate_R{run_ind}_raw_images"] = fig
 
     # Counts-only cleanup: do not keep figures whose inputs are entirely
@@ -4593,7 +4603,7 @@ def _make_pooled_source_off_summary(results):
     )
     ax.grid(alpha=0.2)
     ax.legend(fontsize=8)
-    fig.tight_layout()
+    
     figures["pooled_transition_fraction_histogram"] = fig
 
     # Pooled reference-style Poisson histogram.
@@ -4660,7 +4670,7 @@ def _make_pooled_source_off_summary(results):
         axes[1].grid(alpha=0.2)
         axes[1].legend(fontsize=8)
 
-        fig.tight_layout()
+        
         figures["pooled_reference_poisson_unscrambled_scrambled"] = fig
 
         # Pooled rarity comparison.
@@ -4694,7 +4704,7 @@ def _make_pooled_source_off_summary(results):
         )
         ax.grid(alpha=0.2, axis="y")
         ax.legend()
-        fig.tight_layout()
+        
         figures["pooled_reference_poisson_rarity"] = fig
 
     # Console summary.
@@ -8549,7 +8559,6 @@ def _make_v20_spatial_figures(result):
     fig.suptitle(
         f"{result['dataset_label']}: heterogeneous per-NV charge-loss background"
     )
-    fig.tight_layout(rect=(0, 0, 1, 0.95))
     figures["v20_nv_probability_maps"] = fig
 
     # ------------------------------------------------------------------
@@ -8651,7 +8660,6 @@ def _make_v20_spatial_figures(result):
         fig.suptitle(
             f"{result['dataset_label']}: spatial correlation function"
         )
-        fig.tight_layout(rect=(0, 0, 1, 0.95))
         figures["v20_spatial_correlation_length"] = fig
 
     # ------------------------------------------------------------------
@@ -8717,7 +8725,7 @@ def _make_v20_spatial_figures(result):
     axes[1].grid(alpha=0.2)
     axes[1].legend(fontsize=8)
 
-    fig.tight_layout()
+    
     figures["v20_poisson_binomial_null"] = fig
 
     # ------------------------------------------------------------------
@@ -8834,7 +8842,6 @@ def _make_v20_spatial_figures(result):
         fig.suptitle(
             f"{result['dataset_label']}: V23 weighted same-K spatial analysis"
         )
-        fig.tight_layout(rect=(0, 0, 1, 0.95))
         figures["v23_weighted_same_k_spatial"] = fig
 
 
@@ -8924,7 +8931,6 @@ def _make_v20_spatial_figures(result):
                 f"{result['dataset_label']}: V23 bin-width robustness "
                 f"(same {int(vn['num_null_datasets'])} null data sets)"
             )
-            fig.tight_layout(rect=(0, 0, 1, 0.95))
             figures["v23_bin_width_robustness"] = fig
 
 
@@ -9059,7 +9065,6 @@ def _make_v20_spatial_figures(result):
                 f"{result['dataset_label']}: V23 spatial robustness "
                 f"(same {int(vn['num_null_datasets'])} null data sets)"
             )
-            fig.tight_layout(rect=(0, 0, 1, 0.95))
             figures["v23_g_overlay_and_cumulative_G"] = fig
 
     # ------------------------------------------------------------------
@@ -9163,7 +9168,6 @@ def _make_v20_spatial_figures(result):
         fig.suptitle(
             f"{result['dataset_label']}: V22 two-way conditioned spatial test"
         )
-        fig.tight_layout(rect=(0, 0, 1, 0.95))
         figures["v22_background_conditioned_spatial"] = fig
 
     # ------------------------------------------------------------------
@@ -9265,7 +9269,6 @@ def _make_v20_spatial_figures(result):
         fig.suptitle(
             f"{result['dataset_label']}: V21 K-conditioned spatial test"
         )
-        fig.tight_layout(rect=(0, 0, 1, 0.95))
         figures["v21_k_conditioned_spatial_correlation"] = fig
 
     # ------------------------------------------------------------------
@@ -9336,7 +9339,6 @@ def _make_v20_spatial_figures(result):
         fig.suptitle(
             f"{result['dataset_label']}: V20 rare-event morphology"
         )
-        fig.tight_layout(rect=(0, 0, 1, 0.96))
         figures["v20_candidate_morphology_summary"] = fig
 
         # --------------------------------------------------------------
@@ -9427,7 +9429,6 @@ def _make_v20_spatial_figures(result):
                 f"{result['dataset_label']}: strongest spatial candidates "
                 "(coordinates only — no img_arrays)"
             )
-            fig.tight_layout(rect=(0, 0, 1, 0.94))
             figures["v20_candidate_coordinate_maps"] = fig
 
     return figures
@@ -10734,7 +10735,7 @@ def _comparison_summary_and_figures(results):
         axes[1].grid(alpha=0.2)
         axes[1].legend(fontsize=8)
 
-        fig.tight_layout()
+        
         figures["comparison_transition_fraction_distribution"] = fig
 
     # ------------------------------------------------------------------
@@ -10856,7 +10857,6 @@ def _comparison_summary_and_figures(results):
             "Comparison of coincidence / transition-count distributions",
             fontsize=13,
         )
-        fig.tight_layout(rect=(0, 0, 1, 0.965))
         figures["comparison_transition_count_poisson"] = fig
 
     # ------------------------------------------------------------------
@@ -10911,7 +10911,7 @@ def _comparison_summary_and_figures(results):
     axes[1, 1].grid(alpha=0.2, axis="y")
     axes[1, 1].legend()
 
-    fig.tight_layout()
+    
     figures["comparison_summary_metrics"] = fig
 
     # ------------------------------------------------------------------
@@ -11020,7 +11020,6 @@ def _comparison_summary_and_figures(results):
             "Characteristic distribution fits: Poisson vs beta-binomial",
             fontsize=13,
         )
-        fig.tight_layout(rect=(0, 0, 1, 0.965))
         figures["comparison_characteristic_distribution_fits"] = fig
 
         # ------------------------------------------------------------------
@@ -11077,7 +11076,7 @@ def _comparison_summary_and_figures(results):
         axes[2].grid(alpha=0.2, axis="y")
         axes[2].legend(fontsize=8)
 
-        fig.tight_layout()
+        
         figures["comparison_characteristic_parameters"] = fig
 
     # ------------------------------------------------------------------
@@ -11176,7 +11175,7 @@ def _comparison_summary_and_figures(results):
                 va="center",
             )
 
-    fig.tight_layout()
+    
     figures["comparison_outlier_rates"] = fig
 
     # ------------------------------------------------------------------
@@ -11271,7 +11270,6 @@ def _comparison_summary_and_figures(results):
         axes[1].legend(fontsize=8)
 
         fig.suptitle("V20: spatial correlation across dark-wait conditions")
-        fig.tight_layout(rect=(0, 0, 1, 0.95))
         figures["v20_comparison_spatial_correlation"] = fig
 
         # --------------------------------------------------------------
@@ -11380,7 +11378,6 @@ def _comparison_summary_and_figures(results):
         axes[1, 1].grid(alpha=0.2, axis="y")
 
         fig.suptitle("V20: quantitative spatial-event comparison")
-        fig.tight_layout(rect=(0, 0, 1, 0.96))
         figures["v20_comparison_spatial_parameters"] = fig
 
         # Console summary.
@@ -11523,7 +11520,6 @@ def _comparison_summary_and_figures(results):
         fig.suptitle(
             "V23: rigorous heterogeneous-background spatial comparison"
         )
-        fig.tight_layout(rect=(0, 0, 1, 0.95))
         figures["v23_comparison_weighted_same_k_spatial"] = fig
 
         print("\n" + "=" * 164)
@@ -11653,7 +11649,7 @@ def _comparison_summary_and_figures(results):
         ax.grid(alpha=0.2)
         ax.legend(fontsize=8)
 
-        fig.tight_layout()
+        
         figures["v23_comparison_cumulative_G"] = fig
 
     # ------------------------------------------------------------------
@@ -11747,7 +11743,6 @@ def _comparison_summary_and_figures(results):
         fig.suptitle(
             "V22: background- and K-conditioned spatial comparison"
         )
-        fig.tight_layout(rect=(0, 0, 1, 0.95))
         figures["v22_comparison_background_conditioned_spatial"] = fig
 
         print("\n" + "=" * 160)
@@ -11894,7 +11889,6 @@ def _comparison_summary_and_figures(results):
             "V21: K-conditioned spatial comparison "
             "(global event magnitude removed)"
         )
-        fig.tight_layout(rect=(0, 0, 1, 0.95))
         figures["v21_comparison_k_conditioned_spatial"] = fig
 
         print("\n" + "=" * 152)

@@ -30,11 +30,14 @@ rep 12 : charge check after the dark wait
 from __future__ import annotations
 
 import gc
+import csv
 import os
 import time
 import zipfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Sequence, Tuple
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -68,23 +71,26 @@ from utils import kplotlib as kpl
 # file stems, if automatic Dioptric NAS/search-index resolution cannot locate
 # the files.
 DATASETS = [
-    # {
-    #     "label": "dark_wait_0s",
-    #     "file_stem": (
-    #         "2026_08_20-16_37_57-qnami-nv0_2026_02_20-"
-    #         "particle-memory-source_off_wait_0s-wait-0s"
-    #     ),
-    #     "npz_path_override": None,
-    #     "max_runs": 2008,
-    # },
-
+    # Repeated same-wait acquisitions must be entries in ONE tuple. The
+    # humidity analysis nevertheless reports them as separate physical
+    # acquisitions. This tuple includes all four available 0-s measurements.
     {
         "label": "dark_wait_0s",
         "file_stem": (
+            "2026_08_20-16_37_57-qnami-nv0_2026_02_20-"
+            "particle-memory-source_off_wait_0s-wait-0s",
             "2026_09_01-01_08_53-qnami-nv0_2026_02_20-"
-            "particle-memory-source_off_wait_0s-wait-0s"
+            "particle-memory-source_off_wait_0s-wait-0s",
+            "2026_09_03-11_17_51-qnami-nv0_2026_02_20-"
+            "particle-memory-source_off_wait_0s-wait-0s",
+            "2026_09_04-03_40_05-qnami-nv0_2026_02_20-"
+            "particle-memory-source_off_wait_0s-wait-0s",
         ),
         "npz_path_override": None,
+        # The Aug. 20 source contains >2000 runs; 2008 raw runs leave 2000
+        # accepted runs after the known global-drop rejection. Applied to each
+        # source; shorter sources simply use all available runs.
+        "max_runs": 2008,
     },
   
     {
@@ -103,19 +109,13 @@ DATASETS = [
         ),
         "npz_path_override": None,
     },
-    # {
-    #     "label": "dark_wait_45s",
-    #     "file_stem": (
-    #         "2026_08_31-16_48_17-qnami-nv0_2026_02_20-"
-    #         "particle-memory-source_off_wait_45s-wait-45s"
-    #     ),
-    #     "npz_path_override": None,
-    # },
     {
         "label": "dark_wait_45s",
         "file_stem": (
+            "2026_08_31-16_48_17-qnami-nv0_2026_02_20-"
+            "particle-memory-source_off_wait_45s-wait-45s",
             "2026_09_03-03_11_34-qnami-nv0_2026_02_20-"
-            "particle-memory-source_off_wait_45s-wait-45s"
+            "particle-memory-source_off_wait_45s-wait-45s",
         ),
         "npz_path_override": None,
     },
@@ -163,9 +163,51 @@ MAKE_COMPACT_DARK_WAIT_DISTRIBUTION_GRID = False
 
 # Charge-state-threshold stability / consistency analysis.
 MAKE_CHARGE_THRESHOLD_CONSISTENCY_PLOTS = True
+MAKE_RUN_METRIC_DISTRIBUTION_TIME_PLOTS = True
 THRESHOLD_REFERENCE_WAIT_S = 0.0
 THRESHOLD_HIST_BINS = 50
 THRESHOLD_TOLERANCES_COUNTS = (5.0, 10.0)
+THRESHOLD_TIME_BREAK_HOURS = 36.0
+THRESHOLD_TIME_COMPRESSED_GAP_HOURS = 6.0
+THRESHOLD_TIME_METRIC_ANNOTATE = True
+
+# Humidity / environment correlation analysis.
+#
+# The particle-memory routine saves ``timestamp`` at the END of an experiment
+# and ``experiment_wall_s`` for the measured acquisition duration.  When an
+# explicit per-run timestamp array is not present, run midpoints are therefore
+# reconstructed between ``timestamp - experiment_wall_s`` and ``timestamp``.
+# Recorded ``phase_records[*].actual_wait_s`` are used to weight those run
+# intervals; non-wait overhead is distributed equally across runs.
+MAKE_HUMIDITY_CORRELATION_PLOTS = True
+HUMIDITY_CSV_PATH = "TS00NAHQ2A--2026-09-04--30_days.csv"
+HUMIDITY_TIMEZONE = "America/Los_Angeles"
+HUMIDITY_MAX_INTERPOLATION_GAP_MIN = 30.1
+HUMIDITY_BIN_WIDTH_RH_PERCENT = 0.5
+HUMIDITY_MIN_RUNS_PER_BIN = 25
+HUMIDITY_CIRCULAR_SHIFT_NULLS = 5000
+HUMIDITY_RANDOM_SEED = 271828
+HUMIDITY_RATE_WINDOW_SAMPLES = 5
+SIGMA_EXCEEDANCE_LEVELS = (3.0, 4.0, 5.0)
+
+# In the shot-level figures, every point is one time-aligned experimental run
+# ("shot").  The four environmental predictors and four transition metrics are
+# kept configurable so a smaller subset can be plotted without changing code.
+SHOT_ENVIRONMENT_PREDICTORS = (
+    "humidity",
+    "temperature_c",
+    "dew_point_c",
+    "humidity_rate_rh_per_hour",
+)
+SHOT_RESPONSE_METRICS = (
+    "transition_fraction_pct",
+    "lost",
+    "robust_z",
+    "poisson_local_significance",
+)
+SHOT_CORRELATION_NUM_BINS = 12
+SHOT_CORRELATION_MIN_RUNS_PER_BIN = 20
+SHOT_CORRELATION_MAX_SCATTER_POINTS = 2000
 
 # Validate that NV index i refers to the same physical NV across measurements.
 # We first remove the global camera translation, then inspect the RMS residual.
@@ -267,7 +309,7 @@ CALCULATE_TRIAL_CORRECTED_POISSON_SIGMA = True
 CALCULATE_REFERENCE_POISSON = True
 SCRAMBLE_SHIFT_PER_NV = 10
 
-SCRIPT_VERSION = "BIGFILE_CLEAN_STREAM_V21_THRESHOLD_CONSISTENCY_2026-09-03"
+SCRIPT_VERSION = "BIGFILE_CLEAN_STREAM_V27_SIGMA_ONE_ROW_2026-09-05"
 
 
 # =============================================================================
@@ -293,6 +335,451 @@ def _print_memory(label: str) -> None:
         print(f"[memory] {label}: RSS={_format_bytes(rss)}", flush=True)
     except Exception:
         pass
+
+
+def _safe_subplots_adjust(fig, **kwargs):
+    """Adjust manually only when Matplotlib is not already managing layout."""
+    try:
+        layout_engine = fig.get_layout_engine()
+    except Exception:
+        layout_engine = None
+    if layout_engine is None:
+        fig.subplots_adjust(**kwargs)
+
+
+def _lab_timezone():
+    """Return the configured lab timezone, with a safe UTC fallback."""
+    try:
+        return ZoneInfo(str(HUMIDITY_TIMEZONE))
+    except Exception:
+        return timezone.utc
+
+
+def _parse_datetime_value(value):
+    """Parse Dioptric/sensor timestamps into naive lab-local datetimes."""
+    if value is None:
+        return None
+
+    if isinstance(value, datetime):
+        dt = value
+    elif isinstance(value, np.datetime64):
+        if np.isnat(value):
+            return None
+        seconds = (
+            value.astype("datetime64[us]").astype(np.int64) / 1.0e6
+        )
+        dt = datetime.fromtimestamp(float(seconds), tz=timezone.utc)
+    elif isinstance(value, (int, float, np.integer, np.floating)):
+        value = float(value)
+        # Only interpret numeric values that plausibly represent Unix time.
+        # Monotonic/perf-counter seconds are deliberately rejected.
+        if not np.isfinite(value) or value < 1.0e8:
+            return None
+        if value > 1.0e14:
+            value /= 1.0e9
+        elif value > 1.0e11:
+            value /= 1.0e3
+        dt = datetime.fromtimestamp(value, tz=timezone.utc)
+    else:
+        text = str(value).strip()
+        if not text:
+            return None
+
+        # A file stem starts with the normal Dioptric timestamp.
+        stem_token = Path(text).name[:19]
+        formats = (
+            "%Y_%m_%d-%H_%M_%S",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%d %H:%M:%S.%f",
+            "%Y-%m-%dT%H:%M:%S.%f",
+        )
+        dt = None
+        for candidate in (text, stem_token):
+            for fmt in formats:
+                try:
+                    dt = datetime.strptime(candidate, fmt)
+                    break
+                except Exception:
+                    continue
+            if dt is not None:
+                break
+
+        if dt is None:
+            try:
+                dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            except Exception:
+                return None
+
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(_lab_timezone()).replace(tzinfo=None)
+    return dt
+
+
+def _metadata_float(metadata, keys):
+    if not isinstance(metadata, dict):
+        return np.nan
+    lookup = {str(k).lower(): k for k in metadata}
+    for key in keys:
+        actual = lookup.get(str(key).lower())
+        if actual is None:
+            continue
+        try:
+            value = float(metadata[actual])
+        except Exception:
+            continue
+        if np.isfinite(value):
+            return value
+    return np.nan
+
+
+def _metadata_datetime(metadata, keys):
+    if not isinstance(metadata, dict):
+        return None
+    lookup = {str(k).lower(): k for k in metadata}
+    for key in keys:
+        actual = lookup.get(str(key).lower())
+        if actual is None:
+            continue
+        dt = _parse_datetime_value(metadata[actual])
+        if dt is not None:
+            return dt
+    return None
+
+
+def _coerce_explicit_run_datetimes(value, num_runs):
+    """Return an explicit metadata timestamp array when it is unambiguous."""
+    if isinstance(value, dict):
+        try:
+            ordered_keys = sorted(value, key=lambda k: int(k))
+            value = [value[k] for k in ordered_keys]
+        except Exception:
+            return None
+    try:
+        values = list(np.asarray(value, dtype=object).ravel())
+    except Exception:
+        return None
+    if len(values) != int(num_runs):
+        return None
+    parsed = [_parse_datetime_value(v) for v in values]
+    if any(v is None for v in parsed):
+        return None
+    return np.asarray(parsed, dtype=object)
+
+
+def _find_explicit_run_datetimes(metadata, num_runs):
+    """Find a future/current per-run wall-clock array without guessing durations."""
+    if not isinstance(metadata, dict):
+        return None, None
+
+    preferred = (
+        "run_timestamps",
+        "run_time_stamps",
+        "run_datetimes",
+        "run_datetime",
+        "run_wall_timestamps",
+        "run_start_timestamps",
+        "run_midpoint_timestamps",
+    )
+
+    containers = [("", metadata)]
+    for key, value in metadata.items():
+        if isinstance(value, dict) and any(
+            token in str(key).lower() for token in ("time", "timing", "run")
+        ):
+            containers.append((f"{key}.", value))
+
+    for prefix, container in containers:
+        lookup = {str(k).lower(): k for k in container}
+        for key in preferred:
+            actual = lookup.get(key)
+            if actual is None:
+                continue
+            parsed = _coerce_explicit_run_datetimes(
+                container[actual], num_runs
+            )
+            if parsed is not None:
+                return parsed, prefix + str(actual)
+
+    # Conservative fuzzy fallback: require both "run" and an absolute-time
+    # word. This avoids treating run-duration or perf-counter arrays as clocks.
+    for prefix, container in containers:
+        for key, value in container.items():
+            name = str(key).lower()
+            if "run" not in name or not any(
+                token in name for token in ("timestamp", "datetime", "wall_time")
+            ):
+                continue
+            parsed = _coerce_explicit_run_datetimes(value, num_runs)
+            if parsed is not None:
+                return parsed, prefix + str(key)
+    return None, None
+
+
+def _actual_waits_by_run(metadata, num_runs):
+    """Extract one recorded dark-exposure duration per run when complete."""
+    if not isinstance(metadata, dict):
+        return None
+    records = metadata.get("phase_records")
+    if not isinstance(records, (list, tuple)):
+        return None
+
+    waits = np.full(int(num_runs), np.nan, dtype=float)
+    for rec in records:
+        if not isinstance(rec, dict) or rec.get("phase") != "dark_exposure":
+            continue
+        try:
+            run_ind = int(rec["run_ind"])
+            wait_s = float(rec["actual_wait_s"])
+        except Exception:
+            continue
+        if 0 <= run_ind < waits.size and np.isfinite(wait_s) and wait_s >= 0:
+            waits[run_ind] = wait_s
+
+    return waits if waits.size and np.all(np.isfinite(waits)) else None
+
+
+def _run_datetimes_from_metadata(metadata, file_stem, num_runs):
+    """Build per-run wall-clock midpoints from saved experiment metadata.
+
+    Priority is: explicit per-run absolute timestamps; saved start/end bounds;
+    saved end ``timestamp`` plus ``experiment_wall_s``; file-stem end time.
+    The last option is acquisition-level only and intentionally gives all runs
+    the same time rather than inventing a duration.
+    """
+    num_runs = int(num_runs)
+    explicit, explicit_key = _find_explicit_run_datetimes(metadata, num_runs)
+    if explicit is not None:
+        return explicit, {
+            "method": f"metadata explicit array: {explicit_key}",
+            "start_datetime": explicit[0],
+            "end_datetime": explicit[-1],
+            "experiment_wall_s": float(
+                (explicit[-1] - explicit[0]).total_seconds()
+            ),
+        }
+
+    start_dt = _metadata_datetime(
+        metadata,
+        ("start_timestamp", "experiment_start_timestamp", "start_datetime"),
+    )
+    end_dt = _metadata_datetime(
+        metadata,
+        ("timestamp", "end_timestamp", "stop_timestamp", "end_datetime"),
+    )
+    wall_s = _metadata_float(
+        metadata,
+        ("experiment_wall_s", "experiment_duration_s", "time_elapsed"),
+    )
+
+    if end_dt is None:
+        end_dt = _parse_datetime_value(file_stem)
+        end_source = "file-stem save/end timestamp"
+    else:
+        end_source = "metadata timestamp"
+
+    if start_dt is None and end_dt is not None and np.isfinite(wall_s) and wall_s >= 0:
+        start_dt = end_dt - timedelta(seconds=float(wall_s))
+    elif end_dt is None and start_dt is not None and np.isfinite(wall_s) and wall_s >= 0:
+        end_dt = start_dt + timedelta(seconds=float(wall_s))
+    elif start_dt is not None and end_dt is not None and not np.isfinite(wall_s):
+        wall_s = float((end_dt - start_dt).total_seconds())
+
+    if (
+        num_runs > 0
+        and start_dt is not None
+        and end_dt is not None
+        and np.isfinite(wall_s)
+        and wall_s >= 0
+    ):
+        # Prefer the observed start/end span when both were explicitly saved.
+        span_s = float((end_dt - start_dt).total_seconds())
+        if np.isfinite(span_s) and span_s >= 0:
+            wall_s = span_s
+
+        actual_waits = _actual_waits_by_run(metadata, num_runs)
+        if actual_waits is not None and wall_s >= float(np.sum(actual_waits)):
+            overhead_s = (wall_s - float(np.sum(actual_waits))) / num_runs
+            durations = actual_waits + overhead_s
+            method = (
+                "metadata end + experiment_wall_s; phase-record-weighted "
+                "run midpoints"
+            )
+        else:
+            durations = np.full(num_runs, wall_s / num_runs, dtype=float)
+            method = "metadata acquisition bounds; uniform run midpoints"
+
+        midpoint_s = np.cumsum(durations) - 0.5 * durations
+        run_datetimes = np.asarray(
+            [start_dt + timedelta(seconds=float(v)) for v in midpoint_s],
+            dtype=object,
+        )
+        return run_datetimes, {
+            "method": method,
+            "start_datetime": start_dt,
+            "end_datetime": end_dt,
+            "experiment_wall_s": float(wall_s),
+        }
+
+    # No duration is available. The metadata/file timestamp still supports an
+    # acquisition-level humidity match, but not a within-acquisition trend.
+    if end_dt is not None and num_runs > 0:
+        return np.full(num_runs, end_dt, dtype=object), {
+            "method": end_source + "; acquisition-level only",
+            "start_datetime": None,
+            "end_datetime": end_dt,
+            "experiment_wall_s": np.nan,
+        }
+
+    return np.full(num_runs, None, dtype=object), {
+        "method": "no usable wall-clock metadata",
+        "start_datetime": None,
+        "end_datetime": None,
+        "experiment_wall_s": np.nan,
+    }
+
+
+def _resolve_humidity_csv_path(path_like):
+    path = Path(path_like).expanduser()
+    candidates = [path]
+    if not path.is_absolute():
+        candidates.extend(
+            [
+                Path.cwd() / path,
+                Path(__file__).resolve().parent / path,
+                Path.cwd() / "upload" / path,
+                Path(__file__).resolve().parent / "upload" / path,
+            ]
+        )
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return candidate.resolve()
+    raise FileNotFoundError(
+        f"Humidity CSV not found: {path_like}. Put it beside this script or "
+        "set HUMIDITY_CSV_PATH to its full path."
+    )
+
+
+def _naive_datetime_seconds(dt):
+    return float((dt - datetime(1970, 1, 1)).total_seconds())
+
+
+def _local_environment_rate_per_hour(seconds, values, window_samples):
+    """Local linear rate using a centered window of sensor samples."""
+    seconds = np.asarray(seconds, dtype=float)
+    values = np.asarray(values, dtype=float)
+    rate = np.full(values.shape, np.nan, dtype=float)
+    half = max(1, int(window_samples) // 2)
+    for ind in range(values.size):
+        lo = max(0, ind - half)
+        hi = min(values.size, ind + half + 1)
+        x = (seconds[lo:hi] - seconds[ind]) / 3600.0
+        y = values[lo:hi]
+        good = np.isfinite(x) & np.isfinite(y)
+        if np.sum(good) < 2 or np.ptp(x[good]) <= 0:
+            continue
+        xg = x[good]
+        yg = y[good]
+        xc = xg - np.mean(xg)
+        denom = float(np.dot(xc, xc))
+        if denom > 0:
+            rate[ind] = float(np.dot(xc, yg - np.mean(yg)) / denom)
+    return rate
+
+
+def _load_environment_csv(path_like):
+    """Load and de-duplicate the SensorPush-style environmental CSV."""
+    path = _resolve_humidity_csv_path(path_like)
+    with path.open("r", encoding="utf-8-sig", newline="") as stream:
+        lines = stream.readlines()
+
+    header_ind = None
+    for ind, line in enumerate(lines):
+        first = line.split(",", 1)[0].strip()
+        if first == "Timestamp":
+            header_ind = ind
+            break
+    if header_ind is None:
+        raise ValueError(f"No Timestamp header found in humidity CSV: {path}")
+
+    grouped = {}
+    for row in csv.DictReader(lines[header_ind:]):
+        dt = _parse_datetime_value(row.get("Timestamp"))
+        if dt is None:
+            continue
+        record = grouped.setdefault(
+            dt,
+            {"Temperature": [], "Humidity": [], "Dew Point": []},
+        )
+        for key in record:
+            try:
+                value = float(str(row.get(key, "")).strip())
+            except Exception:
+                value = np.nan
+            if np.isfinite(value):
+                record[key].append(value)
+
+    if len(grouped) < 2:
+        raise ValueError(f"Too few valid environmental records in {path}")
+
+    datetimes = np.asarray(sorted(grouped), dtype=object)
+    output = {
+        "path": str(path),
+        "datetimes": datetimes,
+        "seconds": np.asarray(
+            [_naive_datetime_seconds(dt) for dt in datetimes], dtype=float
+        ),
+    }
+    for key in ("Temperature", "Humidity", "Dew Point"):
+        output[key] = np.asarray(
+            [
+                float(np.mean(grouped[dt][key]))
+                if grouped[dt][key]
+                else np.nan
+                for dt in datetimes
+            ],
+            dtype=float,
+        )
+    output["Humidity Rate"] = _local_environment_rate_per_hour(
+        output["seconds"],
+        output["Humidity"],
+        HUMIDITY_RATE_WINDOW_SAMPLES,
+    )
+    return output
+
+
+def _interpolate_environment(environment, query_datetimes):
+    """Linearly interpolate environmental values without extrapolation."""
+    x = np.asarray(environment["seconds"], dtype=float)
+    query = np.full(len(query_datetimes), np.nan, dtype=float)
+    for ind, dt in enumerate(query_datetimes):
+        if isinstance(dt, datetime):
+            query[ind] = _naive_datetime_seconds(dt)
+
+    hi = np.searchsorted(x, query, side="left")
+    exact = np.zeros(query.size, dtype=bool)
+    in_hi = (hi >= 0) & (hi < x.size) & np.isfinite(query)
+    exact[in_hi] = np.isclose(x[hi[in_hi]], query[in_hi], atol=1.0e-6)
+    interior = np.isfinite(query) & (hi > 0) & (hi < x.size)
+
+    gap_min = np.full(query.size, np.nan, dtype=float)
+    gap_min[interior] = (x[hi[interior]] - x[hi[interior] - 1]) / 60.0
+    valid = exact | (
+        interior
+        & (gap_min <= float(HUMIDITY_MAX_INTERPOLATION_GAP_MIN))
+    )
+
+    output = {
+        "valid": valid,
+        "bracket_gap_min": gap_min,
+    }
+    for key in ("Temperature", "Humidity", "Dew Point", "Humidity Rate"):
+        values = np.asarray(environment[key], dtype=float)
+        interp = np.full(query.size, np.nan, dtype=float)
+        can_interp = valid & np.isfinite(query)
+        interp[can_interp] = np.interp(query[can_interp], x, values)
+        output[key] = interp
+    return output
 
 
 def _robust_zscore(values):
@@ -2691,7 +3178,8 @@ def _make_compact_dark_wait_figures(results):
                     ax.set_ylim(ymin, ymax)
 
             fig.suptitle(title + " across dark waits", fontsize=13)
-            fig.subplots_adjust(
+            _safe_subplots_adjust(
+                fig,
                 left=0.12,
                 right=0.985,
                 bottom=0.06,
@@ -2825,7 +3313,8 @@ def _make_compact_dark_wait_figures(results):
             axes[0].set_title(title)
             axes[-1].set_xlabel(xlabel)
             fig.suptitle(title + " across dark waits", fontsize=13)
-            fig.subplots_adjust(
+            _safe_subplots_adjust(
+                fig,
                 left=0.12,
                 right=0.985,
                 bottom=0.06,
@@ -2882,6 +3371,95 @@ def _make_compact_dark_wait_figures(results):
 # =============================================================================
 
 
+def _parse_file_stem_datetime(file_stem):
+    """Parse the saved/end datetime from a particle-memory file stem."""
+    if file_stem is None:
+        return None
+    stem = str(file_stem)
+    token = Path(stem).name[:19]
+    try:
+        return datetime.strptime(token, "%Y_%m_%d-%H_%M_%S")
+    except Exception:
+        return None
+
+
+def _record_end_datetime(record):
+    """Prefer the metadata-derived acquisition end; use the stem as fallback."""
+    timing_info = record.get("timing_info", {})
+    if isinstance(timing_info, dict):
+        dt = timing_info.get("end_datetime")
+        if isinstance(dt, datetime):
+            return dt
+    return _parse_file_stem_datetime(record.get("file_stem"))
+
+
+def _compressed_time_positions(datetimes, break_hours=THRESHOLD_TIME_BREAK_HOURS,
+                               compressed_gap_hours=THRESHOLD_TIME_COMPRESSED_GAP_HOURS):
+    """Map datetimes to a monotonic x coordinate with explicit gap compression.
+
+    Returns
+    -------
+    positions : ndarray
+        Monotonic x coordinates in pseudo-hours. Small gaps preserve elapsed
+        time; large gaps are compressed to `compressed_gap_hours`.
+    break_positions : list of float
+        Midpoints where a visual axis-break marker should be drawn.
+    elapsed_hours : ndarray
+        True elapsed hours from the first acquisition.
+    """
+    if len(datetimes) == 0:
+        return np.array([], dtype=float), [], np.array([], dtype=float)
+    if len(datetimes) == 1:
+        return np.array([0.0], dtype=float), [], np.array([0.0], dtype=float)
+
+    dts = list(datetimes)
+    t0 = dts[0]
+    elapsed_hours = np.asarray([(dt - t0).total_seconds() / 3600.0 for dt in dts], dtype=float)
+    x = np.zeros(len(dts), dtype=float)
+    breaks = []
+    for i in range(1, len(dts)):
+        gap = float((dts[i] - dts[i - 1]).total_seconds() / 3600.0)
+        if gap > float(break_hours):
+            x[i] = x[i - 1] + float(compressed_gap_hours)
+            breaks.append(0.5 * (x[i - 1] + x[i]))
+        else:
+            x[i] = x[i - 1] + gap
+    return x, breaks, elapsed_hours
+
+
+def _draw_axis_breaks_on_xaxis(ax, break_positions):
+    """Draw slanted break markers on the x-axis of one matplotlib axis."""
+    if not break_positions:
+        return
+    x0, x1 = ax.get_xlim()
+    dx = 0.01 * max(x1 - x0, 1.0)
+    trans = ax.get_xaxis_transform()
+    for xb in break_positions:
+        ax.plot([xb - dx, xb - 0.25 * dx], [-0.03, 0.03], transform=trans, color='k', clip_on=False, linewidth=1.0)
+        ax.plot([xb + 0.25 * dx, xb + dx], [-0.03, 0.03], transform=trans, color='k', clip_on=False, linewidth=1.0)
+
+
+def _format_threshold_time_tick(rec):
+    dt = rec.get("acquisition_datetime")
+    if dt is None:
+        return str(rec.get("measurement_label", "measurement"))
+    wait_label = str(rec.get("wait_label", rec.get("measurement_label", "")))
+    return f"{wait_label}\n{dt.strftime('%b %d')}\n{dt.strftime('%H:%M')}"
+
+
+def _style_boxplot_monochrome(bp):
+    for box in bp.get('boxes', []):
+        box.set(color='k', linewidth=1.1)
+    for whisker in bp.get('whiskers', []):
+        whisker.set(color='k', linewidth=1.0)
+    for cap in bp.get('caps', []):
+        cap.set(color='k', linewidth=1.0)
+    for median in bp.get('medians', []):
+        median.set(color='k', linewidth=1.2)
+    for flier in bp.get('fliers', []):
+        flier.set(marker='o', markerfacecolor='none', markeredgecolor='k', markersize=3.0)
+
+
 def _threshold_sets_for_result(result):
     """Return one saved threshold vector per source acquisition.
 
@@ -2911,6 +3489,8 @@ def _threshold_sets_for_result(result):
                 "wait_label": wait_label,
                 "measurement_label": label,
                 "source_index": int(ind - 1),
+                "file_stem": part.get("file_stem"),
+                "acquisition_datetime": _record_end_datetime(part),
                 "thresholds": thr,
                 "coords_xy": coords,
             })
@@ -2930,6 +3510,8 @@ def _threshold_sets_for_result(result):
         "wait_label": wait_label,
         "measurement_label": wait_label,
         "source_index": 0,
+        "file_stem": result.get("file_stem"),
+        "acquisition_datetime": _record_end_datetime(result),
         "thresholds": np.asarray(thr, dtype=float).ravel(),
         "coords_xy": coords,
     })
@@ -3035,6 +3617,1337 @@ def _match_threshold_nvs(reference_record, target_record):
     )
 
 
+def _run_metric_distribution_records(results):
+    """Return one measurement record per source acquisition for run-level metrics.
+
+    Each record contains accepted per-run values for the three main observables,
+    split by source acquisition when a logical dataset was append-combined.
+    """
+    records = []
+    ordered_results = sorted(list(results), key=_dark_wait_sort_key)
+    for result in ordered_results:
+        wait_label = _dark_wait_label(result)
+        good_global = np.asarray(result.get('good_run_mask', []), dtype=bool)
+        loss_fraction_all = 100.0 * np.asarray(result.get('loss_fraction', []), dtype=float)
+        loss_z_all = np.asarray(result.get('loss_z', []), dtype=float)
+        poisson_all = (
+            np.asarray(result['poisson']['poisson_local_sigma'], dtype=float)
+            if result.get('poisson') is not None
+            else np.full_like(loss_z_all, np.nan, dtype=float)
+        )
+
+        parts = result.get('source_parts')
+        if isinstance(parts, (list, tuple)) and len(parts) > 0:
+            dataset_id_by_run = np.asarray(result.get('dataset_id_by_run'), dtype=int)
+            for part in parts:
+                dataset_id = int(part.get('dataset_id', 0))
+                mask = good_global & (dataset_id_by_run == dataset_id)
+                records.append({
+                    'wait_s': float(result.get('dark_wait_s', np.nan)),
+                    'wait_label': wait_label,
+                    'measurement_label': str(part.get('label', wait_label)),
+                    'source_index': dataset_id,
+                    'file_stem': part.get('file_stem'),
+                    'acquisition_datetime': _record_end_datetime(part),
+                    'transition_fraction': loss_fraction_all[mask],
+                    'robust_z': loss_z_all[mask],
+                    'poisson_local_significance': poisson_all[mask],
+                    'num_good_runs': int(np.sum(mask)),
+                })
+        else:
+            records.append({
+                'wait_s': float(result.get('dark_wait_s', np.nan)),
+                'wait_label': wait_label,
+                'measurement_label': str(result.get('dataset_label', wait_label)),
+                'source_index': 0,
+                'file_stem': result.get('file_stem'),
+                'acquisition_datetime': _record_end_datetime(result),
+                'transition_fraction': loss_fraction_all[good_global],
+                'robust_z': loss_z_all[good_global],
+                'poisson_local_significance': poisson_all[good_global],
+                'num_good_runs': int(np.sum(good_global)),
+            })
+    return records
+
+
+def _run_metric_distributions_vs_time_figures(results):
+    """Create time-axis boxplot distributions for run-level observables."""
+    figures = {}
+    records = [r for r in _run_metric_distribution_records(results) if r.get('acquisition_datetime') is not None]
+    records.sort(key=lambda r: r['acquisition_datetime'])
+    if not records:
+        print('[run-metric time plots] No acquisition datetimes found.', flush=True)
+        return figures
+
+    positions, break_positions, _elapsed_hours = _compressed_time_positions(
+        [r['acquisition_datetime'] for r in records]
+    )
+    if len(positions) > 1:
+        diffs = np.diff(np.sort(positions))
+        diffs = diffs[diffs > 0]
+        width = 0.45 * float(np.min(diffs)) if diffs.size else 2.0
+    else:
+        width = 2.0
+
+    metric_specs = [
+        ('transition_fraction', 'run_metric_transition_fraction_distribution_vs_time',
+         'Distribution of NV⁻ → NV⁰ transition fraction vs acquisition time',
+         'NV⁻ → NV⁰ transition fraction per run (%)', False),
+        ('robust_z', 'run_metric_robust_z_distribution_vs_time',
+         'Distribution of robust loss z vs acquisition time',
+         'Robust loss z', True),
+        ('poisson_local_significance', 'run_metric_poisson_local_significance_distribution_vs_time',
+         'Distribution of Poisson-local significance vs acquisition time',
+         'Poisson-local significance', True),
+    ]
+
+    for value_key, fig_key, title, ylabel, add_threshold_lines in metric_specs:
+        data = []
+        recs_used = []
+        pos_used = []
+        for pos, rec in zip(positions, records):
+            vals = np.asarray(rec.get(value_key, []), dtype=float)
+            vals = vals[np.isfinite(vals)]
+            if vals.size == 0:
+                continue
+            data.append(vals)
+            recs_used.append(rec)
+            pos_used.append(pos)
+        if not data:
+            continue
+
+        fig, ax = plt.subplots(figsize=(12.8, 5.8))
+        bp = ax.boxplot(
+            data, positions=pos_used, widths=width, showfliers=False,
+            manage_ticks=False, patch_artist=False
+        )
+        _style_boxplot_monochrome(bp)
+        medians = [float(np.nanmedian(vals)) for vals in data]
+        ax.plot(pos_used, medians, linestyle='--', linewidth=0.9, marker='o', markersize=3.8)
+        if add_threshold_lines:
+            for thr in SIGMA_THRESHOLDS:
+                ax.axhline(float(thr), linestyle='--', linewidth=0.75, alpha=0.65)
+        ax.set_ylabel(ylabel)
+        ax.set_title(title)
+        ax.grid(alpha=0.18)
+        ax.set_xticks(pos_used)
+        ax.set_xticklabels([_format_threshold_time_tick(r) for r in recs_used], ha='center')
+        _draw_axis_breaks_on_xaxis(ax, [b for b in break_positions if min(pos_used) <= b <= max(pos_used)])
+        if break_positions:
+            ax.text(0.995, 0.015, f'axis break = gap > {THRESHOLD_TIME_BREAK_HOURS:g} h',
+                    transform=ax.transAxes, ha='right', va='bottom', fontsize=8)
+        ax.set_xlabel('Acquisition date / time')
+        figures[fig_key] = fig
+
+    return figures
+
+
+# =============================================================================
+# Humidity alignment and same-dark-time correlation
+# =============================================================================
+
+
+def _finite_linear_summary(x, y):
+    x = np.asarray(x, dtype=float).ravel()
+    y = np.asarray(y, dtype=float).ravel()
+    good = np.isfinite(x) & np.isfinite(y)
+    x = x[good]
+    y = y[good]
+    x_centered = x - np.mean(x) if x.size else x
+    y_centered = y - np.mean(y) if y.size else y
+    sxx = float(np.dot(x_centered, x_centered))
+    syy = float(np.dot(y_centered, y_centered))
+    if x.size < 2 or sxx <= 0 or syy <= 0:
+        return {"n": int(x.size), "slope": np.nan, "intercept": np.nan, "r": np.nan}
+    sxy = float(np.dot(x_centered, y_centered))
+    slope = sxy / sxx
+    intercept = float(np.mean(y) - slope * np.mean(x))
+    return {
+        "n": int(x.size),
+        "slope": float(slope),
+        "intercept": float(intercept),
+        "r": float(sxy / np.sqrt(sxx * syy)),
+    }
+
+
+def _finite_exceedance_percent(values, threshold):
+    values = np.asarray(values, dtype=float)
+    values = values[np.isfinite(values)]
+    if values.size == 0:
+        return np.nan
+    return float(100.0 * np.mean(values >= float(threshold)))
+
+
+def _circular_shift_correlation_p(x, y, rng, num_nulls):
+    """Autocorrelation-preserving null by circularly shifting a predictor."""
+    x = np.asarray(x, dtype=float).ravel()
+    y = np.asarray(y, dtype=float).ravel()
+    good = np.isfinite(x) & np.isfinite(y)
+    x = x[good]
+    y = y[good]
+    x_centered = x - np.mean(x) if x.size else x
+    y_centered = y - np.mean(y) if y.size else y
+    denom = float(
+        np.sqrt(
+            np.dot(x_centered, x_centered)
+            * np.dot(y_centered, y_centered)
+        )
+    )
+    observed = (
+        float(np.dot(x_centered, y_centered) / denom)
+        if denom > 0
+        else np.nan
+    )
+    if x.size < 10 or not np.isfinite(observed):
+        return observed, np.nan
+
+    num_nulls = max(0, int(num_nulls))
+    if num_nulls == 0:
+        return observed, np.nan
+    possible_shifts = np.arange(1, x.size, dtype=int)
+    if num_nulls >= possible_shifts.size:
+        shifts = possible_shifts
+    else:
+        shifts = rng.choice(possible_shifts, size=num_nulls, replace=False)
+    exceed = 0
+    for shift in shifts:
+        shift = int(shift)
+        null_r = float(np.dot(np.roll(x_centered, shift), y_centered) / denom)
+        if np.isfinite(null_r) and abs(null_r) >= abs(observed):
+            exceed += 1
+    p_two_sided = (exceed + 1.0) / (len(shifts) + 1.0)
+    return observed, float(p_two_sided)
+
+
+def _add_benjamini_hochberg_qvalues(rows, p_key, q_key):
+    """Add Benjamini-Hochberg FDR q-values to a list of result dicts."""
+    finite = [
+        ind for ind, row in enumerate(rows)
+        if np.isfinite(float(row.get(p_key, np.nan)))
+    ]
+    for row in rows:
+        row[q_key] = np.nan
+    if not finite:
+        return rows
+    order = sorted(finite, key=lambda ind: float(rows[ind][p_key]))
+    m = len(order)
+    adjusted = np.empty(m, dtype=float)
+    for rank, ind in enumerate(order, start=1):
+        adjusted[rank - 1] = min(1.0, float(rows[ind][p_key]) * m / rank)
+    adjusted = np.minimum.accumulate(adjusted[::-1])[::-1]
+    for ind, q_value in zip(order, adjusted):
+        rows[ind][q_key] = float(q_value)
+    return rows
+
+
+def _humidity_source_records(results, environment):
+    """Return one exactly time-aligned record per physical acquisition."""
+    records = []
+    for result in results:
+        good_global = np.asarray(result.get("good_run_mask", []), dtype=bool)
+        num_global = good_global.size
+        if num_global == 0:
+            continue
+
+        result_times = np.asarray(
+            result.get("run_datetimes", np.full(num_global, None, dtype=object)),
+            dtype=object,
+        )
+        if result_times.size != num_global:
+            print(
+                f"[humidity] skipping {result.get('dataset_label')}: "
+                "run timestamp length mismatch",
+                flush=True,
+            )
+            continue
+
+        parts = result.get("source_parts")
+        if isinstance(parts, (list, tuple)) and len(parts) > 0:
+            dataset_ids = np.asarray(result.get("dataset_id_by_run"), dtype=int)
+            sources = []
+            for part in parts:
+                did = int(part.get("dataset_id", 0))
+                sources.append((part, dataset_ids == did))
+        else:
+            sources = [(result, np.ones(num_global, dtype=bool))]
+
+        for source, source_mask in sources:
+            global_inds = np.where(source_mask)[0]
+            source_times = result_times[global_inds]
+            env = _interpolate_environment(environment, source_times)
+
+            good_source = good_global[global_inds]
+            loss_fraction = 100.0 * np.asarray(
+                result["loss_fraction"], dtype=float
+            )[global_inds]
+            lost = np.asarray(result["lost"], dtype=float)[global_inds]
+            n_eval = np.asarray(
+                result["evaluable_eligible_count"], dtype=float
+            )[global_inds]
+            robust_z = np.asarray(result["loss_z"], dtype=float)[global_inds]
+            poisson_sigma = np.asarray(
+                result["poisson"]["poisson_local_sigma"], dtype=float
+            )[global_inds]
+
+            aligned = (
+                good_source
+                & np.asarray(env["valid"], dtype=bool)
+                & np.isfinite(env["Humidity"])
+                & np.isfinite(loss_fraction)
+                & np.isfinite(lost)
+                & np.isfinite(n_eval)
+            )
+            n_good = int(np.sum(good_source))
+            n_aligned = int(np.sum(aligned))
+            if n_aligned == 0:
+                print(
+                    f"[humidity] no time-aligned runs for {source.get('label', source.get('dataset_label'))}",
+                    flush=True,
+                )
+                continue
+
+            loss_used = loss_fraction[aligned]
+            lost_used = lost[aligned]
+            humidity_used = np.asarray(env["Humidity"], dtype=float)[aligned]
+            temp_used = np.asarray(env["Temperature"], dtype=float)[aligned]
+            dew_used = np.asarray(env["Dew Point"], dtype=float)[aligned]
+            humidity_rate_used = np.asarray(
+                env["Humidity Rate"], dtype=float
+            )[aligned]
+            times_used = source_times[aligned]
+
+            mean_loss = float(np.mean(loss_used))
+            se_loss = (
+                float(np.std(loss_used, ddof=1) / np.sqrt(loss_used.size))
+                if loss_used.size > 1
+                else np.nan
+            )
+            mean_lost = float(np.mean(lost_used))
+            fano = (
+                float(np.var(lost_used, ddof=1) / mean_lost)
+                if lost_used.size > 1 and mean_lost > 0
+                else np.nan
+            )
+
+            fit = _fit_beta_binomial_losses(
+                lost=lost,
+                n_eval=n_eval,
+                valid_mask=aligned,
+            )
+            timing_info = source.get("timing_info", result.get("timing_info", {}))
+            if not isinstance(timing_info, dict):
+                timing_info = {}
+
+            record = {
+                "wait_s": float(result.get("dark_wait_s", np.nan)),
+                "wait_label": _dark_wait_label(result),
+                "acquisition_label": str(
+                    source.get("label", source.get("dataset_label", result.get("dataset_label", "measurement")))
+                ),
+                "file_stem": source.get("file_stem", result.get("file_stem")),
+                "acquisition_start": timing_info.get("start_datetime"),
+                "acquisition_end": timing_info.get("end_datetime", _record_end_datetime(source)),
+                "experiment_wall_s": float(timing_info.get("experiment_wall_s", np.nan)),
+                "timing_method": str(timing_info.get("method", "unknown")),
+                "n_good_runs": n_good,
+                "n_aligned_runs": n_aligned,
+                "alignment_coverage": float(n_aligned / n_good) if n_good else np.nan,
+                "humidity_mean": float(np.mean(humidity_used)),
+                "humidity_sd": float(np.std(humidity_used, ddof=1)) if humidity_used.size > 1 else 0.0,
+                "humidity_min": float(np.min(humidity_used)),
+                "humidity_max": float(np.max(humidity_used)),
+                "temperature_mean_c": float(np.nanmean(temp_used)),
+                "dew_point_mean_c": float(np.nanmean(dew_used)),
+                "mean_transition_frac_pct": mean_loss,
+                "se_transition_frac_pct": se_loss,
+                "mean_lost": mean_lost,
+                "fano_real": fano,
+                "beta_binom_rho": float(fit.get("rho", np.nan)),
+                "beta_binom_rho_se": float(fit.get("rho_se", np.nan)),
+                "robust_ge_4sigma_percent": _finite_exceedance_percent(
+                    robust_z[aligned], 4.0
+                ),
+                "poisson_ge_4sigma_percent": _finite_exceedance_percent(
+                    poisson_sigma[aligned], 4.0
+                ),
+                "robust_sigma_exceedance_percent": {
+                    float(level): _finite_exceedance_percent(robust_z[aligned], level)
+                    for level in SIGMA_EXCEEDANCE_LEVELS
+                },
+                "poisson_sigma_exceedance_percent": {
+                    float(level): _finite_exceedance_percent(poisson_sigma[aligned], level)
+                    for level in SIGMA_EXCEEDANCE_LEVELS
+                },
+                "run_datetimes": times_used,
+                "humidity": humidity_used,
+                "temperature_c": temp_used,
+                "dew_point_c": dew_used,
+                "humidity_rate_rh_per_hour": humidity_rate_used,
+                "transition_fraction_pct": loss_used,
+                "lost": lost_used,
+                "robust_z": robust_z[aligned],
+                "poisson_local_significance": poisson_sigma[aligned],
+            }
+            records.append(record)
+    records.sort(
+        key=lambda r: (
+            float(r["wait_s"]) if np.isfinite(r["wait_s"]) else np.inf,
+            r["acquisition_end"] or datetime.max,
+        )
+    )
+    for acquisition_index, record in enumerate(records):
+        record["acquisition_index"] = int(acquisition_index)
+    return records
+
+
+def _same_wait_acquisition_correlations(records):
+    """Descriptive between-acquisition slopes, never pooling different waits."""
+    rows = []
+    waits = sorted({r["wait_s"] for r in records if np.isfinite(r["wait_s"])})
+    metrics = (
+        ("mean_transition_frac_pct", "mean transition fraction (%)"),
+        ("fano_real", "Fano factor"),
+        ("beta_binom_rho", "beta-binomial rho"),
+    )
+    for wait_s in waits:
+        group = [r for r in records if r["wait_s"] == wait_s]
+        if len(group) < 2:
+            continue
+        x = np.asarray([r["humidity_mean"] for r in group], dtype=float)
+        for metric_key, metric_label in metrics:
+            y = np.asarray([r[metric_key] for r in group], dtype=float)
+            fit = _finite_linear_summary(x, y)
+            rows.append(
+                {
+                    "wait_s": float(wait_s),
+                    "num_acquisitions": int(fit["n"]),
+                    "metric": metric_key,
+                    "metric_label": metric_label,
+                    "slope_per_rh_percent": fit["slope"],
+                    "pearson_r": fit["r"],
+                    # With only two acquisitions |r| is necessarily 1. It is
+                    # retained for completeness but is not inferential.
+                    "inferential": bool(fit["n"] >= 3),
+                }
+            )
+    return rows
+
+
+def _within_acquisition_environment_correlations(records):
+    """All configured shot-level correlations, with drift-aware p-values."""
+    rng = np.random.default_rng(int(HUMIDITY_RANDOM_SEED))
+    predictor_labels = {
+        "humidity": "relative humidity",
+        "temperature_c": "temperature",
+        "dew_point_c": "dew point",
+        "humidity_rate_rh_per_hour": "humidity change rate",
+    }
+    response_labels = {
+        "transition_fraction_pct": "transition fraction",
+        "lost": "lost-NV count",
+        "robust_z": "robust loss z",
+        "poisson_local_significance": "Poisson-local significance",
+    }
+    rows = []
+    for record in records:
+        for predictor_key in SHOT_ENVIRONMENT_PREDICTORS:
+            if predictor_key not in record:
+                continue
+            x = np.asarray(record[predictor_key], dtype=float)
+            for response_key in SHOT_RESPONSE_METRICS:
+                if response_key not in record:
+                    continue
+                y = np.asarray(record[response_key], dtype=float)
+                fit = _finite_linear_summary(x, y)
+                observed_r, p_shift = _circular_shift_correlation_p(
+                    x,
+                    y,
+                    rng,
+                    HUMIDITY_CIRCULAR_SHIFT_NULLS,
+                )
+                x_finite = x[np.isfinite(x)]
+                rows.append(
+                    {
+                        "acquisition_index": record["acquisition_index"],
+                        "wait_s": record["wait_s"],
+                        "acquisition_label": record["acquisition_label"],
+                        "acquisition_end": record["acquisition_end"],
+                        "predictor": predictor_key,
+                        "predictor_label": predictor_labels.get(predictor_key, predictor_key),
+                        "response": response_key,
+                        "response_label": response_labels.get(response_key, response_key),
+                        "num_runs": fit["n"],
+                        "predictor_span": (
+                            float(np.max(x_finite) - np.min(x_finite))
+                            if x_finite.size else np.nan
+                        ),
+                        "slope": fit["slope"],
+                        "pearson_r": observed_r,
+                        "circular_shift_p_two_sided": p_shift,
+                    }
+                )
+    return _add_benjamini_hochberg_qvalues(
+        rows,
+        "circular_shift_p_two_sided",
+        "circular_shift_q_fdr",
+    )
+
+
+def _within_acquisition_humidity_correlations(records):
+    """Backward-compatible main subset: humidity vs transition fraction."""
+    all_rows = _within_acquisition_environment_correlations(records)
+    return [
+        row for row in all_rows
+        if row["predictor"] == "humidity"
+        and row["response"] == "transition_fraction_pct"
+    ]
+
+
+def _fixed_effect_acquisition_summary(records, metric_key):
+    """Within-wait acquisition-level slope after subtracting each wait mean."""
+    x_parts = []
+    y_parts = []
+    num_waits = 0
+    waits = sorted({r["wait_s"] for r in records if np.isfinite(r["wait_s"])})
+    for wait_s in waits:
+        group = [r for r in records if r["wait_s"] == wait_s]
+        x = np.asarray([r["humidity_mean"] for r in group], dtype=float)
+        y = np.asarray([r[metric_key] for r in group], dtype=float)
+        good = np.isfinite(x) & np.isfinite(y)
+        if np.sum(good) < 2:
+            continue
+        num_waits += 1
+        x = x[good]
+        y = y[good]
+        x_parts.append(x - np.mean(x))
+        y_parts.append(y - np.mean(y))
+    if not x_parts:
+        return {
+            "metric": metric_key,
+            "num_wait_groups": 0,
+            "num_acquisitions": 0,
+            "slope_per_rh_percent": np.nan,
+            "pearson_r": np.nan,
+        }
+    fit = _finite_linear_summary(np.concatenate(x_parts), np.concatenate(y_parts))
+    return {
+        "metric": metric_key,
+        "num_wait_groups": int(num_waits),
+        "num_acquisitions": int(fit["n"]),
+        "slope_per_rh_percent": fit["slope"],
+        "pearson_r": fit["r"],
+    }
+
+
+def _humidity_binned_curve(record):
+    x = np.asarray(record["humidity"], dtype=float)
+    y = np.asarray(record["transition_fraction_pct"], dtype=float)
+    good = np.isfinite(x) & np.isfinite(y)
+    x = x[good]
+    y = y[good]
+    if x.size == 0:
+        return np.array([]), np.array([]), np.array([]), np.array([], dtype=int)
+    width = float(HUMIDITY_BIN_WIDTH_RH_PERCENT)
+    bin_id = np.floor(x / width).astype(int)
+    centers = []
+    means = []
+    ses = []
+    counts = []
+    for bid in np.unique(bin_id):
+        vals = y[bin_id == bid]
+        if vals.size < int(HUMIDITY_MIN_RUNS_PER_BIN):
+            continue
+        centers.append((bid + 0.5) * width)
+        means.append(float(np.mean(vals)))
+        ses.append(float(np.std(vals, ddof=1) / np.sqrt(vals.size)) if vals.size > 1 else np.nan)
+        counts.append(int(vals.size))
+    return (
+        np.asarray(centers, dtype=float),
+        np.asarray(means, dtype=float),
+        np.asarray(ses, dtype=float),
+        np.asarray(counts, dtype=int),
+    )
+
+
+def _shot_quantile_binned_curve(record, predictor_key, response_key):
+    """Quantile-bin one acquisition while keeping every dark wait separate."""
+    x = np.asarray(record[predictor_key], dtype=float)
+    y = np.asarray(record[response_key], dtype=float)
+    good = np.isfinite(x) & np.isfinite(y)
+    x = x[good]
+    y = y[good]
+    min_per_bin = max(2, int(SHOT_CORRELATION_MIN_RUNS_PER_BIN))
+    num_bins = min(
+        max(1, int(SHOT_CORRELATION_NUM_BINS)),
+        max(1, x.size // min_per_bin),
+    )
+    if x.size < min_per_bin or num_bins < 2 or np.ptp(x) <= 0:
+        empty = np.array([], dtype=float)
+        return empty, empty, empty, np.array([], dtype=int)
+
+    edges = np.unique(np.quantile(x, np.linspace(0.0, 1.0, num_bins + 1)))
+    if edges.size < 3:
+        empty = np.array([], dtype=float)
+        return empty, empty, empty, np.array([], dtype=int)
+    bin_id = np.searchsorted(edges[1:-1], x, side="right")
+    centers = []
+    means = []
+    ses = []
+    counts = []
+    for bid in range(edges.size - 1):
+        in_bin = bin_id == bid
+        vals = y[in_bin]
+        if vals.size < min_per_bin:
+            continue
+        centers.append(float(np.mean(x[in_bin])))
+        means.append(float(np.mean(vals)))
+        ses.append(
+            float(np.std(vals, ddof=1) / np.sqrt(vals.size))
+            if vals.size > 1 else np.nan
+        )
+        counts.append(int(vals.size))
+    return (
+        np.asarray(centers, dtype=float),
+        np.asarray(means, dtype=float),
+        np.asarray(ses, dtype=float),
+        np.asarray(counts, dtype=int),
+    )
+
+
+def _shot_environment_figures(records, correlation_rows):
+    """Shot-level scatter/binned plots plus an all-metric r summary."""
+    figures = {}
+    if not records:
+        return figures
+
+    predictor_specs = {
+        "humidity": ("Relative humidity (%)", "humidity"),
+        "temperature_c": ("Temperature (°C)", "temperature"),
+        "dew_point_c": ("Dew point (°C)", "dew_point"),
+        "humidity_rate_rh_per_hour": (
+            "Smoothed humidity change (%RH/hour)",
+            "humidity_rate",
+        ),
+    }
+    response_specs = {
+        "transition_fraction_pct": "Transition fraction (%)",
+        "lost": "Lost NVs (count)",
+        "robust_z": "Robust loss z",
+        "poisson_local_significance": "Poisson-local significance (σ)",
+    }
+    waits = sorted({r["wait_s"] for r in records if np.isfinite(r["wait_s"])})
+    correlation_lookup = {
+        (row["acquisition_index"], row["predictor"], row["response"]): row
+        for row in correlation_rows
+    }
+
+    for predictor_key in SHOT_ENVIRONMENT_PREDICTORS:
+        if predictor_key not in predictor_specs:
+            continue
+        xlabel, file_tag = predictor_specs[predictor_key]
+        response_keys = [
+            key for key in SHOT_RESPONSE_METRICS if key in response_specs
+        ]
+        if not response_keys:
+            continue
+        fig, axes = plt.subplots(
+            len(waits),
+            len(response_keys),
+            figsize=(4.15 * len(response_keys), max(4.5, 2.75 * len(waits) + 1.0)),
+            squeeze=False,
+        )
+        for row_ind, wait_s in enumerate(waits):
+            group = [r for r in records if r["wait_s"] == wait_s]
+            colors = plt.cm.tab10(np.linspace(0.0, 0.9, max(1, len(group))))
+            for col_ind, response_key in enumerate(response_keys):
+                ax = axes[row_ind, col_ind]
+                for color, rec in zip(colors, group):
+                    x = np.asarray(rec[predictor_key], dtype=float)
+                    y = np.asarray(rec[response_key], dtype=float)
+                    good = np.isfinite(x) & np.isfinite(y)
+                    x_good = x[good]
+                    y_good = y[good]
+                    if x_good.size == 0:
+                        continue
+                    max_points = max(1, int(SHOT_CORRELATION_MAX_SCATTER_POINTS))
+                    if x_good.size > max_points:
+                        take = np.linspace(0, x_good.size - 1, max_points).astype(int)
+                    else:
+                        take = np.arange(x_good.size, dtype=int)
+                    ax.scatter(
+                        x_good[take],
+                        y_good[take],
+                        s=6,
+                        alpha=0.12,
+                        color=color,
+                        linewidths=0,
+                        rasterized=True,
+                    )
+                    bx, by, bse, _ = _shot_quantile_binned_curve(
+                        rec, predictor_key, response_key
+                    )
+                    corr = correlation_lookup.get(
+                        (rec["acquisition_index"], predictor_key, response_key), {}
+                    )
+                    end_dt = rec.get("acquisition_end")
+                    date_label = (
+                        end_dt.strftime("%b %d %H:%M")
+                        if isinstance(end_dt, datetime)
+                        else rec["acquisition_label"]
+                    )
+                    r_value = float(corr.get("pearson_r", np.nan))
+                    q_value = float(corr.get("circular_shift_q_fdr", np.nan))
+                    stat_label = (
+                        f"{date_label}; r={r_value:+.2f}, q={q_value:.3g}"
+                        if np.isfinite(r_value) and np.isfinite(q_value)
+                        else f"{date_label}; r={r_value:+.2f}"
+                        if np.isfinite(r_value)
+                        else date_label
+                    )
+                    if bx.size:
+                        ax.errorbar(
+                            bx,
+                            by,
+                            yerr=bse,
+                            color=color,
+                            marker="o",
+                            markersize=3.5,
+                            linewidth=1.2,
+                            capsize=1.8,
+                            label=stat_label,
+                        )
+                    else:
+                        ax.plot([], [], color=color, marker="o", label=stat_label)
+                if row_ind == 0:
+                    ax.set_title(response_specs[response_key], fontsize=10)
+                if col_ind == 0:
+                    ax.set_ylabel(f"{wait_s:g} s dark wait", fontsize=9)
+                if row_ind == len(waits) - 1:
+                    ax.set_xlabel(xlabel, fontsize=9)
+                ax.grid(alpha=0.18)
+                ax.tick_params(labelsize=8)
+            if group:
+                axes[row_ind, -1].legend(
+                    fontsize=6.8,
+                    loc="best",
+                    title="Acquisition; drift-aware r, FDR q",
+                    title_fontsize=7,
+                )
+        fig.suptitle(
+            f"Shot-level transition metrics vs {xlabel.lower()}\n"
+            "Each dot is one aligned run; lines are within-acquisition quantile-bin means; dark waits are not pooled",
+            fontsize=12,
+        )
+        _safe_subplots_adjust(
+            fig,
+            left=0.065,
+            right=0.985,
+            bottom=0.07,
+            top=0.91,
+            hspace=0.32,
+            wspace=0.24,
+        )
+        figures[f"shot_correlation_{file_tag}"] = fig
+
+    # Compact overview of every test. A star means q < 0.05 after correcting
+    # across all displayed predictor-response-acquisition combinations.
+    predictor_keys = [key for key in SHOT_ENVIRONMENT_PREDICTORS if key in predictor_specs]
+    response_keys = [key for key in SHOT_RESPONSE_METRICS if key in response_specs]
+    columns = [(x_key, y_key) for x_key in predictor_keys for y_key in response_keys]
+    if columns and correlation_rows:
+        matrix = np.full((len(records), len(columns)), np.nan, dtype=float)
+        q_matrix = np.full_like(matrix, np.nan)
+        for row_ind, rec in enumerate(records):
+            for col_ind, (x_key, y_key) in enumerate(columns):
+                row = correlation_lookup.get((rec["acquisition_index"], x_key, y_key))
+                if row is not None:
+                    matrix[row_ind, col_ind] = row["pearson_r"]
+                    q_matrix[row_ind, col_ind] = row["circular_shift_q_fdr"]
+        fig, ax = plt.subplots(
+            figsize=(max(12.0, 0.85 * len(columns)), max(4.5, 0.58 * len(records) + 2.0))
+        )
+        image = ax.imshow(matrix, aspect="auto", cmap="RdBu_r", vmin=-1.0, vmax=1.0)
+        short_x = {
+            "humidity": "RH",
+            "temperature_c": "Temp",
+            "dew_point_c": "Dew",
+            "humidity_rate_rh_per_hour": "dRH/dt",
+        }
+        short_y = {
+            "transition_fraction_pct": "loss %",
+            "lost": "lost #",
+            "robust_z": "z",
+            "poisson_local_significance": "Poisson σ",
+        }
+        ax.set_xticks(np.arange(len(columns)))
+        ax.set_xticklabels(
+            [f"{short_x.get(x, x)}\n{short_y.get(y, y)}" for x, y in columns],
+            rotation=45,
+            ha="right",
+            fontsize=8,
+        )
+        row_labels = []
+        for rec in records:
+            end_dt = rec.get("acquisition_end")
+            date_label = end_dt.strftime("%Y-%m-%d") if isinstance(end_dt, datetime) else "unknown"
+            row_labels.append(f"{rec['wait_s']:g} s | {date_label}")
+        ax.set_yticks(np.arange(len(records)))
+        ax.set_yticklabels(row_labels, fontsize=8)
+        for row_ind, col_ind in np.argwhere(np.isfinite(q_matrix) & (q_matrix < 0.05)):
+            ax.text(col_ind, row_ind, "★", ha="center", va="center", fontsize=9, color="black")
+        ax.set_title("Within-acquisition shot-level Pearson r (★ = circular-shift FDR q < 0.05)")
+        cbar = fig.colorbar(image, ax=ax, pad=0.012, fraction=0.025)
+        cbar.set_label("Pearson r")
+        _safe_subplots_adjust(fig, left=0.15, right=0.965, bottom=0.24, top=0.90)
+        figures["shot_environment_correlation_summary"] = fig
+
+    return figures
+
+
+def _wilson_fraction_interval_percent(num_success, num_trials, z_value=1.0):
+    """Empirical percentage and a Wilson interval (z=1 gives about 68%)."""
+    n = int(num_trials)
+    k = int(num_success)
+    if n <= 0:
+        return np.nan, np.nan, np.nan
+    p = float(k / n)
+    z2 = float(z_value) ** 2
+    denom = 1.0 + z2 / n
+    center = (p + z2 / (2.0 * n)) / denom
+    half = (
+        float(z_value)
+        * np.sqrt(p * (1.0 - p) / n + z2 / (4.0 * n * n))
+        / denom
+    )
+    return 100.0 * p, 100.0 * max(0.0, center - half), 100.0 * min(1.0, center + half)
+
+
+def _humidity_sigma_fraction_curve(record, significance_key, threshold):
+    """Humidity-quantile-bin fraction of shots at or above a sigma level."""
+    humidity = np.asarray(record["humidity"], dtype=float)
+    significance = np.asarray(record[significance_key], dtype=float)
+    good = np.isfinite(humidity) & np.isfinite(significance)
+    x = humidity[good]
+    sig = significance[good]
+    min_per_bin = max(2, int(SHOT_CORRELATION_MIN_RUNS_PER_BIN))
+    num_bins = min(
+        max(1, int(SHOT_CORRELATION_NUM_BINS)),
+        max(1, x.size // min_per_bin),
+    )
+    if x.size < min_per_bin or num_bins < 2 or np.ptp(x) <= 0:
+        empty = np.array([], dtype=float)
+        return empty, empty, np.empty((2, 0), dtype=float), np.array([], dtype=int)
+
+    edges = np.unique(np.quantile(x, np.linspace(0.0, 1.0, num_bins + 1)))
+    if edges.size < 3:
+        empty = np.array([], dtype=float)
+        return empty, empty, np.empty((2, 0), dtype=float), np.array([], dtype=int)
+    bin_id = np.searchsorted(edges[1:-1], x, side="right")
+    centers = []
+    fractions = []
+    err_low = []
+    err_high = []
+    counts = []
+    for bid in range(edges.size - 1):
+        in_bin = bin_id == bid
+        n_bin = int(np.sum(in_bin))
+        if n_bin < min_per_bin:
+            continue
+        k_bin = int(np.sum(sig[in_bin] >= float(threshold)))
+        fraction, lower, upper = _wilson_fraction_interval_percent(k_bin, n_bin)
+        centers.append(float(np.mean(x[in_bin])))
+        fractions.append(fraction)
+        # Wilson bounds can differ from the empirical fraction by a tiny
+        # negative round-off residual. Matplotlib requires yerr >= 0 exactly.
+        err_low.append(max(0.0, float(fraction - lower)))
+        err_high.append(max(0.0, float(upper - fraction)))
+        counts.append(n_bin)
+    return (
+        np.asarray(centers, dtype=float),
+        np.asarray(fractions, dtype=float),
+        np.asarray([err_low, err_high], dtype=float),
+        np.asarray(counts, dtype=int),
+    )
+
+
+def _sigma_fraction_humidity_correlations(records):
+    """Point-biserial humidity correlation for 3σ/4σ/5σ shot indicators."""
+    rng = np.random.default_rng(int(HUMIDITY_RANDOM_SEED) + 1)
+    significance_specs = (
+        ("robust_z", "robust loss z"),
+        ("poisson_local_significance", "Poisson-local significance"),
+    )
+    rows = []
+    for record in records:
+        humidity = np.asarray(record["humidity"], dtype=float)
+        for significance_key, significance_label in significance_specs:
+            significance = np.asarray(record[significance_key], dtype=float)
+            good = np.isfinite(humidity) & np.isfinite(significance)
+            x = humidity[good]
+            sig = significance[good]
+            for level in SIGMA_EXCEEDANCE_LEVELS:
+                indicator = (sig >= float(level)).astype(float)
+                fit = _finite_linear_summary(x, indicator)
+                observed_r, p_shift = _circular_shift_correlation_p(
+                    x,
+                    indicator,
+                    rng,
+                    HUMIDITY_CIRCULAR_SHIFT_NULLS,
+                )
+                rows.append(
+                    {
+                        "acquisition_index": record["acquisition_index"],
+                        "wait_s": record["wait_s"],
+                        "acquisition_label": record["acquisition_label"],
+                        "acquisition_end": record["acquisition_end"],
+                        "significance_key": significance_key,
+                        "significance_label": significance_label,
+                        "sigma_level": float(level),
+                        "num_runs": int(x.size),
+                        "num_exceedances": int(np.sum(indicator)),
+                        "fraction_percent": float(100.0 * np.mean(indicator)) if indicator.size else np.nan,
+                        "slope_percentage_points_per_rh_percent": (
+                            100.0 * fit["slope"] if np.isfinite(fit["slope"]) else np.nan
+                        ),
+                        "pearson_r": observed_r,
+                        "circular_shift_p_two_sided": p_shift,
+                    }
+                )
+    return _add_benjamini_hochberg_qvalues(
+        rows,
+        "circular_shift_p_two_sided",
+        "circular_shift_q_fdr",
+    )
+
+
+def _sigma_exceedance_humidity_figures(records, correlation_rows):
+    """Plot 3σ/4σ/5σ percentages in horizontal one-row layouts."""
+    figures = {}
+    if not records:
+        return figures
+    waits = sorted({r["wait_s"] for r in records if np.isfinite(r["wait_s"])})
+    levels = tuple(float(level) for level in SIGMA_EXCEEDANCE_LEVELS)
+    significance_specs = (
+        (
+            "robust_z",
+            "Robust loss z",
+            "robust_sigma_exceedance_fraction",
+            "robust",
+        ),
+        (
+            "poisson_local_significance",
+            "Poisson-local significance",
+            "poisson_sigma_exceedance_fraction",
+            "poisson",
+        ),
+    )
+
+    # One unique color per physical file. Each curve uses all time-aligned
+    # shots from that file; only the displayed percentages are humidity-binned.
+    acquisition_colors = plt.cm.tab20(
+        np.linspace(0.0, 0.95, max(1, len(records)))
+    )
+    color_by_acquisition = {
+        record["acquisition_index"]: color
+        for record, color in zip(records, acquisition_colors)
+    }
+    for significance_key, significance_label, figure_key, _ in significance_specs:
+        fig, axes = plt.subplots(
+            1,
+            len(levels),
+            figsize=(5.1 * len(levels), 6.2),
+            squeeze=False,
+            sharey=False,
+        )
+        axes = axes.ravel()
+        for ax, level in zip(axes, levels):
+            for record in records:
+                x, fraction, yerr, _ = _humidity_sigma_fraction_curve(
+                    record,
+                    significance_key,
+                    level,
+                )
+                if x.size == 0:
+                    continue
+                end_dt = record.get("acquisition_end")
+                date_label = (
+                    end_dt.strftime("%Y-%m-%d")
+                    if isinstance(end_dt, datetime)
+                    else record["acquisition_label"]
+                )
+                label = f"{record['wait_s']:g} s | {date_label}"
+                ax.errorbar(
+                    x,
+                    fraction,
+                    yerr=np.maximum(0.0, yerr),
+                    color=color_by_acquisition[record["acquisition_index"]],
+                    marker="o",
+                    markersize=3.2,
+                    linewidth=1.1,
+                    capsize=1.6,
+                    label=label,
+                )
+            ax.set_title(f"≥ {level:g}σ fraction (%)", fontsize=11)
+            ax.set_xlabel("Relative humidity (%)")
+            ax.set_ylim(bottom=0.0)
+            ax.grid(alpha=0.18)
+            ax.tick_params(labelsize=8)
+        axes[0].set_ylabel("Fraction of shots (%)")
+        fig.suptitle(
+            f"Humidity dependence of {significance_label} exceedance fractions\n"
+            "Each curve is one physical file; panels use 3σ, 4σ, and 5σ thresholds",
+            fontsize=12,
+        )
+        handles, labels = axes[0].get_legend_handles_labels()
+        if handles:
+            fig.legend(
+                handles,
+                labels,
+                loc="lower center",
+                bbox_to_anchor=(0.5, 0.015),
+                ncol=4,
+                fontsize=7.2,
+                title="Dark wait | acquisition date",
+                title_fontsize=8,
+            )
+        try:
+            fig.set_layout_engine(None)
+        except Exception:
+            pass
+        _safe_subplots_adjust(
+            fig,
+            left=0.065,
+            right=0.985,
+            bottom=0.265,
+            top=0.84,
+            wspace=0.22,
+        )
+        figures[figure_key] = fig
+
+    # Acquisition-level summaries are also split into separate one-row robust
+    # and Poisson figures. Lines connect only identical dark-wait conditions.
+    wait_colors = plt.cm.viridis(np.linspace(0.08, 0.92, max(1, len(waits))))
+    color_by_wait = dict(zip(waits, wait_colors))
+    for significance_key, significance_label, _, summary_tag in significance_specs:
+        fig, axes = plt.subplots(
+            1,
+            len(levels),
+            figsize=(5.0 * len(levels), 5.2),
+            squeeze=False,
+        )
+        axes = axes.ravel()
+        for ax, level in zip(axes, levels):
+            for wait_s in waits:
+                group = [record for record in records if record["wait_s"] == wait_s]
+                group.sort(key=lambda record: record["humidity_mean"])
+                x_values = []
+                y_values = []
+                lower_errors = []
+                upper_errors = []
+                for record in group:
+                    values = np.asarray(record[significance_key], dtype=float)
+                    values = values[np.isfinite(values)]
+                    n = int(values.size)
+                    k = int(np.sum(values >= level))
+                    fraction, lower, upper = _wilson_fraction_interval_percent(k, n)
+                    x_values.append(record["humidity_mean"])
+                    y_values.append(fraction)
+                    lower_errors.append(max(0.0, float(fraction - lower)))
+                    upper_errors.append(max(0.0, float(upper - fraction)))
+                ax.errorbar(
+                    x_values,
+                    y_values,
+                    yerr=np.maximum(
+                        0.0,
+                        np.asarray([lower_errors, upper_errors], dtype=float),
+                    ),
+                    color=color_by_wait[wait_s],
+                    marker="o",
+                    linewidth=1.0 if len(group) > 1 else 0.0,
+                    capsize=2.2,
+                    label=f"{wait_s:g} s",
+                )
+            ax.set_title(f"≥ {level:g}σ fraction (%)")
+            ax.set_xlabel("Mean relative humidity (%)")
+            ax.set_ylim(bottom=0.0)
+            ax.grid(alpha=0.2)
+        axes[0].set_ylabel("Fraction of shots (%)")
+        axes[0].legend(title="Dark wait", fontsize=8)
+        fig.suptitle(
+            f"Acquisition-level {significance_label} fractions vs humidity\n"
+            # "Lines connect only repeated files with the same dark wait; error bars are 68% Wilson intervals"
+        )
+        try:
+            fig.set_layout_engine(None)
+        except Exception:
+            pass
+        _safe_subplots_adjust(
+            fig,
+            left=0.065,
+            right=0.985,
+            bottom=0.14,
+            top=0.82,
+            wspace=0.22,
+        )
+        figures[f"humidity_{summary_tag}_sigma_acquisition_summary"] = fig
+    return figures
+
+
+def _humidity_figures(records, correlation_rows=None):
+    figures = {}
+    if not records:
+        return figures
+
+    waits = sorted({r["wait_s"] for r in records if np.isfinite(r["wait_s"])})
+    colors = plt.cm.viridis(np.linspace(0.08, 0.92, max(1, len(waits))))
+    color_by_wait = {wait: color for wait, color in zip(waits, colors)}
+
+    # Acquisition-level statistics. Lines connect only identical dark waits.
+    metric_specs = (
+        ("mean_transition_frac_pct", "Mean NV⁻ → NV⁰ transition (%)", "se_transition_frac_pct"),
+        ("fano_real", "Fano factor of lost-NV count", None),
+        ("beta_binom_rho", "Beta-binomial ρ", "beta_binom_rho_se"),
+    )
+    fig, axes = plt.subplots(1, 3, figsize=(16.2, 5.2), squeeze=False)
+    axes = axes.ravel()
+    for ax, (metric_key, ylabel, error_key) in zip(axes, metric_specs):
+        for wait_s in waits:
+            group = [r for r in records if r["wait_s"] == wait_s]
+            group.sort(key=lambda r: r["humidity_mean"])
+            x = np.asarray([r["humidity_mean"] for r in group], dtype=float)
+            y = np.asarray([r[metric_key] for r in group], dtype=float)
+            yerr = (
+                np.asarray([r[error_key] for r in group], dtype=float)
+                if error_key is not None
+                else None
+            )
+            ax.errorbar(
+                x,
+                y,
+                yerr=yerr,
+                marker="o",
+                linewidth=1.0 if len(group) > 1 else 0.0,
+                capsize=2.5,
+                color=color_by_wait[wait_s],
+                label=f"{wait_s:g} s",
+            )
+            for xx, yy, rec in zip(x, y, group):
+                end_dt = rec.get("acquisition_end")
+                label = end_dt.strftime("%b %d") if isinstance(end_dt, datetime) else rec["acquisition_label"]
+                ax.annotate(label, (xx, yy), xytext=(4, 4), textcoords="offset points", fontsize=7)
+        ax.set_xlabel("Mean relative humidity (%)")
+        ax.set_ylabel(ylabel)
+        ax.grid(alpha=0.2)
+    axes[0].legend(title="Dark wait", fontsize=8)
+    fig.suptitle("Same-dark-time acquisition statistics vs humidity")
+    _safe_subplots_adjust(fig, left=0.06, right=0.985, bottom=0.15, top=0.88, wspace=0.28)
+    figures["humidity_same_wait_acquisition_statistics"] = fig
+
+    # Run-level binned curves are shown only for waits with repeated physical
+    # acquisitions, which is the control relevant to the user's question.
+    repeated_waits = [wait for wait in waits if sum(r["wait_s"] == wait for r in records) >= 2]
+    if repeated_waits:
+        fig, axes = plt.subplots(
+            len(repeated_waits),
+            1,
+            figsize=(10.8, max(4.2, 3.6 * len(repeated_waits))),
+            squeeze=False,
+            sharex=True,
+        )
+        for ax, wait_s in zip(axes.ravel(), repeated_waits):
+            group = [r for r in records if r["wait_s"] == wait_s]
+            for rec in group:
+                x, y, yerr, counts = _humidity_binned_curve(rec)
+                if x.size == 0:
+                    continue
+                end_dt = rec.get("acquisition_end")
+                label = end_dt.strftime("%Y-%m-%d %H:%M") if isinstance(end_dt, datetime) else rec["acquisition_label"]
+                ax.errorbar(x, y, yerr=yerr, marker="o", capsize=2.5, linewidth=1.0, label=label)
+            ax.set_ylabel(f"{wait_s:g} s\nmean loss (%)")
+            ax.grid(alpha=0.2)
+            ax.legend(fontsize=8, title="Acquisition end")
+        axes[-1, 0].set_xlabel("Relative humidity (%)")
+        fig.suptitle(
+            f"Run-level humidity response (bins = {HUMIDITY_BIN_WIDTH_RH_PERCENT:g}% RH; "
+            f"minimum {HUMIDITY_MIN_RUNS_PER_BIN} runs/bin)"
+        )
+        _safe_subplots_adjust(
+            fig,
+            left=0.10,
+            right=0.985,
+            bottom=0.10,
+            top=0.90,
+            hspace=0.28,
+        )
+        figures["humidity_same_wait_run_level_binned"] = fig
+
+    figures.update(_shot_environment_figures(records, correlation_rows or []))
+    return figures
+
+
+def _humidity_correlation_analysis(results):
+    """Align humidity to experiment time and quantify same-wait correlations."""
+    try:
+        environment = _load_environment_csv(HUMIDITY_CSV_PATH)
+    except Exception as exc:
+        print(f"[humidity] analysis skipped: {type(exc).__name__}: {exc}", flush=True)
+        return None, {}
+
+    records = _humidity_source_records(results, environment)
+    if not records:
+        print("[humidity] no acquisition records could be aligned.", flush=True)
+        return None, {}
+
+    acquisition_correlations = _same_wait_acquisition_correlations(records)
+    shot_correlations = _within_acquisition_environment_correlations(records)
+    run_correlations = [
+        row for row in shot_correlations
+        if row["predictor"] == "humidity"
+        and row["response"] == "transition_fraction_pct"
+    ]
+    sigma_fraction_correlations = _sigma_fraction_humidity_correlations(records)
+    fixed_effect = {
+        metric: _fixed_effect_acquisition_summary(records, metric)
+        for metric in ("mean_transition_frac_pct", "fano_real", "beta_binom_rho")
+    }
+
+    print("\n" + "=" * 164)
+    print("HUMIDITY ALIGNMENT: ONE ROW PER PHYSICAL ACQUISITION")
+    print("=" * 164)
+    print(
+        "Wait   Acquisition end       Good/paired   Coverage   RH mean [min,max]   "
+        "Mean loss%   Fano    beta-rho     Timing"
+    )
+    print("-" * 164)
+    for rec in records:
+        end_dt = rec.get("acquisition_end")
+        end_text = end_dt.strftime("%Y-%m-%d %H:%M:%S") if isinstance(end_dt, datetime) else "unknown"
+        print(
+            f"{rec['wait_s']:4g}s  {end_text:<19s}  "
+            f"{rec['n_good_runs']:4d}/{rec['n_aligned_runs']:<4d}   "
+            f"{100*rec['alignment_coverage']:7.2f}%   "
+            f"{rec['humidity_mean']:6.2f} [{rec['humidity_min']:5.2f},{rec['humidity_max']:5.2f}]   "
+            f"{rec['mean_transition_frac_pct']:9.4f}   "
+            f"{rec['fano_real']:5.3f}   {rec['beta_binom_rho']:9.6f}   "
+            f"{rec['timing_method']}"
+        )
+
+    print("\nACQUISITION-LEVEL SIGMA-EXCEEDANCE FRACTIONS")
+    print("-" * 126)
+    print("Wait   Acquisition end       RH mean    Robust ≥3σ  ≥4σ  ≥5σ (%)      Poisson-local ≥3σ  ≥4σ  ≥5σ (%)")
+    for rec in records:
+        end_dt = rec.get("acquisition_end")
+        end_text = end_dt.strftime("%Y-%m-%d %H:%M:%S") if isinstance(end_dt, datetime) else "unknown"
+        robust = rec["robust_sigma_exceedance_percent"]
+        poisson_fractions = rec["poisson_sigma_exceedance_percent"]
+        print(
+            f"{rec['wait_s']:4g}s  {end_text:<19s}  {rec['humidity_mean']:7.3f}   "
+            f"{robust.get(3.0, np.nan):8.3f} {robust.get(4.0, np.nan):6.3f} {robust.get(5.0, np.nan):6.3f}       "
+            f"{poisson_fractions.get(3.0, np.nan):8.3f} {poisson_fractions.get(4.0, np.nan):6.3f} "
+            f"{poisson_fractions.get(5.0, np.nan):6.3f}"
+        )
+
+    print("\nSAME-WAIT BETWEEN-ACQUISITION HUMIDITY SLOPES")
+    print("-" * 116)
+    print("Wait   Acq   Metric                         slope per +1% RH    Pearson r   Status")
+    for row in acquisition_correlations:
+        status = "descriptive only (n=2)" if not row["inferential"] else "small-n inference"
+        print(
+            f"{row['wait_s']:4g}s  {row['num_acquisitions']:3d}   "
+            f"{row['metric_label']:<30s}  {row['slope_per_rh_percent']:>16.7g}   "
+            f"{row['pearson_r']:9.4f}   {status}"
+        )
+
+    print("\nWITHIN-ACQUISITION RUN-LEVEL HUMIDITY CORRELATION")
+    print("-" * 132)
+    print("Wait   Acquisition end       Runs   RH span   slope(loss %-point / RH %-point)   r       shift p    FDR q")
+    for row in run_correlations:
+        end_dt = row.get("acquisition_end")
+        end_text = end_dt.strftime("%Y-%m-%d %H:%M:%S") if isinstance(end_dt, datetime) else "unknown"
+        print(
+            f"{row['wait_s']:4g}s  {end_text:<19s}  {row['num_runs']:5d}   "
+            f"{row['predictor_span']:7.3f}   {row['slope']:>16.7g}   "
+            f"{row['pearson_r']:7.4f}   {row['circular_shift_p_two_sided']:8.5f}   "
+            f"{row['circular_shift_q_fdr']:8.5f}"
+        )
+
+    rankable = [
+        row for row in shot_correlations
+        if np.isfinite(row["pearson_r"])
+        and not (
+            row["predictor"] == "humidity"
+            and row["response"] == "transition_fraction_pct"
+        )
+    ]
+    rankable.sort(
+        key=lambda row: (
+            float(row["circular_shift_q_fdr"])
+            if np.isfinite(row["circular_shift_q_fdr"])
+            else np.inf,
+            -abs(float(row["pearson_r"])),
+        )
+    )
+    print("\nTOP OTHER SHOT-LEVEL ENVIRONMENT ASSOCIATIONS")
+    print("-" * 150)
+    print("Wait   Acquisition end       Predictor               Response                       Runs      r       shift p    FDR q")
+    for row in rankable[:16]:
+        end_dt = row.get("acquisition_end")
+        end_text = end_dt.strftime("%Y-%m-%d %H:%M:%S") if isinstance(end_dt, datetime) else "unknown"
+        print(
+            f"{row['wait_s']:4g}s  {end_text:<19s}  "
+            f"{row['predictor_label']:<22s}  {row['response_label']:<29s}  "
+            f"{row['num_runs']:5d}   {row['pearson_r']:7.4f}   "
+            f"{row['circular_shift_p_two_sided']:8.5f}   "
+            f"{row['circular_shift_q_fdr']:8.5f}"
+        )
+
+    sigma_rankable = [
+        row for row in sigma_fraction_correlations
+        if np.isfinite(row["pearson_r"])
+    ]
+    sigma_rankable.sort(
+        key=lambda row: (
+            float(row["circular_shift_q_fdr"])
+            if np.isfinite(row["circular_shift_q_fdr"])
+            else np.inf,
+            -abs(float(row["pearson_r"])),
+        )
+    )
+    print("\nTOP HUMIDITY ASSOCIATIONS WITH 3σ/4σ/5σ EVENT FRACTIONS")
+    print("-" * 146)
+    print("Wait   Acquisition end       Definition                     Level   Events/Runs   Fraction%     r       shift p    FDR q")
+    for row in sigma_rankable[:16]:
+        end_dt = row.get("acquisition_end")
+        end_text = end_dt.strftime("%Y-%m-%d %H:%M:%S") if isinstance(end_dt, datetime) else "unknown"
+        print(
+            f"{row['wait_s']:4g}s  {end_text:<19s}  {row['significance_label']:<29s}  "
+            f"{row['sigma_level']:4g}σ   {row['num_exceedances']:5d}/{row['num_runs']:<5d}   "
+            f"{row['fraction_percent']:8.3f}   {row['pearson_r']:7.4f}   "
+            f"{row['circular_shift_p_two_sided']:8.5f}   {row['circular_shift_q_fdr']:8.5f}"
+        )
+
+    print(
+        "\nInterpretation guardrail: correlation is evaluated within each dark wait. "
+        "The circular-shift null preserves slow humidity and transition drift; "
+        "n=2 acquisition slopes are directional checks, not significance tests."
+    )
+
+    analysis = {
+        "environment": environment,
+        "acquisition_records": records,
+        "same_wait_acquisition_correlations": acquisition_correlations,
+        "within_acquisition_correlations": run_correlations,
+        "shot_level_environment_correlations": shot_correlations,
+        "sigma_fraction_humidity_correlations": sigma_fraction_correlations,
+        "same_wait_fixed_effect_summary": fixed_effect,
+    }
+    figures = _humidity_figures(records, shot_correlations)
+    figures.update(
+        _sigma_exceedance_humidity_figures(records, sigma_fraction_correlations)
+    )
+    return analysis, figures
+
+
 def _charge_threshold_consistency_analysis(results):
     """Quantify and plot saved charge-state-threshold consistency.
 
@@ -3134,6 +5047,10 @@ def _charge_threshold_consistency_analysis(results):
             "dark_wait_s": float(rec["wait_s"]),
             "source_index": int(rec["source_index"]),
             "reference_measurement": reference["measurement_label"],
+            "acquisition_datetime": (
+                rec["acquisition_datetime"].isoformat(sep=" ", timespec="seconds")
+                if rec.get("acquisition_datetime") is not None else ""
+            ),
             "n_thresholds": int(finite_vals.size),
             "threshold_median_counts": float(med),
             "threshold_q25_counts": float(q25),
@@ -3262,7 +5179,8 @@ def _charge_threshold_consistency_analysis(results):
         axes[0].set_title("Saved charge-state threshold distribution")
         axes[-1].set_xlabel("Charge-state threshold (counts)")
         fig.suptitle("Charge-state threshold distributions across measurements", fontsize=13)
-        fig.subplots_adjust(
+        _safe_subplots_adjust(
+            fig,
             left=0.12,
             right=0.985,
             bottom=0.065,
@@ -3305,6 +5223,105 @@ def _charge_threshold_consistency_analysis(results):
         figures["charge_threshold_sorted_vs_nv_rank"] = fig
     else:
         plt.close(fig)
+
+    # ------------------------------------------------------------------
+    # FIGURE C: threshold distribution vs real acquisition time. Each
+    # measurement is one boxplot positioned by acquisition datetime. Large
+    # temporal gaps are compressed and marked with an axis break.
+    # ------------------------------------------------------------------
+    timed_records = [r for r in records if r.get("acquisition_datetime") is not None]
+    timed_records.sort(key=lambda r: r["acquisition_datetime"])
+
+    if timed_records:
+        positions, break_positions, elapsed_hours = _compressed_time_positions(
+            [r["acquisition_datetime"] for r in timed_records]
+        )
+        data = [np.asarray(r["thresholds"], dtype=float)[np.isfinite(r["thresholds"])] for r in timed_records]
+        if any(len(v) for v in data):
+            if len(positions) > 1:
+                diffs = np.diff(np.sort(positions))
+                diffs = diffs[diffs > 0]
+                width = 0.45 * float(np.min(diffs)) if diffs.size else 2.0
+            else:
+                width = 2.0
+            fig, ax = plt.subplots(figsize=(12.8, 5.8))
+            bp = ax.boxplot(
+                data,
+                positions=positions,
+                widths=width,
+                showfliers=False,
+                manage_ticks=False,
+                patch_artist=False,
+            )
+            _style_boxplot_monochrome(bp)
+            medians = [np.nanmedian(v) if len(v) else np.nan for v in data]
+            ax.plot(positions, medians, linestyle='--', linewidth=0.9, marker='o', markersize=3.8)
+            ax.set_ylabel('Charge-state threshold (counts)')
+            ax.set_title('Charge-state threshold distribution vs acquisition time')
+            ax.grid(alpha=0.18)
+            ax.set_xticks(positions)
+            ax.set_xticklabels([_format_threshold_time_tick(r) for r in timed_records], rotation=0, ha='center')
+            for pos, rec in zip(positions, timed_records):
+                ax.text(pos, 1.01, rec['measurement_label'], transform=ax.get_xaxis_transform(),
+                        ha='center', va='bottom', fontsize=8, rotation=0)
+            _draw_axis_breaks_on_xaxis(ax, break_positions)
+            if break_positions:
+                ax.text(0.995, 0.015, f'axis break = gap > {THRESHOLD_TIME_BREAK_HOURS:g} h',
+                        transform=ax.transAxes, ha='right', va='bottom', fontsize=8)
+            figures['charge_threshold_distribution_vs_time'] = fig
+
+        # --------------------------------------------------------------
+        # FIGURE D: threshold-consistency metrics vs real acquisition time.
+        # --------------------------------------------------------------
+        row_lookup = {str(row['measurement']): row for row in summary_rows}
+        metric_records = [r for r in timed_records if str(r['measurement_label']) in row_lookup]
+        if metric_records:
+            xpos, break_positions2, _ = _compressed_time_positions(
+                [r['acquisition_datetime'] for r in metric_records]
+            )
+            metric_rows = [row_lookup[str(r['measurement_label'])] for r in metric_records]
+
+            metric_specs = [
+                ('threshold_median_counts', 'Median threshold (counts)'),
+                ('threshold_iqr_counts', 'Threshold IQR (counts)'),
+                ('pearson_r_vs_reference', 'Correlation to reference'),
+                ('rms_residual_after_median_shift_counts', 'Residual RMS after median shift (counts)'),
+            ]
+            fig, axes = plt.subplots(
+                len(metric_specs), 1, figsize=(12.8, 9.6), squeeze=False, sharex=True
+            )
+            axes = axes.ravel()
+            for ax, (key, ylabel) in zip(axes, metric_specs):
+                y = np.asarray([row.get(key, np.nan) for row in metric_rows], dtype=float)
+                ax.plot(xpos, y, marker='o', linewidth=1.0, markersize=4.0)
+                ax.set_ylabel(ylabel)
+                ax.grid(alpha=0.18)
+                if key == 'pearson_r_vs_reference':
+                    ax.set_ylim(min(0.0, np.nanmin(y) - 0.02) if np.any(np.isfinite(y)) else 0.0, 1.02)
+                _draw_axis_breaks_on_xaxis(ax, break_positions2)
+                if THRESHOLD_TIME_METRIC_ANNOTATE:
+                    for x, yy, rec in zip(xpos, y, metric_records):
+                        if np.isfinite(yy):
+                            ax.annotate(
+                                rec['wait_label'], (x, yy), textcoords='offset points',
+                                xytext=(0, 5), ha='center', fontsize=7
+                            )
+            axes[0].set_title('Charge-threshold consistency metrics vs acquisition time')
+            axes[-1].set_xticks(xpos)
+            axes[-1].set_xticklabels([_format_threshold_time_tick(r) for r in metric_records], ha='center')
+            axes[-1].set_xlabel('Acquisition date / time')
+            if break_positions2:
+                axes[-1].text(0.995, -0.32, f'axis break = gap > {THRESHOLD_TIME_BREAK_HOURS:g} h',
+                              transform=axes[-1].transAxes, ha='right', va='top', fontsize=8)
+            _safe_subplots_adjust(
+                fig,
+                left=0.12,
+                right=0.985,
+                bottom=0.17,
+                top=0.94,
+                hspace=0.18,
+            )
+            figures['charge_threshold_consistency_metrics_vs_time'] = fig
 
     return summary_rows, figures
 
@@ -4424,6 +6441,12 @@ def analyze_appended_particle_memory_files(
         coords_xy = _coerce_img_coords(nv_list)
 
         num_nvs, num_runs_part = c11.shape
+        source_num_runs_part = int(num_runs_part)
+        run_datetimes_part, timing_info_part = _run_datetimes_from_metadata(
+            metadata,
+            file_stem,
+            source_num_runs_part,
+        )
 
         # Optional per-source truncation is applied BEFORE appending.
         max_runs_part = dataset.get("max_runs")
@@ -4440,6 +6463,7 @@ def analyze_appended_particle_memory_files(
                 )
                 c11 = c11[:, :use_num_runs]
                 c12 = c12[:, :use_num_runs]
+                run_datetimes_part = run_datetimes_part[:use_num_runs]
                 num_runs_part = use_num_runs
 
         if first_num_nvs is None:
@@ -4496,7 +6520,10 @@ def analyze_appended_particle_memory_files(
                 "c12": c12,
                 "thresholds": threshold_matrix,
                 "num_runs": int(num_runs_part),
+                "source_num_runs": source_num_runs_part,
                 "max_runs_requested": max_runs_part,
+                "run_datetimes": run_datetimes_part,
+                "timing_info": timing_info_part,
                 "global_start": int(global_start),
                 "global_stop": int(global_stop),
             }
@@ -4534,6 +6561,9 @@ def analyze_appended_particle_memory_files(
 
     dataset_id_by_run = np.empty(num_runs, dtype=int)
     local_run_by_global = np.empty(num_runs, dtype=int)
+    run_datetimes = np.concatenate(
+        [np.asarray(p["run_datetimes"], dtype=object) for p in parts]
+    )
 
     for p in parts:
         sl = slice(p["global_start"], p["global_stop"])
@@ -4724,6 +6754,7 @@ def analyze_appended_particle_memory_files(
         "run": runs,
         "dataset_id_by_run": dataset_id_by_run,
         "local_run_by_global": local_run_by_global,
+        "run_datetimes": run_datetimes,
         "good_run_indices": runs[quality["good_run_mask"]],
         "rejected_run_indices": runs[quality["bad_run_mask"]],
         "coords_xy": reference_coords,
@@ -4791,7 +6822,7 @@ def analyze_appended_particle_memory_files(
     )
 
     if reference_poisson is not None and reference_poisson.get("success", False):
-        print("\nREFERENCE POISSON AFTER APPENDING BOTH 0-s FILES")
+        print("\nREFERENCE POISSON AFTER APPENDING SAME-WAIT FILES")
         print("-" * 132)
         print(
             f"lambda=<K>={reference_poisson['lambda']:.4f}; "
@@ -5427,6 +7458,11 @@ def analyze_big_particle_memory_file(
     # comparison can use the same number of shots as the shorter datasets.
     # Run indices remain the original first-run indices: 0 ... max_runs-1.
     source_num_runs = int(c11.shape[1])
+    run_datetimes, timing_info = _run_datetimes_from_metadata(
+        metadata,
+        file_stem,
+        source_num_runs,
+    )
     if max_runs is not None:
         max_runs = int(max_runs)
         if max_runs <= 0:
@@ -5440,6 +7476,7 @@ def analyze_big_particle_memory_file(
             )
             c11 = c11[:, :use_num_runs].copy()
             c12 = c12[:, :use_num_runs].copy()
+            run_datetimes = run_datetimes[:use_num_runs]
         else:
             print(
                 f"[run selection] requested max_runs={max_runs}; dataset has only "
@@ -5703,6 +7740,8 @@ def analyze_big_particle_memory_file(
         "analyzed_num_runs": num_runs,
         "max_runs_requested": max_runs,
         "run": runs,
+        "run_datetimes": run_datetimes,
+        "timing_info": timing_info,
         "good_run_indices": runs[quality["good_run_mask"]],
         "rejected_run_indices": runs[quality["bad_run_mask"]],
         "coords_xy": coords_xy,
@@ -7506,6 +9545,20 @@ if __name__ == "__main__":
             threshold_consistency_figures,
         ) = _charge_threshold_consistency_analysis(individual_analyses)
 
+    # Run-level distribution boxplots vs real acquisition time.
+    run_metric_time_figures = {}
+    if MAKE_RUN_METRIC_DISTRIBUTION_TIME_PLOTS and len(individual_analyses) >= 1:
+        run_metric_time_figures = _run_metric_distributions_vs_time_figures(individual_analyses)
+
+    # Metadata-timed environmental correlation. Every physical acquisition is
+    # kept separate, even when same-wait files were append-analyzed above.
+    humidity_analysis = None
+    humidity_figures = {}
+    if MAKE_HUMIDITY_CORRELATION_PLOTS and len(individual_analyses) >= 1:
+        humidity_analysis, humidity_figures = _humidity_correlation_analysis(
+            individual_analyses
+        )
+
     # 2) Build direct comparison plots across wait conditions.
     comparison = None
     comparison_figures = {}
@@ -7535,6 +9588,8 @@ if __name__ == "__main__":
     figures = {}
     figures.update(compact_figures)
     figures.update(threshold_consistency_figures)
+    figures.update(run_metric_time_figures)
+    figures.update(humidity_figures)
     figures.update(comparison_figures)
     if MAKE_INDIVIDUAL_WAIT_FIGURES:
         figures["individual_wait_figures"] = individual_figures
