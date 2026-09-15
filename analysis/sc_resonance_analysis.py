@@ -323,7 +323,7 @@ def plot_nv_resonance(
     #     for idx in range(num_nvs)
     #     if idx not in indices_to_remove_manually
     # ]
-    return
+    # return
     filtered_nv_list = [nv_list[idx] for idx in filtered_indices]
     filtered_avg_counts = [avg_counts[idx] for idx in filtered_indices]
     filtered_avg_counts_ste = [avg_counts_ste[idx] for idx in filtered_indices]
@@ -970,7 +970,9 @@ if __name__ == "__main__":
     file_ids = [
         "2026_09_05-08_06_34-qnami-nv0_2026_02_20"
     ]
-
+    file_ids = [
+        "2026_09_11-07_20_45-qnami-nv0_2026_02_20"
+    ]
     
     # Load the first dataset as a base
     combined_data = dm.get_raw_data(

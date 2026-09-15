@@ -169,7 +169,7 @@ def plot_rabi_fits(
     num_cols=9,
     period_bin_width=8,  # ns, choose a multiple of 4 if you want
     period_round_to=4,  # ns
-    period_keep_range=(60, 600),  # ns, set to None to disable range filter
+    period_keep_range=(0, 1000),  # ns, set to None to disable range filter
 ):
     """
     Plot fitted Rabi oscillations for each NV and summarize Rabi periods.
@@ -587,7 +587,6 @@ if __name__ == "__main__":
 
     ##148 MHz deer
     # file_stem =  ["2026_02_04-14_02_35-johnson-nv0_2025_10_21"]
-    
     file_stem = ["2026_02_02-21_30_27-johnson-nv0_2025_10_21"] 
     
     ##qnami array sample
@@ -600,9 +599,11 @@ if __name__ == "__main__":
     ##qnami array sample 1277
     file_stem = ["2026_09_08-20_08_21-qnami-nv0_2026_02_20"]  ### loop     
          
+    ##qnami array sample 631
+    file_stem = ["2026_09_11-13_46_26-qnami-nv0_2026_02_20"]  ### loop     
 
     ##qnami array sample 631
-    file_stem = ["2026_09_08-20_08_21-qnami-nv0_2026_02_20"]  ### loop    
+    file_stem = ["2026_09_12-02_21_34-qnami-nv0_2026_02_20"]  ### loop     
 
     data = dm.get_raw_data(file_stem=file_stem, load_npz=True, use_cache=False)
     nv_list = data["nv_list"]
