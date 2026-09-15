@@ -171,30 +171,30 @@ def plot_nv_resonance(
     ax_snr.tick_params(axis="both", labelsize=14)
     plt.show(block=True)
     # # # Set plot style
-    for nv_ind in range(num_nvs):
-        fig, ax = plt.subplots(figsize=(8, 5))
-        # Data points with error bars
-        ax.errorbar(
-            freqs,
-            avg_counts[nv_ind],
-            yerr=avg_counts_ste[nv_ind],
-            fmt="o",
-            color="steelblue",
-            ecolor="gray",
-            elinewidth=1,
-            capsize=3,
-            markersize=5,
-            label="Data",
-        )
-        # Fit curve
-        ax.plot(freqs_dense, fit_fns[nv_ind], "-", color="red", label="Fit")
-        # Labels and style
-        ax.set_xlabel("Frequency (GHz)")
-        ax.set_ylabel("Normalized NV Population")
-        ax.set_title(f"NV Index: {nv_ind}")
-        ax.grid(True, linestyle="--", alpha=0.6)
-        ax.legend()
-        plt.show(block=True)
+    # for nv_ind in range(num_nvs):
+    #     fig, ax = plt.subplots(figsize=(8, 5))
+    #     # Data points with error bars
+    #     ax.errorbar(
+    #         freqs,
+    #         avg_counts[nv_ind],
+    #         yerr=avg_counts_ste[nv_ind],
+    #         fmt="o",
+    #         color="steelblue",
+    #         ecolor="gray",
+    #         elinewidth=1,
+    #         capsize=3,
+    #         markersize=5,
+    #         label="Data",
+    #     )
+    #     # Fit curve
+    #     ax.plot(freqs_dense, fit_fns[nv_ind], "-", color="red", label="Fit")
+    #     # Labels and style
+    #     ax.set_xlabel("Frequency (GHz)")
+    #     ax.set_ylabel("Normalized NV Population")
+    #     ax.set_title(f"NV Index: {nv_ind}")
+    #     ax.grid(True, linestyle="--", alpha=0.6)
+    #     ax.legend()
+    #     plt.show(block=True)
 
     # ----------------- Example of use in your pipeline -----------------
     # center_freqs is your list of (f1, f2) from the fit_results
@@ -323,7 +323,7 @@ def plot_nv_resonance(
     #     for idx in range(num_nvs)
     #     if idx not in indices_to_remove_manually
     # ]
-    return
+    # return
     filtered_nv_list = [nv_list[idx] for idx in filtered_indices]
     filtered_avg_counts = [avg_counts[idx] for idx in filtered_indices]
     filtered_avg_counts_ste = [avg_counts_ste[idx] for idx in filtered_indices]
@@ -968,10 +968,13 @@ if __name__ == "__main__":
         "2026_06_16-02_26_28-qnami-nv0_2026_02_20"
     ]
     file_ids = [
-        "2026_09_05-08_06_34-qnami-nv0_2026_02_20"
+        "2026_09_11-07_20_45-qnami-nv0_2026_02_20"
     ]
 
-    
+    file_ids = [
+        "2026_09_14-00_27_42-qnami-nv0_2026_02_20"
+    ]
+
     # Load the first dataset as a base
     combined_data = dm.get_raw_data(
         file_stem=file_ids[0], load_npz=True, use_cache=True

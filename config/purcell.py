@@ -38,14 +38,14 @@ calibration_coords_pixel = [
     [17.982, 41.943],
 ]
 calibration_coords_green = [
-    [73.652, 115.454],
-    [100.655, 68.9],
-    [126.908, 127.762],
+    [73.633, 115.445],
+    [100.648, 68.88],
+    [126.881, 127.741],
 ]
 calibration_coords_red = [
-    [47.222, 81.385],
-    [69.592, 44.037],
-    [90.288, 92.23],
+    [47.207, 81.378],
+    [69.587, 44.02],
+    [90.267, 92.212],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -185,7 +185,8 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_0",
                 "uwave_power": 11.0,
-                "frequency": 2.7604,
+                "frequency": 2.8076,
+                # "frequency": 2.7604,
                 "rabi_period": 192,
                 "pi_pulse": 112,
                 "pi_on_2_pulse": 64,
@@ -193,7 +194,8 @@ config |= {
             1: {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
-                "frequency": 2.8076,
+                # "frequency": 2.8076,
+                "frequency": 2.7604,
                 "rabi_period": 256,
                 "pi_pulse": 112,
                 "pi_on_2_pulse": 64,
@@ -1051,7 +1053,8 @@ opx_config = {
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3513},# 1176NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2923},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2911},  ## 631NVs 50ms
-        "yellow_charge_readout": {"type": "constant", "sample": 0.3311},  ## 631NVs 50ms
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.3311},  ## 631NVs 50ms
+        "yellow_charge_readout": {"type": "constant", "sample": 0.3411},  ## 631NVs 50ms
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2133}, ## 631NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2043}, ## 631NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1710}, ## 415NVs

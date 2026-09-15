@@ -888,7 +888,7 @@ def do_calibrate_iq_delay(nv_list):
 
 
 def do_resonance(nv_list):
-    freq_center = 2.8785
+    freq_center = 2.87
     # freq_range = 0.36
     # num_steps = 65
     freq_range = 0.260
@@ -1026,7 +1026,7 @@ def do_rabi(nv_list):
     max_tau = 480 + min_tau
     num_steps = 31
     num_reps = 10
-    num_runs = 300
+    num_runs = 400
     # num_runs = 5
     uwave_ind_list = [0, 1]
     # uwave_ind_list = [2]
@@ -1954,16 +1954,16 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.676, 98.164],
-    #     [73.652, 115.454],
-    #     [100.655, 68.9],
-    #     [126.908, 127.762],
+    #     [97.659, 98.16],
+    #     [73.633, 115.445],
+    #     [100.648, 68.88],
+    #     [126.881, 127.741],
     # ]
     # red_coords_list = [
-    #     [66.88, 67.739],
-    #     [47.222, 81.385],
-    #     [69.592, 44.037],
-    #     [90.288, 92.23],
+    #     [66.867, 67.736],
+    #     [47.207, 81.378],
+    #     [69.587, 44.02],
+    #     [90.267, 92.212],
     # ]
     
     analysis_data = dm.get_raw_data(
@@ -2289,7 +2289,7 @@ if __name__ == "__main__":
         # do_power_rabi(nv_list)
         do_resonance(nv_list)
         # do_optimize_pol_duration(nv_list)
-        do_rabi(nv_list)
+        # do_rabi(nv_list)
         # do_deer_hahn(nv_list)
         # do_deer_hahn_rabi(nv_list)
         # do_resonance_zoom(nv_list)
