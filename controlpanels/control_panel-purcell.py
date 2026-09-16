@@ -1955,10 +1955,10 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.659, 98.16],
-    #     [73.633, 115.445],
-    #     [100.648, 68.88],
-    #     [126.881, 127.741],
+    #     [97.652, 98.174],
+    #     [73.634, 115.45],
+    #     [100.632, 68.904],
+    #     [126.85, 127.769],
     # ]
     # red_coords_list = [
     #     [66.867, 67.736],
@@ -2035,9 +2035,6 @@ if __name__ == "__main__":
 
     num_nvs = len(pixel_coords_list)
     # threshold_list = [None] * num_nvs
-    ion_duration_list = [600] * num_nvs
-    scc_duration_list = [88] * num_nvs
-    pol_duration_list = [1000] * num_nvs
 
     # -------------------------------------------
     # amplitudes
@@ -2072,6 +2069,7 @@ if __name__ == "__main__":
     # print("charge_pol QUA multipliers range:", min(charge_pol_amps), max(charge_pol_amps))
     print("scc QUA multipliers range:", min(scc_amp_list), max(scc_amp_list))
 
+
     ###include indeces
     snr_data = dm.get_raw_data(
             file_stem="2026_09_15-23_15_59-scc_snr_check_analysis",
@@ -2086,6 +2084,34 @@ if __name__ == "__main__":
     selected_inds = [0] + selected_inds 
     print(f"Number selected: {len(selected_inds)}")
     print(f"Selected indices: {selected_inds}")
+    
+    # -------------------------------------------
+    # durations
+    # -------------------------------------------
+    scc_dur_data = dm.get_raw_data(
+        file_stem="2026_09_16-10_48_36-scc_parameter_sweep_analysis_with_nv_amps",
+        load_npz=True,
+    )
+
+    scc_dur_dict = scc_dur_data["optimal_value_by_nv"]
+
+    # Full list for all NVs
+    scc_dur_list = [None] * num_nvs
+
+    # Put optimized durations back at the original NV indices
+    for local_ind, nv_ind in enumerate(selected_inds):
+        val = scc_dur_dict.get(local_ind, scc_dur_dict.get(str(local_ind)))
+        if val is not None:
+            scc_dur_list[nv_ind] = int(round(val))
+
+    print("Number optimized:", sum(v is not None for v in scc_dur_list))
+    # print("SCC durations:", scc_dur_list)
+    
+    ion_duration_list = [600] * num_nvs
+    # scc_duration_list = [88] * num_nvs
+    scc_duration_list = scc_dur_list
+    pol_duration_list = [1000] * num_nvs
+
     # sys.exit()
     # nv_list[i] will have the ith coordinates from the above lists
     nv_list: list[NVSig] = []
@@ -2224,7 +2250,7 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        # do_charge_state_histograms(nv_list)
+        do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
@@ -2255,7 +2281,7 @@ if __name__ == "__main__":
         # do_check_readout_fidelity(nv_list)
         # do_optimize_aod_access_time(nv_list)
 
-        do_scc_snr_check(nv_list)
+        # do_scc_snr_check(nv_list)
         # do_optimize_scc_duration(nv_list)
         # do_optimize_scc_amp(nv_list)
         # optimize_scc_amp_and_duration(nv_list)

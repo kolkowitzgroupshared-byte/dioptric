@@ -11,7 +11,6 @@ Updated Sep 2026
 
 @author: Saroj Chand
 """
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -27,10 +26,14 @@ from utils import widefield
 # USER SETTINGS
 # =============================================================================
 
-FILE_STEM = "2026_09_15-22_34_35-qnami-nv0_2026_02_20"
-FILE_STEM = "2026_09_15-23_47_59-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_15-22_34_35-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_15-23_47_59-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_16-10_27_40-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_16-11_34_19-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_16-13_07_07-qnami-nv0_2026_02_20"
+FILE_STEM = "2026_09_16-14_02_21-qnami-nv0_2026_02_20"
 
-X_AXIS = "scc_amp"       # "scc_amp" or "scc_duration"
+X_AXIS = "scc_duration"       # "scc_amp" or "scc_duration"
 STEP_IND = 0
 APPLY_THRESHOLD = True
 
@@ -39,6 +42,7 @@ SAVE_CSV = False
 SAVE_FIGURE = True
 
 SAVE_BASENAME = "scc_snr_check_analysis"
+
 
 ROI_CENTER = (125, 125)
 

@@ -461,7 +461,7 @@ def compute_and_write_nvs_phase():
     # cam_plot()
     
 def write_pre_computed_nvs_phase():
-    phase = np.load("slmsuite\computed_phase\slm_phase_631nvs_20260825_123354.npy")
+    phase = np.load("slmsuite\computed_phase\slm_phase_631nvs_20260916_122929.npy")
     slm.write(phase, settle=True)
     # cam_plot()
 
@@ -532,15 +532,15 @@ try:
     # wavefront_calibration()
     # load_wavefront_calibration()
     
-    compute_and_write_nvs_phase()
-    # write_pre_computed_nvs_phase()
+    # compute_and_write_nvs_phase()
+    write_pre_computed_nvs_phase()
     
     # calibration_triangle()
     # write_pre_computed_triangle()
     
     # circles()
     # write_pre_computed_circles()
-    # smiley()e
+    # smiley()
     # cam_plot()
     
     input("Pattern displayed and held. Press Enter to close...")
