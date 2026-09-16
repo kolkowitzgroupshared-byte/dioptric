@@ -70,6 +70,7 @@ calibration_coords_nv3 = {
 #     [0.01476835, -0.00148369, -1.42104908],
 #     [0.00140560, 0.01479702, -1.73286644],
 # ]
+
 pixel_to_sample_affine_transformation_matrix = [
     [0.06108861, -0.00533755, -12.74624750],
     [0.00748424, 0.06162394, -16.62683414],
@@ -186,17 +187,17 @@ config |= {
                 "physical_name": "sig_gen_STAN_sg394_0",
                 "uwave_power": 11.0,
                 "frequency": 2.7773,
-                "rabi_period": 192,
-                "pi_pulse": 112,
-                "pi_on_2_pulse": 64,
+                "rabi_period": 276,
+                "pi_pulse": 136,
+                "pi_on_2_pulse": 68,
             },
             1: {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
                 "frequency": 2.8421,
-                "rabi_period": 256,
-                "pi_pulse": 112,
-                "pi_on_2_pulse": 64,
+                "rabi_period": 276,
+                "pi_pulse": 136,
+                "pi_on_2_pulse": 68,
             },
             2: {
                 "physical_name": "sig_gen_STAN_sg394_3",

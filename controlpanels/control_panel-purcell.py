@@ -1026,7 +1026,7 @@ def do_rabi(nv_list):
     max_tau = 480 + min_tau
     num_steps = 31
     num_reps = 10
-    num_runs = 400
+    num_runs = 300
     # num_runs = 5
     uwave_ind_list = [0, 1]
     # uwave_ind_list = [2]

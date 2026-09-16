@@ -603,7 +603,10 @@ if __name__ == "__main__":
     file_stem = ["2026_09_11-13_46_26-qnami-nv0_2026_02_20"]  ### loop     
 
     ##qnami array sample 631
-    file_stem = ["2026_09_12-02_21_34-qnami-nv0_2026_02_20"]  ### loop     
+    file_stem = ["2026_09_12-02_21_34-qnami-nv0_2026_02_20"]  ### loop
+    
+    ##qnami array sample 631
+    file_stem = ["2026_09_16-08_26_27-qnami-nv0_2026_02_20"]  ### loop          
 
     data = dm.get_raw_data(file_stem=file_stem, load_npz=True, use_cache=False)
     nv_list = data["nv_list"]

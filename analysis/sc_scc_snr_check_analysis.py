@@ -28,6 +28,7 @@ from utils import widefield
 # =============================================================================
 
 FILE_STEM = "2026_09_15-22_34_35-qnami-nv0_2026_02_20"
+FILE_STEM = "2026_09_15-23_47_59-qnami-nv0_2026_02_20"
 
 X_AXIS = "scc_amp"       # "scc_amp" or "scc_duration"
 STEP_IND = 0
