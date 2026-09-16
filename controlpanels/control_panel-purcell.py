@@ -724,9 +724,9 @@ def do_optimize_scc_duration(nv_list):
 
 
 def do_optimize_scc_amp(nv_list):
-    min_tau = 0.8
-    max_tau = 1.2
-    num_steps = 16
+    min_tau = 0.4
+    max_tau = 1.6
+    num_steps = 21
     num_reps = 15
     num_runs = 200
     # num_runs = 2
@@ -1900,7 +1900,8 @@ if __name__ == "__main__":
     date_str = "2026_02_20"
     sample_coords = [-1.20, -1.2]
     z_coord = 0.0
-    # z_coord = -2.8
+    # z_coord = -2.4
+    
     
     config = common.get_config_dict()
     file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
@@ -2031,41 +2032,7 @@ if __name__ == "__main__":
     bad = ~np.isfinite(threshold_arr_filled)
     threshold_arr_filled[bad] = median_threshold
     threshold_list = threshold_arr_filled
-    # Then apply your MAD condition
-    # selected_inds = inds_good[mad_thr]
 
-    # threshold = np.asarray(analysis["threshold_any"], dtype=float)
-    # ok = np.asarray(analysis["ok"], dtype=bool)
-    # n_est = np.rint(np.asarray(analysis["n_nvs_est"], dtype=float)).astype(int)
-    # fidelity = np.asarray(analysis["readout_fidelity_any"], dtype=float)
-
-
-    # selected_inds = inds_good[mad_thr]
-
-    # Sort by fidelity, best first
-    # selected_inds = selected_inds[np.argsort(fidelity[selected_inds])[::-1]]
-
-    # Start small
-    # selected_inds = selected_inds[:50]
-
-    # print("median threshold:", median_thr)
-    # print("MAD threshold:", mad_thr)
-    # print("num good 1-NV:", len(inds_good))
-    # print("num near median:", np.sum(near_median_mask_local))
-    # print("num selected:", len(selected_inds))
-    # print("selected inds:", selected_inds)
-    # print("selected threshold range:", np.nanmin(threshold[selected_inds]), np.nanmax(threshold[selected_inds]))
-    # print("selected fidelity range:", np.nanmin(fidelity[selected_inds]), np.nanmax(fidelity[selected_inds]))
-
-    # plt.figure()
-    # plt.hist(thr_good, bins=60, alpha=0.5, label="good 1-NV")
-    # plt.axvline(median_thr, color="k", linestyle="--", label="median")
-    # plt.hist(threshold[selected_inds], bins=20, alpha=0.8, label="selected")
-    # plt.xlabel("threshold_any")
-    # plt.ylabel("count")
-    # plt.legend()
-    # plt.show(block=True)
-    # sys.exit()
     num_nvs = len(pixel_coords_list)
     # threshold_list = [None] * num_nvs
     ion_duration_list = [600] * num_nvs
@@ -2083,22 +2050,48 @@ if __name__ == "__main__":
         for i in range(num_nvs)
     ]
 
-    scc_amp_list = [
-        round(
-            widefield.red_qua_amp_fn_2d(red_coords_list[i]),
-            4,
+    # scc_amp_list = [
+    #     round(
+    #         widefield.red_qua_amp_fn_2d(red_coords_list[i]),
+    #         4,
+    #     )
+    #     for i in range(num_nvs)
+    # ]
+    
+    scc_amp_data = dm.get_raw_data(
+        file_stem="2026_09_15-21_47_15-scc_parameter_sweep_analysis_with_nv_amps",
+        load_npz=True
         )
-        for i in range(num_nvs)
-    ]
 
-    print("charge_pol QUA multipliers range:", min(charge_pol_amps), max(charge_pol_amps))
+    ## AOD multiplier
+    scc_amp_dict = scc_amp_data["optimal_value_by_nv"]
+    scc_amp_list = [
+        scc_amp_dict.get(i, scc_amp_dict.get(str(i)))
+        for i in range(len(scc_amp_dict))
+    ]
+    # print("charge_pol QUA multipliers range:", min(charge_pol_amps), max(charge_pol_amps))
     print("scc QUA multipliers range:", min(scc_amp_list), max(scc_amp_list))
+
+    ###include indeces
+    snr_data = dm.get_raw_data(
+            file_stem="2026_09_15-23_15_59-scc_snr_check_analysis",
+            load_npz=True)
+    print(snr_data.keys())
+    snr_list = np.asarray(snr_data["snr"])
+    # NV indices with SNR < 0.05
+    selected_inds = [
+        ind for ind, val in enumerate(snr_list)
+        if val >= 0.05
+    ]
+    selected_inds = [0] + selected_inds 
+    print(f"Number selected: {len(selected_inds)}")
+    print(f"Selected indices: {selected_inds}")
     # sys.exit()
     # nv_list[i] will have the ith coordinates from the above lists
     nv_list: list[NVSig] = []
     for ind in range(num_nvs):
-        # if ind not in selected_inds:
-        #     continue
+        if ind not in selected_inds:
+            continue
         coords = {
             CoordsKey.SAMPLE: sample_coords,
             CoordsKey.Z: z_coord,
@@ -2262,7 +2255,7 @@ if __name__ == "__main__":
         # do_check_readout_fidelity(nv_list)
         # do_optimize_aod_access_time(nv_list)
 
-        # do_scc_snr_check(nv_list)
+        do_scc_snr_check(nv_list)
         # do_optimize_scc_duration(nv_list)
         # do_optimize_scc_amp(nv_list)
         # optimize_scc_amp_and_duration(nv_list)
@@ -2287,7 +2280,7 @@ if __name__ == "__main__":
         # do_calibrate_iq_delay(nv_list)
         # do_rabi(nv_list)
         # do_power_rabi(nv_list)
-        do_resonance(nv_list)
+        # do_resonance(nv_list)
         # do_optimize_pol_duration(nv_list)
         # do_rabi(nv_list)
         # do_deer_hahn(nv_list)

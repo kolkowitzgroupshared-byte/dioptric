@@ -1,255 +1,409 @@
 # -*- coding: utf-8 -*-
 """
-Lighweight check of the SCC SNR
+Lightweight check of SCC SNR.
 
-Created on Fall, 2024
+Plots SCC SNR versus:
+    - SCC AOD amplitude multiplier, or
+    - SCC duration
+
+Created Fall 2024
+Updated Sep 2026
 
 @author: Saroj Chand
 """
 
-import time
-import traceback
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from utils.constants import (
-    CollectionMode,
-    CoordsKey,
-    NVSig,
-    PosControlMode,
-    VirtualLaserKey,
-)
 
-# import seaborn as sns
-# import pandas as pd
-# def process_and_plot(data, error_threshold=0.2):
-#     threshold = True
-#     nv_list = data["nv_list"]
-#     counts = np.array(data["counts"])
-#     sig_counts = counts[0]
-#     ref_counts = counts[1]
-#     # Apply threshold if needed
-#     if threshold:
-#         thresh_method = "otsu"
-#         sig_counts, ref_counts = widefield.threshold_counts(
-#             nv_list, sig_counts, ref_counts, method=thresh_method
-#         )
-#     # Report the results and return
-#     avg_sig_counts, avg_sig_counts_ste, norms = widefield.average_counts(
-#         sig_counts, ref_counts
-#     )
-#     norms_ms0_newaxis = norms[0][:, np.newaxis]
-#     norms_ms1_newaxis = norms[1][:, np.newaxis]
-#     contrast = norms_ms1_newaxis - norms_ms0_newaxis
-#     norm_counts = (avg_sig_counts - norms_ms0_newaxis) / contrast
-#     norm_counts_ste = avg_sig_counts_ste / contrast
-#     # Ensure no negative yerr values
-#     norm_counts_ste = np.abs(norm_counts_ste)
-#     # Constrain norm_counts to be within [0, 1]
-#     norm_counts_clipped = np.clip(norm_counts, 0, 1)
-#     ### Plot 1: All Data
-#     # Prepare data for seaborn plotting (with all data points)
-#     all_nv_nums = [widefield.get_nv_num(nv) for nv in nv_list]
-#     all_plot_data = pd.DataFrame(
-#         {
-#             "NV": all_nv_nums,
-#             "Contrast": norm_counts_clipped.flatten(),
-#             "Error": norm_counts_ste.flatten(),
-#         }
-#     )
-#     # Set up the first plot with all data points
-#     plt.figure(figsize=(15, 8))  # Adjust size for large numbers of NVs
-#     sns.set(style="whitegrid")
-#     ax_all = sns.barplot(x="NV", y="Contrast", data=all_plot_data, ci=None)
-#     # Add error bars manually
-#     for i, row in all_plot_data.iterrows():
-#         ax_all.errorbar(
-#             row["NV"], row["Contrast"], yerr=row["Error"], fmt="none", c="black"
-#         )
-#     # Customize plot
-#     ax_all.set_xlabel("NV Index")
-#     ax_all.set_ylabel("Normalized Contrast (0 to 1)")
-#     ax_all.set_title("All NV Data")
-#     plt.xticks(rotation=90)  # Rotate x-axis labels for better readability
-#     plt.tight_layout()
-#     ### Plot 2: Filtered Good Data (Contrast between 0-1 and small error bars)
-#     filtered_nv_list = []
-#     filtered_norm_counts = []
-#     filtered_norm_counts_ste = []
-#     for i in range(len(norm_counts)):
-#         if 0 <= norm_counts[i] <= 1 and norm_counts_ste[i] < error_threshold:
-#             filtered_nv_list.append(widefield.get_nv_num(nv_list[i]))
-#             filtered_norm_counts.append(norm_counts[i])
-#             filtered_norm_counts_ste.append(norm_counts_ste[i])
-#     # Prepare data for seaborn plotting (good data points only)
-#     good_plot_data = pd.DataFrame(
-#         {
-#             "NV": filtered_nv_list,
-#             "Contrast": np.array(filtered_norm_counts).flatten(),
-#             "Error": np.array(filtered_norm_counts_ste).flatten(),
-#         }
-#     )
-#     # Set up the second plot with good data points
-#     plt.figure(figsize=(15, 8))  # Adjust size for large numbers of NVs
-#     sns.set(style="whitegrid")
-#     ax_good = sns.barplot(x="NV", y="Contrast", data=good_plot_data, ci=None)
-#     # Add error bars manually for good data points
-#     for i, row in good_plot_data.iterrows():
-#         ax_good.errorbar(
-#             row["NV"], row["Contrast"], yerr=row["Error"], fmt="none", c="black"
-#         )
-#     # Customize plot
-#     ax_good.set_xlabel("NV Index")
-#     ax_good.set_ylabel("Normalized Contrast (0 to 1)")
-#     ax_good.set_title(f"Good NV Data (Error < {error_threshold})")
-#     plt.xticks(rotation=90)  # Rotate x-axis labels for better readability
-#     plt.tight_layout()
-#     # Show both plots
-#     plt.show()
-#     print(f"Mean normalized contrast (all data): {np.mean(norm_counts)}")
-#     print(f"Mean normalized contrast (good data): {np.mean(filtered_norm_counts)}")
-#     return
-import seaborn as sns
-from matplotlib import pyplot as plt
-
-from majorroutines.widefield import base_routine
-from utils import common
+from utils.constants import CoordsKey, VirtualLaserKey
 from utils import data_manager as dm
 from utils import kplotlib as kpl
 from utils import positioning as pos
-from utils import tool_belt as tb
-from utils import widefield as widefield
+from utils import widefield
 
 
-def process_and_plot(data):
-    threshold = True
-    print(data.keys())
+# =============================================================================
+# USER SETTINGS
+# =============================================================================
+
+FILE_STEM = "2026_09_15-22_34_35-qnami-nv0_2026_02_20"
+
+X_AXIS = "scc_amp"       # "scc_amp" or "scc_duration"
+STEP_IND = 0
+APPLY_THRESHOLD = True
+
+SAVE_RESULTS = True
+SAVE_CSV = False
+SAVE_FIGURE = True
+
+SAVE_BASENAME = "scc_snr_check_analysis"
+
+ROI_CENTER = (125, 125)
+
+
+# =============================================================================
+# ANALYSIS
+# =============================================================================
+
+
+def process_data(data):
+
     nv_list = data["nv_list"]
     num_nvs = len(nv_list)
-    counts = np.array(data["counts"])
+
+    counts = np.asarray(data["counts"])
     sig_counts = counts[0]
     ref_counts = counts[1]
 
-    # Apply thresholds
-    if threshold:
+    # Threshold charge-state counts
+    if APPLY_THRESHOLD:
         sig_counts, ref_counts = widefield.threshold_counts(
-            nv_list, sig_counts, ref_counts, dynamic_thresh=False
+            nv_list,
+            sig_counts,
+            ref_counts,
+            dynamic_thresh=False,
         )
 
     # Calculate metrics
-    avg_sig_counts, avg_sig_counts_ste, _ = widefield.average_counts(sig_counts)
-    avg_ref_counts, avg_ref_counts_ste, _ = widefield.average_counts(ref_counts)
-    avg_snr, avg_snr_ste = widefield.calc_snr(sig_counts, ref_counts)
-    avg_contrast, avg_contrast_ste = widefield.calc_contrast(sig_counts, ref_counts)
+    avg_sig, avg_sig_ste, _ = widefield.average_counts(sig_counts)
+    avg_ref, avg_ref_ste, _ = widefield.average_counts(ref_counts)
 
-    # Extract single step values
-    step_ind = 0
-    avg_sig_counts = avg_sig_counts[:, step_ind]
-    avg_sig_counts_ste = avg_sig_counts_ste[:, step_ind]
-    avg_ref_counts = avg_ref_counts[:, step_ind]
-    avg_ref_counts_ste = avg_ref_counts_ste[:, step_ind]
-    avg_snr = avg_snr[:, step_ind]
-    avg_snr_ste = avg_snr_ste[:, step_ind]
-    avg_contrast = avg_contrast[:, step_ind]
-    avg_contrast_ste = avg_contrast_ste[:, step_ind]
+    avg_snr, avg_snr_ste = widefield.calc_snr(
+        sig_counts,
+        ref_counts,
+    )
 
-    # Get NV coordinates and Compute distances
-    nv_coords = []
-    distances = []
-    distances = []
+    avg_contrast, avg_contrast_ste = widefield.calc_contrast(
+        sig_counts,
+        ref_counts,
+    )
+
+    # Select one step
+    avg_sig = avg_sig[:, STEP_IND]
+    avg_sig_ste = avg_sig_ste[:, STEP_IND]
+
+    avg_ref = avg_ref[:, STEP_IND]
+    avg_ref_ste = avg_ref_ste[:, STEP_IND]
+
+    avg_snr = avg_snr[:, STEP_IND]
+    avg_snr_ste = avg_snr_ste[:, STEP_IND]
+
+    avg_contrast = avg_contrast[:, STEP_IND]
+    avg_contrast_ste = avg_contrast_ste[:, STEP_IND]
+
+    # -------------------------------------------------------------------------
+    # Per-NV parameters
+    # -------------------------------------------------------------------------
+
     scc_durations = []
-    for nv in nv_list:
-        coords = pos.get_nv_coords(nv, coords_key=CoordsKey.PIXEL, drift_adjust=False)
-        nv_coords.append(coords)
-        dist = round(np.sqrt((125 - coords[0]) ** 2 + (125 - coords[1]) ** 2), 3)
-        distances.append(dist)
-        # try enum key, then string fallback
-        scc_dur = pos.get_nv_pulse_duration(nv, VirtualLaserKey.SCC)
-        scc_durations.append(scc_dur)
+    scc_amps = []
 
-    yellow_charge_readout_amp = data["opx_config"]["waveforms"][
+    pixel_x = []
+    pixel_y = []
+    distances = []
+
+    cx, cy = ROI_CENTER
+
+    for nv in nv_list:
+
+        coords = pos.get_nv_coords(
+            nv,
+            coords_key=CoordsKey.PIXEL,
+            drift_adjust=False,
+        )
+
+        x = float(coords[0])
+        y = float(coords[1])
+
+        pixel_x.append(x)
+        pixel_y.append(y)
+
+        distances.append(
+            np.hypot(x - cx, y - cy)
+        )
+
+        # SCC duration
+        scc_durations.append(
+            pos.get_nv_pulse_duration(
+                nv,
+                VirtualLaserKey.SCC,
+            )
+        )
+
+        # SCC AOD multiplier
+        amp = nv.pulse_amps.get(
+            VirtualLaserKey.SCC,
+            np.nan,
+        )
+
+        scc_amps.append(amp)
+
+    # -------------------------------------------------------------------------
+    # Yellow laser power
+    # -------------------------------------------------------------------------
+
+    waveforms = data["opx_config"]["waveforms"]
+
+    readout_sample = waveforms[
         "yellow_charge_readout"
     ]["sample"]
-    yellow_spin_pol_amp = data["opx_config"]["waveforms"]["yellow_spin_pol"]["sample"]
-    a, b, c = 1.5133e04, 2.6976, -38.63
-    yellow_charge_readout_amp = int(a * (yellow_charge_readout_amp**b) + c)
-    yellow_spin_pol_amp = int(a * (yellow_spin_pol_amp**b) + c)
-    # Prepare DataFrame for analysis
+
+    spin_pol_sample = waveforms[
+        "yellow_spin_pol"
+    ]["sample"]
+
+    a, b, c = 1.5133e4, 2.6976, -38.63
+
+    readout_power = a * readout_sample**b + c
+    spin_pol_power = a * spin_pol_sample**b + c
+
+    # -------------------------------------------------------------------------
+    # DataFrame
+    # -------------------------------------------------------------------------
+
     df = pd.DataFrame(
         {
-            "NV Index": range(num_nvs),
-            "Signal Counts": avg_sig_counts,
-            "Signal STE": avg_sig_counts_ste,
-            "Reference Counts": avg_ref_counts,
-            "Reference STE": avg_ref_counts_ste,
+            "NV Index": np.arange(num_nvs),
+
+            "Signal Counts": avg_sig,
+            "Signal STE": avg_sig_ste,
+
+            "Reference Counts": avg_ref,
+            "Reference STE": avg_ref_ste,
+
             "SNR": avg_snr,
             "SNR STE": avg_snr_ste,
+
             "Contrast": avg_contrast,
             "Contrast STE": avg_contrast_ste,
+
+            "SCC Duration (ns)": scc_durations,
+            "SCC AOD Multiplier": scc_amps,
+
+            "Pixel X": pixel_x,
+            "Pixel Y": pixel_y,
             "Distance": distances,
-            "scc_durations": scc_durations,
-            "Y Coord": [coord[0] for coord in nv_coords],
-            "X Coord": [coord[1] for coord in nv_coords],
         }
     )
 
-    # Plot: SNR vs. Distance with error bars
-    distance = df["Distance"]
-    scc_durations = df["scc_durations"]
-    snr = df["SNR"]
-    yerr = df["SNR STE"]
-    # indices_to_remove = [ind for ind in range(len(snr)) if snr[ind] < 0.05]
-    indices_to_remove = []
-    print(indices_to_remove)
-    selected_indices = [ind for ind in range(num_nvs) if ind not in indices_to_remove]
-    distance = [distance[ind] for ind in selected_indices]
-    scc_durations = [scc_durations[ind] for ind in selected_indices]
-    snr = [round(snr[ind], 3) for ind in selected_indices]
-    yerr = [yerr[ind] for ind in selected_indices]
-    median = round(np.median(snr), 3)
-    print(f"scc_snrs:{snr}")
-    plt.figure(figsize=(6, 5))
-    plt.errorbar(
-        scc_durations,
-        snr,
-        yerr,
-        fmt="o",
-        ecolor="gray",
-        capsize=3,
-        label=f"SNR (Median: {median})",
-    )
-    plt.title(
-        f"SNRs of {num_nvs}NVs(readout amp:{yellow_charge_readout_amp}uW, spin pol amp:{yellow_spin_pol_amp}uW)",
-        fontsize=13,
-    )
-    plt.xlabel("SCC Durations (ns)", fontsize=15)
-    plt.ylabel("SNR", fontsize=15)
-    plt.xticks(fontsize=15)
-    plt.yticks(fontsize=15)
-    plt.grid(True)
-    plt.legend(fontsize=11)
-    plt.show()
+    metadata = {
+        "num_nvs": num_nvs,
+        "readout_power_uw": float(readout_power),
+        "spin_pol_power_uw": float(spin_pol_power),
+    }
 
-    return df
+    return df, metadata
+
+
+# =============================================================================
+# PLOT
+# =============================================================================
+
+
+def plot_snr(df, metadata):
+
+    if X_AXIS == "scc_amp":
+        x = df["SCC AOD Multiplier"]
+        xlabel = "SCC AOD amplitude multiplier"
+
+    elif X_AXIS == "scc_duration":
+        x = df["SCC Duration (ns)"]
+        xlabel = "SCC duration (ns)"
+
+    else:
+        raise ValueError(
+            "X_AXIS must be 'scc_amp' or 'scc_duration'"
+        )
+
+    snr = df["SNR"].to_numpy()
+    snr_ste = df["SNR STE"].to_numpy()
+
+    valid = (
+        np.isfinite(x)
+        & np.isfinite(snr)
+        & np.isfinite(snr_ste)
+    )
+
+    x = np.asarray(x)[valid]
+    snr = snr[valid]
+    snr_ste = snr_ste[valid]
+
+    median_snr = np.nanmedian(snr)
+    mean_snr = np.nanmean(snr)
+
+    print()
+    print("=" * 55)
+    print("SCC SNR SUMMARY")
+    print("=" * 55)
+    print(f"Number of NVs:     {metadata['num_nvs']}")
+    print(f"Valid NVs:         {len(snr)}")
+    print(f"Median SNR:        {median_snr:.4f}")
+    print(f"Mean SNR:          {mean_snr:.4f}")
+    print(
+        f"Readout power:     "
+        f"{metadata['readout_power_uw']:.1f} uW"
+    )
+    print(
+        f"Spin-pol power:    "
+        f"{metadata['spin_pol_power_uw']:.1f} uW"
+    )
+    print("=" * 55)
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+
+    ax.errorbar(
+        x,
+        snr,
+        yerr=snr_ste,
+        fmt="o",
+        markersize=4,
+        capsize=2,
+        alpha=0.7,
+        label=f"Median SNR = {median_snr:.3f}",
+    )
+
+    ax.axhline(
+        median_snr,
+        linestyle="--",
+        linewidth=1,
+    )
+
+    ax.axhline(
+        0,
+        linestyle=":",
+        linewidth=1,
+    )
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel("SCC SNR")
+
+    ax.set_title(
+        f"SCC SNR of {metadata['num_nvs']} NVs\n"
+        f"Readout = {metadata['readout_power_uw']:.0f} µW, "
+        f"spin pol = {metadata['spin_pol_power_uw']:.0f} µW"
+    )
+
+    ax.grid(alpha=0.25)
+    ax.legend()
+
+    return fig
+
+
+# =============================================================================
+# SAVE
+# =============================================================================
+
+
+def save_results(df, metadata, fig):
+
+    timestamp = dm.get_time_stamp()
+
+    file_path = dm.get_file_path(
+        __file__,
+        timestamp,
+        SAVE_BASENAME,
+    )
+
+    results = {
+        "source_file_stem": FILE_STEM,
+        "num_nvs": metadata["num_nvs"],
+
+        "nv_index": df["NV Index"].tolist(),
+
+        "scc_aod_multiplier":
+            df["SCC AOD Multiplier"].tolist(),
+
+        "scc_duration_ns":
+            df["SCC Duration (ns)"].tolist(),
+
+        "snr": df["SNR"].tolist(),
+        "snr_ste": df["SNR STE"].tolist(),
+
+        "contrast": df["Contrast"].tolist(),
+        "contrast_ste": df["Contrast STE"].tolist(),
+
+        "signal_counts":
+            df["Signal Counts"].tolist(),
+
+        "reference_counts":
+            df["Reference Counts"].tolist(),
+
+        "readout_power_uw":
+            metadata["readout_power_uw"],
+
+        "spin_pol_power_uw":
+            metadata["spin_pol_power_uw"],
+
+        "median_snr":
+            float(np.nanmedian(df["SNR"])),
+
+        "mean_snr":
+            float(np.nanmean(df["SNR"])),
+    }
+
+    if SAVE_RESULTS:
+        dm.save_raw_data(
+            results,
+            file_path,
+        )
+        print(f"\nSaved analysis: {file_path}")
+
+    if SAVE_CSV:
+        df.to_csv(
+            f"{file_path}.csv",
+            index=False,
+        )
+
+    if SAVE_FIGURE:
+        fig.savefig(
+            f"{file_path}.png",
+            dpi=300,
+            bbox_inches="tight",
+        )
+
+
+# =============================================================================
+# MAIN
+# =============================================================================
 
 
 if __name__ == "__main__":
+
     kpl.init_kplotlib()
 
+    print(f"Loading: {FILE_STEM}")
+
     data = dm.get_raw_data(
-        file_stem="2026_02_12-17_34_21-johnson-nv0_2025_10_21", load_npz=True
+        file_stem=FILE_STEM,
+        load_npz=True,
     )
-    # data = dm.get_raw_data(
-    #     file_stem="2026_01_21-13_45_53-johnson-nv0_2025_10_21", load_npz=True
-    # )
-    # data = dm.get_raw_data(
-    #     file_stem="2026_01_21-11_09_56-johnson-nv0_2025_10_21", load_npz=True
-    # )
-    # file_name = dm.get_file_name(file_id=file_id)
-    # print(f"{file_name}_{file_id}")
-    # Process and visualize
-    df = process_and_plot(data)
-    # Save DataFrame if needed
-    # df.to_csv("processed_nv_data.csv", index=False)
+
+    df, metadata = process_data(data)
+
+    print()
+    print(
+        df[
+            [
+                "NV Index",
+                "SCC AOD Multiplier",
+                "SCC Duration (ns)",
+                "SNR",
+                "SNR STE",
+            ]
+        ]
+    )
+
+    fig = plot_snr(
+        df,
+        metadata,
+    )
+
+    if SAVE_RESULTS or SAVE_CSV or SAVE_FIGURE:
+        save_results(
+            df,
+            metadata,
+            fig,
+        )
+
     kpl.show(block=True)

@@ -1,761 +1,743 @@
 # -*- coding: utf-8 -*-
 """
-Optimize SCC parameters
+Robust SCC amplitude/duration optimization.
 
-@author: saroj chand
+Designed for Dioptric wide-field NV data.
+
+Key changes:
+- cast counts to float32 before SNR calculation
+- no longer reuse the duration model for amplitude scans
+- use a local weighted quadratic near each measured SNR maximum
+- never extrapolate outside the measured scan
+- reject non-concave/poor fits and fall back to the measured maximum
+- duration optima can be quantized to 4 ns
+- return useful results for both amplitude and duration modes
+- limit individual plots instead of opening one blocking window per NV
+
+@author: Saroj Chand
 """
 
+from __future__ import annotations
 
-# def fit_snr(taus, avg_snr_nv, avg_snr_ste_nv):
-#     """Fit SNR data to a custom function."""
-
-#     def fit_fn(tau, delay, slope, decay):
-#         tau = np.array(tau) - delay
-#         return slope * tau * np.exp(-tau / decay)
-
-#     guess_params = [taus[0], np.max(avg_snr_nv), taus[-1]]
-#     try:
-#         popt, _ = curve_fit(
-#             fit_fn,
-#             taus,
-#             avg_snr_nv,
-#             p0=guess_params,
-#             sigma=avg_snr_ste_nv,
-#             absolute_sigma=True,
-#             maxfev=10000,  # Increase the max number of iterations
-#         )
-#     except Exception as e:
-#         print(f"Fitting failed for this NV: {e}")
-#         popt = [taus[0], 0, taus[-1]]  # Default fallback parameters
-#     return popt, fit_fn
-
-
-# def plot_individual_nv_fits(nv_list, taus, avg_snr, avg_snr_ste):
-#     """Create separate figures for individual NV SNR fits."""
-#     figs = []  # Store all figures for later reference
-#     optimal_durations = {}  # Store all opitmal
-#     valid_range = (100, 240)
-#     optimal_taus = []
-#     for nv_ind in range(len(nv_list)):
-#         fig, ax = plt.subplots(figsize=(8, 6))  # Create a new figure for each NV
-#         popt, fit_fn = fit_snr(taus, avg_snr[nv_ind], avg_snr_ste[nv_ind])
-#         tau_linspace = np.linspace(min(taus), max(taus), 1000)
-#         # Find the tau corresponding to the max SNR
-#         snr_values = fit_fn(tau_linspace, *popt)
-#         optimal_tau = tau_linspace[np.argmax(snr_values)]
-#         # Ensure optimal_tau is within the valid range
-#         if not valid_range[0] <= optimal_tau <= valid_range[1]:
-#             optimal_tau = np.nan  # Mark invalid values for later adjustment
-#         # Round optimal_tau to the nearest number divisible by 4
-#         if not np.isnan(optimal_tau):
-#             optimal_tau = round(optimal_tau / 4) * 4
-#         # Add to the list for median calculation
-#         optimal_taus.append(optimal_tau)
-#         # Add the NV-specific duration to the dictionary
-#         nv_num = widefield.get_nv_num(nv_list[nv_ind])
-#         optimal_durations[nv_num] = optimal_tau
-#         # Plot the fit curve
-#         sns.lineplot(
-#             x=tau_linspace,
-#             y=fit_fn(tau_linspace, *popt),
-#             label="Fit",
-#             ax=ax,
-#         )
-#         # Plot the data points
-#         sns.scatterplot(
-#             x=taus,
-#             y=avg_snr[nv_ind],
-#             ax=ax,
-#             label="Data",
-#             s=60,
-#         )
-#         # Customize the plot
-#         nv_num = widefield.get_nv_num(nv_list[nv_ind])
-#         ax.set_title(f"NV {nv_num} SNR Fit")
-#         ax.set_xlabel("SCC Pulse Duration (ns)")
-#         ax.set_ylabel("SNR")
-#         ax.legend()
-#         ax.grid(True)
-#         figs.append(fig)  # Append the created figure to the li
-#     # Calculate the median of all valid optimal taus
-#     valid_taus = [tau for tau in optimal_taus if not np.isnan(tau)]
-#     median_tau = np.median(valid_taus)
-#     # Replace any invalid optimal_tau values with the median
-#     for nv_num, tau in optimal_durations.items():
-#         if np.isnan(tau) or not valid_range[0] <= tau <= valid_range[1]:
-#             optimal_durations[nv_num] = 240
-#     return figs, optimal_durations
-
-
-# def process_and_plot(nv_list, taus, sig_counts, ref_counts, duration_or_amp):
-#     """Process and plot data for signal, reference, and SNR."""
-#     # Filter NVs by selected orientations
-#     num_nvs = len(nv_list)
-#     orientation_data = dm.get_raw_data(file_id=1723161184641)
-#     orientation_indices = orientation_data["orientation_indices"]
-#     selected_orientations = ["0.041", "0.147"]
-#     selected_indices = []
-#     for orientation in selected_orientations:
-#         if str(orientation) in orientation_indices:
-#             selected_indices.extend(orientation_indices[str(orientation)]["nv_indices"])
-#     selected_indices = list(set(selected_indices))  # Remove duplicates
-#     # Filter counts and NV list
-#     nv_list = [nv_list[i] for i in selected_indices]
-#     sig_counts = sig_counts[selected_indices, :, :, :]
-#     ref_counts = ref_counts[selected_indices, :, :, :]
-#     # Average counts and calculate metrics
-#     # avg_sig_counts, avg_sig_counts_ste, _ = widefield.average_counts(sig_counts)
-#     # avg_ref_counts, avg_ref_counts_ste, _ = widefield.average_counts(ref_counts)
-#     avg_snr, avg_snr_ste = widefield.calc_snr(sig_counts, ref_counts)
-#     # Average and Median SNR
-#     avg_snr_all = np.mean(avg_snr, axis=0)
-#     median_snr_all = np.median(avg_snr, axis=0)
-#     avg_snr_ste_all = np.mean(avg_snr_ste, axis=0)
-#     ### plot region
-#     if duration_or_amp:
-#         x_label = "duration(ns)"
-#         y_label = "snr"
-#     else:
-#         x_label = "amplitude"
-#         y_label = "snr"
-#     fig_avg_snr, ax_avg_snr = plt.subplots()
-#     sns.lineplot(x=taus, y=avg_snr_all, ax=ax_avg_snr, label="Average SNR")
-#     sns.lineplot(
-#         x=taus, y=median_snr_all, ax=ax_avg_snr, label="Median SNR", linestyle="--"
-#     )
-#     ax_avg_snr.fill_between(
-#         taus,
-#         avg_snr_all - avg_snr_ste_all,
-#         avg_snr_all + avg_snr_ste_all,
-#         alpha=0.2,
-#         label="Error Bounds",
-#     )
-#     ax_avg_snr.set_xlabel(x_label)
-#     ax_avg_snr.set_ylabel(y_label)
-#     ax_avg_snr.legend()
-#     ax_avg_snr.grid(True)
-#     plt.title("Avg and Median SNR across NVs")
-#     fig_snr_fits, optimal_durations = plot_individual_nv_fits(
-#         nv_list, taus, avg_snr, avg_snr_ste
-#     )
-#     print(f"optimal_durations =  {optimal_durations}")
-#     return fig_avg_snr, fig_snr_fits, optimal_durations
-
-# if __name__ == "__main__":
-#     kpl.init_kplotlib()
-#     # Load data
-#     data = dm.get_raw_data(file_id=1722305531191)  # duration
-#     data = dm.get_raw_data(file_id=1724491290147)  # amplitide
-#     nv_list = data["nv_list"]
-#     taus = data["taus"]
-#     counts = np.array(data["counts"])
-#     sig_counts = counts[0]
-#     ref_counts = counts[1]
-#     # Process and plot
-#     figs = process_and_plot(nv_list, taus, sig_counts, ref_counts, duration_or_amp=True)
-#     # Show plots
-#     plt.show(block=True)
-import traceback
-
-import matplotlib.pyplot as plt
+from dataclasses import dataclass
 import numpy as np
-import seaborn as sns
-from scipy.optimize import curve_fit
+import matplotlib.pyplot as plt
 
-from analysis.bimodal_histogram import (
-    ProbDist,
-    determine_threshold,
-    fit_bimodal_histogram,
-)
-from majorroutines.widefield import base_routine
 from utils import data_manager as dm
 from utils import kplotlib as kpl
-from utils import tool_belt as tb
 from utils import widefield
-from utils import widefield as widefield
 
 
-def fit_duration(taus, avg_snr_nv, avg_snr_ste_nv):
-    """Fit SNR data to a custom function."""
+# =============================================================================
+# USER SETTINGS
+# =============================================================================
 
-    def fit_fn(tau, delay, slope, decay):
-        tau = np.array(tau) - delay
-        return slope * tau * np.exp(-tau / decay)
+FILE_STEM = "2026_09_15-04_51_20-qnami-nv0_2026_02_20"
 
-    guess_params = [taus[0], np.max(avg_snr_nv), taus[-1]]
+# "amplitude" or "duration"
+MODE = "amplitude"
+
+AMPLITUDE_VALID_RANGE = (0.5, 1.5)
+DURATION_VALID_RANGE_NS = (0.0, 400.0)
+DURATION_QUANTUM_NS = 4.0
+
+LOCAL_FIT_POINTS = 5
+MAX_VERTEX_UNCERTAINTY_FRACTION = 0.30
+
+SHOW_SUMMARY_PLOTS = True
+PLOT_INDIVIDUAL_FITS = False
+MAX_INDIVIDUAL_PLOTS = 12
+
+SAVE_RESULTS = False
+SAVE_BASENAME = "optimal_scc_parameters_robust"
+
+
+@dataclass
+class PeakEstimate:
+    x_opt: float
+    y_opt: float
+    x_unc: float
+    method: str
+    status: str
+    raw_x_max: float
+    raw_y_max: float
+    fit_x: np.ndarray | None = None
+    fit_y: np.ndarray | None = None
+
+
+def safe_sigma(sigma):
+    """Replace invalid/zero uncertainties with a robust positive value."""
+    sigma = np.asarray(sigma, dtype=float).copy()
+
+    good = np.isfinite(sigma) & (sigma > 0)
+
+    if np.any(good):
+        fallback = float(np.nanmedian(sigma[good]))
+    else:
+        fallback = 1.0
+
+    if not np.isfinite(fallback) or fallback <= 0:
+        fallback = 1.0
+
+    sigma[~good] = fallback
+
+    # Stop one accidentally tiny error bar from dominating.
+    good_vals = sigma[np.isfinite(sigma) & (sigma > 0)]
+    if good_vals.size:
+        floor = max(
+            0.25 * np.nanpercentile(good_vals, 10),
+            np.finfo(float).eps,
+        )
+        sigma = np.maximum(sigma, floor)
+
+    return sigma
+
+
+def intersect_valid_range(requested_range, x):
+    """Never optimize outside the actual measured scan."""
+    x = np.asarray(x, dtype=float)
+    finite = x[np.isfinite(x)]
+
+    if finite.size == 0:
+        raise ValueError("No finite scan values.")
+
+    lo = max(float(requested_range[0]), float(np.min(finite)))
+    hi = min(float(requested_range[1]), float(np.max(finite)))
+
+    if not lo < hi:
+        raise ValueError(
+            f"Requested range {requested_range} does not overlap "
+            f"measured range ({np.min(finite)}, {np.max(finite)})."
+        )
+
+    return lo, hi
+
+
+def quantize(value, quantum):
+    if quantum is None:
+        return float(value)
+    return float(round(value / quantum) * quantum)
+
+
+def quadratic_value(coeff, x, x0):
+    a, b, c = coeff
+    dx = np.asarray(x, dtype=float) - x0
+    return a * dx**2 + b * dx + c
+
+
+def estimate_peak(
+    x,
+    y,
+    yerr,
+    valid_range,
+    local_fit_points=LOCAL_FIT_POINTS,
+):
+    """
+    Robust optimum estimate for a single-peaked scan.
+
+    Start from the best measured point, then fit only its local neighborhood.
+    If the local quadratic is not a trustworthy downward parabola, keep the
+    measured maximum instead.
+    """
+    x = np.asarray(x, dtype=float).ravel()
+    y = np.asarray(y, dtype=float).ravel()
+    yerr = np.asarray(yerr, dtype=float).ravel()
+
+    if not (x.size == y.size == yerr.size):
+        raise ValueError("x, y and yerr must have equal length.")
+
+    lo, hi = valid_range
+
+    mask = (
+        np.isfinite(x)
+        & np.isfinite(y)
+        & (x >= lo)
+        & (x <= hi)
+    )
+
+    if np.sum(mask) == 0:
+        return PeakEstimate(
+            np.nan, np.nan, np.nan,
+            "none", "no_valid_points",
+            np.nan, np.nan,
+        )
+
+    xx = x[mask]
+    yy = y[mask]
+    ss = safe_sigma(yerr[mask])
+
+    order = np.argsort(xx)
+    xx = xx[order]
+    yy = yy[order]
+    ss = ss[order]
+
+    i_max = int(np.nanargmax(yy))
+    raw_x = float(xx[i_max])
+    raw_y = float(yy[i_max])
+
+    if xx.size < 3:
+        return PeakEstimate(
+            raw_x, raw_y, np.nan,
+            "measured_max", "too_few_points",
+            raw_x, raw_y,
+        )
+
+    nfit = int(np.clip(local_fit_points, 3, xx.size))
+
+    # nearest scan points to the measured maximum
+    inds = np.argsort(np.abs(xx - raw_x))[:nfit]
+    inds = np.sort(inds)
+
+    xf = xx[inds]
+    yf = yy[inds]
+    sf = ss[inds]
+
+    if np.unique(xf).size < 3:
+        return PeakEstimate(
+            raw_x, raw_y, np.nan,
+            "measured_max", "not_enough_distinct_x",
+            raw_x, raw_y,
+        )
+
+    x0 = raw_x
+    dx = xf - x0
+
+    A = np.column_stack([dx**2, dx, np.ones_like(dx)])
+    Aw = A / sf[:, None]
+    yw = yf / sf
+
     try:
-        popt, _ = curve_fit(
-            fit_fn,
-            taus,
-            avg_snr_nv,
-            p0=guess_params,
-            sigma=avg_snr_ste_nv,
-            absolute_sigma=True,
-            maxfev=20000,  # Increase the max number of iterations
-        )
-    except Exception as e:
-        print(f"Fitting failed for this NV: {e}")
-        popt = [taus[0], 0, taus[-1]]  # Default fallback parameters
-    return popt, fit_fn
-
-
-def fit_amplitude(taus, snr_data, snr_ste):
-    """Fit SNR data to a generalized logistic function."""
-
-    def fit_fn(P, F_min, F_max, P_mid, steepness, asymmetry):
-        """Generalized logistic function for asymmetric fitting."""
-        P = np.maximum(P, 1e-10)
-        return F_min + (F_max - F_min) / (
-            1 + asymmetry * np.exp(-steepness * (P - P_mid))
+        coeff, _, rank, _ = np.linalg.lstsq(Aw, yw, rcond=None)
+    except np.linalg.LinAlgError:
+        return PeakEstimate(
+            raw_x, raw_y, np.nan,
+            "measured_max", "lstsq_failed",
+            raw_x, raw_y,
         )
 
-    # Initial guess for the parameters
-    guess_params = [
-        np.min(snr_data),  # F_min
-        np.max(snr_data),  # F_max
-        np.median(taus),  # P_mid (point of maximum growth)
-        1.0,  # steepness
-        1.0,  # asymmetry
-    ]
+    if rank < 3:
+        return PeakEstimate(
+            raw_x, raw_y, np.nan,
+            "measured_max", "rank_deficient",
+            raw_x, raw_y,
+        )
 
-    # Set bounds to prevent saturation
-    bounds = (
-        [np.min(snr_data), np.min(snr_data), 1.4, 0.1, 0.0],  # Lower bounds
-        [np.max(snr_data), np.max(snr_data), 1.8, 5.0, 2.0],  # Upper bounds
-    )
+    a, b, _ = coeff
 
+    # Need a true local maximum.
+    if not np.isfinite(a) or a >= 0:
+        return PeakEstimate(
+            raw_x, raw_y, np.nan,
+            "measured_max", "non_concave_fit",
+            raw_x, raw_y,
+        )
+
+    vertex = x0 - b / (2.0 * a)
+
+    # Do not extrapolate, even within the global valid range.
+    local_lo = float(np.min(xf))
+    local_hi = float(np.max(xf))
+
+    if not (
+        local_lo <= vertex <= local_hi
+        and lo <= vertex <= hi
+    ):
+        return PeakEstimate(
+            raw_x, raw_y, np.nan,
+            "measured_max", "vertex_outside_local_window",
+            raw_x, raw_y,
+        )
+
+    # Propagate coefficient covariance to vertex uncertainty.
     try:
-        # Perform the fit
-        popt, _ = curve_fit(
-            fit_fn,
-            taus,
-            snr_data,
-            p0=guess_params,
-            sigma=snr_ste,
-            bounds=bounds,
-            absolute_sigma=True,
-            maxfev=10000,
+        covariance = np.linalg.pinv(Aw.T @ Aw)
+
+        grad = np.array([
+            b / (2.0 * a**2),
+            -1.0 / (2.0 * a),
+            0.0,
+        ])
+
+        var_vertex = float(grad @ covariance @ grad)
+        x_unc = np.sqrt(max(var_vertex, 0.0))
+    except Exception:
+        x_unc = np.nan
+
+    span = hi - lo
+
+    if (
+        np.isfinite(x_unc)
+        and span > 0
+        and x_unc > MAX_VERTEX_UNCERTAINTY_FRACTION * span
+    ):
+        return PeakEstimate(
+            raw_x, raw_y, x_unc,
+            "measured_max", "vertex_poorly_constrained",
+            raw_x, raw_y,
         )
-    except Exception as e:
-        print(f"Fitting failed for amplitude data: {e}")
-        popt = guess_params  # Use fallback parameters
 
-    return popt, fit_fn
-
-
-def process_and_plot(nv_list, duration_file_id, amp_file_id):
-    """Process NV data for duration and amplitude optimization."""
-    total_nvs = len(nv_list)
-    optimal_durations = {nv: None for nv in range(total_nvs)}
-    optimal_amplitudes = {nv: None for nv in range(total_nvs)}
-
-    # Common: Filter NVs by selected orientations
-    # orientation_data = dm.get_raw_data(file_id=1723161184641)
-    # orientation_indices = orientation_data["orientation_indices"]
-    # selected_orientations = ["0.041", "0.147"]
-    # selected_indices = [
-    #     idx
-    #     for orientation in selected_orientations
-    #     if orientation in orientation_indices
-    #     for idx in orientation_indices[orientation]["nv_indices"]
-    # ]
-    # selected_indices = list(set(idx for idx in selected_indices if idx < total_nvs))
-    selected_indices = range(total_nvs)
-
-    def optimize_step_vals(file_id, fit_function, valid_range, duration_or_amp=False):
-        data = dm.get_raw_data(file_id=file_id)
-        taus, counts = data["taus"], np.array(data["counts"])
-        sig_counts, ref_counts = (
-            counts[0][selected_indices],
-            counts[1][selected_indices],
-        )
-        avg_snr, avg_snr_ste = widefield.calc_snr(sig_counts, ref_counts)
-
-        optimal_values = {}
-        for i, nv_ind in enumerate(selected_indices):
-            try:
-                popt, fit_fn = fit_function(taus, avg_snr[i], avg_snr_ste[i])
-                tau_linspace = np.linspace(min(taus), max(taus), 1000)
-                snr_values = fit_fn(tau_linspace, *popt)
-                optimal_value = tau_linspace[np.argmax(snr_values)]
-
-                # Apply constraints based on whether it's duration or amplitude
-                if duration_or_amp:
-                    # Round to nearest multiple of 4
-                    optimal_value = max(
-                        valid_range[0],
-                        min(valid_range[1], round(optimal_value / 4) * 4),
-                    )
-                else:
-                    # Keep as floating point within the valid range
-                    optimal_value = max(
-                        valid_range[0], min(valid_range[1], optimal_value)
-                    )
-
-                optimal_values[nv_ind] = optimal_value
-            except Exception as e:
-                print(f"Fitting failed for NV index {nv_ind}: {e}")
-                optimal_values[nv_ind] = None  # Mark as unprocessed
-
-        return optimal_values, avg_snr, avg_snr_ste, taus
-
-    # Optimize durations
-    duration_valid_range = (60, 240)
-    optimal_durations, avg_snr, avg_snr_ste, taus = optimize_step_vals(
-        duration_file_id, fit_duration, duration_valid_range, duration_or_amp=True
+    y_vertex = float(
+        quadratic_value(coeff, np.array([vertex]), x0)[0]
     )
 
-    # Optimize amplitudes
-    amp_valid_range = (0.8, 1.2)
-    # amp_valid_range = (np.min(taus), np.max(taus))
-    optimal_amplitudes, avg_snr, avg_snr_ste, taus = optimize_step_vals(
-        amp_file_id, fit_duration, amp_valid_range, duration_or_amp=False
+    fit_x = np.linspace(local_lo, local_hi, 300)
+    fit_y = quadratic_value(coeff, fit_x, x0)
+
+    boundary_tol = 1e-12 * max(1.0, abs(lo), abs(hi))
+    at_boundary = (
+        abs(raw_x - lo) <= boundary_tol
+        or abs(raw_x - hi) <= boundary_tol
     )
 
-    # Replace unprocessed NVs with medians
-    valid_durations = [
-        v
-        for k, v in optimal_durations.items()
-        if k in selected_indices and v is not None
-    ]
-    median_duration = np.median(valid_durations) if valid_durations else 0
-    for nv_index in range(total_nvs):
-        if optimal_durations.get(nv_index) is None:
-            optimal_durations[nv_index] = median_duration
+    status = "ok_boundary_raw_max" if at_boundary else "ok"
 
-    valid_amplitudes = [
-        v
-        for k, v in optimal_amplitudes.items()
-        if k in selected_indices and v is not None
-    ]
-    median_amplitude = np.median(valid_amplitudes) if valid_amplitudes else 0
-    print(median_amplitude)
-    for nv_index in range(total_nvs):
-        if optimal_amplitudes.get(nv_index) is None:
-            optimal_amplitudes[nv_index] = median_amplitude
-    # Sort optimal_durations by index (key)
-    sorted_optimal_durations = dict(sorted(optimal_durations.items()))
-    sorted_optimal_amplitudes = dict(sorted(optimal_amplitudes.items()))
+    return PeakEstimate(
+        float(vertex),
+        y_vertex,
+        float(x_unc) if np.isfinite(x_unc) else np.nan,
+        "local_weighted_quadratic",
+        status,
+        raw_x,
+        raw_y,
+        fit_x,
+        fit_y,
+    )
 
-    # Update results
+
+def analyze_scan(
+    data,
+    parameter_name,
+    requested_range,
+    quantum=None,
+):
+    """Common engine for amplitude and duration optimization."""
+    nv_list = data["nv_list"]
+    x = np.asarray(data["taus"], dtype=float).ravel()
+
+    # Important for old float16 datasets.
+    counts = np.asarray(data["counts"])
+    sig_counts = np.asarray(counts[0], dtype=np.float32)
+    ref_counts = np.asarray(counts[1], dtype=np.float32)
+
+    avg_snr, avg_snr_ste = widefield.calc_snr(
+        sig_counts,
+        ref_counts,
+    )
+
+    avg_snr = np.asarray(avg_snr, dtype=float)
+    avg_snr_ste = np.asarray(avg_snr_ste, dtype=float)
+
+    if avg_snr.ndim != 2:
+        raise ValueError(
+            f"Expected avg_snr to be 2D; got {avg_snr.shape}"
+        )
+
+    if avg_snr.shape != avg_snr_ste.shape:
+        raise ValueError(
+            "avg_snr and avg_snr_ste shape mismatch: "
+            f"{avg_snr.shape} vs {avg_snr_ste.shape}"
+        )
+
+    if avg_snr.shape[0] != len(nv_list):
+        raise ValueError(
+            f"Expected {len(nv_list)} NV rows; "
+            f"got {avg_snr.shape[0]}"
+        )
+
+    if avg_snr.shape[1] != x.size:
+        raise ValueError(
+            f"Expected {x.size} scan columns; "
+            f"got {avg_snr.shape[1]}"
+        )
+
+    valid_range = intersect_valid_range(
+        requested_range,
+        x,
+    )
+
+    # Ensemble median curve.
+    ensemble_snr = np.nanmedian(avg_snr, axis=0)
+
+    n_eff = np.sum(np.isfinite(avg_snr), axis=0)
+    ensemble_ste = (
+        np.nanmedian(avg_snr_ste, axis=0)
+        / np.sqrt(np.maximum(n_eff, 1))
+    )
+    ensemble_ste = safe_sigma(ensemble_ste)
+
+    ensemble_peak = estimate_peak(
+        x,
+        ensemble_snr,
+        ensemble_ste,
+        valid_range,
+    )
+
+    estimates = []
+
+    for nv_ind in range(len(nv_list)):
+        est = estimate_peak(
+            x,
+            avg_snr[nv_ind],
+            avg_snr_ste[nv_ind],
+            valid_range,
+        )
+
+        # Only truly unusable curves fall back to ensemble.
+        if not np.isfinite(est.x_opt):
+            est = PeakEstimate(
+                ensemble_peak.x_opt,
+                np.nan,
+                np.nan,
+                "ensemble_fallback",
+                "ensemble_fallback",
+                np.nan,
+                np.nan,
+            )
+
+        est.x_opt = quantize(est.x_opt, quantum)
+        est.x_opt = float(
+            np.clip(est.x_opt, *valid_range)
+        )
+
+        estimates.append(est)
+
+    opt_values = np.array(
+        [est.x_opt for est in estimates],
+        dtype=float,
+    )
+
+    opt_snrs = np.array(
+        [est.y_opt for est in estimates],
+        dtype=float,
+    )
+
+    opt_unc = np.array(
+        [est.x_unc for est in estimates],
+        dtype=float,
+    )
+
+    median_individual = float(
+        np.nanmedian(opt_values)
+    )
+    median_individual = quantize(
+        median_individual,
+        quantum,
+    )
+    median_individual = float(
+        np.clip(median_individual, *valid_range)
+    )
+
     results = {
-        "optimal_durations": sorted_optimal_durations,
-        "optimal_amplitudes": sorted_optimal_amplitudes,
+        "parameter_name": parameter_name,
+        "requested_valid_range": list(requested_range),
+        "actual_valid_range": list(valid_range),
+        "measured_scan_values": x.tolist(),
+        "ensemble_optimum": float(ensemble_peak.x_opt),
+        "ensemble_status": ensemble_peak.status,
+        "median_individual_optimum": median_individual,
+        "optimal_values": {
+            int(i): float(opt_values[i])
+            for i in range(len(nv_list))
+        },
+        "optimal_snrs": {
+            int(i): (
+                float(opt_snrs[i])
+                if np.isfinite(opt_snrs[i])
+                else None
+            )
+            for i in range(len(nv_list))
+        },
+        "optimal_value_uncertainties": {
+            int(i): (
+                float(opt_unc[i])
+                if np.isfinite(opt_unc[i])
+                else None
+            )
+            for i in range(len(nv_list))
+        },
+        "methods": {
+            int(i): estimates[i].method
+            for i in range(len(nv_list))
+        },
+        "statuses": {
+            int(i): estimates[i].status
+            for i in range(len(nv_list))
+        },
     }
 
-    timestamp = dm.get_time_stamp()
-    file_name = "optimal_durations"
-    file_path = dm.get_file_path(__file__, timestamp, file_name)
-    # dm.save_raw_data(results, file_path)
+    aux = {
+        "x": x,
+        "avg_snr": avg_snr,
+        "avg_snr_ste": avg_snr_ste,
+        "ensemble_snr": ensemble_snr,
+        "ensemble_ste": ensemble_ste,
+        "ensemble_peak": ensemble_peak,
+        "estimates": estimates,
+        "opt_values": opt_values,
+    }
 
-    # Plot medians and means
-    avg_snr_all = np.mean(avg_snr, axis=0)
-    median_snr_all = np.median(avg_snr, axis=0)
-    avg_snr_ste_all = np.mean(avg_snr_ste, axis=0)
+    return results, aux
 
-    fig, ax = plt.subplots(figsize=(8, 6))
-    sns.lineplot(x=taus, y=avg_snr_all, ax=ax, label="Average SNR")
-    sns.lineplot(x=taus, y=median_snr_all, ax=ax, label="Median SNR", linestyle="--")
-    ax.fill_between(
-        taus,
-        avg_snr_all - avg_snr_ste_all,
-        avg_snr_all + avg_snr_ste_all,
-        alpha=0.2,
-        label="Error Bounds",
+
+def plot_summary(aux, parameter_label, unit=""):
+    """Three compact summary figures."""
+    x = aux["x"]
+    avg_snr = aux["avg_snr"]
+    ensemble_snr = aux["ensemble_snr"]
+    ensemble_ste = aux["ensemble_ste"]
+    ensemble_peak = aux["ensemble_peak"]
+    opt_values = aux["opt_values"]
+
+    suffix = f" ({unit})" if unit else ""
+
+    # Ensemble curve.
+    fig, ax = plt.subplots(figsize=(8, 5.5))
+    ax.errorbar(
+        x,
+        ensemble_snr,
+        yerr=ensemble_ste,
+        fmt="o",
+        capsize=3,
+        label="Median SNR across NVs",
     )
-    ax.set_xlabel("step vals")
-    ax.set_ylabel("SNR")
+
+    if ensemble_peak.fit_x is not None:
+        ax.plot(
+            ensemble_peak.fit_x,
+            ensemble_peak.fit_y,
+            label="Local weighted quadratic",
+        )
+
+    ax.axvline(
+        ensemble_peak.x_opt,
+        linestyle="--",
+        label=f"Ensemble optimum = {ensemble_peak.x_opt:.4g}",
+    )
+    ax.set_xlabel(f"{parameter_label}{suffix}")
+    ax.set_ylabel("SCC SNR")
+    ax.set_title("Ensemble SCC optimization")
+    ax.grid(alpha=0.25)
     ax.legend()
-    ax.grid(True)
-    plt.title("Median and Average SNR across NVs")
-    plt.show()
+
+    # Distribution of individual optima.
+    fig, ax = plt.subplots(figsize=(7, 5))
+    finite = opt_values[np.isfinite(opt_values)]
+
+    if finite.size:
+        bins = min(
+            30,
+            max(8, int(np.sqrt(finite.size))),
+        )
+        ax.hist(finite, bins=bins)
+        med = np.nanmedian(finite)
+        ax.axvline(
+            med,
+            linestyle="--",
+            label=f"Median = {med:.4g}",
+        )
+
+    ax.set_xlabel(f"Optimal {parameter_label.lower()}{suffix}")
+    ax.set_ylabel("NV count")
+    ax.set_title("Per-NV SCC optima")
+    ax.grid(alpha=0.25)
+    ax.legend()
+
+    # Optimum vs best directly measured SNR.
+    raw_best_snr = np.nanmax(avg_snr, axis=1)
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.scatter(
+        opt_values,
+        raw_best_snr,
+        alpha=0.65,
+    )
+    ax.set_xlabel(f"Optimal {parameter_label.lower()}{suffix}")
+    ax.set_ylabel("Best measured SCC SNR")
+    ax.set_title("Optimum vs measured peak SNR")
+    ax.grid(alpha=0.25)
+
+
+def plot_individual_examples(
+    aux,
+    parameter_label,
+    unit="",
+    max_plots=MAX_INDIVIDUAL_PLOTS,
+):
+    """Optional limited set of per-NV diagnostics."""
+    x = aux["x"]
+    avg_snr = aux["avg_snr"]
+    avg_snr_ste = aux["avg_snr_ste"]
+    estimates = aux["estimates"]
+
+    suffix = f" ({unit})" if unit else ""
+
+    for nv_ind in range(
+        min(len(estimates), int(max_plots))
+    ):
+        est = estimates[nv_ind]
+
+        fig, ax = plt.subplots(figsize=(6.5, 4.5))
+        ax.errorbar(
+            x,
+            avg_snr[nv_ind],
+            yerr=avg_snr_ste[nv_ind],
+            fmt="o",
+            capsize=2,
+            label="Data",
+        )
+
+        if est.fit_x is not None:
+            ax.plot(
+                est.fit_x,
+                est.fit_y,
+                label="Local fit",
+            )
+
+        ax.axvline(
+            est.x_opt,
+            linestyle="--",
+            label=f"Optimum = {est.x_opt:.4g}",
+        )
+
+        ax.set_xlabel(f"{parameter_label}{suffix}")
+        ax.set_ylabel("SCC SNR")
+        ax.set_title(
+            f"NV {nv_ind}: {est.status}"
+        )
+        ax.grid(alpha=0.25)
+        ax.legend()
+
+
+def print_status_summary(results):
+    statuses = list(results["statuses"].values())
+    names, counts = np.unique(
+        statuses,
+        return_counts=True,
+    )
+
+    print("Fit status counts:")
+    for name, count in zip(names, counts):
+        print(f"  {name}: {count}")
+
+
+def process_and_plot_amplitudes(data):
+    results, aux = analyze_scan(
+        data,
+        parameter_name="SCC amplitude",
+        requested_range=AMPLITUDE_VALID_RANGE,
+        quantum=None,
+    )
+
+    print("\n========== SCC amplitude optimization ==========")
+    print(
+        "Actual valid range:",
+        tuple(results["actual_valid_range"]),
+    )
+    print(
+        "Ensemble optimum:",
+        results["ensemble_optimum"],
+    )
+    print(
+        "Median individual optimum:",
+        results["median_individual_optimum"],
+    )
+    print_status_summary(results)
+
+    if SHOW_SUMMARY_PLOTS:
+        plot_summary(
+            aux,
+            parameter_label="SCC amplitude",
+        )
+
+    if PLOT_INDIVIDUAL_FITS:
+        plot_individual_examples(
+            aux,
+            parameter_label="SCC amplitude",
+        )
 
     return results
 
 
-# def process_and_plot_amplitudes(nv_list, amp_file_id):
-#     """Process NV data for amplitude optimization."""
-#     total_nvs = len(nv_list)
-#     optimal_amplitudes = {nv: None for nv in range(total_nvs)}
-#     optimal_snrs = {nv: None for nv in range(total_nvs)}
-
-#     selected_indices = range(total_nvs)
-
-#     def optimize_amplitudes(file_id, fit_function, valid_range):
-#         data = dm.get_raw_data(file_id=file_id)
-#         taus, counts = data["taus"], np.array(data["counts"])
-#         sig_counts, ref_counts = (
-#             counts[0][selected_indices],
-#             counts[1][selected_indices],
-#         )
-#         avg_snr, avg_snr_ste = widefield.calc_snr(sig_counts, ref_counts)
-
-#         optimal_values = {}
-#         snr_values = {}
-#         for i, nv_ind in enumerate(selected_indices):
-#             try:
-#                 popt, fit_fn = fit_function(taus, avg_snr[i], avg_snr_ste[i])
-#                 tau_linspace = np.linspace(min(taus), max(taus), 1000)
-#                 snr_values_curve = fit_fn(tau_linspace, *popt)
-#                 optimal_value = tau_linspace[np.argmax(snr_values_curve)]
-
-#                 # Keep the value within the valid range
-#                 optimal_value = max(valid_range[0], min(valid_range[1], optimal_value))
-
-#                 optimal_values[nv_ind] = optimal_value
-#                 snr_values[nv_ind] = max(snr_values_curve)  # Optimal SNR
-#             except Exception as e:
-#                 print(f"Fitting failed for NV index {nv_ind}: {e}")
-#                 optimal_values[nv_ind] = None  # Mark as unprocessed
-#                 snr_values[nv_ind] = None
-
-#         return optimal_values, snr_values, avg_snr, avg_snr_ste, taus
-
-#     # Optimize amplitudes
-#     amp_valid_range = (0, 400)
-#     optimal_amplitudes, optimal_snrs, avg_snr, avg_snr_ste, taus = optimize_amplitudes(
-#         amp_file_id, fit_duration, amp_valid_range
-#     )
-
-#     # Replace unprocessed NVs with medians
-#     valid_amplitudes = [
-#         v
-#         for k, v in optimal_amplitudes.items()
-#         if k in selected_indices and v is not None
-#     ]
-#     median_amplitude = np.median(valid_amplitudes) if valid_amplitudes else 0
-#     for nv_index in range(total_nvs):
-#         if optimal_amplitudes.get(nv_index) is None:
-#             optimal_amplitudes[nv_index] = median_amplitude
-
-#     # Plot individual NV fits
-#     for nv_index in selected_indices:
-#         plt.figure(figsize=(6, 4))
-#         plt.errorbar(
-#             taus,
-#             avg_snr[nv_index],
-#             yerr=avg_snr_ste[nv_index],
-#             fmt="o",
-#             label="SNR Data",
-#         )
-#         if optimal_amplitudes[nv_index] is not None:
-#             tau_linspace = np.linspace(min(taus), max(taus), 1000)
-#             popt, fit_fn = fit_duration(taus, avg_snr[nv_index], avg_snr_ste[nv_index])
-#             plt.plot(
-#                 tau_linspace,
-#                 fit_fn(tau_linspace, *popt),
-#                 label="Fitted Curve",
-#             )
-#             plt.axvline(
-#                 optimal_amplitudes[nv_index],
-#                 color="r",
-#                 linestyle="--",
-#                 label=f"Optimal Amp: {optimal_amplitudes[nv_index]:.2f}",
-#             )
-#         plt.title(f"NV {nv_index} - Amplitude Optimization")
-#         plt.xlabel("Amplitude")
-#         plt.ylabel("SNR")
-#         plt.legend()
-#         plt.grid(alpha=0.3)
-#         plt.show()
-
-#     # Print lists of amplitudes and SNRs
-#     print("Optimal Amplitudes:")
-#     print([optimal_amplitudes[nv] for nv in selected_indices])
-
-#     print("Optimal SNRs:")
-#     print([optimal_snrs[nv] for nv in selected_indices])
-
-# # Sort optimal_amplitudes by index (key)
-# sorted_optimal_amplitudes = dict(sorted(optimal_amplitudes.items()))
-# sorted_optimal_snrs = dict(sorted(optimal_snrs.items()))
-
-# # Update results
-# results = {
-#     "optimal_amplitudes": sorted_optimal_amplitudes,
-#     "optimal_snrs": sorted_optimal_snrs,
-# }
-
-
-def process_and_plot_amplitudes(data):
-    """Process NV data for amplitude optimization."""
-    nv_list = data["nv_list"]
-    taus, counts = data["taus"], np.array(data["counts"])
-    total_nvs = len(nv_list)
-    optimal_amplitudes = {nv: None for nv in range(total_nvs)}
-    optimal_snrs = {nv: None for nv in range(total_nvs)}
-
-    selected_indices = range(total_nvs)
-
-    def optimize_amplitudes(fit_function, valid_range):
-        sig_counts, ref_counts = (
-            counts[0][selected_indices],
-            counts[1][selected_indices],
-        )
-        avg_snr, avg_snr_ste = widefield.calc_snr(sig_counts, ref_counts)
-
-        optimal_values = {}
-        snr_values = {}
-        for i, nv_ind in enumerate(selected_indices):
-            try:
-                popt, fit_fn = fit_function(taus, avg_snr[i], avg_snr_ste[i])
-                tau_linspace = np.linspace(min(taus), max(taus), 1000)
-                snr_values_curve = fit_fn(tau_linspace, *popt)
-                optimal_value = tau_linspace[np.argmax(snr_values_curve)]
-
-                # Keep the value within the valid range
-                optimal_value = max(valid_range[0], min(valid_range[1], optimal_value))
-
-                optimal_values[nv_ind] = optimal_value
-                snr_values[nv_ind] = max(snr_values_curve)  # Optimal SNR
-            except Exception as e:
-                print(f"Fitting failed for NV index {nv_ind}: {e}")
-                optimal_values[nv_ind] = None  # Mark as unprocessed
-                snr_values[nv_ind] = None
-
-        return optimal_values, snr_values, avg_snr, avg_snr_ste, taus
-
-    # Optimize amplitudes
-    amp_valid_range = (0.5, 1.5)
-    optimal_amplitudes, optimal_snrs, avg_snr, avg_snr_ste, taus = optimize_amplitudes(
-     fit_duration, amp_valid_range
-    )
-
-    # Replace unprocessed NVs with medians
-    valid_amplitudes = [
-        v
-        for k, v in optimal_amplitudes.items()
-        if k in selected_indices and v is not None
-    ]
-    median_amplitude = np.median(valid_amplitudes) if valid_amplitudes else 0
-    for nv_index in range(total_nvs):
-        if optimal_amplitudes.get(nv_index) is None:
-            optimal_amplitudes[nv_index] = median_amplitude
-
-    # Print lists of optimal amplitudes and SNRs
-    print("Optimal Amplitudes:")
-    print([optimal_amplitudes[nv] for nv in selected_indices])
-
-    print("Optimal SNRs:")
-    print([optimal_snrs[nv] for nv in selected_indices])
-
-    # Scatter plot: SNR vs Optimal Amplitudes
-    valid_snrs = [
-        optimal_snrs[nv] for nv in selected_indices if optimal_snrs[nv] is not None
-    ]
-    valid_amplitudes = [
-        optimal_amplitudes[nv]
-        for nv in selected_indices
-        if optimal_snrs[nv] is not None
-    ]
-
-    # Ensure yerr_snr is correctly shaped
-    yerr = np.median(avg_snr_ste, axis=1).flatten()
-
-    if valid_snrs:
-        median_snr = np.median(valid_snrs)
-    else:
-        median_snr = 0  # Set a default value if there are no valid SNRs
-    plt.figure(figsize=(6, 5))
-    plt.errorbar(
-        valid_amplitudes,
-        valid_snrs,
-        yerr=yerr,
-        fmt="o",
-        ecolor="gray",
-        capsize=3,
-        label=f"Median SCC SNR:{median_snr:.3f}",
-    )
-    plt.xlabel("Optimal SCC Amplitude")
-    plt.ylabel("SCC SNR")
-    plt.title("SCC SNR vs Optimal SCC Amplitude")
-    plt.legend()
-    plt.grid(alpha=0.3)
-    plt.show()
-
-    # Plot only the median amplitude fit curve
-    plt.figure(figsize=(6, 5))
-    plt.errorbar(
-        taus,
-        np.median(avg_snr, axis=0),
-        yerr=np.min(avg_snr_ste, axis=0),
-        color="blue",
-        fmt="o",
-        ecolor="gray",
-        capsize=3,
-        label="Med. SCC SNR Data",
-    )
-    tau_linspace = np.linspace(min(taus), max(taus), 1000)
-    popt, fit_fn = fit_duration(
-        taus, np.median(avg_snr, axis=0), np.median(avg_snr_ste, axis=0)
-    )
-    plt.plot(
-        tau_linspace,
-        fit_fn(tau_linspace, *popt),
-        color="orange",
-        label=f"Optimal SCC SNR: {median_snr:.3f}",
-    )
-    plt.axvline(
-        median_amplitude,
-        color="r",
-        linestyle="--",
-        label=f"Optimal SCC Amp: {median_amplitude:.3f}",
-    )
-    plt.xlabel("SCC Amplitude")
-    plt.ylabel("SCC SNR")
-    plt.legend()
-    plt.grid(alpha=0.3)
-    plt.title("Median NV SCC Amplitude Optimization")
-    plt.show()
-
-
 def process_and_plot_durations(data):
-    """Process NV data for duration optimization."""
-    nv_list = data["nv_list"]
-    total_nvs = len(nv_list)
-    optimal_durations = {nv: None for nv in range(total_nvs)}
-    optimal_snrs = {nv: None for nv in range(total_nvs)}
-
-    selected_indices = range(total_nvs)
-
-    def optimize_durations(data, fit_function, valid_range):
-        taus, counts = data["taus"], np.array(data["counts"])
-        sig_counts, ref_counts = counts[0], counts[1]
-        avg_snr, avg_snr_ste = widefield.calc_snr(sig_counts, ref_counts)
-
-        optimal_values = {}
-        snr_values = {}
-        for i, nv_ind in enumerate(selected_indices):
-            try:
-                popt, fit_fn = fit_function(taus, avg_snr[i], avg_snr_ste[i])
-                tau_linspace = np.linspace(min(taus), max(taus), 1000)
-                snr_values_curve = fit_fn(tau_linspace, *popt)
-                optimal_value = tau_linspace[np.argmax(snr_values_curve)]
-
-                # Keep the value within the valid range and round to nearest integer divisible by 4
-                optimal_value = max(valid_range[0], min(valid_range[1], optimal_value))
-                # optimal_value = int(round(optimal_value / 4.0) * 4)
-
-                optimal_values[nv_ind] = optimal_value
-                snr_values[nv_ind] = max(snr_values_curve)  # Optimal SNR
-            except Exception as e:
-                print(f"Fitting failed for NV index {nv_ind}: {e}")
-                optimal_values[nv_ind] = None  # Mark as unprocessed
-                snr_values[nv_ind] = None
-
-        return optimal_values, snr_values, avg_snr, avg_snr_ste, taus
-
-    # Optimize durations
-    duration_valid_range = (0, 400)
-    optimal_durations, optimal_snrs, avg_snr, avg_snr_ste, taus = optimize_durations(
-        data, fit_duration, duration_valid_range
+    results, aux = analyze_scan(
+        data,
+        parameter_name="SCC duration",
+        requested_range=DURATION_VALID_RANGE_NS,
+        quantum=DURATION_QUANTUM_NS,
     )
 
-    # Replace unprocessed NVs with medians
-    valid_durations = [
-        v
-        for k, v in optimal_durations.items()
-        if k in selected_indices and v is not None
-    ]
-    median_duration = np.median(valid_durations) if valid_durations else 0
-    median_duration = int(round(median_duration / 4.0) * 4)  # Ensure divisibility by 4
-    for nv_index in range(total_nvs):
-        if optimal_durations.get(nv_index) is None:
-            optimal_durations[nv_index] = median_duration
+    print("\n========== SCC duration optimization ==========")
+    print(
+        "Actual valid range:",
+        tuple(results["actual_valid_range"]),
+        "ns",
+    )
+    print(
+        "Ensemble optimum:",
+        results["ensemble_optimum"],
+        "ns",
+    )
+    print(
+        "Median individual optimum:",
+        results["median_individual_optimum"],
+        "ns",
+    )
+    print_status_summary(results)
 
-    # # Plot individual NV fits
-    for nv_index in selected_indices:
-        plt.figure(figsize=(6, 4))
-        plt.errorbar(
-            taus,
-            avg_snr[nv_index],
-            yerr=avg_snr_ste[nv_index],
-            fmt="o",
-            label="SNR Data",
+    if SHOW_SUMMARY_PLOTS:
+        plot_summary(
+            aux,
+            parameter_label="SCC duration",
+            unit="ns",
         )
-        if optimal_durations[nv_index] is not None:
-            tau_linspace = np.linspace(min(taus), max(taus), 1000)
-            popt, fit_fn = fit_duration(taus, avg_snr[nv_index], avg_snr_ste[nv_index])
-            plt.plot(
-                tau_linspace,
-                fit_fn(tau_linspace, *popt),
-                label="Fitted Curve",
-            )
-            plt.axvline(
-                optimal_durations[nv_index],
-                color="r",
-                linestyle="--",
-                label=f"Optimal Duration: {optimal_durations[nv_index]}",
-            )
-        plt.title(f"NV {nv_index} - Duration Optimization")
-        plt.xlabel("Duration")
-        plt.ylabel("SNR")
-        plt.legend()
-        plt.grid(alpha=0.3)
-        plt.show(block=True)
 
-    # Print lists of durations and SNRs
-    print("Optimal Durations:")
+    if PLOT_INDIVIDUAL_FITS:
+        plot_individual_examples(
+            aux,
+            parameter_label="SCC duration",
+            unit="ns",
+        )
 
-    optimal_durations = [int(round(optimal_durations[nv]/4)*4) for nv in selected_indices]
-    print("Optimal SNRs:")
-    print(optimal_durations)
-    optimal_snrs = [optimal_snrs[nv] for nv in selected_indices]
-    print(optimal_snrs)
-    median = np.median(optimal_durations)
-    optimal_durations = [int(median) if (val < 24 or val > 200) else val for val in optimal_durations]
-    plt.figure(figsize=(6, 5))
-    plt.scatter(
-        optimal_durations,
-        optimal_snrs,
-        marker="o",
-        color="blue",
-        edgecolors="black",
-        alpha=0.6,
-    )
-    plt.xlabel("Durations")
-    plt.ylabel("SNR")
-    plt.title(f"SNR Vs SCC Durations ({len(optimal_durations)}NVs)")
-    return
-    # Sort optimal_durations by index (key)
-    sorted_optimal_durations = dict(sorted(optimal_durations.items()))
-    sorted_optimal_snrs = dict(sorted(optimal_snrs.items()))
-
-    # Update results
-    results = {
-        "optimal_durations": sorted_optimal_durations,
-        "optimal_snrs": sorted_optimal_snrs,
-    }
     return results
 
 
 if __name__ == "__main__":
-    # Initialize plot settings
     kpl.init_kplotlib()
-    # duration_file_id = 1722305531191
-    # amp_file_id = 1724491290147  # same scc duration 160
-    # amp_file_id = 1725708405583  # optimized durations for each
-    # amp_file_id = 1731980653795  # amp
-    # amp_file_id = 1771055850280
-    # duration_file_id = 1732098676751  # duration
-    # duration_file_id = 1732098676751  # duration
-    # duration_file_id = 1800578617426  # duration
 
-    # amp_file_id = 1786527980407
-
-    #duration
     data = dm.get_raw_data(
-        file_stem="2026_02_10-14_23_31-johnson-nv0_2025_10_21", load_npz=True
+        file_stem=FILE_STEM,
+        load_npz=True,
     )
 
-    results = process_and_plot_durations(data)
+    if MODE.lower() == "amplitude":
+        results = process_and_plot_amplitudes(data)
 
-    # amp_file id
-    # data = dm.get_raw_data(
-    #     file_stem="2025_10_27-01_08_57-johnson-nv0_2025_10_21", load_npz=True
-    # )
-    # results = process_and_plot_amplitudes(data)
+    elif MODE.lower() == "duration":
+        results = process_and_plot_durations(data)
 
-    # print("Results:", results)
-    # print(f"{file_name}_{duration_file_id}")
+    else:
+        raise ValueError(
+            "MODE must be 'amplitude' or 'duration'."
+        )
+
+    if SAVE_RESULTS:
+        timestamp = dm.get_time_stamp()
+        file_path = dm.get_file_path(
+            __file__,
+            timestamp,
+            SAVE_BASENAME,
+        )
+        dm.save_raw_data(results, file_path)
+        print("Saved:", file_path)
+
+    print("\nResults summary")
+    print(
+        "ensemble optimum =",
+        results["ensemble_optimum"],
+    )
+    print(
+        "median individual optimum =",
+        results["median_individual_optimum"],
+    )
+
     kpl.show(block=True)
