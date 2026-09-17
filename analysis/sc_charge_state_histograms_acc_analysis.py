@@ -1419,7 +1419,9 @@ if __name__ == "__main__":
     # FILE_ID = "2026_09_10-20_18_27-qnami-nv0_2026_02_20" ## 631 working NVs 50ms readout
     # FILE_ID = "2026_09_10-20_59_29-qnami-nv0_2026_02_20" ## 631 working NVs 50ms readout
     # FILE_ID = "2026_09_10-21_14_01-qnami-nv0_2026_02_20" ## 631 working NVs 50ms readout
-    FILE_ID = "2026_09_13-14_43_29-qnami-nv0_2026_02_20" ## 631 working NVs 50ms readout
+    # FILE_ID = "2026_09_13-14_43_29-qnami-nv0_2026_02_20" ## 631 working NVs 50ms readout
+    # FILE_ID = "2026_09_16-14_14_31-qnami-nv0_2026_02_20" ## 212 working NVs 50ms readout
+    FILE_ID = "2026_09_16-18_06_35-qnami-nv0_2026_02_20" ## 212 working NVs 50ms readout
     
     # SAVED_ANALYSIS_FILE_ID = "2026_07_15-19_48_48-single_step_charge_hist_single_cpu_2026_07_15-19_42_19-qnami-nv0_2026_02_20"
     # SAVED_ANALYSIS_FILE_ID = "2026_07_21-16_11_27-single_step_charge_hist_single_cpu_2026_07_21-16_08_28-qnami-nv0_2026_02_20"
@@ -1513,17 +1515,29 @@ if __name__ == "__main__":
     # =============================================================================
     # Plot summary
     # =============================================================================
+    # if DO_PLOT_SUMMARY:
+    #     plot_prep_vs_readout_single_step(
+    #         raw_data,
+    #         use_multiclass=False,
+    #     )
+
+    #     if analysis.get("model_kind", MODEL_KIND) == "multi":
+    #         plot_prep_vs_readout_single_step(
+    #             raw_data,
+    #             use_multiclass=True,
+    #         )
     if DO_PLOT_SUMMARY:
-        plot_prep_vs_readout_single_step(
+        fig, ax = plot_prep_vs_readout_single_step(
             raw_data,
             use_multiclass=False,
         )
 
-        if analysis.get("model_kind", MODEL_KIND) == "multi":
-            plot_prep_vs_readout_single_step(
-                raw_data,
-                use_multiclass=True,
-            )
+        file_path = dm.get_file_path(
+            __file__,
+            dm.get_time_stamp(),
+            f"{FILE_ID}-prep-vs-readout",
+        )
+        dm.save_figure(fig, file_path)
 
     # =============================================================================
     # Choose examples from saved analysis

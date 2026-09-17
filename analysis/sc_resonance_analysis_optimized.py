@@ -7,7 +7,7 @@ Main features
 - Preserves the historical file_ids block from the original script.
 - Loads/combines multiple resonance files efficiently.
 - Converts count arrays to float32 before reductions to avoid float16 overflow.
-- Fits every NV to the same two-Voigt model used previously.
+- Fits every NV to the same two-Voigt model using conservative multi-start fitting.
 - Saves ALL requested plots as PDF.
 - Produces:
     1. all-NV spectra + fits in one overlay plot
@@ -54,6 +54,20 @@ N_JOBS = -1
 FIT_VERBOSE = 5
 FIT_CACHE = True
 
+# Bump this whenever the fitter changes so stale cached fits are not reused.
+FIT_CACHE_VERSION = "multistart_free_voigt_v1"
+
+# Conservative multi-start settings. Frequencies below are specified in MHz
+# and automatically converted when the dataset frequency axis is in GHz.
+FIT_WIDTH_STARTS_MHZ = (2.0, 5.0, 10.0)
+FIT_MIN_WIDTH_MHZ = 0.2
+FIT_MAX_WIDTH_MHZ = 30.0
+FIT_SMOOTH_POINTS = 3
+
+# Dense-curve guard: a candidate that shoots far above/below the measured
+# population receives a large penalty instead of winning on chi-square alone.
+FIT_SPIKE_ALLOWANCE = 1.0
+
 # Plot switches
 SAVE_PNG = True
 SAVE_LIST_PLOTS_AS_PDF = True
@@ -71,10 +85,10 @@ PLOT_HISTOGRAMS = True
 PLOT_SNR_OVERVIEW = True
 
 # Optional detailed per-NV fits.
-# This puts ALL individual fits into ONE multipage PDF.
-PLOT_INDIVIDUAL_FITS_PDF = False
-FITS_PER_PAGE = 24
-FIT_GRID_COLS = 4
+# This puts the selected individual fits into ONE multipage PDF.
+PLOT_INDIVIDUAL_FITS_PDF = True
+FITS_PER_PAGE = 12
+FIT_GRID_COLS = 3
 
 # ---------------------------------------------------------------------------
 # RESONANCE-PEAK FILTER
@@ -119,6 +133,40 @@ SCATTER_SIZE = 12
 HIST_BINS = 35
 
 
+# NV selection for plots/PDFs:
+#   None -> include ALL NVs
+#   list -> include only those original NV indices
+MANUAL_FILTERED_INDICES = [
+    0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+    18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+    32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45,
+    47, 48, 49, 50, 51, 53, 54, 55, 56, 57, 58, 59, 60, 61,
+    62, 63, 64, 65, 66, 67, 68, 69, 71, 72, 73, 74, 75, 76,
+    77, 78, 79, 81, 82, 83, 84, 85, 86, 88, 89, 90, 91, 92,
+    93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105,
+    106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117,
+    118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129,
+    130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141,
+    142, 143, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154,
+    155, 156, 157, 158, 159, 161, 162, 163, 164, 165, 166, 167,
+    168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179,
+    180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191,
+    192, 194, 195, 197, 198, 199, 200, 201, 202, 203, 204, 205,
+    206, 207, 208, 209, 210, 211,
+]
+
+FILTERED_INDICES = None  # None = all NVs
+# FILTERED_INDICES = MANUAL_FILTERED_INDICES  # use manual subset instead
+
+
+def resolve_filtered_indices(num_nvs):
+    """Return valid original NV indices selected for plotting/output."""
+    if FILTERED_INDICES is None:
+        return np.arange(num_nvs, dtype=int)
+
+    inds = np.asarray(FILTERED_INDICES, dtype=int)
+    inds = inds[(inds >= 0) & (inds < num_nvs)]
+    return np.unique(inds)
 # ============================================================================
 # FIT MODEL
 # ============================================================================
@@ -159,113 +207,326 @@ def _frequency_units_and_width_guess(freqs):
 
 
 def fit_one_nv(nv_idx, freqs, avg_counts, avg_counts_ste, freqs_dense):
-    y = np.asarray(avg_counts[nv_idx], dtype=float)
-    yste = _safe_sigma(avg_counts_ste[nv_idx])
+    """
+    Conservative multi-start two-Voigt fit.
 
-    if np.count_nonzero(np.isfinite(y)) < 8:
+    This intentionally stays close to the original fitting strategy that works
+    reasonably well for these wide-field ESR data:
+
+      * one initial resonance from each half of the scan
+      * the same free two-Voigt model used previously
+      * ordinary weighted least squares (no robust-loss reshaping)
+      * several linewidth starts (2, 5, 10 MHz by default)
+      * raw and lightly smoothed peak-position starts
+      * only mild linewidth bounds (0.2--30 MHz by default)
+      * choose the best solution by weighted chi-square, with a penalty for
+        unphysical narrow/tall dense-curve spikes between sampled points
+
+    The fit centers are NOT forced to the known orientation frequencies.
+    Orientation classification remains a downstream analysis step.
+    """
+
+    freq_arr = np.asarray(freqs, dtype=float)
+    y_full = np.asarray(avg_counts[nv_idx], dtype=float)
+    sigma_full = _safe_sigma(avg_counts_ste[nv_idx])
+
+    finite = (
+        np.isfinite(freq_arr)
+        & np.isfinite(y_full)
+        & np.isfinite(sigma_full)
+    )
+
+    if np.count_nonzero(finite) < 8:
         return {
             "nv_idx": nv_idx,
             "success": False,
             "message": "too few finite points",
             "popt": np.full(6, np.nan),
             "fit_dense": np.full_like(freqs_dense, np.nan, dtype=float),
-            "fit_at_data": np.full_like(freqs, np.nan, dtype=float),
+            "fit_at_data": np.full_like(freq_arr, np.nan, dtype=float),
             "chi2": np.nan,
             "red_chi2": np.nan,
             "rms_resid": np.nan,
             "nfev": 0,
         }
 
-    mid = max(1, len(freqs) // 2)
-    low_slice = y[:mid]
-    high_slice = y[mid:]
+    # Fit only finite samples, but evaluate/store the model on the full axis.
+    f = freq_arr[finite]
+    y = y_full[finite]
+    sigma = sigma_full[finite]
 
-    try:
-        low_idx = int(np.nanargmax(low_slice))
-        high_idx = int(np.nanargmax(high_slice)) + mid
-    except ValueError:
-        low_idx = 0
-        high_idx = len(freqs) - 1
-
-    low_guess = float(freqs[low_idx])
-    high_guess = float(freqs[high_idx])
+    fmin = float(np.nanmin(f))
+    fmax = float(np.nanmax(f))
+    fmid = 0.5 * (fmin + fmax)
 
     finite_y = y[np.isfinite(y)]
     ymin = float(np.nanmin(finite_y))
     ymax = float(np.nanmax(finite_y))
-    amp_guess = max(ymax - ymin, 1e-4)
+    yspan = max(ymax - ymin, 1e-6)
 
-    _, width_guess = _frequency_units_and_width_guess(freqs)
-    min_width = width_guess / 100.0
-    max_width = max((float(np.nanmax(freqs)) - float(np.nanmin(freqs))) / 2.0, width_guess)
+    # Infer GHz-like versus MHz-like axis and convert user settings.
+    units, _ = _frequency_units_and_width_guess(f)
+    if units == "GHz":
+        width_starts = [v / 1000.0 for v in FIT_WIDTH_STARTS_MHZ]
+        min_width = FIT_MIN_WIDTH_MHZ / 1000.0
+        max_width = FIT_MAX_WIDTH_MHZ / 1000.0
+    else:
+        width_starts = list(FIT_WIDTH_STARTS_MHZ)
+        min_width = float(FIT_MIN_WIDTH_MHZ)
+        max_width = float(FIT_MAX_WIDTH_MHZ)
 
-    guess = [
-        amp_guess,
-        amp_guess,
-        low_guess,
-        high_guess,
-        width_guess,
-        ymin,
-    ]
+    scan_span = fmax - fmin
+    max_width = min(max_width, max(scan_span / 2.0, min_width * 1.01))
 
-    fmin = float(np.nanmin(freqs))
-    fmax = float(np.nanmax(freqs))
-    lower = [0.0, 0.0, fmin, fmin, min_width, -np.inf]
-    upper = [np.inf, np.inf, fmax, fmax, max_width, np.inf]
+    # ---------------------------------------------------------------------
+    # Center starts: original raw maxima + lightly smoothed maxima.
+    # ---------------------------------------------------------------------
+    mid_ind = max(1, len(f) // 2)
 
     try:
-        result = least_squares(
-            residuals_fn,
-            guess,
-            args=(freqs, y, yste),
-            bounds=(lower, upper),
-            max_nfev=5000,
-            method="trf",
-        )
+        raw_low_ind = int(np.nanargmax(y[:mid_ind]))
+        raw_high_ind = int(np.nanargmax(y[mid_ind:])) + mid_ind
+    except ValueError:
+        raw_low_ind = 0
+        raw_high_ind = len(f) - 1
 
-        popt = np.asarray(result.x, dtype=float)
+    center_starts = [
+        (float(f[raw_low_ind]), float(f[raw_high_ind]))
+    ]
 
-        # Always store f1 <= f2 for cleaner downstream plots.
-        if popt[2] > popt[3]:
-            popt[[0, 1]] = popt[[1, 0]]
-            popt[[2, 3]] = popt[[3, 2]]
+    # Light smoothing is ONLY for initialization; fitting still uses raw data.
+    smooth_points = int(max(1, FIT_SMOOTH_POINTS))
+    if smooth_points > 1 and len(y) >= smooth_points:
+        kernel = np.ones(smooth_points, dtype=float) / smooth_points
+        pad_left = smooth_points // 2
+        pad_right = smooth_points - 1 - pad_left
+        y_pad = np.pad(y, (pad_left, pad_right), mode="edge")
+        y_smooth = np.convolve(y_pad, kernel, mode="valid")
 
-        fit_at_data = two_voigt(freqs, *popt)
-        fit_dense = two_voigt(freqs_dense, *popt)
+        try:
+            sm_low_ind = int(np.nanargmax(y_smooth[:mid_ind]))
+            sm_high_ind = int(np.nanargmax(y_smooth[mid_ind:])) + mid_ind
+            center_starts.append(
+                (float(f[sm_low_ind]), float(f[sm_high_ind]))
+            )
+        except ValueError:
+            pass
 
-        residual = y - fit_at_data
-        weighted = residual / yste
-        chi2 = float(np.nansum(weighted**2))
-        dof = max(1, np.count_nonzero(np.isfinite(y)) - len(popt))
-        red_chi2 = chi2 / dof
-        rms_resid = float(np.sqrt(np.nanmean(residual**2)))
+    # Remove duplicate start pairs while preserving order.
+    unique_center_starts = []
+    for pair in center_starts:
+        if pair not in unique_center_starts:
+            unique_center_starts.append(pair)
 
-        return {
-            "nv_idx": nv_idx,
-            "success": bool(result.success),
-            "message": str(result.message),
-            "popt": popt,
-            "fit_dense": fit_dense,
-            "fit_at_data": fit_at_data,
-            "chi2": chi2,
-            "red_chi2": red_chi2,
-            "rms_resid": rms_resid,
-            "nfev": int(result.nfev),
-        }
+    # A low percentile is less sensitive to one downward outlier than min(y).
+    baseline_guess = float(np.nanpercentile(y, 20.0))
 
-    except Exception as exc:
+    # Keep one resonance in each half of the scan. This matches the acquisition
+    # geometry and prevents both free peaks from collapsing onto the same noise
+    # feature, while still allowing each center to move freely within its half.
+    margin = max(scan_span * 1e-10, 1e-12)
+    lower = np.array(
+        [
+            0.0,
+            0.0,
+            fmin,
+            fmid + margin,
+            min_width,
+            ymin - yspan,
+        ],
+        dtype=float,
+    )
+    upper = np.array(
+        [
+            np.inf,
+            np.inf,
+            fmid - margin,
+            fmax,
+            max_width,
+            ymax + yspan,
+        ],
+        dtype=float,
+    )
+
+    # In the unlikely case that the finite-point axis is too short/odd for the
+    # strict half split, fall back to full-scan center bounds.
+    if lower[2] >= upper[2] or lower[3] >= upper[3]:
+        lower[2] = fmin
+        lower[3] = fmin
+        upper[2] = fmax
+        upper[3] = fmax
+
+    best = None
+    best_rank_score = np.inf
+    best_chi2 = np.inf
+    best_clean = False
+
+    # ---------------------------------------------------------------------
+    # Multi-start over center and linewidth guesses.
+    # ---------------------------------------------------------------------
+    for low_guess, high_guess in unique_center_starts:
+        for width_guess in width_starts:
+            width_guess = float(np.clip(width_guess, min_width, max_width))
+
+            # norm_voigt is area-normalized. Convert a desired measured peak
+            # height to an area-like coefficient for a sensible p0.
+            desired_height = max(0.35 * yspan, 1e-5)
+
+            try:
+                n1 = float(
+                    norm_voigt(
+                        np.array([low_guess]),
+                        width_guess,
+                        width_guess,
+                        low_guess,
+                    )[0]
+                )
+                n2 = float(
+                    norm_voigt(
+                        np.array([high_guess]),
+                        width_guess,
+                        width_guess,
+                        high_guess,
+                    )[0]
+                )
+            except Exception:
+                n1 = np.nan
+                n2 = np.nan
+
+            amp1_guess = (
+                desired_height / n1
+                if np.isfinite(n1) and n1 > 0
+                else desired_height * max(width_guess, 1e-12)
+            )
+            amp2_guess = (
+                desired_height / n2
+                if np.isfinite(n2) and n2 > 0
+                else desired_height * max(width_guess, 1e-12)
+            )
+
+            p0 = np.array(
+                [
+                    amp1_guess,
+                    amp2_guess,
+                    low_guess,
+                    high_guess,
+                    width_guess,
+                    baseline_guess,
+                ],
+                dtype=float,
+            )
+
+            # Ensure the starting point is strictly within finite bounds.
+            p0 = np.maximum(p0, lower + 1e-12)
+            finite_upper = np.isfinite(upper)
+            p0[finite_upper] = np.minimum(
+                p0[finite_upper], upper[finite_upper] - 1e-12
+            )
+
+            try:
+                result = least_squares(
+                    residuals_fn,
+                    p0,
+                    args=(f, y, sigma),
+                    bounds=(lower, upper),
+                    method="trf",
+                    max_nfev=20000,
+                )
+            except Exception:
+                continue
+
+            if not np.all(np.isfinite(result.x)):
+                continue
+
+            popt_test = np.asarray(result.x, dtype=float)
+            fit_test = two_voigt(f, *popt_test)
+            dense_test = two_voigt(freqs_dense, *popt_test)
+
+            if not (
+                np.all(np.isfinite(fit_test))
+                and np.all(np.isfinite(dense_test))
+            ):
+                continue
+
+            weighted = (y - fit_test) / sigma
+            chi2 = float(np.nansum(weighted**2))
+
+            # -------------------------------------------------------------
+            # Dense-curve spike penalty.
+            # -------------------------------------------------------------
+            # A very narrow normalized Voigt can hide a huge peak between the
+            # sampled frequency points. Rather than imposing a large minimum
+            # linewidth, penalize only the actual unmeasured overshoot.
+            dense_min = float(np.nanmin(dense_test))
+            dense_max = float(np.nanmax(dense_test))
+
+            allowed_low = ymin - FIT_SPIKE_ALLOWANCE * yspan
+            allowed_high = ymax + FIT_SPIKE_ALLOWANCE * yspan
+
+            excess_high = max(0.0, dense_max - allowed_high) / yspan
+            excess_low = max(0.0, allowed_low - dense_min) / yspan
+            spike_penalty = 1.0e4 * (excess_high**2 + excess_low**2)
+
+            rank_score = chi2 + spike_penalty
+            clean = spike_penalty == 0.0
+
+            if rank_score < best_rank_score:
+                best_rank_score = rank_score
+                best_chi2 = chi2
+                best = result
+                best_clean = clean
+
+    if best is None:
         return {
             "nv_idx": nv_idx,
             "success": False,
-            "message": repr(exc),
+            "message": "all multistart candidates failed",
             "popt": np.full(6, np.nan),
             "fit_dense": np.full_like(freqs_dense, np.nan, dtype=float),
-            "fit_at_data": np.full_like(freqs, np.nan, dtype=float),
+            "fit_at_data": np.full_like(freq_arr, np.nan, dtype=float),
             "chi2": np.nan,
             "red_chi2": np.nan,
             "rms_resid": np.nan,
             "nfev": 0,
         }
+
+    popt = np.asarray(best.x, dtype=float)
+
+    # Always store f1 <= f2 for cleaner downstream plots/CSV output.
+    if popt[2] > popt[3]:
+        popt[[0, 1]] = popt[[1, 0]]
+        popt[[2, 3]] = popt[[3, 2]]
+
+    fit_at_data = two_voigt(freq_arr, *popt)
+    fit_dense = two_voigt(freqs_dense, *popt)
+
+    residual = y_full - fit_at_data
+    weighted_full = residual[finite] / sigma_full[finite]
+    chi2 = float(np.nansum(weighted_full**2))
+    dof = max(1, np.count_nonzero(finite) - len(popt))
+    red_chi2 = chi2 / dof
+    rms_resid = float(np.sqrt(np.nanmean(residual[finite] ** 2)))
+
+    width = float(popt[4])
+    width_mhz = width * 1000.0 if units == "GHz" else width
+
+    message = (
+        f"{best.message}; multistart; width={width_mhz:.3f} MHz; "
+        f"dense_guard={'clean' if best_clean else 'penalized'}"
+    )
+
+    return {
+        "nv_idx": nv_idx,
+        "success": bool(best.success),
+        "message": message,
+        "popt": popt,
+        "fit_dense": fit_dense,
+        "fit_at_data": fit_at_data,
+        "chi2": chi2,
+        "red_chi2": red_chi2,
+        "rms_resid": rms_resid,
+        "nfev": int(best.nfev),
+    }
 
 
 # ============================================================================
@@ -274,8 +535,13 @@ def fit_one_nv(nv_idx, freqs, avg_counts, avg_counts_ste, freqs_dense):
 
 def _cache_key(file_id, num_nvs, freqs):
     payload = (
-        str(file_id)
+        FIT_CACHE_VERSION
+        + "|"
+        + str(file_id)
         + f"|N={num_nvs}|"
+        + f"|width_starts_mhz={FIT_WIDTH_STARTS_MHZ}"
+        + f"|width_bounds_mhz={FIT_MIN_WIDTH_MHZ},{FIT_MAX_WIDTH_MHZ}"
+        + f"|spike_allowance={FIT_SPIKE_ALLOWANCE}"
         + np.array2string(np.asarray(freqs, dtype=float), precision=10)
     )
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
@@ -694,16 +960,16 @@ def plot_all_nv_overlay(
 
     # Selected-population median.
     if np.any(selected):
-        med = np.nanmedian(
-            np.asarray(avg_counts, dtype=float)[selected],
-            axis=0,
-        )
-        ax.plot(
-            freqs,
-            med,
-            linewidth=2.5,
-            label=f"Median selected (N={selected.sum()})",
-        )
+        # med = np.nanmedian(
+        #     np.asarray(avg_counts, dtype=float)[selected],
+        #     axis=0,
+        # )
+        # ax.plot(
+        #     freqs,
+        #     med,
+        #     linewidth=2.5,
+        #     label=f"Median selected (N={selected.sum()})",
+        # )
 
         selected_fit_curves = np.asarray(
             [
@@ -713,14 +979,14 @@ def plot_all_nv_overlay(
             ],
             dtype=float,
         )
-        if selected_fit_curves.size:
-            ax.plot(
-                freqs_dense,
-                np.nanmedian(selected_fit_curves, axis=0),
-                linewidth=2.0,
-                linestyle="--",
-                label="Median selected fit",
-            )
+        # if selected_fit_curves.size:
+        #     ax.plot(
+        #         freqs_dense,
+        #         np.nanmedian(selected_fit_curves, axis=0),
+        #         linewidth=2.0,
+        #         linestyle="--",
+        #         label="Median selected fit",
+        #     )
 
     # Mark the eight target resonances.
     target_native = _targets_in_native_units(freqs)
@@ -764,23 +1030,23 @@ def plot_filtered_overlay(freqs, avg_counts, freqs_dense, fit_results, p, out_di
                 alpha=0.25,
             )
 
-        med = np.nanmedian(
-            np.asarray(avg_counts, dtype=float)[selected_idx],
-            axis=0,
-        )
-        ax.plot(freqs, med, linewidth=2.5, label="Median selected data")
+        # med = np.nanmedian(
+        #     np.asarray(avg_counts, dtype=float)[selected_idx],
+        #     axis=0,
+        # )
+        # ax.plot(freqs, med, linewidth=2.5, label="Median selected data")
 
         fit_curves = np.asarray(
             [fit_results[i]["fit_dense"] for i in selected_idx],
             dtype=float,
         )
-        ax.plot(
-            freqs_dense,
-            np.nanmedian(fit_curves, axis=0),
-            linewidth=2.0,
-            linestyle="--",
-            label="Median selected fit",
-        )
+        # ax.plot(
+        #     freqs_dense,
+        #     np.nanmedian(fit_curves, axis=0),
+        #     linewidth=2.0,
+        #     linestyle="--",
+        #     label="Median selected fit",
+        # )
 
     for target in _targets_in_native_units(freqs):
         ax.axvline(target, linestyle=":", linewidth=0.9, alpha=0.7)
@@ -1097,20 +1363,20 @@ def plot_snr_overview(freqs, avg_snr, p_all, out_dir):
             for row in snr2[selected]:
                 axes[0].plot(freqs, row, linewidth=0.55, alpha=0.25)
 
-            if np.any(selected):
-                axes[0].plot(
-                    freqs,
-                    np.nanmedian(snr2[selected], axis=0),
-                    linewidth=2.2,
-                    label="Median filtered SNR",
-                )
+            # if np.any(selected):
+            #     axes[0].plot(
+            #         freqs,
+            #         np.nanmedian(snr2[selected], axis=0),
+            #         linewidth=2.2,
+            #         label="Median filtered SNR",
+            #     )
 
             for target in _targets_in_native_units(freqs):
                 axes[0].axvline(target, linestyle=":", linewidth=0.9, alpha=0.7)
 
             axes[0].set_xlabel("Frequency")
         else:
-            axes[0].plot(np.nanmedian(snr2, axis=0), linewidth=2.0)
+            # axes[0].plot(np.nanmedian(snr2, axis=0), linewidth=2.0)
             axes[0].set_xlabel("SNR sample index")
 
     axes[0].set_ylabel("SNR")
@@ -1153,12 +1419,19 @@ def plot_individual_fits_multipage(
     out_dir,
 ):
     """
-    All FILTERED NV fits in one multipage PDF.
+    Save the selected NVs in one multipage vector PDF.
+    FILTERED_INDICES=None includes all NVs; otherwise only the listed indices.
     """
-    pdf_path = out_dir / "09_filtered_individual_nv_fits.pdf"
+    pdf_path = out_dir / "09_selected_individual_nv_fits.pdf"
 
-    selected_idx = np.flatnonzero(p_all["filter_selected"])
+    selected_idx = resolve_filtered_indices(len(avg_counts))
+
     rows = int(np.ceil(FITS_PER_PAGE / FIT_GRID_COLS))
+
+    print(
+        f"Saving {len(selected_idx)} selected NV fits to PDF "
+        f"({FIT_GRID_COLS} columns x {rows} rows/page)..."
+    )
 
     with PdfPages(pdf_path) as pdf:
         for start in range(0, len(selected_idx), FITS_PER_PAGE):
@@ -1167,7 +1440,7 @@ def plot_individual_fits_multipage(
             fig, axes = plt.subplots(
                 rows,
                 FIT_GRID_COLS,
-                figsize=(14, 3.0 * rows),
+                figsize=(5.0 * FIT_GRID_COLS, 3.6 * rows),
                 squeeze=False,
             )
             axes = axes.ravel()
@@ -1189,36 +1462,54 @@ def plot_individual_fits_multipage(
                 )
 
                 if np.any(np.isfinite(fit["fit_dense"])):
-                    ax.plot(freqs_dense, fit["fit_dense"], linewidth=1.2)
+                    ax.plot(
+                        freqs_dense,
+                        fit["fit_dense"],
+                        linewidth=1.2,
+                    )
 
                 for target in _targets_in_native_units(freqs):
-                    ax.axvline(target, linestyle=":", linewidth=0.45, alpha=0.4)
+                    ax.axvline(
+                        target,
+                        linestyle=":",
+                        linewidth=0.45,
+                        alpha=0.4,
+                    )
 
-                t1 = p_all["nearest_target_f1_ghz"][nv_idx]
-                t2 = p_all["nearest_target_f2_ghz"][nv_idx]
+                f1 = p_all["f1"][nv_idx]
+                f2 = p_all["f2"][nv_idx]
                 e1 = p_all["f1_target_error_mhz"][nv_idx]
                 e2 = p_all["f2_target_error_mhz"][nv_idx]
 
                 ax.set_title(
-                    f"NV {nv_idx} | {t1:.4f}/{t2:.4f} GHz\n"
-                    f"err={e1:.1f}/{e2:.1f} MHz",
-                    fontsize=7.5,
+                    f"NV {nv_idx} | {f1:.4f}/{f2:.4f} GHz\n"
+                    f"target err={e1:.1f}/{e2:.1f} MHz",
+                    fontsize=8.5,
                 )
+                ax.set_xlabel("Frequency", fontsize=8)
+                ax.set_ylabel("Normalized NV population", fontsize=8)
                 ax.grid(True, alpha=0.2)
                 ax.tick_params(labelsize=7)
 
+            # Hide unused panels on the final page.
             for slot in range(len(page_inds), len(axes)):
                 axes[slot].axis("off")
 
             if len(page_inds):
                 fig.suptitle(
-                    f"Filtered ESR fits: selected NV #{start + 1}–"
-                    f"{start + len(page_inds)} of {len(selected_idx)}"
+                    f"Selected ESR fits: {start + 1}–"
+                    f"{start + len(page_inds)} of {len(selected_idx)}",
+                    fontsize=14,
+                    y=0.995,
                 )
-            pdf.savefig(fig, bbox_inches="tight", dpi=PDF_DPI)
+
+            fig.tight_layout(rect=[0, 0, 1, 0.975])
+
+            # PdfPages preserves Matplotlib lines/text as vector graphics.
+            pdf.savefig(fig, bbox_inches="tight")
             plt.close(fig)
 
-    print(f"Saved: {pdf_path}")
+    print(f"Saved selected-NV vector PDF:\n  {pdf_path}")
 
 
 # ============================================================================
@@ -1334,7 +1625,7 @@ def analyze(file_ids):
     avg_snr = np.asarray(avg_snr, dtype=float)
 
     num_nvs = len(nv_list)
-    freqs_dense = np.linspace(np.nanmin(freqs), np.nanmax(freqs), 500)
+    freqs_dense = np.linspace(np.nanmin(freqs), np.nanmax(freqs), 45)
 
     cache_file = _cache_path(combined_id, num_nvs, freqs)
 
@@ -1385,9 +1676,22 @@ def analyze(file_ids):
     if len(failed):
         print("Failed NV indices:", failed.tolist())
 
+    # p_all = extract_parameters(fit_results, avg_snr)
+    # selected_idx = np.flatnonzero(p_all["filter_selected"])
+    # p_filtered = subset_parameters(p_all, selected_idx)
+
     p_all = extract_parameters(fit_results, avg_snr)
-    selected_idx = np.flatnonzero(p_all["filter_selected"])
+
+    # Use all NVs when FILTERED_INDICES=None, otherwise use the manual subset.
+    selected_idx = resolve_filtered_indices(num_nvs)
+
+    manual_mask = np.zeros(num_nvs, dtype=bool)
+    manual_mask[selected_idx] = True
+    p_all["filter_selected"] = manual_mask
+
     p_filtered = subset_parameters(p_all, selected_idx)
+
+    print("Filtered idx:", selected_idx.tolist())
 
     print("\n=== Resonance-frequency filter ===")
     print("Targets (GHz):", RESONANCE_TARGETS_GHZ)
@@ -1683,53 +1987,56 @@ if __name__ == "__main__":
     #     "2026_02_07-04_26_34-johnson-nv0_2025_10_21",
     # ]
 
-    file_ids = [
-        "2026_02_09-05_33_54-johnson-nv0_2025_10_21",
-    ]
+    # file_ids = [
+    #     "2026_02_09-05_33_54-johnson-nv0_2025_10_21",
+    # ]
     ########## Rubin with beads
     # file_ids = [
     #     "2026_02_16-08_20_17-rubin-nv0_2026_02_15",
     # ]
 
     ##########
-    file_ids = [
-        "2026_02_19-15_37_59-rubin-nv0_2026_02_15",
-    ]
-    file_ids = [
-        "2026_02_19-19_16_49-rubin-nv0_2026_02_15",
-        "2026_02_19-22_39_18-rubin-nv0_2026_02_15",
-    ]
-    ####QNami
-    file_ids = [
-        "2026_03_04-14_45_10-qnami-nv0_2026_02_20",
-    ]
+    # file_ids = [
+    #     "2026_02_19-15_37_59-rubin-nv0_2026_02_15",
+    # ]
+    # file_ids = [
+    #     "2026_02_19-19_16_49-rubin-nv0_2026_02_15",
+    #     "2026_02_19-22_39_18-rubin-nv0_2026_02_15",
+    # ]
+    # ####QNami
+    # file_ids = [
+    #     "2026_03_04-14_45_10-qnami-nv0_2026_02_20",
+    # ]
 
-    file_ids = [
-        "2026_03_21-16_56_11-qnami-nv0_2026_02_20",
-        "2026_03_21-22_26_49-qnami-nv0_2026_02_20"
-    ]
-    file_ids = [
-        "2026_03_27-13_38_36-qnami-nv0_2026_02_20",
-        "2026_03_27-18_02_25-qnami-nv0_2026_02_20"
-    ]
-    file_ids = [
-        "2026_03_28-07_17_36-qnami-nv0_2026_02_20"
-    ]
-    file_ids = [
-        "2026_03_28-21_55_48-qnami-nv0_2026_02_20"
-    ]
+    # file_ids = [
+    #     "2026_03_21-16_56_11-qnami-nv0_2026_02_20",
+    #     "2026_03_21-22_26_49-qnami-nv0_2026_02_20"
+    # ]
+    # file_ids = [
+    #     "2026_03_27-13_38_36-qnami-nv0_2026_02_20",
+    #     "2026_03_27-18_02_25-qnami-nv0_2026_02_20"
+    # ]
+    # file_ids = [
+    #     "2026_03_28-07_17_36-qnami-nv0_2026_02_20"
+    # ]
+    # file_ids = [
+    #     "2026_03_28-21_55_48-qnami-nv0_2026_02_20"
+    # ]
     
+    # file_ids = [
+    #     "2026_06_16-02_26_28-qnami-nv0_2026_02_20"
+    # ]
+    # file_ids = [
+    #     "2026_09_05-08_06_34-qnami-nv0_2026_02_20"
+    # ]
+    # file_ids = [
+    #     "2026_09_11-07_20_45-qnami-nv0_2026_02_20"
+    # ]
+    # file_ids = [
+    #     "2026_09_14-00_27_42-qnami-nv0_2026_02_20"
+    # ]
     file_ids = [
-        "2026_06_16-02_26_28-qnami-nv0_2026_02_20"
-    ]
-    file_ids = [
-        "2026_09_05-08_06_34-qnami-nv0_2026_02_20"
-    ]
-    file_ids = [
-        "2026_09_11-07_20_45-qnami-nv0_2026_02_20"
-    ]
-    file_ids = [
-        "2026_09_14-00_27_42-qnami-nv0_2026_02_20"
+        "2026_09_17-11_59_59-qnami-nv0_2026_02_20"
     ]
     # Run analysis using the final active file_ids assignment above.
     analyze(file_ids)
