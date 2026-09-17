@@ -35,10 +35,12 @@ from utils import widefield
 # FILE_STEM = "2026_09_16-18_51_43-qnami-nv0_2026_02_20"
 # FILE_STEM = "2026_09_16-21_37_16-qnami-nv0_2026_02_20"
 # FILE_STEM = "2026_09_16-22_09_33-qnami-nv0_2026_02_20"
-FILE_STEM = "2026_09_16-22_41_13-qnami-nv0_2026_02_20"
-FILE_STEM = "2026_09_16-23_32_24-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_16-22_41_13-1qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_16-23_32_24-qnami-nv0_2026_02_20"
+FILE_STEM = "2026_09_17-13_14_05-qnami-nv0_2026_02_20"
 
-X_AXIS = "scc_duration"       # "scc_amp" or "scc_duration"
+
+X_AXIS = "scc_amp"       # "scc_amp" or "scc_duration"
 STEP_IND = 0
 APPLY_THRESHOLD = True
 
