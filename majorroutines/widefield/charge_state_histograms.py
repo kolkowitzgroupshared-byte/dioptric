@@ -18,7 +18,7 @@ import os
 import sys
 import time
 import traceback
-
+import json
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import ndimage
@@ -340,6 +340,7 @@ def main(
     num_runs,
     ion_do_target_inds=None,
     verify_charge_states=False,
+    selected_inds = None,
     do_plot_histograms=False,
 ):
     ### Initial setup
@@ -359,9 +360,19 @@ def main(
         charge_prep_fn = None
 
     pulse_gen = tb.get_server_pulse_gen()
+    dmd = tb.get_server_dmd()
 
     ### Collect the data
     def run_fn(shuffled_step_inds):
+        # -------------------------------------------
+        # Apply DMD mask AFTER base_routine reset
+        # -------------------------------------------
+        if selected_inds is not None:
+            dmd.pass_loaded_indices(
+                json.dumps([int(i) for i in selected_inds]),
+                8,      # radius_px
+                230,
+            )
         # Green charge polarization parameters
         pol_coords_list, pol_duration_list, pol_amp_list = (
             widefield.get_pulse_parameter_lists(

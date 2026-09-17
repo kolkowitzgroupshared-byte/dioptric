@@ -14,6 +14,7 @@ import random
 import sys
 import time
 from random import shuffle
+import json
 import re
 import cv2
 import matplotlib.pyplot as plt
@@ -126,7 +127,7 @@ def do_image_single_nv(nv_sig):
     return image_sample.single_nv(nv_sig, num_reps)
 
 
-def do_charge_state_histograms(nv_list):
+def do_charge_state_histograms(nv_list, selected_inds=None):
     # 50 ms
     num_reps = 200
     num_runs = 10
@@ -135,7 +136,7 @@ def do_charge_state_histograms(nv_list):
     # num_runs = 2
 
     return charge_state_histograms.main(
-        nv_list, num_reps, num_runs, do_plot_histograms=False
+        nv_list, num_reps, num_runs, selected_inds=selected_inds, do_plot_histograms=False
     )
 
 def do_optimize_pol_duration(nv_list):
@@ -1889,6 +1890,7 @@ def scan_equilateral_triangle(nv_sig, center_coord=(0, 0), radius=0.2):
         do_scanning_image_sample(nv_sig)
 
 
+    
 ### Run the file
 if __name__ == "__main__":
     # region Shared parameters
@@ -2084,7 +2086,7 @@ if __name__ == "__main__":
     selected_inds = [0] + selected_inds 
     print(f"Number selected: {len(selected_inds)}")
     print(f"Selected indices: {selected_inds}")
-    
+
     # -------------------------------------------
     # durations
     # -------------------------------------------
@@ -2250,7 +2252,7 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        do_charge_state_histograms(nv_list)
+        # do_charge_state_histograms(nv_list, selected_inds)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
@@ -2307,7 +2309,7 @@ if __name__ == "__main__":
         # do_rabi(nv_list)
         # do_power_rabi(nv_list)
         # do_resonance(nv_list)
-        # do_optimize_pol_duration(nv_list)
+        # do_optimize_scc_amp(nv_list)
         # do_rabi(nv_list)
         # do_deer_hahn(nv_list)
         # do_deer_hahn_rabi(nv_list)

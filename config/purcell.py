@@ -1053,14 +1053,14 @@ opx_config = {
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2923},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2911},  ## 631NVs 50ms
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3311},  ## 631NVs 50ms
-        "yellow_charge_readout": {"type": "constant", "sample": 0.3411},  ## 631NVs 50ms
+        "yellow_charge_readout": {"type": "constant", "sample": 0.3611},  ## 631NVs 50ms
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2133}, ## 631NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2043}, ## 631NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1710}, ## 415NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1693}, ## 402NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.160}, ## 366NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1582}, ## 404NVs
-        "yellow_spin_pol": {"type": "constant", "sample": 0.22},
+        "yellow_spin_pol": {"type": "constant", "sample": 0.38},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other
         "aod_cw": {"type": "constant", "sample": 0.35},
