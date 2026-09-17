@@ -20,8 +20,11 @@ Key changes:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
+
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 from utils import data_manager as dm
 from utils import kplotlib as kpl
@@ -32,7 +35,8 @@ from utils import widefield
 # USER SETTINGS
 # =============================================================================
 
-FILE_STEM = "2026_09_15-04_51_20-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_15-04_51_20-qnami-nv0_2026_02_20"
+FILE_STEM = "2026_09_17-03_23_08-qnami-nv0_2026_02_20"
 
 # "amplitude" or "duration"
 MODE = "amplitude"
@@ -41,15 +45,44 @@ AMPLITUDE_VALID_RANGE = (0.5, 1.5)
 DURATION_VALID_RANGE_NS = (0.0, 400.0)
 DURATION_QUANTUM_NS = 4.0
 
-LOCAL_FIT_POINTS = 5
+LOCAL_FIT_POINTS = 11
 MAX_VERTEX_UNCERTAINTY_FRACTION = 0.30
 
 SHOW_SUMMARY_PLOTS = True
-PLOT_INDIVIDUAL_FITS = False
-MAX_INDIVIDUAL_PLOTS = 12
+SHOW_INDIVIDUAL_PLOTS = False
+PLOT_INDIVIDUAL_FITS = True
+MAX_INDIVIDUAL_PLOTS = 212
 
-SAVE_RESULTS = False
+# PDF output
+SAVE_SUMMARY_PDF = True
+SAVE_INDIVIDUAL_PDF = True
+PDF_COLS = 3
+PDF_ROWS = 4
+
+SAVE_RESULTS = True
 SAVE_BASENAME = "optimal_scc_parameters_robust"
+
+
+
+def make_pdf_path(label):
+    """Create a valid PDF path using Dioptric's data-manager output folder."""
+    timestamp = dm.get_time_stamp()
+    base = Path(dm.get_file_path(__file__, timestamp, label))
+    pdf_path = base.with_suffix(".pdf")
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+    return pdf_path
+
+
+def save_figures_to_pdf(figures, pdf_path):
+    """Save a sequence of Matplotlib figures to one multipage vector PDF."""
+    if not figures:
+        return
+
+    with PdfPages(pdf_path) as pdf:
+        for fig in figures:
+            pdf.savefig(fig, bbox_inches="tight")
+
+    print(f"Saved summary PDF:\n  {pdf_path}")
 
 
 @dataclass
@@ -480,7 +513,7 @@ def analyze_scan(
 
 
 def plot_summary(aux, parameter_label, unit=""):
-    """Three compact summary figures."""
+    """Create and return the three compact summary figures."""
     x = aux["x"]
     avg_snr = aux["avg_snr"]
     ensemble_snr = aux["ensemble_snr"]
@@ -489,6 +522,7 @@ def plot_summary(aux, parameter_label, unit=""):
     opt_values = aux["opt_values"]
 
     suffix = f" ({unit})" if unit else ""
+    figures = []
 
     # Ensemble curve.
     fig, ax = plt.subplots(figsize=(8, 5.5))
@@ -518,6 +552,8 @@ def plot_summary(aux, parameter_label, unit=""):
     ax.set_title("Ensemble SCC optimization")
     ax.grid(alpha=0.25)
     ax.legend()
+    fig.tight_layout()
+    figures.append(fig)
 
     # Distribution of individual optima.
     fig, ax = plt.subplots(figsize=(7, 5))
@@ -541,6 +577,8 @@ def plot_summary(aux, parameter_label, unit=""):
     ax.set_title("Per-NV SCC optima")
     ax.grid(alpha=0.25)
     ax.legend()
+    fig.tight_layout()
+    figures.append(fig)
 
     # Optimum vs best directly measured SNR.
     raw_best_snr = np.nanmax(avg_snr, axis=1)
@@ -555,6 +593,10 @@ def plot_summary(aux, parameter_label, unit=""):
     ax.set_ylabel("Best measured SCC SNR")
     ax.set_title("Optimum vs measured peak SNR")
     ax.grid(alpha=0.25)
+    fig.tight_layout()
+    figures.append(fig)
+
+    return figures
 
 
 def plot_individual_examples(
@@ -562,8 +604,16 @@ def plot_individual_examples(
     parameter_label,
     unit="",
     max_plots=MAX_INDIVIDUAL_PLOTS,
+    save_pdf=SAVE_INDIVIDUAL_PDF,
+    show_plots=SHOW_INDIVIDUAL_PLOTS,
+    pdf_label="scc-individual-fits",
 ):
-    """Optional limited set of per-NV diagnostics."""
+    """
+    Plot per-NV SCC optimization diagnostics.
+
+    When save_pdf=True, save the selected NV plots into one multipage
+    vector PDF using PDF_COLS x PDF_ROWS panels per page.
+    """
     x = aux["x"]
     avg_snr = aux["avg_snr"]
     avg_snr_ste = aux["avg_snr_ste"]
@@ -571,41 +621,116 @@ def plot_individual_examples(
 
     suffix = f" ({unit})" if unit else ""
 
-    for nv_ind in range(
-        min(len(estimates), int(max_plots))
-    ):
-        est = estimates[nv_ind]
+    n_total = len(estimates)
+    n_plot = min(n_total, int(max_plots)) if max_plots is not None else n_total
+    inds = np.arange(n_plot, dtype=int)
 
-        fig, ax = plt.subplots(figsize=(6.5, 4.5))
-        ax.errorbar(
-            x,
-            avg_snr[nv_ind],
-            yerr=avg_snr_ste[nv_ind],
-            fmt="o",
-            capsize=2,
-            label="Data",
-        )
+    if save_pdf:
+        pdf_path = make_pdf_path(pdf_label)
+        plots_per_page = PDF_COLS * PDF_ROWS
 
-        if est.fit_x is not None:
-            ax.plot(
-                est.fit_x,
-                est.fit_y,
-                label="Local fit",
+        with PdfPages(pdf_path) as pdf:
+            for start in range(0, len(inds), plots_per_page):
+                page_inds = inds[start : start + plots_per_page]
+
+                fig, axes = plt.subplots(
+                    PDF_ROWS,
+                    PDF_COLS,
+                    figsize=(5.0 * PDF_COLS, 3.6 * PDF_ROWS),
+                    squeeze=False,
+                )
+                axes = axes.ravel()
+
+                for slot, nv_ind in enumerate(page_inds):
+                    ax = axes[slot]
+                    est = estimates[nv_ind]
+
+                    ax.errorbar(
+                        x,
+                        avg_snr[nv_ind],
+                        yerr=avg_snr_ste[nv_ind],
+                        fmt="o",
+                        markersize=3.0,
+                        linewidth=0.7,
+                        capsize=1.5,
+                        label="Data",
+                    )
+
+                    if est.fit_x is not None:
+                        ax.plot(
+                            est.fit_x,
+                            est.fit_y,
+                            linewidth=1.2,
+                            label="Local fit",
+                        )
+
+                    ax.axvline(
+                        est.x_opt,
+                        linestyle="--",
+                        linewidth=1.0,
+                        label=f"Opt = {est.x_opt:.4g}",
+                    )
+
+                    ax.set_xlabel(f"{parameter_label}{suffix}", fontsize=8)
+                    ax.set_ylabel("SCC SNR", fontsize=8)
+                    ax.set_title(
+                        f"NV {nv_ind}: {est.status}",
+                        fontsize=9,
+                    )
+                    ax.tick_params(labelsize=7)
+                    ax.grid(alpha=0.25)
+                    ax.legend(fontsize=6)
+
+                for slot in range(len(page_inds), len(axes)):
+                    axes[slot].axis("off")
+
+                if len(page_inds):
+                    fig.suptitle(
+                        f"{parameter_label} optimization — "
+                        f"NV {page_inds[0]} to {page_inds[-1]}",
+                        fontsize=14,
+                        y=0.995,
+                    )
+
+                fig.tight_layout(rect=[0, 0, 1, 0.975])
+                pdf.savefig(fig, bbox_inches="tight")
+
+                if show_plots:
+                    plt.show(block=False)
+
+                plt.close(fig)
+
+        print(f"Saved individual-fit PDF:\n  {pdf_path}")
+
+    elif show_plots:
+        # Optional one-window-per-NV display without PDF saving.
+        for nv_ind in inds:
+            est = estimates[nv_ind]
+            fig, ax = plt.subplots(figsize=(6.5, 4.5))
+            ax.errorbar(
+                x,
+                avg_snr[nv_ind],
+                yerr=avg_snr_ste[nv_ind],
+                fmt="o",
+                capsize=2,
+                label="Data",
             )
 
-        ax.axvline(
-            est.x_opt,
-            linestyle="--",
-            label=f"Optimum = {est.x_opt:.4g}",
-        )
+            if est.fit_x is not None:
+                ax.plot(est.fit_x, est.fit_y, label="Local fit")
 
-        ax.set_xlabel(f"{parameter_label}{suffix}")
-        ax.set_ylabel("SCC SNR")
-        ax.set_title(
-            f"NV {nv_ind}: {est.status}"
-        )
-        ax.grid(alpha=0.25)
-        ax.legend()
+            ax.axvline(
+                est.x_opt,
+                linestyle="--",
+                label=f"Optimum = {est.x_opt:.4g}",
+            )
+            ax.set_xlabel(f"{parameter_label}{suffix}")
+            ax.set_ylabel("SCC SNR")
+            ax.set_title(f"NV {nv_ind}: {est.status}")
+            ax.grid(alpha=0.25)
+            ax.legend()
+            fig.tight_layout()
+            plt.show(block=False)
 
 
 def print_status_summary(results):
@@ -629,30 +754,34 @@ def process_and_plot_amplitudes(data):
     )
 
     print("\n========== SCC amplitude optimization ==========")
-    print(
-        "Actual valid range:",
-        tuple(results["actual_valid_range"]),
-    )
-    print(
-        "Ensemble optimum:",
-        results["ensemble_optimum"],
-    )
-    print(
-        "Median individual optimum:",
-        results["median_individual_optimum"],
-    )
+    print("Actual valid range:", tuple(results["actual_valid_range"]))
+    print("Ensemble optimum:", results["ensemble_optimum"])
+    print("Median individual optimum:", results["median_individual_optimum"])
     print_status_summary(results)
 
-    if SHOW_SUMMARY_PLOTS:
-        plot_summary(
+    if SHOW_SUMMARY_PLOTS or SAVE_SUMMARY_PDF:
+        summary_figs = plot_summary(
             aux,
             parameter_label="SCC amplitude",
         )
+
+        if SAVE_SUMMARY_PDF:
+            save_figures_to_pdf(
+                summary_figs,
+                make_pdf_path(f"{FILE_STEM}-scc-amplitude-summary"),
+            )
+
+        if not SHOW_SUMMARY_PLOTS:
+            for fig in summary_figs:
+                plt.close(fig)
 
     if PLOT_INDIVIDUAL_FITS:
         plot_individual_examples(
             aux,
             parameter_label="SCC amplitude",
+            save_pdf=SAVE_INDIVIDUAL_PDF,
+            show_plots=SHOW_INDIVIDUAL_PLOTS,
+            pdf_label=f"{FILE_STEM}-scc-amplitude-individual-fits",
         )
 
     return results
@@ -667,35 +796,36 @@ def process_and_plot_durations(data):
     )
 
     print("\n========== SCC duration optimization ==========")
-    print(
-        "Actual valid range:",
-        tuple(results["actual_valid_range"]),
-        "ns",
-    )
-    print(
-        "Ensemble optimum:",
-        results["ensemble_optimum"],
-        "ns",
-    )
-    print(
-        "Median individual optimum:",
-        results["median_individual_optimum"],
-        "ns",
-    )
+    print("Actual valid range:", tuple(results["actual_valid_range"]), "ns")
+    print("Ensemble optimum:", results["ensemble_optimum"], "ns")
+    print("Median individual optimum:", results["median_individual_optimum"], "ns")
     print_status_summary(results)
 
-    if SHOW_SUMMARY_PLOTS:
-        plot_summary(
+    if SHOW_SUMMARY_PLOTS or SAVE_SUMMARY_PDF:
+        summary_figs = plot_summary(
             aux,
             parameter_label="SCC duration",
             unit="ns",
         )
+
+        if SAVE_SUMMARY_PDF:
+            save_figures_to_pdf(
+                summary_figs,
+                make_pdf_path(f"{FILE_STEM}-scc-duration-summary"),
+            )
+
+        if not SHOW_SUMMARY_PLOTS:
+            for fig in summary_figs:
+                plt.close(fig)
 
     if PLOT_INDIVIDUAL_FITS:
         plot_individual_examples(
             aux,
             parameter_label="SCC duration",
             unit="ns",
+            save_pdf=SAVE_INDIVIDUAL_PDF,
+            show_plots=SHOW_INDIVIDUAL_PLOTS,
+            pdf_label=f"{FILE_STEM}-scc-duration-individual-fits",
         )
 
     return results
