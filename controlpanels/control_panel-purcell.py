@@ -1902,7 +1902,7 @@ if __name__ == "__main__":
     date_str = "2026_02_20"
     sample_coords = [-1.20, -1.2]
     z_coord = 0.0
-    # z_coord = -2.4
+    # z_coord = -2.2
     
     
     config = common.get_config_dict()
@@ -1969,75 +1969,56 @@ if __name__ == "__main__":
     #     [90.267, 92.212],
     # ]
     
-    analysis_data = dm.get_raw_data(
-        # file_stem="2026_06_23-16_12_54-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##1176NVs
-        # file_stem="2026_07_09-21_39_43-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
-        # file_stem="2026_07_10-12_52_52-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
-        # file_stem="2026_07_10-17_01_26-single_step_charge_hist_single_cpu_2026_07_10-16_57_47-qnami-nv0_2026_02_20", ##814NVs
-        # file_stem="2026_07_10-17_25_18-single_step_charge_hist_single_cpu_2026_07_10-16_57_47-qnami-nv0_2026_02_20", ##814NVs
-        # file_stem="2026_07_13-15_34_49-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
-        # file_stem="2026_07_13-16_02_12-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
-        # file_stem="2026_07_13-17_11_02-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis", ##814NVs
-        # file_stem= "2026_07_13-22_24_18-single_step_charge_hist_single_cpu_2026_07_13-17_00_15-qnami-nv0_2026_02_20",
-        # file_stem = "2026_07_14-10_39_06-single_step_charge_hist_single_cpu_2026_07_13-17_00_15-qnami-nv0_2026_02_20",
-        # file_stem = "2026_07_15-19_48_48-single_step_charge_hist_single_cpu_2026_07_15-19_42_19-qnami-nv0_2026_02_20", 
-        # file_stem = "2026_07_16-22_53_11-single_step_charge_hist_single_cpu_2026_07_16-22_48_08-qnami-nv0_2026_02_20", 
-        # file_stem = "2026_07_19-00_47_30-single_step_charge_hist_single_cpu_2026_07_19-00_17_00-qnami-nv0_2026_02_20",
-        # file_stem = "2026_07_20-17_07_53-single_step_charge_hist_single_cpu_2026_07_20-17_04_32-qnami-nv0_2026_02_20",
-        # file_stem = "2026_07_21-16_11_27-single_step_charge_hist_single_cpu_2026_07_21-16_08_28-qnami-nv0_2026_02_20",
-        # file_stem = "2026_07_23-00_37_58-single_step_charge_hist_single_cpu_2026_07_22-22_20_35-qnami-nv0_2026_02_20",
-        # file_stem = "2026_08_04-13_25_01-single_step_charge_hist_single_cpu_2026_08_04-13_21_07-qnami-nv0_2026_02_20",
-        # file_stem = "2026_08_04-16_28_51-single_step_charge_hist_single_cpu_2026_08_04-16_25_34-qnami-nv0_2026_02_20",
-        # file_stem = "2026_08_08-16_47_43-single_step_charge_hist_single_cpu_2026_08_08-16_44_44-qnami-nv0_2026_02_20",
-        # file_stem = "2026_08_08-17_24_56-single_step_charge_hist_single_cpu_2026_08_08-17_21_48-qnami-nv0_2026_02_20",
-        # file_stem = "2026_08_08-21_33_29-single_step_charge_hist_single_cpu_2026_08_08-20_30_31-qnami-nv0_2026_02_20",
-        # file_stem = "2026_08_08-22_54_51-single_step_charge_hist_single_cpu_2026_08_08-22_52_19-qnami-nv0_2026_02_20",
-        # file_stem= "2026_08_11-17_25_05-single_step_charge_hist_single_cpu_2026_08_11-17_19_57-qnami-nv0_2026_02_20",
-        # file_stem ="2026_08_11-21_53_16-single_step_charge_hist_single_cpu_2026_08_11-19_24_34-qnami-nv0_2026_02_20",
-        # file_stem ="2026_08_12-23_18_49-single_step_charge_hist_single_cpu_2026_08_12-22_13_55-qnami-nv0_2026_02_20",
-        # file_stem = "2026_08_13-14_09_16-single_step_charge_hist_single_cpu_2026_08_13-14_04_07-qnami-nv0_2026_02_20",
-        # file_stem = "2026_08_16-00_51_03-single_step_charge_hist_single_cpu_2026_08_15-21_54_52-qnami-nv0_2026_02_20",
-        # file_stem= "2026_08_17-16_13_17-single_step_charge_hist_single_cpu_2026_08_17-15_36_41-qnami-nv0_2026_02_20",
-        # file_stem = "2026_08_18-12_45_35-single_step_charge_hist_single_cpu_2026_08_18-12_42_18-qnami-nv0_2026_02_20",
-        # file_stem = "2026_08_18-13_18_23-single_step_charge_hist_single_cpu_2026_08_18-13_13_16-qnami-nv0_2026_02_20",
-        # file_stem = "2026_08_20-00_00_35-single_step_charge_hist_single_cpu_2026_08_19-23_56_37-qnami-nv0_2026_02_20",
-        # file_stem =  "2026_08_21-22_22_23-single_step_charge_hist_single_cpu_2026_08_21-22_18_24-qnami-nv0_2026_02_20",
-        # file_stem= "2026_08_25-18_40_38-single_step_charge_hist_single_cpu_2026_08_25-18_08_58-qnami-nv0_2026_02_20",
-        # file_stem = "2026_08_29-15_06_55-single_step_charge_hist_single_cpu_2026_08_29-15_03_28-qnami-nv0_2026_02_20",
-        # file_stem = "2026_09_01-16_53_59-single_step_charge_hist_single_cpu_2026_09_01-16_50_13-qnami-nv0_2026_02_20",
-        # file_stem = "2026_09_03-18_15_43-single_step_charge_hist_single_cpu_2026_09_03-17_45_41-qnami-nv0_2026_02_20",
-        # file_stem = "2026_09_06-13_51_32-single_step_charge_hist_single_cpu_2026_09_06-13_46_16-qnami-nv0_2026_02_20",
-        file_stem = "2026_09_10-21_27_12-single_step_charge_hist_single_cpu_2026_09_10-21_14_01-qnami-nv0_2026_02_20",
-        load_npz=True,
-    )
-    # print (analysis_data.keys())
-    # sys.exit()
-    # analysis = analysis_data["charge_hist_multinv_binomial"]
-    # threshold_list = analysis["threshold_any"]
-    
-    analysis = analysis_data["single_step_charge_histogram"]
-    threshold_list = analysis["threshold"]
-    # Convert None/bad values to np.nan
-    threshold_arr = np.asarray(
-        [
-            np.nan if val is None else float(val)
-            for val in threshold_list
-        ],
-        dtype=float,
-    )
-
-    # Compute median from valid values only
-    median_threshold = float(np.nanmedian(threshold_arr))
-
-    # Replace None/nan values with median
-    threshold_arr_filled = threshold_arr.copy()
-    bad = ~np.isfinite(threshold_arr_filled)
-    threshold_arr_filled[bad] = median_threshold
-    threshold_list = threshold_arr_filled
-
+    # -------------------------------------------
+    # num_nvs
+    # -------------------------------------------
     num_nvs = len(pixel_coords_list)
-    # threshold_list = [None] * num_nvs
+    
+    # -------------------------------------------
+    # Thresholds
+    # -------------------------------------------
+    # threshold_data = dm.get_raw_data(
+    #        file_stem = "2026_09_10-21_27_12-single_step_charge_hist_single_cpu_2026_09_10-21_14_01-qnami-nv0_2026_02_20",
+    #     load_npz=True,
+    # )
+    # threshold_list = threshold_data["threshold"]["single_step_charge_histogram"]
+    # # Convert None/bad values to np.nan
+    # threshold_arr = np.asarray(
+    #     [
+    #         np.nan if val is None else float(val)
+    #         for val in threshold_list
+    #     ],
+    #     dtype=float,
+    # )
 
+    # # Compute median from valid values only
+    # median_threshold = float(np.nanmedian(threshold_arr))
+
+    # # Replace None/nan values with median
+    # threshold_arr_filled = threshold_arr.copy()
+    # bad = ~np.isfinite(threshold_arr_filled)
+    # threshold_arr_filled[bad] = median_threshold
+    # threshold_list = threshold_arr_filled
+
+    threshold_list = [None] * num_nvs
+
+    # -------------------------------------------
+    # snrs and filtering
+    # -------------------------------------------
+    # snr_data = dm.get_raw_data(
+    #         file_stem="2026_09_15-23_15_59-scc_snr_check_analysis",
+    #         load_npz=True)
+    # print(snr_data.keys())
+    # snr_list = np.asarray(snr_data["snr"])
+    # # NV indices with SNR < 0.05
+    # selected_inds = [
+    #     ind for ind, val in enumerate(snr_list)
+    #     if val >= 0.05
+    # ]
+    # selected_inds = [0] + selected_inds 
+    # print(f"Number selected: {len(selected_inds)}")
+    # print(f"Selected indices: {selected_inds}")
+    
     # -------------------------------------------
     # amplitudes
     # -------------------------------------------
@@ -2058,35 +2039,24 @@ if __name__ == "__main__":
     # ]
     
     scc_amp_data = dm.get_raw_data(
-        file_stem="2026_09_15-21_47_15-scc_parameter_sweep_analysis_with_nv_amps",
-        load_npz=True
-        )
+        file_stem="2026_09_17-15_31_19-optimal_scc_parameters_robust",
+        load_npz=True,
+    )
 
-    ## AOD multiplier
-    scc_amp_dict = scc_amp_data["optimal_value_by_nv"]
+    # AOD amplitude multiplier
+    scc_amp_dict = scc_amp_data["optimal_values"]
     scc_amp_list = [
-        scc_amp_dict.get(i, scc_amp_dict.get(str(i)))
+        round(scc_amp_dict.get(i, scc_amp_dict.get(str(i))), 4)
         for i in range(len(scc_amp_dict))
     ]
-    # print("charge_pol QUA multipliers range:", min(charge_pol_amps), max(charge_pol_amps))
-    print("scc QUA multipliers range:", min(scc_amp_list), max(scc_amp_list))
 
-
-    ###include indeces
-    snr_data = dm.get_raw_data(
-            file_stem="2026_09_15-23_15_59-scc_snr_check_analysis",
-            load_npz=True)
-    print(snr_data.keys())
-    snr_list = np.asarray(snr_data["snr"])
-    # NV indices with SNR < 0.05
-    selected_inds = [
-        ind for ind, val in enumerate(snr_list)
-        if val >= 0.05
-    ]
-    selected_inds = [0] + selected_inds 
-    print(f"Number selected: {len(selected_inds)}")
-    print(f"Selected indices: {selected_inds}")
-
+    # Put optimized durations back at the original NV indices
+    # for local_ind, nv_ind in enumerate(selected_inds):
+    #     val = scc_amp_dict.get(local_ind, scc_amp_dict.get(str(local_ind)))
+    #     if val is not None:
+    #         scc_amp_list[nv_ind] = round(float(val), 4)
+    # print("SCC amps", scc_amp_list)
+            
     # -------------------------------------------
     # durations
     # -------------------------------------------
@@ -2094,32 +2064,34 @@ if __name__ == "__main__":
         file_stem="2026_09_16-10_48_36-scc_parameter_sweep_analysis_with_nv_amps",
         load_npz=True,
     )
-
     scc_dur_dict = scc_dur_data["optimal_value_by_nv"]
 
     # Full list for all NVs
-    scc_dur_list = [None] * num_nvs
+    scc_duration_list =[
+        round(scc_dur_dict.get(i, scc_dur_dict.get(str(i))), 4)
+        for i in range(len(scc_dur_dict))
+    ]
 
     # Put optimized durations back at the original NV indices
-    for local_ind, nv_ind in enumerate(selected_inds):
-        val = scc_dur_dict.get(local_ind, scc_dur_dict.get(str(local_ind)))
-        if val is not None:
-            scc_dur_list[nv_ind] = int(round(val))
+    # for local_ind, nv_ind in enumerate(selected_inds):
+    #     val = scc_dur_dict.get(local_ind, scc_dur_dict.get(str(local_ind)))
+    #     if val is not None:
+    #         scc_dur_list[nv_ind] = int(round(val))
 
-    print("Number optimized:", sum(v is not None for v in scc_dur_list))
-    # print("SCC durations:", scc_dur_list)
+    # print("Number optimized:", sum(v is not None for v in scc_duration_list))
+    print("SCC durations:", scc_duration_list)
     
+    pol_duration_list = [1000] * num_nvs
     ion_duration_list = [600] * num_nvs
     # scc_duration_list = [88] * num_nvs
-    scc_duration_list = scc_dur_list
-    pol_duration_list = [1000] * num_nvs
+
 
     # sys.exit()
     # nv_list[i] will have the ith coordinates from the above lists
     nv_list: list[NVSig] = []
     for ind in range(num_nvs):
-        if ind not in selected_inds:
-            continue
+        # if ind not in selected_inds:
+        #     continue
         coords = {
             CoordsKey.SAMPLE: sample_coords,
             CoordsKey.Z: z_coord,
@@ -2252,7 +2224,7 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        # do_charge_state_histograms(nv_list, selected_inds)
+        do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
@@ -2283,7 +2255,7 @@ if __name__ == "__main__":
         # do_check_readout_fidelity(nv_list)
         # do_optimize_aod_access_time(nv_list)
 
-        # do_scc_snr_check(nv_list)
+        do_scc_snr_check(nv_list)
         # do_optimize_scc_duration(nv_list)
         # do_optimize_scc_amp(nv_list)
         # optimize_scc_amp_and_duration(nv_list)

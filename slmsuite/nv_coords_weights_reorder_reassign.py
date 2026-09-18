@@ -793,10 +793,11 @@ if __name__ == "__main__":
     # file_stem="2026_07_18-23_11_48-reoptimized_slm_score_survival_focused_2026_07_18-11_10_09-qnami-nv0_2026_02_20"
     # file_stem="2026_07_22-15_53_45-reoptimized_slm_score_survival_focused_2026_07_22-04_39_34-qnami-nv0_2026_02_20"
     # file_stem="2026_08_05-14_57_39-reoptimized_slm_score_survival_focused_2026_08_05-04_43_20-qnami-nv0_2026_02_20"
-    file_stem="2026_08_05-14_57_39-reoptimized_slm_score_survival_focused_2026_08_05-04_43_20-qnami-nv0_2026_02_20"
+    # file_stem="2026_08_05-14_57_39-reoptimized_slm_score_survival_focused_2026_08_05-04_43_20-qnami-nv0_2026_02_20"
+    file_stem = "2026_09_10-18_37_14-repeated_readout_slm_processed_2026_09_10-04_40_32-qnami-nv0_2026_02_20"
     )
     # spot_weights = data_spot_weight["optimal_weights"]
-    # spot_weights  = data_spot_weight["slm_amplitude_weight"]
+    spot_weights  = data_spot_weight["slm_amplitude_weight"]
     # spot_weights = data_spot_weight["slm_mean_norm_weight_clipped"]
     # # spot_weights = np.squeeze(spot_weights)
     # sys.exit()
@@ -984,6 +985,7 @@ if __name__ == "__main__":
     # calcualted_spot_weights = linear_weights(filtered_reordered_counts, alpha=0.3)
     # filtered_reordered_spot_weights = calcualted_spot_weights
     # Manually remove NVs with specified indices
+
     indices_to_remove = []
     filtered_reordered_coords_0 = [
         coord
@@ -1077,14 +1079,30 @@ if __name__ == "__main__":
     # ]
     # include_indices = list(range(len(filtered_reordered_coords)))
     # include_indices = one_nv_inds
-    include_indices = [
-        i
-        for i, (v1, v2) in enumerate(zip(readout_fidelity_list, prep_fidelity_list))
-        if (v1 is not None and v2 is not None)
-        and all(isinstance(x, (int, float)) for x in (v1, v2))
-        and not (math.isnan(v1) or math.isnan(v2))
-        and v1 >= 0.98 and v2 >= 0.60
+    
+    
+    snr_data = dm.get_raw_data(
+            file_stem="2026_09_15-23_15_59-scc_snr_check_analysis",
+            load_npz=True)
+    print(snr_data.keys())
+    snr_list = np.asarray(snr_data["snr"])
+    # NV indices with SNR < 0.05
+    selected_inds = [
+        ind for ind, val in enumerate(snr_list)
+        if val >= 0.05
     ]
+    selected_inds = [0] + selected_inds 
+    print(f"Number selected: {len(selected_inds)}")
+    print(f"Selected indices: {selected_inds}")
+    include_indices = selected_inds
+    # include_indices = [
+    #     i
+    #     for i, (v1, v2) in enumerate(zip(readout_fidelity_list, prep_fidelity_list))
+    #     if (v1 is not None and v2 is not None)
+    #     and all(isinstance(x, (int, float)) for x in (v1, v2))
+    #     and not (math.isnan(v1) or math.isnan(v2))
+    #     and v1 >= 0.98 and v2 >= 0.60
+    # ]
     # print(np.sort(list(include_indices)))
     filtered_reordered_coords = [filtered_reordered_coords[i] for i in include_indices]
     updated_spot_weights = [filtered_reordered_spot_weights[i] for i in include_indices]
@@ -1093,15 +1111,15 @@ if __name__ == "__main__":
     # filtered_pol_durs = [pol_duration_list[i] for i in include_indices]
     # filtered_scc_durs = [scc_duration_list[i] for i in include_indices]
     
-    reference_nv = filtered_reordered_coords[0]
-    filtered_reordered_coords, filtered_reordered_spot_weights, include_indices = (
-        filter_and_reorder_nv_coords(
-            filtered_reordered_coords, updated_spot_weights, reference_nv, min_distance=8.0
-        )
-    )
+    # reference_nv = filtered_reordered_coords[0]
+    # filtered_reordered_coords, filtered_reordered_spot_weights, include_indices = (
+    #     filter_and_reorder_nv_coords(
+    #         filtered_reordered_coords, updated_spot_weights, reference_nv, min_distance=8.0
+    #     )
+    # )
 
     # aom_voltage = 0.2923
-    aom_voltage = 0.1600
+    aom_voltage = 0.37
     a, b, c = 1.5133e04, 2.6976, -38.63  # UPDATED 2025-09-17
 
     total_power = a * (aom_voltage) ** b + c
@@ -1154,7 +1172,7 @@ if __name__ == "__main__":
     adjusted_aom_voltage = ((filtered_total_power - c) / a) ** (1 / b)
     print("Adjusted Voltages (V):", adjusted_aom_voltage)
     # sys.exit()
-    # filtered_reordered_spot_weights = updated_spot_weights
+    filtered_reordered_spot_weights = updated_spot_weights
     print("filtered_reordered_spot_weights_len:", len(filtered_reordered_spot_weights))
     print("filtered_reordered_coords_len:", len(filtered_reordered_coords))
     print("filtered_nv_power_len:", len(nv_powers_filtered))
@@ -1167,8 +1185,6 @@ if __name__ == "__main__":
 
     # print(adjusted_aom_voltage)
     
-
-
     # print(np.max(filtered_reordered_spot_weights))
     # print(np.median(filter_and_reorder_nv_coords))
     # sys.exit()
@@ -1191,7 +1207,7 @@ if __name__ == "__main__":
     save_results(
         filtered_reordered_coords,
         filtered_reordered_spot_weights,
-        filename="slmsuite/nv_blob_detection/nv_blob_351nvs_reordered_inside_dmd.npz",
+        filename="slmsuite/nv_blob_detection/nv_blob_212nvs_reordered.npz",
     )
 
     # # Plot the original image with circles around each NV
