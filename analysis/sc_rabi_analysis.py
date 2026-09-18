@@ -1667,8 +1667,8 @@ if __name__ == "__main__":
     ##qnami array sample 631
     file_stem = ["2026_09_12-02_21_34-qnami-nv0_2026_02_20"]  ### loop
     
-    ##qnami array sample 631
-    file_stem = ["2026_09_16-08_26_27-qnami-nv0_2026_02_20"]  ### loop          
+    # #qnami array sample 212
+    # file_stem = ["2026_09_16-08_26_27-qnami-nv0_2026_02_20"]  ### loop          
 
     data = dm.get_raw_data(
         file_stem=file_stem,

@@ -41,11 +41,11 @@ FILE_STEM = "2026_09_17-03_23_08-qnami-nv0_2026_02_20"
 # "amplitude" or "duration"
 MODE = "amplitude"
 
-AMPLITUDE_VALID_RANGE = (0.5, 1.5)
+AMPLITUDE_VALID_RANGE = (0.4, 1.6)
 DURATION_VALID_RANGE_NS = (0.0, 400.0)
 DURATION_QUANTUM_NS = 4.0
 
-LOCAL_FIT_POINTS = 11
+LOCAL_FIT_POINTS = 8
 MAX_VERTEX_UNCERTAINTY_FRACTION = 0.30
 
 SHOW_SUMMARY_PLOTS = True
@@ -62,7 +62,8 @@ PDF_ROWS = 4
 SAVE_RESULTS = True
 SAVE_BASENAME = "optimal_scc_parameters_robust"
 
-
+SAVE_SUMMARY_PNG = True
+PNG_DPI = 300
 
 def make_pdf_path(label):
     """Create a valid PDF path using Dioptric's data-manager output folder."""
@@ -84,6 +85,53 @@ def save_figures_to_pdf(figures, pdf_path):
 
     print(f"Saved summary PDF:\n  {pdf_path}")
 
+def save_figures_to_png(figures, label, dpi=PNG_DPI):
+    """Save each summary figure as a separate high-resolution PNG."""
+
+    if not figures:
+        return
+
+    timestamp = dm.get_time_stamp()
+
+    base = Path(
+        dm.get_file_path(
+            __file__,
+            timestamp,
+            label,
+        )
+    ).with_suffix("")
+
+    base.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    suffixes = [
+        "ensemble",
+        "optima_distribution",
+        "optimum_vs_snr",
+    ]
+
+    for ind, fig in enumerate(figures):
+
+        if ind < len(suffixes):
+            suffix = suffixes[ind]
+        else:
+            suffix = f"figure_{ind + 1}"
+
+        png_path = (
+            base.parent
+            / f"{base.name}_{suffix}.png"
+        )
+
+        fig.savefig(
+            png_path,
+            format="png",
+            dpi=dpi,
+            bbox_inches="tight",
+        )
+
+        print(f"Saved summary PNG:\n  {png_path}")
 
 @dataclass
 class PeakEstimate:
@@ -96,7 +144,6 @@ class PeakEstimate:
     raw_y_max: float
     fit_x: np.ndarray | None = None
     fit_y: np.ndarray | None = None
-
 
 def safe_sigma(sigma):
     """Replace invalid/zero uncertainties with a robust positive value."""
@@ -746,6 +793,7 @@ def print_status_summary(results):
 
 
 def process_and_plot_amplitudes(data):
+
     results, aux = analyze_scan(
         data,
         parameter_name="SCC amplitude",
@@ -754,40 +802,77 @@ def process_and_plot_amplitudes(data):
     )
 
     print("\n========== SCC amplitude optimization ==========")
-    print("Actual valid range:", tuple(results["actual_valid_range"]))
-    print("Ensemble optimum:", results["ensemble_optimum"])
-    print("Median individual optimum:", results["median_individual_optimum"])
+    print(
+        "Actual valid range:",
+        tuple(results["actual_valid_range"]),
+    )
+    print(
+        "Ensemble optimum:",
+        results["ensemble_optimum"],
+    )
+    print(
+        "Median individual optimum:",
+        results["median_individual_optimum"],
+    )
+
     print_status_summary(results)
 
-    if SHOW_SUMMARY_PLOTS or SAVE_SUMMARY_PDF:
+    # -------------------------------------------------------------------------
+    # Summary plots
+    # -------------------------------------------------------------------------
+
+    if (
+        SHOW_SUMMARY_PLOTS
+        or SAVE_SUMMARY_PDF
+        or SAVE_SUMMARY_PNG
+    ):
+
         summary_figs = plot_summary(
             aux,
             parameter_label="SCC amplitude",
         )
 
         if SAVE_SUMMARY_PDF:
+
             save_figures_to_pdf(
                 summary_figs,
-                make_pdf_path(f"{FILE_STEM}-scc-amplitude-summary"),
+                make_pdf_path(
+                    f"{FILE_STEM}-scc-amplitude-summary"
+                ),
+            )
+
+        if SAVE_SUMMARY_PNG:
+
+            save_figures_to_png(
+                summary_figs,
+                f"{FILE_STEM}-scc-amplitude-summary",
             )
 
         if not SHOW_SUMMARY_PLOTS:
             for fig in summary_figs:
                 plt.close(fig)
 
+    # -------------------------------------------------------------------------
+    # Individual NV fits
+    # -------------------------------------------------------------------------
+
     if PLOT_INDIVIDUAL_FITS:
+
         plot_individual_examples(
             aux,
             parameter_label="SCC amplitude",
             save_pdf=SAVE_INDIVIDUAL_PDF,
             show_plots=SHOW_INDIVIDUAL_PLOTS,
-            pdf_label=f"{FILE_STEM}-scc-amplitude-individual-fits",
+            pdf_label=(
+                f"{FILE_STEM}-"
+                "scc-amplitude-individual-fits"
+            ),
         )
 
     return results
 
-
 def process_and_plot_durations(data):
+
     results, aux = analyze_scan(
         data,
         parameter_name="SCC duration",
@@ -796,12 +881,34 @@ def process_and_plot_durations(data):
     )
 
     print("\n========== SCC duration optimization ==========")
-    print("Actual valid range:", tuple(results["actual_valid_range"]), "ns")
-    print("Ensemble optimum:", results["ensemble_optimum"], "ns")
-    print("Median individual optimum:", results["median_individual_optimum"], "ns")
+    print(
+        "Actual valid range:",
+        tuple(results["actual_valid_range"]),
+        "ns",
+    )
+    print(
+        "Ensemble optimum:",
+        results["ensemble_optimum"],
+        "ns",
+    )
+    print(
+        "Median individual optimum:",
+        results["median_individual_optimum"],
+        "ns",
+    )
+
     print_status_summary(results)
 
-    if SHOW_SUMMARY_PLOTS or SAVE_SUMMARY_PDF:
+    # -------------------------------------------------------------------------
+    # Summary plots
+    # -------------------------------------------------------------------------
+
+    if (
+        SHOW_SUMMARY_PLOTS
+        or SAVE_SUMMARY_PDF
+        or SAVE_SUMMARY_PNG
+    ):
+
         summary_figs = plot_summary(
             aux,
             parameter_label="SCC duration",
@@ -809,27 +916,44 @@ def process_and_plot_durations(data):
         )
 
         if SAVE_SUMMARY_PDF:
+
             save_figures_to_pdf(
                 summary_figs,
-                make_pdf_path(f"{FILE_STEM}-scc-duration-summary"),
+                make_pdf_path(
+                    f"{FILE_STEM}-scc-duration-summary"
+                ),
+            )
+
+        if SAVE_SUMMARY_PNG:
+
+            save_figures_to_png(
+                summary_figs,
+                f"{FILE_STEM}-scc-duration-summary",
             )
 
         if not SHOW_SUMMARY_PLOTS:
             for fig in summary_figs:
                 plt.close(fig)
 
+    # -------------------------------------------------------------------------
+    # Individual NV fits
+    # -------------------------------------------------------------------------
+
     if PLOT_INDIVIDUAL_FITS:
+
         plot_individual_examples(
             aux,
             parameter_label="SCC duration",
             unit="ns",
             save_pdf=SAVE_INDIVIDUAL_PDF,
             show_plots=SHOW_INDIVIDUAL_PLOTS,
-            pdf_label=f"{FILE_STEM}-scc-duration-individual-fits",
+            pdf_label=(
+                f"{FILE_STEM}-"
+                "scc-duration-individual-fits"
+            ),
         )
 
     return results
-
 
 if __name__ == "__main__":
     kpl.init_kplotlib()
@@ -859,6 +983,7 @@ if __name__ == "__main__":
         )
         dm.save_raw_data(results, file_path)
         print("Saved:", file_path)
+
 
     print("\nResults summary")
     print(
