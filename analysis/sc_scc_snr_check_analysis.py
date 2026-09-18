@@ -37,7 +37,12 @@ from utils import widefield
 # FILE_STEM = "2026_09_16-22_09_33-qnami-nv0_2026_02_20"
 # FILE_STEM = "2026_09_16-22_41_13-1qnami-nv0_2026_02_20"
 # FILE_STEM = "2026_09_16-23_32_24-qnami-nv0_2026_02_20"
-FILE_STEM = "2026_09_17-13_14_05-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_17-13_14_05-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_17-15_22_26-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_17-17_09_04-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_17-17_44_42-qnami-nv0_2026_02_20"
+FILE_STEM = "2026_09_17-18_18_42-qnami-nv0_2026_02_20"
+
 
 
 X_AXIS = "scc_amp"       # "scc_amp" or "scc_duration"
@@ -47,6 +52,11 @@ APPLY_THRESHOLD = True
 SAVE_RESULTS = True
 SAVE_CSV = False
 SAVE_FIGURE = True
+
+# Additional joint plot: SCC amplitude vs duration, colored by SNR
+PLOT_AMP_DURATION_SNR = True
+SAVE_JOINT_FIGURE = True
+ANNOTATE_NV_INDICES = False
 
 SAVE_BASENAME = "scc_snr_check_analysis"
 
@@ -302,12 +312,80 @@ def plot_snr(df, metadata):
     return fig
 
 
+def plot_amp_duration_snr(df, metadata):
+    """
+    Joint view of all three SCC quantities:
+        x     = SCC AOD amplitude multiplier
+        y     = SCC duration (ns)
+        color = SCC SNR
+
+    This complements, rather than replaces, plot_snr().
+    """
+
+    amp = df["SCC AOD Multiplier"].to_numpy(dtype=float)
+    dur = df["SCC Duration (ns)"].to_numpy(dtype=float)
+    snr = df["SNR"].to_numpy(dtype=float)
+    nv_idx = df["NV Index"].to_numpy(dtype=int)
+
+    valid = (
+        np.isfinite(amp)
+        & np.isfinite(dur)
+        & np.isfinite(snr)
+    )
+
+    amp = amp[valid]
+    dur = dur[valid]
+    snr = snr[valid]
+    nv_idx = nv_idx[valid]
+
+    fig, ax = plt.subplots(figsize=(7.5, 5.8))
+
+    scatter = ax.scatter(
+        amp,
+        dur,
+        c=snr,
+        s=38,
+        alpha=0.80,
+        edgecolors="none",
+    )
+
+    cbar = fig.colorbar(
+        scatter,
+        ax=ax,
+        pad=0.02,
+    )
+    cbar.set_label("SCC SNR")
+
+    if ANNOTATE_NV_INDICES:
+        for xval, yval, ind in zip(amp, dur, nv_idx):
+            ax.annotate(
+                str(ind),
+                (xval, yval),
+                xytext=(3, 3),
+                textcoords="offset points",
+                fontsize=6,
+                alpha=0.7,
+            )
+
+    ax.set_xlabel("SCC AOD amplitude multiplier")
+    ax.set_ylabel("SCC duration (ns)")
+    ax.set_title(
+        f"SCC amplitude-duration map colored by SNR\n"
+        f"{len(snr)} valid NVs | "
+        f"median SNR = {np.nanmedian(snr):.3f}"
+    )
+
+    ax.grid(alpha=0.25)
+
+    return fig
+
+
 # =============================================================================
 # SAVE
 # =============================================================================
 
 
-def save_results(df, metadata, fig):
+def save_results(df, metadata, fig, joint_fig=None):
 
     timestamp = dm.get_time_stamp()
 
@@ -373,6 +451,19 @@ def save_results(df, metadata, fig):
             dpi=300,
             bbox_inches="tight",
         )
+        print(f"Saved main figure: {file_path}.png")
+
+    if (
+        SAVE_JOINT_FIGURE
+        and joint_fig is not None
+    ):
+        joint_path = f"{file_path}_amp_duration_snr.png"
+        joint_fig.savefig(
+            joint_path,
+            dpi=300,
+            bbox_inches="tight",
+        )
+        print(f"Saved joint amplitude-duration-SNR figure: {joint_path}")
 
 
 # =============================================================================
@@ -406,16 +497,31 @@ if __name__ == "__main__":
         ]
     )
 
+    # Keep the existing SNR-vs-selected-parameter plot.
     fig = plot_snr(
         df,
         metadata,
     )
 
-    if SAVE_RESULTS or SAVE_CSV or SAVE_FIGURE:
+    # Add one joint plot showing amplitude, duration, and SNR together.
+    joint_fig = None
+    if PLOT_AMP_DURATION_SNR:
+        joint_fig = plot_amp_duration_snr(
+            df,
+            metadata,
+        )
+
+    if (
+        SAVE_RESULTS
+        or SAVE_CSV
+        or SAVE_FIGURE
+        or SAVE_JOINT_FIGURE
+    ):
         save_results(
             df,
             metadata,
             fig,
+            joint_fig=joint_fig,
         )
 
     kpl.show(block=True)

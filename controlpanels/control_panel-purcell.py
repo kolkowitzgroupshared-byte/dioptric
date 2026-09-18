@@ -2005,19 +2005,19 @@ if __name__ == "__main__":
     # -------------------------------------------
     # snrs and filtering
     # -------------------------------------------
-    snr_data = dm.get_raw_data(
-            file_stem="2026_09_15-23_15_59-scc_snr_check_analysis",
-            load_npz=True)
-    print(snr_data.keys())
-    snr_list = np.asarray(snr_data["snr"])
-    # NV indices with SNR < 0.05
-    selected_inds = [
-        ind for ind, val in enumerate(snr_list)
-        if val >= 0.05
-    ]
-    selected_inds = [0] + selected_inds 
-    print(f"Number selected: {len(selected_inds)}")
-    print(f"Selected indices: {selected_inds}")
+    # snr_data = dm.get_raw_data(
+    #         file_stem="2026_09_15-23_15_59-scc_snr_check_analysis",
+    #         load_npz=True)
+    # print(snr_data.keys())
+    # snr_list = np.asarray(snr_data["snr"])
+    # # NV indices with SNR < 0.05
+    # selected_inds = [
+    #     ind for ind, val in enumerate(snr_list)
+    #     if val >= 0.05
+    # ]
+    # selected_inds = [0] + selected_inds 
+    # print(f"Number selected: {len(selected_inds)}")
+    # print(f"Selected indices: {selected_inds}")
     
     # -------------------------------------------
     # amplitudes
@@ -2039,18 +2039,23 @@ if __name__ == "__main__":
     # ]
     
     scc_amp_data = dm.get_raw_data(
-        file_stem="2026_09_17-12_31_59-optimal_scc_parameters_robust",
+        file_stem="2026_09_17-15_31_19-optimal_scc_parameters_robust",
         load_npz=True,
     )
 
     # AOD amplitude multiplier
     scc_amp_dict = scc_amp_data["optimal_values"]
-    scc_amp_list = [None] * num_nvs
+    scc_amp_list = [
+        round(scc_amp_dict.get(i, scc_amp_dict.get(str(i))), 4)
+        for i in range(len(scc_amp_dict))
+    ]
+
     # Put optimized durations back at the original NV indices
-    for local_ind, nv_ind in enumerate(selected_inds):
-        val = scc_amp_dict.get(local_ind, scc_amp_dict.get(str(local_ind)))
-        if val is not None:
-            scc_amp_list[nv_ind] = round(float(val), 4)
+    # for local_ind, nv_ind in enumerate(selected_inds):
+    #     val = scc_amp_dict.get(local_ind, scc_amp_dict.get(str(local_ind)))
+    #     if val is not None:
+    #         scc_amp_list[nv_ind] = round(float(val), 4)
+    # print("SCC amps", scc_amp_list)
             
     # -------------------------------------------
     # durations
@@ -2059,34 +2064,34 @@ if __name__ == "__main__":
         file_stem="2026_09_16-10_48_36-scc_parameter_sweep_analysis_with_nv_amps",
         load_npz=True,
     )
-
     scc_dur_dict = scc_dur_data["optimal_value_by_nv"]
 
     # Full list for all NVs
-    scc_dur_list = [None] * num_nvs
+    scc_duration_list =[
+        round(scc_dur_dict.get(i, scc_dur_dict.get(str(i))), 4)
+        for i in range(len(scc_dur_dict))
+    ]
 
     # Put optimized durations back at the original NV indices
-    for local_ind, nv_ind in enumerate(selected_inds):
-        val = scc_dur_dict.get(local_ind, scc_dur_dict.get(str(local_ind)))
-        if val is not None:
-            scc_dur_list[nv_ind] = int(round(val))
+    # for local_ind, nv_ind in enumerate(selected_inds):
+    #     val = scc_dur_dict.get(local_ind, scc_dur_dict.get(str(local_ind)))
+    #     if val is not None:
+    #         scc_dur_list[nv_ind] = int(round(val))
 
-    print("Number optimized:", sum(v is not None for v in scc_dur_list))
-    # print("SCC durations:", scc_dur_list)
+    # print("Number optimized:", sum(v is not None for v in scc_duration_list))
+    print("SCC durations:", scc_duration_list)
     
-
+    pol_duration_list = [1000] * num_nvs
     ion_duration_list = [600] * num_nvs
     # scc_duration_list = [88] * num_nvs
-    scc_duration_list = scc_dur_list
-    pol_duration_list = [1000] * num_nvs
 
 
     # sys.exit()
     # nv_list[i] will have the ith coordinates from the above lists
     nv_list: list[NVSig] = []
     for ind in range(num_nvs):
-        if ind not in selected_inds:
-            continue
+        # if ind not in selected_inds:
+        #     continue
         coords = {
             CoordsKey.SAMPLE: sample_coords,
             CoordsKey.Z: z_coord,
@@ -2161,7 +2166,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_widefield_image_sample(nv_sig, 50)     
+        # do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list: 
@@ -2219,7 +2224,7 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        # do_charge_state_histograms(nv_list, selected_inds)
+        do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)

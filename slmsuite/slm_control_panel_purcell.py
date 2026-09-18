@@ -371,12 +371,12 @@ data_spot_weight = dm.get_raw_data(
     "2026_09_10-18_37_14-repeated_readout_slm_processed_2026_09_10-04_40_32-qnami-nv0_2026_02_20" ## 631NVs 50ms
 )
 # spot_weights = data_spot_weight["optimal_weights"]
-spot_weights  = data_spot_weight["slm_amplitude_weight"]
+# spot_weights  = data_spot_weight["slm_amplitude_weight"]
 
 # spot_weights = curve_extreme_weights_simple(
 #         spot_weights, scaling_factor=1.0
 #     )
-spot_weights = np.array(spot_weights)
+# spot_weights = np.array(spot_weights)
 
 # If weights are 2D, choose one row/column as needed.
 # This keeps the most common case: shape (N,)

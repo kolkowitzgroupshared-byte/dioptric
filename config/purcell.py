@@ -95,7 +95,6 @@ config |= {
     "CommonDurations": {
         "default_pulse_duration": 1000,
         "aod_access_time": 2.6e3,  # access time in specs is 10us
-        # "aod_access_time":8e3,  # access time in specs is 10us
         "widefield_operation_buffer": 1e3,
         "uwave_buffer": 0,
         "iq_buffer": 0,
@@ -148,12 +147,13 @@ config |= {
         "active_nv_coords_path": (
             # "slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz"
             # "slmsuite/nv_blob_detection/nv_blob_814nvs_reordered_inside_dmd.npz"
-            "slmsuite/nv_blob_detection/nv_blob_631nvs_reordered_inside_dmd.npz"
+            # "slmsuite/nv_blob_detection/nv_blob_631nvs_reordered_inside_dmd.npz"
             # "slmsuite/nv_blob_detection/nv_blob_415nvs_reordered_inside_dmd.npz"
             # "slmsuite/nv_blob_detection/nv_blob_404nvs_reordered_inside_dmd.npz"
             # "slmsuite/nv_blob_detection/nv_blob_402nvs_reordered_inside_dmd.npz"
             # "slmsuite/nv_blob_detection/nv_blob_366nvs_reordered_inside_dmd.npz"
             # "slmsuite/nv_blob_detection/nv_blob_351nvs_reordered_inside_dmd.npz"
+            "slmsuite/nv_blob_detection/nv_blob_212nvs_reordered.npz"
         ),
         "slm_fourier_calib_path": (
             "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00015.h5"
@@ -1053,14 +1053,15 @@ opx_config = {
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2923},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2911},  ## 631NVs 50ms
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3311},  ## 631NVs 50ms
-        "yellow_charge_readout": {"type": "constant", "sample": 0.3611},  ## 631NVs 50ms
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.3611},  ## 631NVs 50ms
+        "yellow_charge_readout": {"type": "constant", "sample": 0.2518},  ## 212NVs 50ms two orientation
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2133}, ## 631NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2043}, ## 631NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1710}, ## 415NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1693}, ## 402NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.160}, ## 366NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1582}, ## 404NVs
-        "yellow_spin_pol": {"type": "constant", "sample": 0.38},
+        "yellow_spin_pol": {"type": "constant", "sample": 0.33},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other
         "aod_cw": {"type": "constant", "sample": 0.35},
