@@ -34,7 +34,13 @@ from utils import widefield
 FILE_STEMS = [
     "2026_09_18-04_06_09-qnami-nv0_2026_02_20",
     "2026_09_18-11_34_02-qnami-nv0_2026_02_20",
-    # "2026_09_18-YY_YY_YY-qnami-nv0_2026_02_20",
+    "2026_09_18-18_56_52-qnami-nv0_2026_02_20",
+    "2026_09_19-04_08_37-qnami-nv0_2026_02_20",
+    "2026_09_19-11_31_54-qnami-nv0_2026_02_20",
+    "2026_09_19-18_54_03-qnami-nv0_2026_02_20",
+    "2026_09_20-07_36_49-qnami-nv0_2026_02_20",
+    "2026_09_20-17_46_31-qnami-nv0_2026_02_20",
+    "2026_09_21-03_58_53-qnami-nv0_2026_02_20",
 ]
 
 APPLY_THRESHOLD = True
@@ -59,6 +65,11 @@ SAVE_SUMMARY_PNG = True
 SHOW_SUMMARY = True
 
 OUTPUT_BASENAME = "spin_echo_analysis"
+
+# Save one compact, analysis-ready combined dataset.
+# This is the file the physics fitting pipeline should load.
+SAVE_COMBINED_PROCESSED = True
+COMBINED_SAVE_BASENAME = "qnami_spin_echo_combined_52G"
 
 # None -> all NVs
 # e.g. [0, 1, 2, 7, 15] -> selected NVs only
@@ -128,7 +139,74 @@ def first_revival_mask(taus_ns):
 # DATA LOADING / PROCESSING
 # =============================================================================
 
+def group_file_stems_by_num_reps(file_stems):
+    """Group files by rep-axis length while checking NV count and tau grid."""
+    groups = {}
+    reference_taus = None
+    reference_num_nvs = None
+
+    for stem in file_stems:
+        raw = dm.get_raw_data(
+            file_stem=stem,
+            load_npz=True,
+        )
+
+        counts = np.asarray(raw["counts"])
+        taus = np.asarray(raw["taus"], dtype=float).ravel()
+        nv_list = raw["nv_list"]
+
+        if counts.ndim != 5:
+            raise ValueError(
+                f"{stem}: expected counts shape "
+                f"(sig/ref, NV, run, step, rep), got {counts.shape}"
+            )
+
+        if reference_taus is None:
+            reference_taus = taus.copy()
+            reference_num_nvs = len(nv_list)
+        else:
+            if len(nv_list) != reference_num_nvs:
+                raise ValueError(
+                    f"{stem}: NV count mismatch: "
+                    f"{len(nv_list)} vs {reference_num_nvs}"
+                )
+
+            if (
+                taus.shape != reference_taus.shape
+                or not np.allclose(
+                    taus,
+                    reference_taus,
+                    rtol=0,
+                    atol=1e-9,
+                )
+            ):
+                raise ValueError(
+                    f"{stem}: tau grid does not match the first file."
+                )
+
+        n_reps = int(counts.shape[-1])
+        groups.setdefault(n_reps, []).append(stem)
+
+        print(
+            f"  {stem}: raw shape {counts.shape} "
+            f"-> rep group {n_reps}"
+        )
+
+    return groups
+
+
 def load_and_process(file_stems):
+    """
+    Preserve the OLD widefield normalization for mixed-num_reps data.
+
+    widefield.process_counts() uses the original rep axis for reference
+    normalization (even reps -> ms=0, odd reps -> ms=±1), so run and rep
+    must NOT be flattened together before calling it.
+
+    Files are grouped by num_reps, each group is processed with the old
+    pipeline, then the normalized group traces are combined using the number
+    of acquired shots per tau point as weights.
+    """
     print("=" * 72)
     print("SPIN ECHO ANALYSIS")
     print("=" * 72)
@@ -137,53 +215,160 @@ def load_and_process(file_stems):
     for ind, stem in enumerate(file_stems, start=1):
         print(f"  {ind}: {stem}")
 
-    data = widefield.process_multiple_files(
-        file_stems,
-        load_npz=True,
+    print()
+    print("Inspecting repetition structure...")
+    groups = group_file_stems_by_num_reps(file_stems)
+
+    print()
+    print("Rep groups:")
+    for n_reps, stems in sorted(groups.items()):
+        print(f"  {n_reps} reps: {len(stems)} file(s)")
+
+    weighted_norm_sum = None
+    weighted_ste_sq_sum = None
+    total_shots = 0
+
+    base_data = None
+    reference_taus = None
+    reference_num_nvs = None
+
+    for n_reps, stems in sorted(groups.items()):
+        print()
+        print("-" * 72)
+        print(
+            f"Processing {len(stems)} file(s) with "
+            f"{n_reps} reps using OLD normalization"
+        )
+        print("-" * 72)
+
+        # Safe because all files in this group have identical rep length.
+        group_data = widefield.process_multiple_files(
+            stems,
+            load_npz=True,
+        )
+
+        nv_list = group_data["nv_list"]
+        taus_ns = np.asarray(
+            group_data["taus"],
+            dtype=float,
+        ).ravel()
+
+        counts = np.asarray(group_data["counts"])
+
+        if counts.ndim != 5:
+            raise ValueError(
+                f"Unexpected combined counts shape: {counts.shape}"
+            )
+
+        sig_counts = np.asarray(
+            counts[0],
+            dtype=np.float32,
+        )
+        ref_counts = np.asarray(
+            counts[1],
+            dtype=np.float32,
+        )
+
+        # OLD NORMALIZATION: keep [NV, run, step, rep] intact.
+        group_norm_counts, group_norm_counts_ste = (
+            widefield.process_counts(
+                nv_list,
+                sig_counts,
+                ref_counts,
+                threshold=APPLY_THRESHOLD,
+            )
+        )
+
+        group_norm_counts = np.asarray(
+            group_norm_counts,
+            dtype=float,
+        )
+        group_norm_counts_ste = np.asarray(
+            group_norm_counts_ste,
+            dtype=float,
+        )
+
+        num_runs = int(counts.shape[2])
+        num_reps_group = int(counts.shape[4])
+        group_shots = num_runs * num_reps_group
+
+        print(f"Group counts shape: {counts.shape}")
+        print(
+            f"Group weight: {num_runs} runs x "
+            f"{num_reps_group} reps = {group_shots} shots/step"
+        )
+
+        if base_data is None:
+            base_data = group_data
+            reference_taus = taus_ns.copy()
+            reference_num_nvs = len(nv_list)
+
+            weighted_norm_sum = np.zeros_like(
+                group_norm_counts,
+                dtype=float,
+            )
+            weighted_ste_sq_sum = np.zeros_like(
+                group_norm_counts_ste,
+                dtype=float,
+            )
+        else:
+            if len(nv_list) != reference_num_nvs:
+                raise ValueError(
+                    "NV count changed between rep groups."
+                )
+
+            if (
+                taus_ns.shape != reference_taus.shape
+                or not np.allclose(
+                    taus_ns,
+                    reference_taus,
+                    rtol=0,
+                    atol=1e-9,
+                )
+            ):
+                raise ValueError(
+                    "Tau grid changed between rep groups."
+                )
+
+        weighted_norm_sum += (
+            group_shots * group_norm_counts
+        )
+
+        weighted_ste_sq_sum += (
+            group_shots * group_norm_counts_ste
+        ) ** 2
+
+        total_shots += group_shots
+
+    if total_shots <= 0:
+        raise ValueError("No valid shots were found.")
+
+    norm_counts = weighted_norm_sum / total_shots
+
+    norm_counts_ste = (
+        np.sqrt(weighted_ste_sq_sum)
+        / total_shots
     )
-
-    nv_list = data["nv_list"]
-    taus_ns = np.asarray(data["taus"], dtype=float)
-
-    # Spin-echo total evolution time = 2*tau
-    total_evolution_us = 2.0 * taus_ns / 1e3
-
-    counts = np.asarray(data["counts"])
-    sig_counts = np.asarray(counts[0], dtype=np.float32)
-    ref_counts = np.asarray(counts[1], dtype=np.float32)
-
-    norm_counts, norm_counts_ste = widefield.process_counts(
-        nv_list,
-        sig_counts,
-        ref_counts,
-        threshold=APPLY_THRESHOLD,
-    )
-
-    norm_counts = np.asarray(norm_counts, dtype=float)
     norm_counts_ste = safe_ste(norm_counts_ste)
 
-    if norm_counts.shape != norm_counts_ste.shape:
-        raise ValueError(
-            f"norm_counts shape {norm_counts.shape} does not match "
-            f"norm_counts_ste shape {norm_counts_ste.shape}"
-        )
+    data = base_data
+    nv_list = data["nv_list"]
+    taus_ns = reference_taus
 
-    if norm_counts.shape[0] != len(nv_list):
-        raise ValueError(
-            f"Expected {len(nv_list)} NV rows, got {norm_counts.shape[0]}"
-        )
-
-    if norm_counts.shape[1] != len(taus_ns):
-        raise ValueError(
-            f"Expected {len(taus_ns)} tau columns, got {norm_counts.shape[1]}"
-        )
-
+    total_evolution_us = 2.0 * taus_ns / 1e3
     zoom_mask = first_revival_mask(taus_ns)
 
     print()
+    print("=" * 72)
+    print("COMBINED NORMALIZED DATA")
+    print("=" * 72)
     print(f"NVs:                  {len(nv_list)}")
     print(f"Total tau points:     {len(taus_ns)}")
-    print(f"First-revival points: {int(np.sum(zoom_mask))}")
+    print(f"Total shots/step:     {total_shots}")
+    print(
+        f"First-revival points: "
+        f"{int(np.sum(zoom_mask))}"
+    )
     print(
         "Expected first revival in total evolution: "
         f"{2 * REVIVAL_PERIOD_TAU_NS / 1e3:.3f} us"
@@ -196,7 +381,26 @@ def load_and_process(file_stems):
             f"{total_evolution_us[zoom_mask].max():.3f} us"
         )
     else:
-        print("WARNING: no points found in first-revival window.")
+        print(
+            "WARNING: no points found in "
+            "first-revival window."
+        )
+
+    # Store processing metadata in memory so the compact saved dataset has
+    # full provenance without copying the huge raw counts arrays.
+    data["source_file_stems"] = list(file_stems)
+    data["total_shots_per_step"] = int(total_shots)
+    data["normalization_method"] = (
+        "old widefield.process_counts per num_reps group; "
+        "shot-weighted combination across rep groups"
+    )
+    data["rep_group_summary"] = {
+        str(int(n_reps)): {
+            "num_files": int(len(stems)),
+            "file_stems": list(stems),
+        }
+        for n_reps, stems in sorted(groups.items())
+    }
 
     return (
         data,
@@ -207,6 +411,110 @@ def load_and_process(file_stems):
         norm_counts_ste,
         zoom_mask,
     )
+
+
+def save_combined_processed_data(
+    data,
+    nv_list,
+    taus_ns,
+    total_evolution_us,
+    norm_counts,
+    norm_counts_ste,
+):
+    """
+    Save a compact analysis-ready dataset.
+
+    Deliberately does NOT save the giant combined raw-count array. The source
+    file stems are preserved, so the raw combination can always be recreated.
+
+    The physics fitting pipeline can load this file directly because it
+    contains:
+        nv_list
+        taus
+        total_evolution_times
+        norm_counts
+        norm_counts_ste
+    """
+    timestamp = dm.get_time_stamp()
+
+    file_path = dm.get_file_path(
+        __file__,
+        timestamp,
+        COMBINED_SAVE_BASENAME,
+    )
+
+    processed = {
+        "nv_list": nv_list,
+        "taus": np.asarray(taus_ns, dtype=float),
+        "total_evolution_times": np.asarray(
+            total_evolution_us,
+            dtype=float,
+        ),
+        "norm_counts": np.asarray(
+            norm_counts,
+            dtype=float,
+        ),
+        "norm_counts_ste": np.asarray(
+            norm_counts_ste,
+            dtype=float,
+        ),
+        "source_file_stems": list(
+            data.get("source_file_stems", FILE_STEMS)
+        ),
+        "total_shots_per_step": int(
+            data.get("total_shots_per_step", 0)
+        ),
+        "normalization_method": data.get(
+            "normalization_method",
+            "old widefield normalization",
+        ),
+        "rep_group_summary": data.get(
+            "rep_group_summary",
+            {},
+        ),
+        "revival_period_tau_ns": float(
+            REVIVAL_PERIOD_TAU_NS
+        ),
+    }
+
+    # Preserve orientation information if it exists in the source data.
+    if "orientations" in data:
+        processed["orientations"] = np.asarray(
+            data["orientations"]
+        )
+
+    # Preserve a few useful experiment labels when available.
+    for key in (
+        "sample",
+        "sample_name",
+        "sequence",
+        "sequence_name",
+        "num_steps",
+    ):
+        if key in data:
+            processed[key] = data[key]
+
+    dm.save_raw_data(
+        processed,
+        file_path,
+    )
+
+    file_stem = Path(
+        str(file_path)
+    ).name
+
+    print()
+    print("=" * 72)
+    print("SAVED COMBINED PROCESSED SPIN-ECHO DATA")
+    print("=" * 72)
+    print(f"Saved:     {file_path}")
+    print(f"File stem: {file_stem}")
+    print()
+    print("Use this stem in the physics fitter:")
+    print(f'FILE_STEM = "{file_stem}"')
+    print("=" * 72)
+
+    return file_path
 
 
 # =============================================================================
@@ -457,6 +765,16 @@ def main():
         norm_counts_ste,
         zoom_mask,
     ) = load_and_process(FILE_STEMS)
+
+    if SAVE_COMBINED_PROCESSED:
+        save_combined_processed_data(
+            data,
+            nv_list,
+            taus_ns,
+            total_evolution_us,
+            norm_counts,
+            norm_counts_ste,
+        )
 
     nv_indices = resolve_nv_indices(len(nv_list))
     print(f"NVs selected for PDFs: {len(nv_indices)}")
