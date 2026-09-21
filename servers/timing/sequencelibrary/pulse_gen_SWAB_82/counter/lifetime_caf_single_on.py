@@ -79,9 +79,9 @@ def get_seq(pulse_streamer, config, args):
 
     # Laser ON only for excitation pulses
     laser_train = [
-        (int(front_buffer), HIGH),
+        (int(front_buffer), LOW),
         # pulse 1
-        (int(recovery_delay_ns), HIGH),
+        (int(recovery_delay_ns), LOW),
         (int(exc_ns), HIGH),
         # # readout 1
         (int(detect_ns), LOW),
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     cfg = common.get_config_dict()
 
     # args = [readout_delay_ns, exc_ns, detect_ns, laser_vkey, laser_power]
-    args = [54, 2000, 500, "SPIN_READOUT", None]
+    args = [500, 1500, 500, "SPIN_READOUT", None]
 
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])
