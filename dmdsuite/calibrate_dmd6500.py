@@ -20,6 +20,7 @@ ON-pass convention:
 """
 
 import os
+import shutil
 import sys
 import time
 import traceback
@@ -912,7 +913,7 @@ def save_raw_data_npz_compressed(data, file_label="dmd-triangle-affine-onpass-ra
 
     npz_path, _ = _compressed_npz_path_from_dm(file_label, timestamp=timestamp)
     flat = _flatten_dict_for_npz(data)
-    np.savez_compressed(npz_path, **flat)
+    npz_path = dm.save_npz(npz_path, **flat)
 
     print(f"Saved compressed raw DMD data to: {npz_path}")
     return str(npz_path)
@@ -1164,7 +1165,7 @@ def _npz_path_from_dm_path(file_path):
 
 def save_zero_order_calibration_npz(
     zero_data,
-    save_path="dmdsuite/calibration/zero_order_onpass.npz",
+    save_path="calibrations/purcell/current/dmd_zero_order.npz",
 ):
     """
     Save a compact zero-order calibration immediately after it succeeds.
@@ -1172,23 +1173,28 @@ def save_zero_order_calibration_npz(
     This lets you skip the 0th-order scan next time and go directly to the
     triangle affine calibration.
     """
-    path = _ensure_parent_dir(save_path)
-
-    np.savez_compressed(
-        path,
+    timestamp = zero_data.get("timestamp", dm.get_time_stamp())
+    history_base = dm.get_file_path(
+        __file__, timestamp, "dmd-zero-order-onpass", subfolder="calibration"
+    )
+    history_path = dm.save_npz(
+        history_base,
         zero_cam_xy=np.asarray(zero_data["zero_cam_xy"], dtype=np.float32),
         zero_dmd_xy=np.asarray(zero_data["zero_dmd_xy"], dtype=np.float32),
         zero_radius_px=np.asarray(zero_data.get("zero_radius_px", 30), dtype=np.int32),
         convention=np.asarray("ON_PASS_WHITE_PASS_BLACK_BLOCK"),
         calibration_type=np.asarray("dmd_zero_order_onpass"),
-        created_timestamp=np.asarray(zero_data.get("timestamp", dm.get_time_stamp())),
+        created_timestamp=np.asarray(timestamp),
     )
 
-    print(f"Saved compact zero-order calibration to: {path}")
-    return str(path)
+    active_path = _ensure_parent_dir(save_path)
+    shutil.copy2(history_path, active_path)
+    print(f"Saved zero-order calibration history to: {history_path}")
+    print(f"Updated active zero-order calibration: {active_path}")
+    return str(active_path)
 
 
-def load_zero_order_calibration_npz(calib_path="dmdsuite/calibration/zero_order_onpass.npz"):
+def load_zero_order_calibration_npz(calib_path="calibrations/purcell/current/dmd_zero_order.npz"):
     """Load compact zero-order calibration without rerunning the stripe scan."""
     path = Path(calib_path)
     if not path.exists():
@@ -1220,7 +1226,7 @@ def apply_zero_order_to_dmd(dmd, zero_data):
 
 def save_server_calibration_npz(
     data,
-    save_path="dmdsuite/calibration/triangle_affine_onpass.npz",
+    save_path="calibrations/purcell/current/dmd_triangle_affine.npz",
 ):
     """
     Save the compact affine calibration expected by the DMD LabRAD server.
@@ -1229,10 +1235,12 @@ def save_server_calibration_npz(
     The server currently reads M_cam_to_dmd, zero_dmd_xy, and zero_cam_xy from
     this file, with optional DMD/camera point arrays available for debugging.
     """
-    path = _ensure_parent_dir(save_path)
-
-    np.savez_compressed(
-        path,
+    timestamp = data.get("timestamp", dm.get_time_stamp())
+    history_base = dm.get_file_path(
+        __file__, timestamp, "dmd-triangle-affine-onpass", subfolder="calibration"
+    )
+    history_path = dm.save_npz(
+        history_base,
         M_cam_to_dmd=np.asarray(data["M_cam_to_dmd"], dtype=np.float32),
         zero_cam_xy=np.asarray(data["zero_cam_xy"], dtype=np.float32),
         zero_dmd_xy=np.asarray(data["zero_dmd_xy"], dtype=np.float32),
@@ -1242,11 +1250,14 @@ def save_server_calibration_npz(
         inliers=np.asarray(data["inliers"]),
         convention=np.asarray("ON_PASS_WHITE_PASS_BLACK_BLOCK"),
         calibration_type=np.asarray("dmd_triangle_affine_onpass"),
-        created_timestamp=np.asarray(data.get("timestamp", dm.get_time_stamp())),
+        created_timestamp=np.asarray(timestamp),
     )
 
-    print(f"Saved compact server affine calibration to: {path}")
-    return str(path)
+    active_path = _ensure_parent_dir(save_path)
+    shutil.copy2(history_path, active_path)
+    print(f"Saved affine calibration history to: {history_path}")
+    print(f"Updated active affine calibration: {active_path}")
+    return str(active_path)
 
 def save_thorcam_snapshot(img, label="thorcam-snapshot", exposure=0.0001):
     timestamp = dm.get_time_stamp()
@@ -1257,9 +1268,9 @@ def save_thorcam_snapshot(img, label="thorcam-snapshot", exposure=0.0001):
         label,
     )
 
-    # Save raw image data
-    np.savez_compressed(
-        str(file_path) + ".npz",
+    # Save raw image data through the standard data manager backend.
+    npz_path = dm.save_npz(
+        file_path,
         img=np.asarray(img),
         exposure=np.array(exposure, dtype=np.float32),
         timestamp=np.asarray(timestamp),
@@ -1274,10 +1285,10 @@ def save_thorcam_snapshot(img, label="thorcam-snapshot", exposure=0.0001):
 
     dm.save_figure(fig, file_path)
 
-    print("Saved image data:", str(file_path) + ".npz")
+    print("Saved image data:", npz_path)
     print("Saved figure:", file_path)
 
-    return str(file_path) + ".npz", fig
+    return str(npz_path), fig
 
 
 def do_thorcam_hardware_roi_with_yellow(
@@ -1567,8 +1578,8 @@ def main(
     save_scan_images=True,
     reuse_zero_order=True,
     force_zero_order=False,
-    zero_calib_path="dmdsuite/calibration/zero_order_onpass.npz",
-    server_calib_path="dmdsuite/calibration/triangle_affine_onpass.npz",
+    zero_calib_path="calibrations/purcell/current/dmd_zero_order.npz",
+    server_calib_path="calibrations/purcell/current/dmd_triangle_affine.npz",
     yellow_channel=7,
     yellow_amp=0.08,
     use_yellow=True,

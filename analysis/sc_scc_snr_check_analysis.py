@@ -41,11 +41,16 @@ from utils import widefield
 # FILE_STEM = "2026_09_17-15_22_26-qnami-nv0_2026_02_20"
 # FILE_STEM = "2026_09_17-17_09_04-qnami-nv0_2026_02_20"
 # FILE_STEM = "2026_09_17-17_44_42-qnami-nv0_2026_02_20"
-FILE_STEM = "2026_09_17-18_18_42-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_17-18_18_42-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_19-21_09_56-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_21-13_03_32-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_22-11_53_14-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_22-14_50_48-qnami-nv0_2026_02_20"
+FILE_STEM = "2026_09_23-12_00_41-qnami-nv0_2026_02_20"
 
 
 
-X_AXIS = "scc_amp"       # "scc_amp" or "scc_duration"
+X_AXIS = "scc_duration"       # "scc_amp" or "scc_duration"
 STEP_IND = 0
 APPLY_THRESHOLD = True
 

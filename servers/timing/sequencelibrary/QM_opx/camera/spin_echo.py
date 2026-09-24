@@ -60,7 +60,7 @@ if __name__ == "__main__":
     config = config_module.config
     opx_config = config_module.opx_config
     opx_config["pulses"]["yellow_spin_pol"]["length"] = 2e3
-
+    
     qm_opx_args = config["DeviceIDs"]["QM_opx_args"]
     qmm = QuantumMachinesManager(**qm_opx_args)
     opx = qmm.open_qm(opx_config)
@@ -68,28 +68,23 @@ if __name__ == "__main__":
     try:
         seq, seq_ret_vals = get_seq(
             [
-                [[109.062, 107.003], [110.183, 105.383], [110.417, 108.653]],
-                [10000, 10000, 10000],
-                [1.0, 1.0, 1.0],
-                [[73.477, 72.33], [74.328, 70.992], [74.594, 73.662]],
-                [168, 184, 220],
-                [1.0, 1.0, 1.0],
+                [[109.062, 107.003], [110.183, 105.383]],
+                [1000, 1000],
+                [1.0, 1.0],
+                [[73.477, 72.33], [74.328, 70.992]],
+                [168, 184],
+                [1.0, 1.0],
                 [False, False, False],
                 [0, 1],
             ],
             [
                 27200,
                 41832,
-                41500,
-                78500,
-                74500,
-                78000,
-                39668,
             ],
             10,
         )
 
-        sim_config = SimulationConfig(duration=int(100e3 / 4))
+        sim_config = SimulationConfig(duration=int(200e3 / 4))
         sim = opx.simulate(seq, sim_config)
         samples = sim.get_simulated_samples()
         samples.con1.plot()

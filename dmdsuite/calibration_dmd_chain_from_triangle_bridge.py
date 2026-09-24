@@ -24,6 +24,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from utils import common
+from utils import data_manager as dm
 from utils import kplotlib as kpl
 
 
@@ -33,11 +34,11 @@ from utils import kplotlib as kpl
 config = common.get_config_dict()
 # NV_COORDS_PATH = "slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz"
 NV_COORDS_PATH = config["SpatialCalibrations"]["active_nv_coords_path"]
-NUVU_TO_THORCAM_SLM_PATH = "slmsuite/calibration/nuvu_to_thorcam_slm.npz"
-DMD_TRIANGLE_CALIB_PATH = "dmdsuite/calibration/triangle_affine_onpass.npz"
+NUVU_TO_THORCAM_SLM_PATH = config["SpatialCalibrations"]["nuvu_to_thorcam_slm_calib_path"]
+DMD_TRIANGLE_CALIB_PATH = config["SpatialCalibrations"]["dmd_triangle_calib_path"]
 
-NUVU_TO_THORCAM_DMD_OUT = "dmdsuite/calibration/nuvu_to_thorcam_dmd.npz"
-DMD_CHAIN_OUT = "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd.npz"
+NUVU_TO_THORCAM_DMD_OUT = None
+DMD_CHAIN_OUT = None
 
 DMD_WIDTH = 1920
 DMD_HEIGHT = 1080
@@ -453,9 +454,13 @@ def main():
 
     print("\n=== Saving bridge calibration ===")
 
-    out_bridge = ensure_parent(NUVU_TO_THORCAM_DMD_OUT)
+    timestamp = dm.get_time_stamp()
+    bridge_base = dm.get_file_path(
+        __file__, timestamp, "nuvu-to-thorcam-dmd", subfolder="calibration"
+    )
+    out_bridge = bridge_base.with_suffix(".npz")
 
-    np.savez_compressed(
+    dm.save_npz(
         out_bridge,
         M_nuvu_to_thorcam_dmd=M_nuvu_to_thorcam_dmd.astype(np.float32),
         M_thorcam_dmd_to_nuvu=invert_affine(M_nuvu_to_thorcam_dmd).astype(np.float32),
@@ -508,7 +513,10 @@ def main():
 
     center_test_indices = get_center_test_indices(nv_coords_dmd, n=10)
 
-    out_chain = ensure_parent(DMD_CHAIN_OUT)
+    chain_base = dm.get_file_path(
+        __file__, timestamp, "dmd-nv-chain", subfolder="calibration"
+    )
+    out_chain = chain_base.with_suffix(".npz")
 
     save_dict = {
         # DMD server compatibility
@@ -570,7 +578,7 @@ def main():
     if original_global_indices is not None:
         save_dict["original_global_indices"] = original_global_indices.astype(np.int32)
 
-    np.savez_compressed(out_chain, **save_dict)
+    out_chain = dm.save_npz(out_chain, **save_dict)
 
     print("Saved:", out_chain)
     print("Number of NV DMD points:", len(nv_coords_dmd))
@@ -596,9 +604,10 @@ def main():
         save_path=diag_path,
     )
 
-    print("\nNext:")
-    print(f'dmd.load_calibration("{DMD_CHAIN_OUT}", True)')
-    print("dmd.pass_loaded_indices(<center_test_indices_json>, 50, 230)")
+    print("\nNext (after validating these files):")
+    print(f'python calibrations/purcell/promote.py nuvu_to_thorcam_dmd "{out_bridge}"')
+    print(f'python calibrations/purcell/promote.py dmd_nv_chain "{out_chain}"')
+    print("Then restart/reload the DMD server calibration from the stable current file.")
 
     return {
         "M_nuvu_to_thorcam_dmd": M_nuvu_to_thorcam_dmd,

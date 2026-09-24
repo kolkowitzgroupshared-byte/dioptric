@@ -1,0 +1,66 @@
+﻿{
+    "schema_version":  1,
+    "setup":  "purcell",
+    "created":  "2026-09-18",
+    "purpose":  "Offline-safe current calibration snapshot; G drive stores history/provenance.",
+    "current_root":  "calibrations/purcell/current",
+    "history_root":  "G:\\nvdata\\pc_Purcell\\calibration_history",
+    "files":  [
+                  {
+                      "role":  "active_nv_coordinates_and_weights",
+                      "current_file":  "active_nv_coords.npz",
+                      "source_path":  "slmsuite\\nv_blob_detection\\nv_blob_212nvs_reordered.npz",
+                      "source_sha256":  "050AA186BCEAF0C67E80481E41DA0AB34C0FACB3FA00088C1109BAF791837718",
+                      "current_sha256":  "050AA186BCEAF0C67E80481E41DA0AB34C0FACB3FA00088C1109BAF791837718",
+                      "source_last_write":  "2026-09-17T16:12:52"
+                  },
+                  {
+                      "role":  "slm_fourier_calibration",
+                      "current_file":  "slm_fourier.h5",
+                      "source_path":  "slmsuite\\fourier_calibration\\26438-SLM-fourier-calibration_00015.h5",
+                      "source_sha256":  "21E8D0D36C8F06569DA49D6A05B67EF633C8C5B0C88FD90CF78D2FD6146C3317",
+                      "current_sha256":  "21E8D0D36C8F06569DA49D6A05B67EF633C8C5B0C88FD90CF78D2FD6146C3317",
+                      "source_last_write":  "2026-03-05T21:35:42"
+                  },
+                  {
+                      "role":  "nuvu_to_thorcam_slm_affine",
+                      "current_file":  "nuvu_to_thorcam_slm.npz",
+                      "source_path":  "slmsuite\\calibration\\nuvu_to_thorcam_slm.npz",
+                      "source_sha256":  "8C306D0AC1C0C725F1BA1FCB1A0E2B47BE52648E3C4C2BCF31C936A0EB3516D5",
+                      "current_sha256":  "8C306D0AC1C0C725F1BA1FCB1A0E2B47BE52648E3C4C2BCF31C936A0EB3516D5",
+                      "source_last_write":  "2026-09-17T14:00:17"
+                  },
+                  {
+                      "role":  "dmd_zero_order",
+                      "current_file":  "dmd_zero_order.npz",
+                      "source_path":  "dmdsuite\\calibration\\zero_order_onpass.npz",
+                      "source_sha256":  "3249BFDAE05A4BD05CC1A2EA82695BC5F98358C2DB1B13F89C8149D3BF4FE36D",
+                      "current_sha256":  "3249BFDAE05A4BD05CC1A2EA82695BC5F98358C2DB1B13F89C8149D3BF4FE36D",
+                      "source_last_write":  "2026-09-03T17:13:01"
+                  },
+                  {
+                      "role":  "dmd_triangle_affine",
+                      "current_file":  "dmd_triangle_affine.npz",
+                      "source_path":  "dmdsuite\\calibration\\triangle_affine_onpass.npz",
+                      "source_sha256":  "B615EFFDD5AA4073DE5C2278CB41AFD1520645D362A241DB826CFBEFE9D15CC9",
+                      "current_sha256":  "B615EFFDD5AA4073DE5C2278CB41AFD1520645D362A241DB826CFBEFE9D15CC9",
+                      "source_last_write":  "2026-09-03T17:15:53"
+                  },
+                  {
+                      "role":  "nuvu_to_thorcam_dmd_affine",
+                      "current_file":  "nuvu_to_thorcam_dmd.npz",
+                      "source_path":  "dmdsuite\\calibration\\nuvu_to_thorcam_dmd.npz",
+                      "source_sha256":  "6861F2B02127A1FADAA295B600E969374C122BD453D59973436AFECE623B64B4",
+                      "current_sha256":  "6861F2B02127A1FADAA295B600E969374C122BD453D59973436AFECE623B64B4",
+                      "source_last_write":  "2026-09-17T16:31:36"
+                  },
+                  {
+                      "role":  "nuvu_to_dmd_final_chain",
+                      "current_file":  "dmd_nv_chain.npz",
+                      "source_path":  "dmdsuite\\calibration\\nv_chain_nuvu_thorcamDMD_dmd.npz",
+                      "source_sha256":  "5F02C10C00689828298C29B2279498A57F8E908BAFA102E16F0E37A3037C8351",
+                      "current_sha256":  "5F02C10C00689828298C29B2279498A57F8E908BAFA102E16F0E37A3037C8351",
+                      "source_last_write":  "2026-09-17T16:31:36"
+                  }
+              ]
+}

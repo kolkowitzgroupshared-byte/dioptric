@@ -13,6 +13,7 @@ Created November 15th, 2023
 import copy
 import io
 import os
+import shutil
 import socket
 import sys
 import time
@@ -61,6 +62,59 @@ def get_time_stamp():
     return timestamp
 
 
+def get_local_cache_archive_folder():
+    """Return the per-computer folder used to archive evicted local cache files."""
+    pc_name = socket.gethostname()
+    date_folder = datetime.now().strftime("%Y_%m")
+    archive_folder = (
+        common.get_nvdata_path()
+        / f"pc_{pc_name}"
+        / "local_cache_archive"
+        / date_folder
+    )
+    archive_folder.mkdir(parents=True, exist_ok=True)
+    return archive_folder
+
+
+def _archive_local_cache_file(file_path):
+    """Move a local cache file to nvdata instead of deleting it."""
+    file_path = Path(file_path)
+    if not file_path.exists():
+        return None
+
+    archive_folder = get_local_cache_archive_folder()
+    destination = archive_folder / file_path.name
+    if destination.exists():
+        suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
+        destination = archive_folder / f"{file_path.stem}__{suffix}{file_path.suffix}"
+
+    shutil.move(str(file_path), str(destination))
+    return destination
+
+
+def get_output_folder(source_file, time_stamp=None, subfolder=None, create=False):
+    """Return the standard per-computer/branch/source/month output folder."""
+    if time_stamp is None:
+        time_stamp = get_time_stamp()
+
+    pc_name = socket.gethostname()
+    branch_name = _get_branch_name()
+    source_name = Path(source_file).stem
+    date_folder = "_".join(time_stamp.split("_")[0:2])
+    folder_path = (
+        nvdata_dir
+        / f"pc_{pc_name}"
+        / f"branch_{branch_name}"
+        / source_name
+        / date_folder
+    )
+    if subfolder is not None:
+        folder_path = folder_path / subfolder
+    if create:
+        folder_path.mkdir(parents=True, exist_ok=True)
+    return folder_path
+
+
 def get_file_path(source_file, time_stamp, name, subfolder=None):
     """Get the file path to save to. This will be in a subdirectory of nvdata
 
@@ -83,20 +137,39 @@ def get_file_path(source_file, time_stamp, name, subfolder=None):
         Path to save to
     """
 
-    pc_name = socket.gethostname()
-    branch_name = _get_branch_name()
-    source_name = Path(source_file).stem
-    date_folder = "_".join(time_stamp.split("_")[0:2])  # yyyy_mm
-
-    path_from_nv_data = f"pc_{pc_name}/branch_{branch_name}/{source_name}/{date_folder}"
-    folder_path = nvdata_dir / path_from_nv_data
-
-    if subfolder is not None:
-        folder_path = folder_path / subfolder
-
+    folder_path = get_output_folder(
+        source_file, time_stamp=time_stamp, subfolder=subfolder
+    )
     file_name = f"{time_stamp}-{name}.txt"
-
     return folder_path / file_name
+
+
+def save_npy(array, file_path):
+    """Save a NumPy array through the configured data backend."""
+    file_path = Path(file_path).with_suffix(".npy")
+    content = BytesIO()
+    np.save(content, array)
+    cloud.upload(file_path, content.getbuffer())
+    return file_path
+
+
+def save_npz(file_path, compressed=True, **arrays):
+    """Save named arrays through the configured data backend."""
+    file_path = Path(file_path).with_suffix(".npz")
+    content = BytesIO()
+    if compressed:
+        np.savez_compressed(content, **arrays)
+    else:
+        np.savez(content, **arrays)
+    cloud.upload(file_path, content.getbuffer())
+    return file_path
+
+
+def save_text(text, file_path, suffix=".txt", encoding="utf-8"):
+    """Save text through the configured data backend."""
+    file_path = Path(file_path).with_suffix(suffix)
+    cloud.upload(file_path, str(text).encode(encoding))
+    return file_path
 
 
 def save_figure(fig, file_path):
@@ -279,7 +352,7 @@ def get_raw_data(file_stem, use_cache=True, load_npz=False, allow_pickle=False):
                 del cache_manifest[file_stem_to_remove]
                 file_to_remove = data_manager_folder / f"{file_stem_to_remove}.txt"
                 if file_to_remove.exists():
-                    os.remove(file_to_remove)
+                    _archive_local_cache_file(file_to_remove)
             cache_manifest_updated = True
         if cache_manifest_updated:
             with open(data_manager_folder / "cache_manifest.txt", "w+") as f:

@@ -11,6 +11,7 @@ import os
 import sys
 import warnings
 from datetime import datetime
+from pathlib import Path
 
 # os.environ["QT_QPA_PLATFORM"] = "offscreen"
 import cv2
@@ -103,8 +104,11 @@ def fourier_calibration():
         plot=True,
     )
     cam.set_exposure(0.0002)
-    # save calibation
-    calibration_file = fs.save_fourier_calibration(path="slmsuite/fourier_calibration")
+    # Save new calibration history through the standard nvdata hierarchy.
+    output_dir = dm.get_output_folder(
+        __file__, subfolder="fourier_calibration", create=True
+    )
+    calibration_file = fs.save_fourier_calibration(path=str(output_dir))
     print("Fourier calibration saved to:", calibration_file)
 
 
@@ -119,8 +123,13 @@ def test_wavefront_calibration():
         autoexposure=False,
         plot=3,  # Special mode to generate a phase .gif
     )
-    imageio.mimsave("wavefront.gif", movie)
-    Image(filename="wavefront.gif")
+    timestamp = dm.get_time_stamp()
+    gif_path = dm.get_file_path(
+        __file__, timestamp, "wavefront", subfolder="wavefront_calibration"
+    ).with_suffix(".gif")
+    gif_path.parent.mkdir(parents=True, exist_ok=True)
+    imageio.mimsave(gif_path, movie)
+    Image(filename=str(gif_path))
 
 
 def wavefront_calibration():
@@ -132,11 +141,12 @@ def wavefront_calibration():
         superpixel_size=40,
         autoexposure=False,
     )
-    # save calibation
-    calibration_file = fs.save_wavefront_calibration(
-        path="slmsuite/wavefront_calibration"
+    # Save new calibration history through the standard nvdata hierarchy.
+    output_dir = dm.get_output_folder(
+        __file__, subfolder="wavefront_calibration", create=True
     )
-    print("Fourier calibration saved to:", calibration_file)
+    calibration_file = fs.save_wavefront_calibration(path=str(output_dir))
+    print("Wavefront calibration saved to:", calibration_file)
 
 
 def load_fourier_calibration():
@@ -144,7 +154,7 @@ def load_fourier_calibration():
         # "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00003.h5"
         # "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00006.h5"
         # "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00008.h5"
-        "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00015.h5"
+        "calibrations/purcell/current/slm_fourier.h5"
     )
     
     fs.load_fourier_calibration(calibration_file_path)
@@ -324,7 +334,7 @@ def apply_affine(M, coords):
 
 def nuvu2thorcam_slm(
     coords,
-    calib_path="slmsuite/calibration/nuvu_to_thorcam_slm.npz",
+    calib_path="calibrations/purcell/current/nuvu_to_thorcam_slm.npz",
 ):
     data = np.load(calib_path, allow_pickle=True)
     M = np.asarray(data["M_nuvu_to_thorcam_slm"], dtype=np.float32)
@@ -478,9 +488,16 @@ def write_pre_computed_triangle():
 
 # Define the save function
 def save(data, path, filename):
-    if not os.path.exists(path):
-        os.makedirs(path)
-    np.save(os.path.join(path, filename), data)
+    """Save generated SLM data through the standard nvdata hierarchy."""
+    timestamp = dm.get_time_stamp()
+    name = Path(filename).stem
+    subfolder = Path(path).name if path else None
+    file_path = dm.get_file_path(
+        __file__, timestamp, name, subfolder=subfolder
+    )
+    saved_path = dm.save_npy(data, file_path)
+    print(f"Saved to {saved_path}")
+    return saved_path
     
 class DummyCamera:
     """

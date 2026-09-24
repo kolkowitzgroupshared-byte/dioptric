@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "setup": "purcell",
+  "sample": {
+    "name": "qnami",
+    "sample_date": "2026_02_20",
+    "sample_coords": [-1.2, -1.2],
+    "z_coord": 0.0,
+    "magnet_angle_deg": 90
+  },
+  "nv_set": {
+    "active_coords_path": "calibrations/purcell/current/active_nv_coords.npz",
+    "representative_nv_index": 0
+  },
+  "charge_state": {
+    "threshold_mode": "none",
+    "scc_amplitude_source": "2026_09_17-15_31_19-optimal_scc_parameters_robust",
+    "scc_amplitude_key": "optimal_values",
+    "scc_duration_source": "2026_09_16-10_48_36-scc_parameter_sweep_analysis_with_nv_amps",
+    "scc_duration_key": "optimal_value_by_nv",
+    "charge_pol_duration_ns": 1000,
+    "ion_duration_ns": 600
+  },
+  "calibrations": {
+    "manifest_path": "calibrations/purcell/manifest.json"
+  },
+  "microwave_groups": [0, 1, 2]
+}

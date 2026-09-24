@@ -38,14 +38,14 @@ calibration_coords_pixel = [
     [17.982, 41.943],
 ]
 calibration_coords_green = [
-    [73.634, 115.45],
-    [100.632, 68.904],
-    [126.85, 127.769],
+    [73.663, 115.461],
+    [100.662, 68.901],
+    [126.909, 127.772],
 ]
 calibration_coords_red = [
     [47.207, 81.378],
     [69.587, 44.02],
-    [90.267, 92.212],
+    [90.267, 92.212]
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -138,7 +138,7 @@ config |= {
         "dmd_DLP6500_zero_radius_px": 11,
         # Important: load final NV-chain file, not just triangle_affine_onpass.npz
         "dmd_DLP6500_init_calib_path": (
-            "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd.npz"
+            "calibrations/purcell/current/dmd_nv_chain.npz"
         ),
     },
     
@@ -153,22 +153,22 @@ config |= {
             # "slmsuite/nv_blob_detection/nv_blob_402nvs_reordered_inside_dmd.npz"
             # "slmsuite/nv_blob_detection/nv_blob_366nvs_reordered_inside_dmd.npz"
             # "slmsuite/nv_blob_detection/nv_blob_351nvs_reordered_inside_dmd.npz"
-            "slmsuite/nv_blob_detection/nv_blob_212nvs_reordered.npz"
+            "calibrations/purcell/current/active_nv_coords.npz"
         ),
         "slm_fourier_calib_path": (
-            "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00015.h5"
+            "calibrations/purcell/current/slm_fourier.h5"
         ),
         "nuvu_to_thorcam_slm_calib_path": (
-            "slmsuite/calibration/nuvu_to_thorcam_slm.npz"
+            "calibrations/purcell/current/nuvu_to_thorcam_slm.npz"
         ),
         "dmd_zero_order_calib_path": (
-            "dmdsuite/calibration/zero_order_onpass.npz"
+            "calibrations/purcell/current/dmd_zero_order.npz"
         ),
         "dmd_triangle_calib_path": (
-            "dmdsuite/calibration/triangle_affine_onpass.npz"
+            "calibrations/purcell/current/dmd_triangle_affine.npz"
         ),
         "nuvu_to_thorcam_dmd_calib_path": (
-            "dmdsuite/calibration/nuvu_to_thorcam_dmd.npz"
+            "calibrations/purcell/current/nuvu_to_thorcam_dmd.npz"
         ),
     },
     ###
@@ -188,15 +188,18 @@ config |= {
                 "uwave_power": 11.0,
                 "frequency": 2.7773,
                 "rabi_period": 276,
-                "pi_pulse": 136,
+                # "pi_pulse": 136, ## loop
+                "pi_pulse": 256, ## resonator
                 "pi_on_2_pulse": 68,
             },
             1: {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
-                "frequency": 2.8421,
+                # "frequency": 2.8421,
+                "frequency": 148,
                 "rabi_period": 276,
-                "pi_pulse": 136,
+                "pi_pulse": 128, ## loop
+                # "pi_pulse": 256, ## resonator
                 "pi_on_2_pulse": 68,
             },
             2: {

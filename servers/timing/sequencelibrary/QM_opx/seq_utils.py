@@ -199,23 +199,10 @@ def macro_polarize(
     else:
         charge_pol_sub()
 
-    ### SBC: updated Spin polarization which includes sweeping amp and duration
+    ###updated Spin polarization which includes sweeping amp and duration
     if spin_pol:
         macro_spin_polarize(spin_pol_duration_override, spin_pol_amp_override)
-
-    ## previous version of spin_pol
-    # if spin_pol:
-    #     spin_pol_laser_name = tb.get_physical_laser_name(
-    #         VirtualLaserKey.WIDEFIELD_SPIN_POL
-    #     )
-    #     spin_pol_laser_el = get_laser_mod_element(spin_pol_laser_name)
-    #     buffer = get_widefield_operation_buffer()
-    #     qua.align()
-    #     qua.play("spin_pol", spin_pol_laser_el)
-    #     qua.wait(buffer, spin_pol_laser_el)
-
-
-# SBC: spin polarization updates
+        
 def macro_spin_polarize(duration: int = None, amp: float = None):
     """
     Apply a widefield yellow spin polarization pulse.
@@ -243,24 +230,6 @@ def macro_spin_polarize(duration: int = None, amp: float = None):
 
     qua.wait(buffer, spin_pol_laser_el)
 
-
-# def macro_ionize(ion_coords_list: list[list[float]], do_target_list: list[bool] = None):
-#     """Apply an ionization pulse to each coordinate pair in the passed coords_list.
-
-#     Parameters
-#     ----------
-#     ion_coords_list : list[list[float]]
-#         List of coordinate pairs to target
-#     do_target_list : list[bool], optional
-#         List of whether to target an NV or not. Used to skip certain NVs.
-#         Default value None targets all NVs
-#     """
-#     ion_laser_name = tb.get_physical_laser_name(VirtualLaserKey.ION)
-#     ion_pulse_name = "ion"
-#     macro_run_aods([ion_laser_name], aod_suffices=[ion_pulse_name])
-#     _macro_pulse_series(
-#         ion_laser_name, ion_pulse_name, ion_coords_list, do_target_list=do_target_list
-#     )
 
 def macro_ionize(
     ion_coords_list: list[list[float]],

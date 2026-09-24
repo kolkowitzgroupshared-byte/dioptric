@@ -111,7 +111,7 @@ class DmdDlp6500(LabradServer):
         #   dmd_points / pattern_dmd_points
         self.init_calib_path = device_ids.get(
             f"{self.name}_init_calib_path",
-            "dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd.npz",
+            "calibrations/purcell/current/dmd_nv_chain.npz",
         )
 
         self.zero_radius_px = int(

@@ -68,6 +68,7 @@ from majorroutines.widefield import (
 # from slmsuite import optimize_slm_calibration
 from utils import common, widefield
 from utils import data_manager as dm
+from utils import experiment_state as exp_state
 from utils import kplotlib as kpl
 from utils import positioning as pos
 from utils import tool_belt as tb
@@ -477,7 +478,7 @@ def do_dmd_crosstalk_matrix(
     dmd_radius_px=8,
     num_reps=200,
     num_runs=1,
-    chain_path="dmdsuite/calibration/nv_chain_nuvu_thorcamDMD_dmd.npz",
+    chain_path="calibrations/purcell/current/dmd_nv_chain.npz",
 ):
     print("len(nv_list_all):", len(nv_list_all))
 
@@ -893,9 +894,9 @@ def do_resonance(nv_list):
     # freq_range = 0.36
     # num_steps = 65
     freq_range = 0.260
-    num_steps = 45
+    num_steps = 51
     num_reps = 4
-    num_runs = 400
+    num_runs = 500
     freqs = calculate_freqs(freq_center, freq_range, num_steps)
     ##
     # Remove duplicates and sort
@@ -913,56 +914,63 @@ def do_resonance(nv_list):
     # for _ in range(2):
     #     resonance.main(nv_list, num_steps, num_reps, num_runs, freqs=freqs)
 
-# def do_deer_hahn(nv_list):
-#     # freq_center = 0.174
-#     # freq_range = 0.024
-#     # num_steps =  48
-#     # num_reps = 6
-#     num_reps =2
-#     num_runs =300
-#     # num_runs = 2
-#     # freqs = calculate_freqs(freq_center, freq_range, num_steps)
-#     # freqs = np.arange(20, 330 + 2, 2)
-#     freqs = np.arange(40, 300 + 1, 1)
-#     freqs = freqs / 1000
-#     # Remove duplicates and sort
-#     freqs = sorted(set(freqs))
-#     num_steps = len(freqs)
-#     for _ in range(2):
-#         do_widefield_image_sample(nv_sig, 50)
-#         deer_hahn.main(
-#             nv_list,
-#             num_steps,
-#             num_reps,
-#             num_runs,
-#             freqs=freqs,
-#             uwave_ind_list=[0,1,2],
-#         )
-
 def do_deer_hahn(nv_list):
-    num_reps = 1
-    num_runs = 600
-    bands_mhz = [
-        (76, 94, 0.2),  
-        (188, 210, 0.2),
-        (248, 276, 0.2),
-    ]
+    # freq_center = 0.174
+    # freq_range = 0.024
+    # num_steps =  48
+    # num_reps = 6
+    num_reps =2
+    num_runs =300
+    # num_runs = 2
+    # freqs = calculate_freqs(freq_center, freq_range, num_steps)
+    # freqs = np.arange(20, 330 + 2, 2)
+    freqs = np.arange(110, 200, 2)
+    freqs = freqs / 1000
+    # Remove duplicates and sort
+    freqs = sorted(set(freqs))
+    num_steps = len(freqs)
     for _ in range(2):
         do_widefield_image_sample(nv_sig, 50)
+        deer_hahn.main(
+            nv_list,
+            num_steps=len(freqs),
+            num_reps=num_reps,
+            num_runs=num_runs,
+            freqs=freqs,
 
-        for f0, f1, df in bands_mhz:
-            freqs = np.arange(f0, f1 + df, df) / 1000  # MHz -> GHz
-            freqs = sorted(set(freqs))
-            num_steps = len(freqs)
+            # 0 = NV microwave
+            # 1 = P1 / RF
+            uwave_ind_list=[0, 1],
 
-            deer_hahn.main(
-                nv_list,
-                num_steps,
-                num_reps,
-                num_runs,
-                freqs=freqs,
-                uwave_ind_list=[0, 1, 2],
-            )
+            tau_ns=18_000,
+            nv_pi_ns=256,
+            rf_pi_ns=100,
+        )
+
+# def do_deer_hahn(nv_list):
+#     num_reps = 1
+#     num_runs = 600
+#     bands_mhz = [
+#         (76, 94, 0.2),  
+#         (188, 210, 0.2),
+#         (248, 276, 0.2),
+#     ]
+#     for _ in range(2):
+#         do_widefield_image_sample(nv_sig, 50)
+
+#         for f0, f1, df in bands_mhz:
+#             freqs = np.arange(f0, f1 + df, df) / 1000  # MHz -> GHz
+#             freqs = sorted(set(freqs))
+#             num_steps = len(freqs)
+
+#             deer_hahn.main(
+#                 nv_list,
+#                 num_steps,
+#                 num_reps,
+#                 num_runs,
+#                 freqs=freqs,
+#                 uwave_ind_list=[0, 1, 2],
+#             )
 
 def do_deer_hahn_rabi(nv_list):
     min_tau = 16
@@ -1071,8 +1079,9 @@ def do_spin_echo(nv_list):
     # revival_period = int(51.5e3 / 2) ### ~37.0 G
     # revival_period = int(38.5e3 / 2)### 49.68 G
     # revival_period = int(28.6e3 / 2) ### 65.14G
-    revival_period = int(29.90e3 / 2) ### 62.14G
+    # revival_period = int(29.90e3 / 2) ### 62.14G
     # revival_period = int(31.2e3 / 2) ### 59.69G
+    revival_period = int(35.66e3 / 2)  # ~52.39 G
     min_tau = 200
     taus = []
     revival_width = 6e3
@@ -1111,7 +1120,7 @@ def do_spin_echo(nv_list):
     # num_runs = 2
     # spin_echo.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau)
     # spin_echo.main(nv_list, num_steps, num_reps, num_runs, taus=taus)
-    for ind in range(6):
+    for ind in range(3):
         do_widefield_image_sample(nv_sig, 50)
         spin_echo.main(nv_list, num_steps, num_reps, num_runs, taus=taus)
 
@@ -1957,10 +1966,10 @@ if __name__ == "__main__":
     #     [17.982, 41.943],
     # ]
     # green_coords_list = [
-    #     [97.652, 98.174],
-    #     [73.634, 115.45],
-    #     [100.632, 68.904],
-    #     [126.85, 127.769],
+    #     [97.678, 98.174],
+    #     [73.663, 115.461],
+    #     [100.662, 68.901],
+    #     [126.909, 127.772],
     # ]
     # red_coords_list = [
     #     [66.867, 67.736],
@@ -2224,7 +2233,7 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        do_charge_state_histograms(nv_list)
+        # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
@@ -2255,7 +2264,7 @@ if __name__ == "__main__":
         # do_check_readout_fidelity(nv_list)
         # do_optimize_aod_access_time(nv_list)
 
-        do_scc_snr_check(nv_list)
+        # do_scc_snr_check(nv_list)
         # do_optimize_scc_duration(nv_list)
         # do_optimize_scc_amp(nv_list)
         # optimize_scc_amp_and_duration(nv_list)
@@ -2283,7 +2292,7 @@ if __name__ == "__main__":
         # do_resonance(nv_list)
         # do_optimize_scc_amp(nv_list)
         # do_rabi(nv_list)
-        # do_deer_hahn(nv_list)
+        do_deer_hahn(nv_list)
         # do_deer_hahn_rabi(nv_list)
         # do_resonance_zoom(nv_list)
         # do_spin_echo(nv_list)
