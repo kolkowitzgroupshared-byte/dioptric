@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-V8: orientation-locked single-/multi-13C Hahn-echo fitting.
+V8b: orientation-locked single-/multi-13C Hahn-echo fitting.
+
+The short-time background term is an empirical nuisance shape shared by all
+NVs; its amplitude is fitted per NV and it is never interpreted as a 13C.
 
 Keeps the empirically useful stretched-envelope + quartic-revival background
 from the current fitter, but replaces free additive oscillations with a
@@ -38,8 +41,10 @@ from __future__ import annotations
 
 import argparse
 import ast
+import hashlib
 import json
 import os
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -52,11 +57,12 @@ from scipy.optimize import least_squares
 from threadpoolctl import threadpool_limits
 
 SEARCH_ROOT = Path(r"G:\nvdata\pc_NVOffice\branch_master")
+UNC_SEARCH_ROOT = Path(r"\\192.168.0.197\G\nvdata\pc_NVOffice\branch_master")
 RESULT_TAG = "spin_echo_old_protocol_ranked_52G"
 ALL_ATTEMPTS_PATH = None
 CHECKPOINT_PATH = None
 OUTPUT_DIR = None
-CATALOG_PATH = Path(r"analysis\spin_echo_work\essem_freq_kappa_catalog_22A_52G.json")
+CATALOG_PATH = Path(__file__).resolve().parent / "essem_freq_kappa_catalog_22A_52G.json"
 V6_ALL_SITE_FITS = None
 ORIENTATION_ASSIGNMENTS_CSV = None
 
@@ -66,23 +72,23 @@ MAX_DISTANCE_A = 22.0
 MIN_KAPPA = 1e-5
 MIN_ESEEM_LINE_KHZ = 4.0
 
-# Reduced background: baseline, contrast, revival_time, width0, T2, beta, width_slope
+# Reduced background plus one shared-shape early transient amplitude.
 BG_NAMES = (
     "baseline", "contrast", "revival_time_us", "width0_us",
-    "T2_us", "beta", "width_slope",
+    "T2_us", "beta", "width_slope", "early_amp",
 )
-BG_LB = np.array([0.00, 0.00, 34.0, 1.5, 5.0, 0.70, 0.00], float)
-BG_UB = np.array([1.10, 0.95, 37.5, 12.0, 250.0, 2.50, 0.80], float)
+BG_LB = np.array([0.00, 0.00, 34.5, 1.0, 3.0, 0.60, 0.00, -0.80], float)
+BG_UB = np.array([1.10, 0.95, 36.8, 15.0, 600.0, 4.00, 0.80, 0.80], float)
 ETA_BOUNDS = (0.0, 1.0)
 DT_BOUNDS_US = (-0.25, 0.25)
 
-BG_T2_STARTS_US = (20.0, 40.0, 80.0, 140.0)
-BG_BETA_STARTS = (1.0, 1.5, 2.0)
+BG_T2_STARTS_US = (15.0, 60.0, 200.0)
+BG_BETA_STARTS = (1.0, 2.0, 3.0)
 BG_ROBUST_MAX_NFEV = 15000
 BG_FINAL_MAX_NFEV = 25000
 FULL_MAX_NFEV = 30000
-FULL_ETA_STARTS = (0.20, 0.55, 0.90)
-FULL_DT_STARTS_US = (0.0, -0.08, 0.08)
+FULL_ETA_STARTS = (0.30, 0.80)
+FULL_DT_STARTS_US = (0.0,)
 
 SINGLE_SCREEN_KEEP = 80
 SINGLE_FULL_KEEP = 36
@@ -125,8 +131,9 @@ def newest_match(root, pattern):
 
 
 def discover_paths():
+    root = SEARCH_ROOT if SEARCH_ROOT.exists() else UNC_SEARCH_ROOT
     attempts = Path(ALL_ATTEMPTS_PATH) if ALL_ATTEMPTS_PATH else newest_match(
-        SEARCH_ROOT, f"*{RESULT_TAG}_all_attempts.csv.gz"
+        root, f"*{RESULT_TAG}_all_attempts.csv.gz"
     )
     suffix = "_all_attempts.csv.gz"
     s = str(attempts)
@@ -135,10 +142,10 @@ def discover_paths():
     prefix = Path(s[:-len(suffix)])
     checkpoint = Path(CHECKPOINT_PATH) if CHECKPOINT_PATH else Path(str(prefix) + "_fit_checkpoint.npz")
     orientation_csv = Path(ORIENTATION_ASSIGNMENTS_CSV) if ORIENTATION_ASSIGNMENTS_CSV else newest_match(
-        SEARCH_ROOT, "*orientation_locked_confidence_v6_orientation_assignments.csv"
+        root, "*orientation_locked_confidence_v6_orientation_assignments.csv"
     )
     v6_site_fits = Path(V6_ALL_SITE_FITS) if V6_ALL_SITE_FITS else newest_match(
-        SEARCH_ROOT, "*orientation_locked_confidence_v6_all_equal_footing_sites.csv"
+        root, "*orientation_locked_confidence_v6_all_equal_footing_sites.csv"
     )
     for p in (checkpoint, orientation_csv, v6_site_fits, CATALOG_PATH):
         if not Path(p).exists():
@@ -173,6 +180,20 @@ def load_inputs(paths):
         }
         for r in odf.itertuples()
     }
+
+    # The alternative ESR target quantifies ambiguity independently of 13C fits.
+    esr_targets = {(1, 1, -1): (2.7773, 2.9758), (-1, 1, 1): (2.8421, 2.9195)}
+    for r in odf.itertuples():
+        q = ori_quality[int(r.nv_index)]
+        measured = np.array([r.measured_f1_GHz, r.measured_f2_GHz], float)
+        alternative = next(o for o in esr_targets if o != tuple(r.orientation_tuple))
+        alt_rms = float(np.sqrt(np.mean((1000*(measured - esr_targets[alternative]))**2)))
+        q.update(measured_f1_GHz=float(measured[0]), measured_f2_GHz=float(measured[1]),
+                 target_f1_GHz=float(r.target_f1_GHz), target_f2_GHz=float(r.target_f2_GHz),
+                 alternative_rms_MHz=alt_rms,
+                 esr_margin_MHz=alt_rms-float(q['rms_mhz']))
+        q['quality_flag'] = ('ambiguous' if q['rms_mhz']>10 and q['esr_margin_MHz']<20
+                             else 'high_error' if q['rms_mhz']>10 else 'ok')
 
     v6 = pd.read_csv(paths.v6_site_fits)
     v6_best = v6[v6["site_rank"] == 1].copy()
@@ -218,7 +239,7 @@ def quartic_revival_comb(t_us, revival_time_us, width0_us, width_slope):
 
 
 def background_carrier(t_us, bg):
-    baseline, contrast, trev, width0, T2, beta, width_slope = np.asarray(bg, float)
+    baseline, contrast, trev, width0, T2, beta, width_slope, early_amp = np.asarray(bg, float)
     t = np.asarray(t_us, float)
     env = np.exp(-np.power(np.maximum(t, 0.0) / max(float(T2), 1e-9), float(beta)))
     comb = quartic_revival_comb(t, trev, width0, width_slope)
@@ -244,9 +265,16 @@ def c13_coherence(t_us, sites, etas, dt_us):
     return L
 
 
+def early_template(t_us):
+    """Fixed, population-level short-time structure; no site information."""
+    t = np.asarray(t_us, float)
+    return np.exp(-((t - 2.8) / 1.4) ** 2) - .35 * np.exp(-((t - 5.2) / 1.4) ** 2)
+
+
 def model_from_parts(t_us, bg, sites=(), etas=(), dt_us=0.0):
     baseline, contrast, carrier = background_carrier(t_us, bg)
-    return baseline - contrast * carrier * c13_coherence(t_us, sites, etas, dt_us)
+    return (baseline - contrast * carrier * c13_coherence(t_us, sites, etas, dt_us)
+            + float(bg[7]) * early_template(t_us))
 
 
 def fit_stats(y, e, pred, npar):
@@ -270,7 +298,7 @@ def data_seed(yv):
     yv = np.asarray(yv, float)
     b = float(np.clip(np.nanpercentile(yv, 90), BG_LB[0]+.01, BG_UB[0]-.01))
     c = float(np.clip(b - np.nanpercentile(yv, 5), .03, .70))
-    return np.array([b, c, 35.66, 5.5, 45., 1.5, .15], float)
+    return np.array([b, c, 35.66, 5.5, 45., 1.5, .15, 0.], float)
 
 
 def v6_seed(row, yv):
@@ -284,8 +312,8 @@ def v6_seed(row, yv):
         v = getattr(row, name, np.nan)
         if np.isfinite(v):
             p[idx] = float(v)
-    if p[4] > 180:
-        p[4] = 80.0
+    if p[4] > 300:
+        p[4] = 100.0
     return np.clip(p, BG_LB+1e-6, BG_UB-1e-6)
 
 
@@ -327,7 +355,8 @@ def catalog_for_nv(catalog, orientation, t):
     for r in catalog:
         if tuple(r["orientation_tuple"]) != orientation:
             continue
-        if float(r["fplus_kHz"]) > .98*nyq:
+        # ESEEM combination lines on the total-time axis are at f_plus/2.
+        if .5*float(r["fplus_kHz"]) > .98*nyq:
             continue
         if max(float(r["fminus_kHz"]), float(r["fplus_kHz"])) < MIN_ESEEM_LINE_KHZ:
             continue
@@ -340,7 +369,7 @@ def catalog_for_nv(catalog, orientation, t):
 def analytic_eta_screen(t,y,e,bg,existing_sites,existing_etas,candidate_site,dt_us=0.):
     baseline, contrast, carrier = background_carrier(t,bg)
     L0 = c13_coherence(t,existing_sites,existing_etas,dt_us)
-    pred0 = baseline - contrast*carrier*L0
+    pred0 = baseline - contrast*carrier*L0 + float(bg[7])*early_template(t)
     basis = contrast*carrier*L0*site_q(t,candidate_site,dt_us)
     w = 1.0/np.maximum(np.asarray(e,float),1e-12)**2
     den=float(np.sum(w*basis*basis)); num=float(np.sum(w*basis*(np.asarray(y)-pred0)))
@@ -498,20 +527,34 @@ def profile_selected_t2(t,y,e,selected_fit):
             st=fit_stats(y,e,pred,len(th)-1); rows.append(dict(T2_us=float(t2),chi2=st["chi2"],red_chi2=st["red_chi2"]))
         except Exception: pass
     if not rows: return [],dict(T2_profile_status="profile_failed")
+    rows.sort(key=lambda r:r["T2_us"])
     mn=min(r["chi2"] for r in rows)
     for r in rows: r["delta_chi2"]=float(r["chi2"]-mn)
-    def interval(th):
-        vals=[r["T2_us"] for r in rows if r["delta_chi2"]<=th]
-        if not vals:return np.nan,np.nan,False,False
-        lo=float(min(vals)); hi=float(max(vals)); return lo,hi,lo<=1.02*BG_LB[4],hi>=.98*BG_UB[4]
-    lo68,hi68,_,hi_touch68=interval(PROFILE_DELTA_CHI2_68); lo95,hi95,lo_touch95,hi_touch95=interval(PROFILE_DELTA_CHI2_95)
+    def intervals(th):
+        ok=np.array([r["delta_chi2"]<=th for r in rows],bool)
+        ranges=[]; ix=np.flatnonzero(ok)
+        if not len(ix): return ranges
+        for block in np.split(ix,np.flatnonzero(np.diff(ix)>1)+1):
+            lo=float(rows[block[0]]["T2_us"]); hi=float(rows[block[-1]]["T2_us"])
+            ranges.append((lo,hi))
+        return ranges
+    i68=intervals(PROFILE_DELTA_CHI2_68); i95=intervals(PROFILE_DELTA_CHI2_95)
+    lo68=min((a for a,b in i68),default=np.nan);hi68=max((b for a,b in i68),default=np.nan)
+    lo95=min((a for a,b in i95),default=np.nan);hi95=max((b for a,b in i95),default=np.nan)
     best=min(rows,key=lambda r:r["chi2"])["T2_us"]
-    if hi_touch95: status="lower_bound_only"; report=f"> {lo95:.1f} us (95% profile)"
+    hi_touch68=bool(i68 and hi68>=.98*BG_UB[4])
+    hi_touch95=bool(i95 and hi95>=.98*BG_UB[4])
+    lo_touch95=bool(i95 and lo95<=1.02*BG_LB[4])
+    if len(i95)>1:
+        status="multimodal"
+        report="95% disconnected: "+", ".join(f"[{a:.1f},{b:.1f}]" for a,b in i95)+" us"
+    elif hi_touch95: status="lower_bound_only"; report=f"> {lo95:.1f} us (95% profile)"
     elif lo_touch95: status="upper_bound_only"; report=f"< {hi95:.1f} us (95% profile)"
     else: status="bounded"; report=f"{best:.1f} us [{lo95:.1f}, {hi95:.1f}] 95% profile"
     return rows,dict(T2_profile_status=status,T2_profile_report=report,T2_profile_best_us=float(best),
                      T2_68_low_us=lo68,T2_68_high_us=hi68,T2_95_low_us=lo95,T2_95_high_us=hi95,
-                     T2_profile_touches_upper_68=bool(hi_touch68),T2_profile_touches_upper_95=bool(hi_touch95))
+                     T2_95_regions_json=json.dumps(i95),
+                     T2_profile_touches_upper_68=hi_touch68,T2_profile_touches_upper_95=hi_touch95)
 
 
 # ------------------------- SERIALIZATION / ONE NV ----------------------------
@@ -536,7 +579,10 @@ def fit_to_row(nv,orientation,order,rank,fit,weight=np.nan):
              site_key=str(tuple(fit["site_key"])),chi2=float(fit["chi2"]),red_chi2=float(fit["red_chi2"]),
              aicc=float(fit["aicc"]),bic=float(fit["bic"]),akaike_weight_within_order=float(weight),
              baseline=float(bg[0]),contrast=float(bg[1]),revival_time_us=float(bg[2]),width0_us=float(bg[3]),
-             T2_us=float(bg[4]),beta=float(bg[5]),width_slope=float(bg[6]),dt_us=float(dt),
+             T2_us=float(bg[4]),beta=float(bg[5]),width_slope=float(bg[6]),early_amp=float(bg[7]),dt_us=float(dt),
+             convergence=bool(fit.get('success',False)),nfev=int(fit.get('nfev',0)),
+             T2_upper_hit=bool(bg[4]>=.995*BG_UB[4]),T2_lower_hit=bool(bg[4]<=1.005*BG_LB[4]),
+             beta_boundary_hit=bool(bg[5]<=BG_LB[5]+.01 or bg[5]>=BG_UB[5]-.01),
              theta_json=json.dumps(np.asarray(fit["theta"],float).tolist()))
     for j,s in enumerate(fit["sites"],1):
         row[f"eta{j}"]=float(etas[j-1]); row.update(site_metadata(s,f"c13_{j}"))
@@ -545,6 +591,7 @@ def fit_to_row(nv,orientation,order,rank,fit,weight=np.nan):
 
 def fit_one_nv(nv,t,y,e,orientation,orientation_quality,v6_seed_row,catalog,max_spins,quick):
     yv=np.asarray(y[nv],float); ev=np.asarray(e[nv],float); sites=catalog_for_nv(catalog,orientation,t)
+    assert all(tuple(s['orientation_tuple']) == tuple(orientation) for s in sites)
     if not sites: raise RuntimeError(f"NV {nv}: no sites for {orientation}")
     bg=fit_background(t,yv,ev,v6_seed(v6_seed_row,yv)); order0=make_order0_record(bg)
     screen=screen_single_sites(t,yv,ev,bg["bg"],sites)
@@ -571,16 +618,42 @@ def fit_one_nv(nv,t,y,e,orientation,orientation_quality,v6_seed_row,catalog,max_
         for rank,(f,w) in enumerate(zip(fits,akaike_weights(fits)),1):
             candidate_rows.append(fit_to_row(nv,orientation,order,rank,f,w))
     bgsel,etasel,dtsel=unpack_theta(selected["theta"],selected_order)
+    selected_weight=float(akaike_weights(allfits[selected_order])[0])
+    adequate=bool(selected['red_chi2']<=3.0)
+    conditional_site_status=('none' if selected_order==0 else
+        'model_inadequate' if not adequate else
+        'orientation_unreliable' if orientation_quality.get('quality_flag')!='ok' else
+        'visibility_boundary' if any(v>=.995 or v<=.005 for v in etasel) else
+        'ambiguous_shortlist' if selected_weight<.8 else 'conditional_support')
     summary=dict(nv_index=int(nv),orientation=str(tuple(orientation)),
                  orientation_rms_error_MHz=float(orientation_quality.get("rms_mhz",np.nan)),
                  orientation_warning=bool(orientation_quality.get("warning",False)),
+                 orientation_quality_flag=str(orientation_quality.get('quality_flag','unknown')),
+                 esr_margin_MHz=float(orientation_quality.get('esr_margin_MHz',np.nan)),
+                 esr_alternative_rms_MHz=float(orientation_quality.get('alternative_rms_MHz',np.nan)),
+                 measured_f1_GHz=float(orientation_quality.get('measured_f1_GHz',np.nan)),
+                 measured_f2_GHz=float(orientation_quality.get('measured_f2_GHz',np.nan)),
+                 target_f1_GHz=float(orientation_quality.get('target_f1_GHz',np.nan)),
+                 target_f2_GHz=float(orientation_quality.get('target_f2_GHz',np.nan)),
                  num_catalog_sites_considered=len(sites),selected_order=int(selected_order),
                  selected_site_key=str(tuple(selected["site_key"])),selected_red_chi2=float(selected["red_chi2"]),
                  selected_aicc=float(selected["aicc"]),selected_bic=float(selected["bic"]),
+                 selected_akaike_weight_within_shortlist=selected_weight,
+                 model_adequacy=('adequate' if adequate else 'poor_fit'),
+                 site_inference_status=conditional_site_status,
+                 T2_inference_status=('model_inadequate' if not adequate else
+                                      'beta_boundary' if bgsel[5]<=BG_LB[5]+.01 or bgsel[5]>=BG_UB[5]-.01
+                                      else profile_summary.get('T2_profile_status','not_run')),
                  background_red_chi2=float(order0["red_chi2"]),background_bic=float(order0["bic"]),
                  T2_us=float(bgsel[4]),beta=float(bgsel[5]),revival_time_us=float(bgsel[2]),
-                 width0_us=float(bgsel[3]),width_slope=float(bgsel[6]),baseline=float(bgsel[0]),
-                 contrast=float(bgsel[1]),dt_us=float(dtsel),decision_json=json.dumps(decisions),**profile_summary)
+                 width0_us=float(bgsel[3]),width_slope=float(bgsel[6]),early_amp=float(bgsel[7]),
+                 baseline=float(bgsel[0]),contrast=float(bgsel[1]),dt_us=float(dtsel),
+                 T2_upper_hit=bool(bgsel[4]>=.995*BG_UB[4]),T2_lower_hit=bool(bgsel[4]<=1.005*BG_LB[4]),
+                 beta_boundary_hit=bool(bgsel[5]<=BG_LB[5]+.01 or bgsel[5]>=BG_UB[5]-.01),
+                 early_amp_boundary_hit=bool(abs(bgsel[7])>=.99*BG_UB[7]),
+                 eta_boundary_hit=bool(any(v>=.995 or v<=.005 for v in etasel)),
+                 fit_converged=bool(selected.get('success',False)),fit_nfev=int(selected.get('nfev',0)),
+                 decision_json=json.dumps(decisions),**profile_summary)
     for j,s in enumerate(selected["sites"],1):
         summary[f"eta{j}"]=float(etasel[j-1]); summary.update(site_metadata(s,f"c13_{j}"))
     order_rows=[dict(nv_index=int(nv),model_order=int(o),site_key=str(tuple(f["site_key"])),chi2=float(f["chi2"]),
@@ -621,22 +694,46 @@ def plot_dashboard(pdf,nv,t,y,e,summary_df,candidate_df,order_df,profile_df,cata
     lo=bg[2]-ZOOM_HALF_WIDTH_US; hi=bg[2]+ZOOM_HALF_WIDTH_US; m=(t>=lo)&(t<=hi); tz=np.linspace(lo,hi,DENSE_POINTS)
     ax2.errorbar(t[m],y[nv,m],yerr=e[nv,m],fmt="o",ms=3,capsize=1,lw=.5); ax2.plot(tz,model_from_parts(tz,bg,sites,etas,dt),lw=2,label="selected model"); ax2.axvline(bg[2],ls="--",lw=.8,alpha=.5,label="bath revival")
     ax2.set(title="First-revival zoom",xlabel="Total evolution time (us)",ylabel="Normalized signal"); ax2.grid(alpha=.2); ax2.legend(fontsize=7)
-    x=np.arange(len(odf)); ax3.bar(x,odf.bic-odf.bic.min()); ax3.set_xticks(x); ax3.set_xticklabels([f"N={int(v)}" for v in odf.model_order]); ax3.set(title=f"Model order | selected N={order}",ylabel="Delta BIC from best tested order"); ax3.grid(alpha=.2,axis="y")
+    worder=order if order>0 else 1
+    shortlist=cdf[cdf.model_order==worder].head(8)
+    if len(shortlist):
+        labs=[str(v).strip("()").replace(","," +") for v in shortlist.site_key]
+        ax3.bar(np.arange(len(shortlist)),shortlist.akaike_weight_within_order,color="C2")
+        ax3.set_xticks(np.arange(len(shortlist)));ax3.set_xticklabels(labs,rotation=45,ha="right",fontsize=7)
+    ax3.set(title=f"Site weights within N={worder} shortlist",ylabel="Conditional Akaike weight")
+    ax3.grid(alpha=.2,axis="y")
     ax4.scatter([0],[0],[0],marker="*",s=220,c="black",label="NV",depthshade=False); xyz=[]
     for j,s in enumerate(sites,1):
         pt=np.array([s.get("x_A",np.nan),s.get("y_A",np.nan),s.get("z_A",np.nan)],float)
         if np.all(np.isfinite(pt)):
-            xyz.append(pt); ax4.plot([0,pt[0]],[0,pt[1]],[0,pt[2]],lw=1.1,alpha=.55); ax4.scatter([pt[0]],[pt[1]],[pt[2]],s=130,depthshade=False,label=f"C{j}: site {s['site_id']} eta={etas[j-1]:.2f}"); ax4.text(*pt,f" C{j}:S{s['site_id']}",fontsize=8)
+            xyz.append(pt); ax4.plot([0,pt[0]],[0,pt[1]],[0,pt[2]],lw=1.1,alpha=.55,color=cmap(j%10)); ax4.scatter([pt[0]],[pt[1]],[pt[2]],s=130,color=cmap(j%10),depthshade=False,label=f"C{j}: site {s['site_id']} eta={etas[j-1]:.2f}"); ax4.text(*pt,f" C{j}:S{s['site_id']}",fontsize=8)
     if xyz:set_3d_equal(ax4,np.vstack(xyz))
     ax4.set(xlabel="x (A)",ylabel="y (A)",zlabel="z (A)",title=f"Selected coherent 13C\n{srow.orientation}"); ax4.view_init(elev=24,azim=38); ax4.legend(fontsize=7)
     if not pdfp.empty:
         ax5.plot(pdfp.T2_us,pdfp.delta_chi2,marker="o",ms=3,lw=1.2); ax5.axhline(1,ls="--",lw=.8,label="68% Delta chi2=1"); ax5.axhline(3.84,ls=":",lw=1,label="95% Delta chi2=3.84"); ax5.set_xscale("log"); ax5.legend(fontsize=7)
     ax5.set(title=f"T2 identifiability: {srow.get('T2_profile_status','')}",xlabel="T2 (us)",ylabel="Profile Delta chi2"); ax5.grid(alpha=.2,which="both")
-    ax6.axis("off"); lines=[f"NV {nv}",f"orientation = {srow.orientation}",f"orientation ESR RMS = {srow.orientation_rms_error_MHz:.2f} MHz",f"orientation warning = {bool(srow.orientation_warning)}","",f"SELECTED N_C13 = {order}",f"site key = {srow.selected_site_key}",f"reduced chi2 = {srow.selected_red_chi2:.3f}",f"BIC = {srow.selected_bic:.2f}","",f"T2 point = {srow.T2_us:.1f} us",f"T2 profile = {srow.get('T2_profile_report','')}",f"beta = {srow.beta:.3f}",f"revival = {srow.revival_time_us:.3f} us",f"width0 = {srow.width0_us:.3f} us",f"width slope = {srow.width_slope:.3f}",f"dt = {srow.dt_us:.4f} us",f"baseline = {srow.baseline:.4f}",f"contrast = {srow.contrast:.4f}",""]
+    ax6.axis("off")
+    lines=[f"NV {nv} | orientation {srow.orientation}",
+           f"ESR RMS {srow.orientation_rms_error_MHz:.1f} MHz | {srow.orientation_quality_flag}",
+           f"N={order} sites={srow.selected_site_key} | {srow.site_inference_status}",
+           f"red chi2 {srow.selected_red_chi2:.2f} | {srow.model_adequacy}",
+           f"site weight {srow.selected_akaike_weight_within_shortlist:.2f} (shortlist only)",
+           f"T2 {srow.T2_us:.1f} us | {srow.T2_inference_status}",
+           f"profile {srow.get('T2_profile_report','')}",
+           f"beta {srow.beta:.2f} | revival {srow.revival_time_us:.2f} us",
+           f"width {srow.width0_us:.2f} us | slope {srow.width_slope:.2f}",
+           f"early amplitude {srow.early_amp:.3f} | timing offset {srow.dt_us:.3f} us",
+           "", " N  sites      red chi2   AICc    delta   weight"]
+    a=odf.aicc.to_numpy(float); w=np.exp(-.5*np.clip(a-a.min(),0,140));w/=w.sum()
+    for (_,rr),ww in zip(odf.iterrows(),w):
+        lines.append(f" {int(rr.model_order)}  {str(rr.site_key):10.10} {rr.red_chi2:7.2f} {rr.aicc:7.1f} {rr.aicc-a.min():6.1f} {ww:6.2f}")
+    lines.append("")
     for j in range(1,order+1):
         lines += [f"C{j}: site {int(srow[f'c13_{j}_site_id'])}",f"  eta = {srow.get(f'eta{j}',np.nan):.3f}",f"  kappa = {srow[f'c13_{j}_kappa']:.4f}",f"  f-/f+ = {srow[f'c13_{j}_fminus_kHz']:.2f}/{srow[f'c13_{j}_fplus_kHz']:.2f} kHz",f"  r = {srow[f'c13_{j}_distance_A']:.2f} A"]
     ax6.text(.02,.98,"\n".join(lines),va="top",ha="left",family="monospace",fontsize=8.8)
-    fig.suptitle(f"V8 multi-13C physical fit | NV {nv} | N={order} | {srow.selected_site_key}",fontsize=13); fig.tight_layout(rect=[0,0,1,.96]); pdf.savefig(fig,bbox_inches="tight"); plt.close(fig)
+    fig.suptitle(f"V8b physical fit + early nuisance | NV {nv} | N={order} | {srow.selected_site_key}",fontsize=13)
+    fig.subplots_adjust(top=.91,bottom=.08,left=.06,right=.98)
+    pdf.savefig(fig,bbox_inches="tight"); plt.close(fig)
 
 
 def global_summary_figure(summary):
@@ -651,26 +748,63 @@ def parse_nv_list(s):
 
 
 def main():
-    parser=argparse.ArgumentParser(); parser.add_argument("--nv",type=str,default=None); parser.add_argument("--max-spins",type=int,default=3,choices=(1,2,3)); parser.add_argument("--quick",action="store_true"); parser.add_argument("--workers",type=int,default=DEFAULT_N_JOBS); parser.add_argument("--no-profile",action="store_true"); parser.add_argument("--no-show",action="store_true"); args=parser.parse_args()
+    parser=argparse.ArgumentParser(); parser.add_argument("--nv",type=str,default=None); parser.add_argument("--max-spins",type=int,default=3,choices=(1,2,3)); parser.add_argument("--quick",action="store_true"); parser.add_argument("--workers",type=int,default=DEFAULT_N_JOBS); parser.add_argument("--no-profile",action="store_true"); parser.add_argument("--no-show",action="store_true"); parser.add_argument("--resume-dir",type=str,default=None); args=parser.parse_args()
     global RUN_T2_PROFILE
     if args.no_profile: RUN_T2_PROFILE=False
     np.random.seed(RANDOM_SEED); paths=discover_paths(); t,y,e,ori_df,ori_map,ori_quality,v6_seed_map,catalog=load_inputs(paths)
     req=parse_nv_list(args.nv); nvs=list(range(y.shape[0])) if req is None else [nv for nv in req if 0<=nv<y.shape[0]]
     print("="*100); print("V8 ORIENTATION-LOCKED SINGLE/MULTI-13C HAHN-ECHO FIT"); print("="*100); print(f"checkpoint: {paths.checkpoint}"); print(f"orientation source: {paths.orientation_csv}"); print(f"V6 seed source: {paths.v6_site_fits}"); print(f"catalog: {CATALOG_PATH}"); print(f"NVs: {len(nvs)} | max spins: {args.max_spins} | quick: {args.quick} | workers: {args.workers}"); print(f"BIC add-spin threshold: {ORDER_ACCEPT_DELTA_BIC}"); print("="*100)
+    outdir=Path(OUTPUT_DIR) if OUTPUT_DIR else paths.prefix.parent
+    outdir.mkdir(parents=True,exist_ok=True)
+    quick="_quick" if args.quick else ""
+    stamp=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    base=outdir/("v8b_"+stamp+"_n"+str(len(nvs))+quick)
+    checkpoint_dir=Path(args.resume_dir) if args.resume_dir else Path(str(base)+"_checkpoints")
+    if args.resume_dir: base=Path(str(checkpoint_dir).removesuffix("_checkpoints"))
+    checkpoint_dir.mkdir(parents=True,exist_ok=True)
     jobs=[]
     for nv in nvs:
         ori=ori_map.get(nv)
         if ori not in set(ALLOWED_ORIENTATIONS): print(f"[NV {nv}] skipped orientation {ori}"); continue
         jobs.append((nv,ori,ori_quality.get(nv,{}),v6_seed_map.get(nv)))
     def task(nv,ori,oq,seed): return fit_one_nv(nv,t,y,e,ori,oq,seed,catalog,args.max_spins,args.quick)
+    existing={int(p.stem[2:]):json.loads(p.read_text(encoding="utf-8"))
+              for p in checkpoint_dir.glob("nv*.json")}
+    pending=[j for j in jobs if j[0] not in existing]
+    print(f"Saved NV checkpoints: {len(existing)} | pending: {len(pending)}",flush=True)
+    results=list(existing.values())
     with threadpool_limits(limits=BLAS_THREADS_PER_WORKER):
-        results=Parallel(n_jobs=max(1,args.workers),backend="loky",batch_size=1,verbose=5)(delayed(task)(*j) for j in jobs)
+        generator=Parallel(n_jobs=max(1,args.workers),backend="loky",batch_size=1,
+                           return_as="generator_unordered",verbose=5)(delayed(task)(*j) for j in pending)
+        for r in generator:
+            nv=int(r["summary"]["nv_index"])
+            target=checkpoint_dir/f"nv{nv:03d}.json"; temp=checkpoint_dir/f"nv{nv:03d}.tmp"
+            temp.write_text(json.dumps(r,default=lambda x:x.item() if isinstance(x,np.generic) else x.tolist()),encoding="utf-8")
+            os.replace(temp,target)
+            results.append(r)
+            if len(results)%10==0: print(f"CHECKPOINT {len(results)}/{len(jobs)} NVs",flush=True)
     candidates=[]; orders=[]; profiles=[]; summaries=[]
     for r in results: candidates+=r["candidate_rows"]; orders+=r["order_rows"]; profiles+=r["profile_rows"]; summaries.append(r["summary"])
     cdf=pd.DataFrame(candidates); odf=pd.DataFrame(orders); pdfp=pd.DataFrame(profiles); sdf=pd.DataFrame(summaries).sort_values("nv_index")
-    outdir=Path(OUTPUT_DIR) if OUTPUT_DIR else paths.prefix.parent; outdir.mkdir(parents=True,exist_ok=True); subset="" if req is None else "_subset_"+"-".join(map(str,nvs)); quick="_quick" if args.quick else ""; base=outdir/(paths.prefix.name+"_v8_multic13"+subset+quick)
     candidate_csv=Path(str(base)+"_candidate_fits.csv"); order_csv=Path(str(base)+"_model_orders.csv"); profile_csv=Path(str(base)+"_t2_profiles.csv"); summary_csv=Path(str(base)+"_nv_summary.csv"); dashboard_pdf=Path(str(base)+"_dashboard.pdf"); global_png=Path(str(base)+"_global_summary.png"); global_pdf=Path(str(base)+"_global_summary.pdf")
     cdf.to_csv(candidate_csv,index=False); odf.to_csv(order_csv,index=False); pdfp.to_csv(profile_csv,index=False); sdf.to_csv(summary_csv,index=False)
+    def digest(path):
+        h=hashlib.sha256()
+        with open(path,'rb') as f:
+            for chunk in iter(lambda:f.read(1024*1024),b''): h.update(chunk)
+        return h.hexdigest()
+    config=dict(utc_stamp=stamp,script=str(Path(__file__).resolve()),script_sha256=digest(__file__),
+                checkpoint=str(paths.checkpoint),checkpoint_sha256=digest(paths.checkpoint),
+                orientation_csv=str(paths.orientation_csv),orientation_sha256=digest(paths.orientation_csv),
+                catalog=str(CATALOG_PATH),catalog_sha256=digest(CATALOG_PATH),
+                v6_seed_csv=str(paths.v6_site_fits),nvs=nvs,max_spins=args.max_spins,
+                quick=args.quick,profile=RUN_T2_PROFILE,workers=args.workers,
+                background_names=BG_NAMES,bounds={'lower':BG_LB.tolist(),'upper':BG_UB.tolist()},
+                early_template='exp(-((t-2.8)/1.4)^2)-0.35*exp(-((t-5.2)/1.4)^2)',
+                time_axis='total Hahn echo evolution (2*tau), microseconds',
+                site_model='product of [1-2 eta kappa sin^2(pi fI t/2) sin^2(pi fm t/2)]',
+                order_rule=f'BIC improvement >= {ORDER_ACCEPT_DELTA_BIC} at each addition')
+    Path(str(base)+'_config.json').write_text(json.dumps(config,indent=2),encoding='utf-8')
     with PdfPages(dashboard_pdf) as pdf:
         for nv in sdf.nv_index.astype(int): plot_dashboard(pdf,int(nv),t,y,e,sdf,cdf,odf,pdfp,catalog)
     fig=global_summary_figure(sdf); fig.savefig(global_png,dpi=300,bbox_inches="tight"); fig.savefig(global_pdf,bbox_inches="tight")

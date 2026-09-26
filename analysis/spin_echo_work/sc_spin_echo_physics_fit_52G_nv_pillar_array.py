@@ -1,313 +1,365 @@
 # -*- coding: utf-8 -*-
 """
-Physics-informed wide-field spin-echo fitting pipeline.
+Spin-echo ranked confidence analysis V6 — orientation-locked physical model
+=======================================
 
-Designed for the new QNami spin-echo scans:
-- runs directly from ONE raw Dioptric file
-- preserves the original widefield.process_counts() normalization
-- uses the measured B-field vector to constrain the 13C revival period
-- fits a compact collapse/revival envelope first
-- optionally tests physically allowed single-13C ESEEM frequency pairs
-  from the existing hyperfine table
-- uses AICc to decide whether adding ESEEM structure is justified
-- parallelizes across NVs
-- saves CSV + summary PNG/PDF + full-trace and first-revival PDFs
+What this version fixes
+-----------------------
+1. This experiment uses exactly TWO allowed crystallographic NV orientations.
+2. Each individual NV has ONE independently determined crystallographic orientation.
+3. For each NV, ONLY the 13C catalog entries belonging to that NV's orientation
+   are allowed into screening, equal-footing refitting, ranking, Akaike weights,
+   bootstrap/CV, and plotting.
+4. The C13 spin-echo fit is therefore NOT allowed to choose the NV orientation.
+   Orientation is an external physical constraint, supplied by ESR/resonance
+   assignment (or by a manual/CSV map).
+5. The cheap screen-only candidates are not mixed directly with deep fits.
+   Instead, the best candidates from the correct orientation pool are refit
+   on equal footing with the same model, bounds, optimizer and budget.
+4. A physical hypothesis is unique by:
+       (NV index, known NV orientation, 13C site_id)
+   so the same site cannot repeat in the top-3.
+5. The main PDF is one NV per page:
+       LEFT   = full spin-echo trace + dense top-3 fitted curves
+       MIDDLE = first-revival zoom + same top-3 colors
+       RIGHT  = spatial positions of the best 13C candidates, colored by rank
+6. Fit curves are evaluated on a dense grid (default 3000 points).
+7. Every equal-footing fit stores the old fitter's penalized score
+   (score_primary), reduced chi-square, AICc, delta-AICc and Akaike weight.
+8. Fitted physical/model parameters are expanded into explicit CSV columns:
+   T2, revival time, revival width, stretch exponent, comb contrast, oscillation
+   amplitude/frequencies/phases, taper, chirp, etc.
+9. The main PDF is a six-information dashboard:
+       top-left     full trace + dense top-3 fits
+       top-middle   first-revival zoom
+       top-right    Akaike-weight plot
+       bottom-left  colored 13C candidate positions
+       bottom-right top-3 detailed fit-parameter table
+10. Optional bootstrap and held-out validation use the two experiment orientations.
 
-Internal fit coordinate:
-    tau = half the total Hahn-echo evolution time
+This script consumes the saved exhaustive *_all_attempts.csv.gz and checkpoint;
+it does NOT repeat the original 1500-site search.
 
-Plots:
-    total evolution time = 2*tau
+For 52 G QNami:
+    orientation is inferred from the latest resonance-analysis CSV by matching
+    the measured doublet (f1,f2) to the four known ODMR orientation pairs.
 
-B field:
-    all-negative branch from the ODMR reconstruction:
-    (-48.551229, -18.748242, -5.973533) G
+For 49 G Johnson:
+    orientation is read directly from the saved combined dataset's
+    "orientations" array.
 
-@author: Saroj Chand
+@author: Saroj Chand / analysis helper
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
-from pathlib import Path
-import math
-import os
+import ast
 import json
-import traceback
+import os
+from dataclasses import dataclass
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
 from matplotlib.backends.backend_pdf import PdfPages
-from scipy.optimize import least_squares
-from scipy.signal import lombscargle, find_peaks
+from scipy.signal import lombscargle
 from threadpoolctl import threadpool_limits
 
-from utils import data_manager as dm
-from utils import kplotlib as kpl
-from utils import widefield
+from analysis.spin_echo_work import fitter_module_for_spin_echo as oldfit
+
+fine_decay = oldfit.fine_decay
 
 
 # =============================================================================
 # USER SETTINGS
 # =============================================================================
 
-FILE_STEM = "2026_09_21-15_37_34-qnami_spin_echo_combined_52G"
+# ---- Choose dataset -----------------------------------------------------------
+RESULT_TAG = "spin_echo_old_protocol_ranked_52G"
+# RESULT_TAG = "spin_echo_old_protocol_ranked_49G"
 
-APPLY_THRESHOLD = True
-
-# -------------------------------------------------------------------------
-# Magnetic field
-# -------------------------------------------------------------------------
-
-# ODMR solution, explicitly using the all-negative sign branch.
-B_VECTOR_G = np.array(
-    [-48.551229, -18.748242, -5.973533],
-    dtype=float,
+# The ONLY two NV orientations used in this experiment.
+# Every NV is fit against BOTH corresponding 13C catalog pools.
+ALLOWED_ORIENTATIONS = (
+    (1, 1, -1),
+    (-1, 1, 1),
 )
 
-GAMMA_C13_KHZ_PER_G = 1.0705
+SEARCH_ROOT = Path(r"G:\nvdata\pc_NVOffice\branch_master")
 
-# Allow the measured revival period to move slightly around the B-field prior.
-REVIVAL_RELATIVE_TOL = 0.06
+ALL_ATTEMPTS_PATH = None
+CHECKPOINT_PATH = None
+OUTPUT_DIR = None
 
-# -------------------------------------------------------------------------
-# Core collapse/revival model
-# -------------------------------------------------------------------------
+# ---- Catalog -----------------------------------------------------------------
+if RESULT_TAG.endswith("52G"):
+    CATALOG_PATH = Path(
+        r"analysis\spin_echo_work\essem_freq_kappa_catalog_22A_52G.json"
+    )
+else:
+    CATALOG_PATH = Path(
+        r"analysis\spin_echo_work\essem_freq_kappa_catalog_22A_49G.json"
+    )
 
-T2_US_BOUNDS = (10.0, 5000.0)
-T2_EXP_BOUNDS = (0.5, 4.0)
-WIDTH_US_BOUNDS = (0.4, 10.0)
-TAPER_BOUNDS = (0.0, 3.0)
-BASELINE_BOUNDS = (0.0, 1.5)
-CONTRAST_BOUNDS = (-1.2, 1.2)
+# ---- Orientation: 52 G QNami -------------------------------------------------
+AUTO_ASSIGN_52G_ORIENTATION_FROM_RESONANCE = True
 
-CORE_MULTISTART = 8
-ROBUST_LOSS = "soft_l1"
-ERR_FLOOR = 1e-3
-
-# -------------------------------------------------------------------------
-# ESEEM / hyperfine-informed stage
-# -------------------------------------------------------------------------
-
-USE_ESEEM = True
-USE_HYPERFINE_CATALOG = True
-
-# Existing table used by the old spin-echo work.
-HYPERFINE_PATH = r"analysis\nv_hyperfine_coupling\nv-2.txt"
-
-# Reuse the exact-kappa catalog from the established spin_echo_work workflow.
-# If it does not exist, this fitter can build it automatically.
-CATALOG_JSON = Path(
-    r"analysis\spin_echo_work\essem_freq_kappa_catalog_22A_52G.json"
+RESONANCE_ANALYSIS_ROOT = Path(
+    r"G:\nvdata\pc_NVOffice\branch_master"
+    r"\sc_resonance_analysis_optimized\resonance_analysis"
 )
-CATALOG_CSV = Path(
-    r"analysis\spin_echo_work\essem_freq_kappa_catalog_22A_52G.csv"
+
+# The four measured ODMR pairs at the 52 G field.
+# low transition, high transition in GHz.
+ESR_ORIENTATION_TARGETS_GHZ = {
+    (1, 1, -1): (2.7773, 2.9758),
+    (-1, 1, 1): (2.8421, 2.9195),
+}
+
+# We still assign the nearest joint doublet if this is exceeded, but flag it.
+ORIENTATION_WARN_RMS_MHZ = 10.0
+
+# ---- Orientation: 49 G Johnson -----------------------------------------------
+JOHNSON_49G_FILE_STEM = (
+    "2025_11_15-14_11_49-johnson_204nv_s9-17d44b"
 )
-AUTO_BUILD_CATALOG = True
-P_C13 = 0.011
-CATALOG_PHI_DEG = 0.0
-CATALOG_MS = -1
 
-# Maximum hyperfine-site radius included in the candidate catalog.
-DISTANCE_MAX_A = 22.0
+# ---- Manual override ----------------------------------------------------------
+# Manual values take precedence over ESR/automatic assignments.
+# Example:
+# MANUAL_ORIENTATION_MAP = {16: (-1,1,1), 25: (1,1,-1)}
+MANUAL_ORIENTATION_MAP = {}
 
-# Candidate frequency range. Actual upper bound is also clipped by the
-# experimental Nyquist limit inferred from the dense tau spacing.
-ESEEM_FREQ_RANGE_KHZ = (5.0, 3000.0)
+# Hard rule requested: do not compare a site from the wrong NV orientation.
+REQUIRE_KNOWN_ORIENTATION = True
 
-# Keep only the strongest physically allowed sites per orientation before
-# testing them against each NV. This is the main speed control.
-MAX_CATALOG_SITES_PER_ORIENTATION = 180
+# =============================================================================
+# ORIENTATION-POOL REFIT
+# =============================================================================
 
-# Accept the ESEEM-augmented model only if it improves AICc by this amount.
-MIN_DELTA_AICC = 6.0
+# Use the correct-orientation cheap screen to nominate sites, then refit them
+# equally. Existing correct-orientation deep candidates are added to the pool.
+POOL_TOP_SCREEN_SITES = 16
+POOL_MAX_UNIQUE_SITES = 28
 
-# Bound amplitudes of the four linear quadratures in the final joint refinement.
-ESEEM_QUAD_BOUND = 0.5
+# Every candidate receives the SAME broad oscillation-amplitude bounds.
+POOL_AMP_BOUNDS = (-2.0, 2.0)
 
-# If catalog construction fails, use residual-spectrum peaks as a fallback.
-ALLOW_SPECTRAL_FALLBACK = True
-NUM_FALLBACK_PEAKS = 6
+# Equal optimizer budget for every candidate.
+POOL_REFIT_MAX_NFEV = 60_000
 
-# -------------------------------------------------------------------------
-# Parallelism / output
-# -------------------------------------------------------------------------
+# Each candidate gets two equal-footing starts:
+#   (1) standardized model seed
+#   (2) its best saved seed from the exhaustive run
+POOL_USE_TWO_STARTS = True
 
-# CPU acceleration.
-# Purcell currently reports 14 physical / 20 logical CPU cores.
-# For small independent nonlinear fits, one process per physical core is a
-# good default; BLAS is limited to one thread inside each worker to prevent
-# oversubscription.
+# Parallelize by NV.
 CPU_COUNT = os.cpu_count() or 4
-N_JOBS = min(14, max(1, CPU_COUNT - 2))
-JOBLIB_BACKEND = "loky"
+POOL_N_JOBS = max(1, min(18, CPU_COUNT - 2))
+BLAS_THREADS_PER_WORKER = 1
 
-# GPU note:
-# The heavy nonlinear optimization is SciPy least_squares and is CPU-based.
-# Candidate ESEEM screening below is vectorized in NumPy, which is typically
-# faster than launching many tiny GPU kernels for only ~94 time points.
-USE_GPU_FOR_SCREENING = False
+# =============================================================================
+# RANKING / CONFIDENCE
+# =============================================================================
 
-# None -> fit all NVs
-# Example: [0, 1, 2, 20, 75]
-NV_INDICES = None
+TOP_UNIQUE_SAVE = 10
+TOP_UNIQUE_PLOT = 3
 
-PDF_COLS = 3
-PDF_ROWS = 4
+# Spectroscopically similar family threshold, within the SAME orientation.
+# Non-transitive leader grouping is used.
+FAMILY_TOL_KHZ = 2.0
 
-SAVE_CSV = True
-SAVE_RESULTS = True
-SAVE_CHECKPOINT_NPZ = True
-SAVE_SUMMARY_PNG = True
-SAVE_SUMMARY_PDF = True
-SAVE_FULL_FIT_PDF = True
-SAVE_FIRST_REVIVAL_PDF = True
+# =============================================================================
+# PDF DESIGN
+# =============================================================================
 
-SHOW_SUMMARY = True
+DENSE_CURVE_POINTS = 3000
 
-OUTPUT_BASENAME = "spin_echo_physics_fit_52G"
+FIRST_REVIVAL_HALF_WIDTH_US = 12.5
+
+# How many candidate carbon positions to show in the right panel.
+POSITION_TOP_N = 8
+AKAIKE_PLOT_TOP_N = 8
+
+# Main page table: only the top hypotheses, but with the detailed fit parameters.
+FIT_TABLE_TOP_N = 3
+
+SAVE_MAIN_THREE_PANEL_PDF = True
+SAVE_CONFIDENCE_TABLES = True
+SAVE_GLOBAL_SUMMARY = True
+SHOW_GLOBAL_SUMMARY = True
+
+# None -> all NVs
+PLOT_NV_INDICES = None
+
+# =============================================================================
+# OPTIONAL BOOTSTRAP / CV
+# =============================================================================
+
+RUN_BOOTSTRAP = True
+BOOTSTRAP_NV_INDICES = [16]
+BOOTSTRAP_N = 300
+BOOTSTRAP_TOP_SITES = 5
+BOOTSTRAP_MAX_NFEV = 30_000
+
+RUN_CROSS_VALIDATION = True
+CV_NV_INDICES = [16]
+CV_REPEATS = 50
+CV_TOP_SITES = 3
+CV_TRAIN_FRACTION = 0.80
+CV_MAX_NFEV = 30_000
+
+POST_N_JOBS = max(1, min(12, CPU_COUNT - 2))
+RANDOM_SEED = 20260922
+
+# =============================================================================
+# RESIDUAL SPECTROSCOPY
+# =============================================================================
+
+RUN_RESIDUAL_SPECTROSCOPY = True
+RESIDUAL_FREQ_MIN_KHZ = 5.0
+RESIDUAL_FREQ_MAX_KHZ = None
+RESIDUAL_GRID_POINTS = 5000
+RESIDUAL_N_PEAKS = 5
+
+
+PARAM_NAMES = [
+    "baseline",
+    "comb_contrast",
+    "revival_time_us",
+    "width0_us",
+    "T2_ms",
+    "T2_exp",
+    "amp_taper_alpha",
+    "width_slope",
+    "revival_chirp",
+    "osc_amp",
+    "osc_f0",
+    "osc_phi0",
+    "osc_f1",
+    "osc_phi1",
+]
 
 
 # =============================================================================
-# PHYSICAL CONSTANTS / DERIVED PRIORS
-# =============================================================================
-
-B_MAG_G = float(np.linalg.norm(B_VECTOR_G))
-C13_LARMOR_KHZ = GAMMA_C13_KHZ_PER_G * B_MAG_G
-
-# In this experiment tau is half of total evolution time.
-# The revival is expected at tau ~= 1/f_C13.
-REVIVAL_TAU_US_THEORY = 1000.0 / C13_LARMOR_KHZ
-REVIVAL_TOTAL_US_THEORY = 2.0 * REVIVAL_TAU_US_THEORY
-
-
-# =============================================================================
-# DATA CLASSES
+# PATH DISCOVERY
 # =============================================================================
 
 @dataclass
-class CatalogRecord:
-    orientation: tuple[int, int, int]
-    site_index: int
-    distance_A: float
-    f_minus_kHz: float
-    f_plus_kHz: float
-    kappa: float
-    amp_weight: float
+class ResultPaths:
+    all_attempts: Path
+    checkpoint: Path
+    prefix: Path
 
 
-@dataclass
-class FitResult:
-    nv_index: int
-    status: str
+def newest_match(root: Path, pattern: str) -> Path:
+    if not root.exists():
+        raise FileNotFoundError(f"Search root does not exist: {root}")
+    matches = list(root.rglob(pattern))
+    if not matches:
+        raise FileNotFoundError(
+            f"No files matching {pattern!r} under {root}"
+        )
+    return max(matches, key=lambda p: p.stat().st_mtime)
 
-    red_chi2: float
-    aicc: float
 
-    baseline: float
-    contrast: float
-    revival_tau_us: float
-    fitted_B_G: float
-    width_us: float
-    T2_us: float
-    T2_exp: float
-    taper_alpha: float
+def discover_paths() -> ResultPaths:
+    if ALL_ATTEMPTS_PATH is None:
+        all_path = newest_match(
+            SEARCH_ROOT,
+            f"*{RESULT_TAG}_all_attempts.csv.gz",
+        )
+    else:
+        all_path = Path(ALL_ATTEMPTS_PATH)
 
-    eseem_used: bool
-    delta_aicc: float
+    suffix = "_all_attempts.csv.gz"
+    s = str(all_path)
+    if not s.endswith(suffix):
+        raise ValueError(
+            f"Expected filename ending {suffix}; got {all_path}"
+        )
 
-    site_index: int
-    orientation: tuple | None
-    distance_A: float
-    kappa: float
+    prefix = Path(s[: -len(suffix)])
+    checkpoint = (
+        Path(CHECKPOINT_PATH)
+        if CHECKPOINT_PATH is not None
+        else Path(str(prefix) + "_fit_checkpoint.npz")
+    )
 
-    f_minus_kHz: float
-    f_plus_kHz: float
+    if not checkpoint.exists():
+        raise FileNotFoundError(checkpoint)
 
-    amp_minus: float
-    phase_minus_rad: float
-    amp_plus: float
-    phase_plus_rad: float
-
-    fit_curve: np.ndarray | None = None
-    core_curve: np.ndarray | None = None
+    return ResultPaths(
+        all_attempts=all_path,
+        checkpoint=checkpoint,
+        prefix=prefix,
+    )
 
 
 # =============================================================================
 # BASIC HELPERS
 # =============================================================================
 
-def safe_sigma(arr):
-    arr = np.abs(np.asarray(arr, dtype=float))
+def canonical_orientation(value):
+    if value is None:
+        return None
 
-    good = np.isfinite(arr) & (arr > 0)
+    if isinstance(value, str):
+        try:
+            value = ast.literal_eval(value)
+        except Exception:
+            return None
 
-    if np.any(good):
-        fallback = float(np.nanmedian(arr[good]))
-    else:
-        fallback = ERR_FLOOR
+    try:
+        a = np.asarray(value, int).ravel()
+    except Exception:
+        return None
 
-    arr = np.where(good, arr, fallback)
-    arr = np.maximum(arr, ERR_FLOOR)
+    if a.size != 3:
+        return None
 
-    return arr
-
-
-def resolve_nv_indices(num_nvs):
-    if NV_INDICES is None:
-        return np.arange(num_nvs, dtype=int)
-
-    inds = np.asarray(NV_INDICES, dtype=int)
-    inds = inds[(inds >= 0) & (inds < num_nvs)]
-
-    return np.unique(inds)
+    return tuple(int(v) for v in a)
 
 
-def get_output_base():
-    timestamp = dm.get_time_stamp()
-
-    base = Path(
-        dm.get_file_path(
-            __file__,
-            timestamp,
-            OUTPUT_BASENAME,
-        )
-    ).with_suffix("")
-
-    base.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    return base
+def orientation_str(value):
+    ori = canonical_orientation(value)
+    return str(ori) if ori is not None else ""
 
 
-def calc_fit_stats(y, yerr, yfit, npar):
-    y = np.asarray(y, dtype=float)
-    yerr = safe_sigma(yerr)
-    yfit = np.asarray(yfit, dtype=float)
+def parse_popt(s):
+    try:
+        p = np.asarray(json.loads(s), float)
+        if (
+            p.ndim == 1
+            and len(p) == len(PARAM_NAMES)
+            and np.all(np.isfinite(p))
+        ):
+            return p
+    except Exception:
+        pass
+    return None
 
-    chi2 = float(
-        np.sum(
-            ((y - yfit) / yerr) ** 2
-        )
-    )
 
-    dof = max(1, len(y) - int(npar))
-    red = chi2 / dof
+def fit_stats(y, e, pred, npar):
+    y = np.asarray(y, float)
+    e = np.maximum(np.asarray(e, float), 1e-12)
+    pred = np.asarray(pred, float)
 
+    chi2 = float(np.sum(((y - pred) / e) ** 2))
+
+    n = len(y)
     k = int(npar)
-    n = int(len(y))
+    dof = max(1, n - k)
 
-    aic = chi2 + 2.0 * k
+    red = chi2 / dof
+    aic = chi2 + 2 * k
 
     if n > k + 1:
         aicc = (
             aic
-            + 2.0 * k * (k + 1)
-            / (n - k - 1)
+            + 2 * k * (k + 1) / (n - k - 1)
         )
     else:
         aicc = np.inf
@@ -315,2482 +367,1587 @@ def calc_fit_stats(y, yerr, yfit, npar):
     return chi2, red, float(aicc)
 
 
+def curve_from_popt(t, popt):
+    return np.asarray(
+        fine_decay(np.asarray(t, float), *np.asarray(popt, float)),
+        float,
+    )
+
+
+def finite_success(df):
+    out = df[df["status"].astype(str) == "ok"].copy()
+
+    for col in ("aicc", "red_chi2", "score_primary"):
+        out[col] = pd.to_numeric(out[col], errors="coerce")
+
+    out = out[
+        np.isfinite(out["aicc"])
+        & np.isfinite(out["red_chi2"])
+        & np.isfinite(out["score_primary"])
+    ].copy()
+
+    out["orientation_tuple"] = out["orientation"].map(
+        canonical_orientation
+    )
+    out = out[out["orientation_tuple"].notna()].copy()
+
+    out["site_id"] = pd.to_numeric(
+        out["site_id"],
+        errors="coerce",
+    )
+    out = out[np.isfinite(out["site_id"])].copy()
+    out["site_id"] = out["site_id"].astype(int)
+
+    return out
+
+
 # =============================================================================
-# DATA LOADING
+# LOAD EXHAUSTIVE RESULTS
 # =============================================================================
 
-def load_single_file(file_stem):
-    """
-    Load one raw or already-processed spin-echo file.
+def load_inputs(paths):
+    print("=" * 96)
+    print("SPIN-ECHO ORIENTATION-LOCKED CONFIDENCE ANALYSIS V6")
+    print("=" * 96)
+    print(f"result tag   : {RESULT_TAG}")
+    print(f"all attempts : {paths.all_attempts}")
+    print(f"checkpoint   : {paths.checkpoint}")
 
-    If norm_counts are already stored, use them directly.
-    Otherwise use the original widefield.process_counts() normalization with
-    the rep axis untouched.
+    attempts = pd.read_csv(paths.all_attempts)
+
+    ckpt = np.load(
+        paths.checkpoint,
+        allow_pickle=True,
+    )
+
+    t = np.asarray(ckpt["times_us"], float)
+    y = np.asarray(ckpt["norm_counts"], float)
+    e = np.asarray(ckpt["norm_counts_ste"], float)
+
+    expected_revival = np.nan
+
+    if "expected_revival_total_us" in ckpt:
+        arr = np.asarray(
+            ckpt["expected_revival_total_us"],
+            float,
+        ).ravel()
+
+        if arr.size:
+            expected_revival = float(arr[0])
+
+    print(f"attempt rows : {len(attempts):,}")
+    print(f"data shape   : {y.shape}")
+
+    return (
+        attempts,
+        ckpt,
+        t,
+        y,
+        e,
+        expected_revival,
+    )
+
+
+# =============================================================================
+# KNOWN NV ORIENTATION
+# =============================================================================
+
+def assign_52g_orientations_from_resonance():
     """
-    print("=" * 78)
-    print("PHYSICS-INFORMED SPIN-ECHO FITTING")
-    print("=" * 78)
-    print(f"Loading: {file_stem}")
+    Infer each QNami NV orientation by JOINT matching of its measured ESR
+    doublet (f1,f2) to the four known orientation doublets.
+
+    This is much stronger than choosing f1 and f2 independently.
+    """
+    csv_path = newest_match(
+        RESONANCE_ANALYSIS_ROOT,
+        "fit_parameters_filtered.csv",
+    )
+
+    df = pd.read_csv(csv_path)
+
+    if not {"nv_index", "f1", "f2"}.issubset(df.columns):
+        raise ValueError(
+            f"Resonance CSV lacks nv_index/f1/f2: {csv_path}"
+        )
+
+    target_items = list(
+        ESR_ORIENTATION_TARGETS_GHZ.items()
+    )
+
+    mapping = {}
+    rows = []
+
+    for _, row in df.iterrows():
+        nv = int(row["nv_index"])
+        f1 = float(row["f1"])
+        f2 = float(row["f2"])
+
+        measured = np.sort([f1, f2])
+
+        scored = []
+
+        for ori, pair in target_items:
+            target = np.sort(
+                np.asarray(pair, float)
+            )
+
+            err_mhz = 1000.0 * (
+                measured - target
+            )
+
+            rms = float(
+                np.sqrt(
+                    np.mean(
+                        err_mhz**2
+                    )
+                )
+            )
+
+            scored.append(
+                (
+                    rms,
+                    tuple(ori),
+                    target,
+                    err_mhz,
+                )
+            )
+
+        scored.sort(
+            key=lambda x: x[0]
+        )
+
+        rms, ori, target, err_mhz = (
+            scored[0]
+        )
+
+        mapping[nv] = tuple(ori)
+
+        rows.append(
+            {
+                "nv_index": nv,
+                "orientation": str(
+                    tuple(ori)
+                ),
+                "measured_f1_GHz": float(
+                    measured[0]
+                ),
+                "measured_f2_GHz": float(
+                    measured[1]
+                ),
+                "target_f1_GHz": float(
+                    target[0]
+                ),
+                "target_f2_GHz": float(
+                    target[1]
+                ),
+                "orientation_rms_error_MHz":
+                    rms,
+                "orientation_warning":
+                    bool(
+                        rms
+                        > ORIENTATION_WARN_RMS_MHZ
+                    ),
+            }
+        )
+
+    quality = pd.DataFrame(rows)
+
+    print(
+        f"[orientation] QNami ESR mapping: "
+        f"{len(mapping)} NVs from {csv_path}"
+    )
+
+    bad = int(
+        quality[
+            "orientation_warning"
+        ].sum()
+    )
+
+    print(
+        f"[orientation] assignments with RMS error "
+        f">{ORIENTATION_WARN_RMS_MHZ:g} MHz: "
+        f"{bad}"
+    )
+
+    return mapping, quality, csv_path
+
+
+def load_49g_johnson_orientations():
+    from utils import data_manager as dm
 
     data = dm.get_raw_data(
-        file_stem=file_stem,
+        file_stem=JOHNSON_49G_FILE_STEM,
         load_npz=True,
     )
 
-    nv_list = data["nv_list"]
-
-    if "taus" in data:
-        taus_ns = np.asarray(
-            data["taus"],
-            dtype=float,
-        ).ravel()
-
-        tau_us = taus_ns / 1e3
-
-    elif "total_evolution_times" in data:
-        total_us = np.asarray(
-            data["total_evolution_times"],
-            dtype=float,
-        ).ravel()
-
-        tau_us = total_us / 2.0
-
-    else:
-        raise KeyError(
-            "Data must contain either 'taus' or "
-            "'total_evolution_times'."
-        )
-
-    if (
-        "norm_counts" in data
-        and "norm_counts_ste" in data
-    ):
-        print(
-            "Using stored norm_counts / norm_counts_ste."
-        )
-
-        norm_counts = np.asarray(
-            data["norm_counts"],
-            dtype=float,
-        )
-
-        norm_counts_ste = np.asarray(
-            data["norm_counts_ste"],
-            dtype=float,
-        )
-
-    else:
-        print(
-            "Using original widefield.process_counts() "
-            "normalization."
-        )
-
-        counts = np.asarray(
-            data["counts"]
-        )
-
-        print(
-            f"Raw counts shape: {counts.shape}"
-        )
-
-        sig_counts = np.asarray(
-            counts[0],
-            dtype=np.float32,
-        )
-
-        ref_counts = np.asarray(
-            counts[1],
-            dtype=np.float32,
-        )
-
-        norm_counts, norm_counts_ste = (
-            widefield.process_counts(
-                nv_list,
-                sig_counts,
-                ref_counts,
-                threshold=APPLY_THRESHOLD,
-            )
-        )
-
-        norm_counts = np.asarray(
-            norm_counts,
-            dtype=float,
-        )
-
-        norm_counts_ste = np.asarray(
-            norm_counts_ste,
-            dtype=float,
-        )
-
-    norm_counts_ste = safe_sigma(
-        norm_counts_ste
+    arr = np.asarray(
+        data["orientations"],
+        int,
     )
 
-    if (
-        norm_counts.shape
-        != norm_counts_ste.shape
-    ):
+    if arr.ndim != 2 or arr.shape[1] != 3:
         raise ValueError(
-            "norm_counts and norm_counts_ste "
-            "shape mismatch."
+            "49 G orientations array is not N x 3."
         )
 
-    if (
-        norm_counts.shape[0]
-        != len(nv_list)
-    ):
-        raise ValueError(
-            "NV count does not match "
-            "norm_counts rows."
+    mapping = {}
+    rows = []
+
+    for nv in range(arr.shape[0]):
+        ori = canonical_orientation(
+            arr[nv]
         )
 
-    if (
-        norm_counts.shape[1]
-        != tau_us.size
-    ):
-        raise ValueError(
-            "Tau length does not match "
-            "norm_counts columns."
-        )
-
-    # Sort by tau because the fit assumes ordered x for some diagnostics.
-    order = np.argsort(tau_us)
-
-    tau_us = tau_us[order]
-    norm_counts = norm_counts[:, order]
-    norm_counts_ste = norm_counts_ste[:, order]
-
-    total_evolution_us = 2.0 * tau_us
-
-    orientations = extract_nv_orientations(
-        data,
-        nv_list,
-    )
-
-    print()
-    print(f"NVs:                  {len(nv_list)}")
-    print(f"Tau points:           {len(tau_us)}")
-    print(f"|B|:                  {B_MAG_G:.4f} G")
-    print(
-        f"B vector:             "
-        f"{B_VECTOR_G.tolist()} G"
-    )
-    print(
-        f"13C Larmor frequency: "
-        f"{C13_LARMOR_KHZ:.4f} kHz"
-    )
-    print(
-        f"Expected revival tau: "
-        f"{REVIVAL_TAU_US_THEORY:.4f} us"
-    )
-    print(
-        f"Expected total time:  "
-        f"{REVIVAL_TOTAL_US_THEORY:.4f} us"
-    )
-
-    return (
-        data,
-        nv_list,
-        tau_us,
-        total_evolution_us,
-        norm_counts,
-        norm_counts_ste,
-        orientations,
-    )
-
-
-def extract_nv_orientations(data, nv_list):
-    """
-    Return shape (N_NV, 3) integer orientations when available.
-
-    Missing orientation -> row [0,0,0], which means "search all orientations".
-    """
-    num_nvs = len(nv_list)
-
-    out = np.zeros(
-        (num_nvs, 3),
-        dtype=int,
-    )
-
-    raw = data.get(
-        "orientations",
-        None,
-    )
-
-    if raw is not None:
-        arr = np.asarray(raw)
-
-        if (
-            arr.ndim == 2
-            and arr.shape[0] >= num_nvs
-            and arr.shape[1] == 3
-        ):
-            return arr[:num_nvs].astype(int)
-
-    for i, nv in enumerate(nv_list):
-        ori = None
-
-        if hasattr(nv, "orientation"):
-            ori = getattr(
-                nv,
-                "orientation",
-            )
-
-        elif isinstance(nv, dict):
-            ori = nv.get(
-                "orientation",
-                None,
-            )
-
-        if ori is None:
+        if ori is None or ori == (0, 0, 0):
             continue
 
-        try:
-            arr = np.asarray(
-                ori,
-                dtype=int,
-            ).ravel()
+        mapping[int(nv)] = ori
 
-            if arr.size == 3:
-                out[i] = arr
+        rows.append(
+            {
+                "nv_index": int(nv),
+                "orientation": str(ori),
+                "orientation_rms_error_MHz":
+                    np.nan,
+                "orientation_warning":
+                    False,
+            }
+        )
 
-        except Exception:
-            pass
-
-    return out
-
-
-# =============================================================================
-# CORE PHYSICS MODEL
-# =============================================================================
-
-def revival_comb(
-    tau_us,
-    revival_tau_us,
-    width_us,
-    taper_alpha,
-):
-    """
-    Quartic revival comb adapted from the previous spin-echo model.
-
-    Centers:
-        tau_k = k * T_rev
-
-    Amplitude:
-        1/(1+k)^alpha
-    """
-    tau_us = np.asarray(
-        tau_us,
-        dtype=float,
+    print(
+        f"[orientation] Johnson saved orientation map: "
+        f"{len(mapping)} NVs"
     )
 
-    revival_tau_us = max(
-        float(revival_tau_us),
-        1e-9,
-    )
+    return mapping, pd.DataFrame(rows), None
 
-    width_us = max(
-        float(width_us),
-        1e-9,
-    )
 
-    tau_max = float(
-        np.nanmax(tau_us)
-    )
-
-    n_rev = (
-        int(
-            np.ceil(
-                tau_max
-                / revival_tau_us
+def load_orientation_map():
+    if RESULT_TAG.endswith("52G"):
+        if not AUTO_ASSIGN_52G_ORIENTATION_FROM_RESONANCE:
+            mapping = {}
+            quality = pd.DataFrame()
+            src = None
+        else:
+            mapping, quality, src = (
+                assign_52g_orientations_from_resonance()
             )
-        )
-        + 2
-    )
-
-    comb = np.zeros_like(
-        tau_us,
-        dtype=float,
-    )
-
-    for k in range(n_rev):
-        center = (
-            k * revival_tau_us
-        )
-
-        amp = (
-            1.0
-            / (1.0 + k)
-            ** float(taper_alpha)
-        )
-
-        x = (
-            (tau_us - center)
-            / width_us
-        )
-
-        comb += (
-            amp
-            * np.exp(
-                -(x ** 4)
-            )
-        )
-
-    return comb
-
-
-def core_model(
-    tau_us,
-    baseline,
-    contrast,
-    revival_tau_us,
-    width_us,
-    T2_us,
-    T2_exp,
-    taper_alpha,
-):
-    """
-    Compact B-informed collapse/revival model.
-
-    y(tau) =
-        baseline
-        - contrast
-        * exp[-(2*tau/T2)^p]
-        * revival_comb(tau)
-
-    T2 is written in TOTAL evolution time, hence 2*tau/T2.
-    """
-    tau_us = np.asarray(
-        tau_us,
-        dtype=float,
-    )
-
-    T2_us = max(
-        float(T2_us),
-        1e-9,
-    )
-
-    env = np.exp(
-        -(
-            2.0 * tau_us
-            / T2_us
-        )
-        ** float(T2_exp)
-    )
-
-    comb = revival_comb(
-        tau_us,
-        revival_tau_us,
-        width_us,
-        taper_alpha,
-    )
-
-    return (
-        float(baseline)
-        - float(contrast)
-        * env
-        * comb
-    )
-
-
-def core_carrier(
-    tau_us,
-    revival_tau_us,
-    width_us,
-    T2_us,
-    T2_exp,
-    taper_alpha,
-):
-    """
-    Positive envelope x revival-comb carrier used by ESEEM modulation.
-    """
-    T2_us = max(
-        float(T2_us),
-        1e-9,
-    )
-
-    env = np.exp(
-        -(
-            2.0 * np.asarray(
-                tau_us,
-                dtype=float,
-            )
-            / T2_us
-        )
-        ** float(T2_exp)
-    )
-
-    comb = revival_comb(
-        tau_us,
-        revival_tau_us,
-        width_us,
-        taper_alpha,
-    )
-
-    return env * comb
-
-
-def initial_core_guess(
-    tau_us,
-    y,
-):
-    tau_us = np.asarray(
-        tau_us,
-        dtype=float,
-    )
-
-    y = np.asarray(
-        y,
-        dtype=float,
-    )
-
-    baseline = float(
-        np.nanmedian(y)
-    )
-
-    near = (
-        np.abs(
-            tau_us
-            - REVIVAL_TAU_US_THEORY
-        )
-        <= 0.25
-        * REVIVAL_TAU_US_THEORY
-    )
-
-    if np.any(near):
-        local = float(
-            np.nanmedian(
-                y[near]
-            )
-        )
-
-        contrast = (
-            baseline
-            - local
-        )
     else:
-        contrast = (
-            np.nanpercentile(
-                y,
-                80,
-            )
-            - np.nanpercentile(
-                y,
-                20,
-            )
+        mapping, quality, src = (
+            load_49g_johnson_orientations()
         )
 
-    contrast = float(
-        np.clip(
-            contrast,
-            -0.7,
-            0.7,
-        )
-    )
+    # Manual overrides win.
+    for nv, ori in MANUAL_ORIENTATION_MAP.items():
+        c = canonical_orientation(ori)
 
-    width = min(
-        6.0,
-        0.35
-        * REVIVAL_TAU_US_THEORY,
-    )
+        if c is not None:
+            mapping[int(nv)] = c
 
-    T2_us = max(
-        3.0
-        * REVIVAL_TOTAL_US_THEORY,
-        100.0,
-    )
-
-    return np.array(
-        [
-            baseline,
-            contrast,
-            REVIVAL_TAU_US_THEORY,
-            width,
-            T2_us,
-            2.0,
-            0.4,
-        ],
-        dtype=float,
-    )
-
-
-def core_bounds():
-    rev_lo = (
-        REVIVAL_TAU_US_THEORY
-        * (1.0 - REVIVAL_RELATIVE_TOL)
-    )
-
-    rev_hi = (
-        REVIVAL_TAU_US_THEORY
-        * (1.0 + REVIVAL_RELATIVE_TOL)
-    )
-
-    width_hi = min(
-        WIDTH_US_BOUNDS[1],
-        0.48 * rev_lo,
-    )
-
-    lb = np.array(
-        [
-            BASELINE_BOUNDS[0],
-            CONTRAST_BOUNDS[0],
-            rev_lo,
-            WIDTH_US_BOUNDS[0],
-            T2_US_BOUNDS[0],
-            T2_EXP_BOUNDS[0],
-            TAPER_BOUNDS[0],
-        ],
-        dtype=float,
-    )
-
-    ub = np.array(
-        [
-            BASELINE_BOUNDS[1],
-            CONTRAST_BOUNDS[1],
-            rev_hi,
-            width_hi,
-            T2_US_BOUNDS[1],
-            T2_EXP_BOUNDS[1],
-            TAPER_BOUNDS[1],
-        ],
-        dtype=float,
-    )
-
-    return lb, ub
-
-
-def fit_core(
-    tau_us,
-    y,
-    yerr,
-):
-    tau_us = np.asarray(
-        tau_us,
-        dtype=float,
-    )
-
-    y = np.asarray(
-        y,
-        dtype=float,
-    )
-
-    yerr = safe_sigma(
-        yerr
-    )
-
-    good = (
-        np.isfinite(tau_us)
-        & np.isfinite(y)
-        & np.isfinite(yerr)
-    )
-
-    t = tau_us[good]
-    yy = y[good]
-    ee = yerr[good]
-
-    if len(t) < 12:
-        raise RuntimeError(
-            "Too few valid points."
-        )
-
-    pbase = initial_core_guess(
-        t,
-        yy,
-    )
-
-    lb, ub = core_bounds()
-
-    rng = np.random.default_rng(
-        12345
-    )
-
-    starts = [
-        pbase.copy()
-    ]
-
-    for _ in range(
-        max(
-            0,
-            CORE_MULTISTART - 1,
-        )
-    ):
-        p = pbase.copy()
-
-        p[1] *= rng.uniform(
-            0.6,
-            1.4,
-        )
-
-        p[2] *= rng.uniform(
-            0.985,
-            1.015,
-        )
-
-        p[3] *= rng.uniform(
-            0.65,
-            1.4,
-        )
-
-        p[4] *= rng.uniform(
-            0.5,
-            2.0,
-        )
-
-        p[5] = rng.uniform(
-            1.0,
-            3.0,
-        )
-
-        p[6] = rng.uniform(
-            0.0,
-            1.2,
-        )
-
-        p = np.clip(
-            p,
-            lb + 1e-8,
-            ub - 1e-8,
-        )
-
-        starts.append(p)
-
-    best = None
-
-    def residual(p):
-        return (
-            yy
-            - core_model(
-                t,
-                *p,
-            )
-        ) / ee
-
-    for p0 in starts:
-        try:
-            res = least_squares(
-                residual,
-                x0=p0,
-                bounds=(lb, ub),
-                loss=ROBUST_LOSS,
-                f_scale=1.0,
-                max_nfev=25_000,
-                ftol=1e-10,
-                xtol=1e-10,
-                gtol=1e-10,
-            )
-
-            p = res.x
-
-            yfit = core_model(
-                t,
-                *p,
-            )
-
-            _, red, aicc = (
-                calc_fit_stats(
-                    yy,
-                    ee,
-                    yfit,
-                    len(p),
-                )
-            )
-
-            score = (
-                aicc,
-                red,
-            )
-
-            if (
-                best is None
-                or score < best[0]
-            ):
-                best = (
-                    score,
-                    p,
-                )
-
-        except Exception:
-            continue
-
-    if best is None:
-        raise RuntimeError(
-            "Core fit failed."
-        )
-
-    p = best[1]
-
-    full_curve = core_model(
-        tau_us,
-        *p,
-    )
-
-    _, red, aicc = calc_fit_stats(
-        y,
-        yerr,
-        full_curve,
-        len(p),
-    )
-
-    return p, full_curve, red, aicc
+    return mapping, quality, src
 
 
 # =============================================================================
-# HYPERFINE / ESEEM PHYSICS
+# LOAD C13 CATALOG / POSITIONS
 # =============================================================================
 
-Sx = 0.5 * np.array(
-    [[0, 1], [1, 0]],
-    dtype=complex,
-)
-
-Sy = 0.5 * np.array(
-    [[0, -1j], [1j, 0]],
-    dtype=complex,
-)
-
-Sz = 0.5 * np.array(
-    [[1, 0], [0, -1]],
-    dtype=complex,
-)
-
-
-def build_U_from_orientation(
-    orientation,
-):
-    """
-    Same cubic -> NV-frame construction used in the old ESEEM catalog code.
-    """
-    ez = np.asarray(
-        orientation,
-        dtype=float,
-    )
-
-    ez /= np.linalg.norm(
-        ez
-    )
-
-    trial = np.array(
-        [1.0, -1.0, 0.0],
-        dtype=float,
-    )
-
-    trial /= np.linalg.norm(
-        trial
-    )
-
-    if (
-        abs(
-            np.dot(
-                trial,
-                ez,
-            )
-        )
-        > 0.95
-    ):
-        trial = np.array(
-            [0.0, 1.0, -1.0],
-            dtype=float,
-        )
-
-    ex = (
-        trial
-        - np.dot(
-            trial,
-            ez,
-        )
-        * ez
-    )
-
-    ex /= np.linalg.norm(
-        ex
-    )
-
-    ey = np.cross(
-        ez,
-        ex,
-    )
-
-    ey /= np.linalg.norm(
-        ey
-    )
-
-    U = np.column_stack(
-        [ex, ey, ez]
-    )
-
-    return U, ez
-
-
-def eseem_lines_by_diag(
-    A_file_Hz,
-    orientation,
-    B_lab_T,
-    ms=-1,
-):
-    """
-    Nuclear Hamiltonian diagonalization copied conceptually from the old
-    build_essem_catalog.py workflow.
-    """
-    U, z_nv = (
-        build_U_from_orientation(
-            orientation
-        )
-    )
-
-    A_cubic = (
-        U
-        @ A_file_Hz
-        @ U.T
-    )
-
-    B = np.asarray(
-        B_lab_T,
-        dtype=float,
-    )
-
-    Bmag = float(
-        np.linalg.norm(B)
-    )
-
-    bhat = (
-        B / Bmag
-    )
-
-    fI_Hz = (
-        10.705e6
-        * Bmag
-    )
-
-    HZ = (
-        fI_Hz
-        * (
-            bhat[0] * Sx
-            + bhat[1] * Sy
-            + bhat[2] * Sz
-        )
-    )
-
-    Aeff = (
-        A_cubic
-        @ z_nv
-    )
-
-    Hhf = (
-        float(ms)
-        * (
-            Aeff[0] * Sx
-            + Aeff[1] * Sy
-            + Aeff[2] * Sz
-        )
-    )
-
-    e0 = np.linalg.eigvalsh(
-        HZ
-    )
-
-    ems = np.linalg.eigvalsh(
-        HZ + Hhf
-    )
-
-    f0 = float(
-        abs(
-            e0[1] - e0[0]
-        )
-    )
-
-    fms = float(
-        abs(
-            ems[1] - ems[0]
-        )
-    )
-
-    f_minus = abs(
-        fms - f0
-    )
-
-    f_plus = (
-        fms + f0
-    )
-
-    Bhat = bhat
-
-    A_par = float(
-        np.real(
-            Bhat
-            @ A_cubic
-            @ Bhat
-        )
-    )
-
-    A_perp_vec = (
-        A_cubic
-        @ Bhat
-        - A_par * Bhat
-    )
-
-    A_perp = float(
-        np.linalg.norm(
-            A_perp_vec
-        )
-    )
-
-    cos_th = float(
-        np.clip(
-            Bhat
-            @ (
-                z_nv
-                / np.linalg.norm(z_nv)
-            ),
-            -1,
-            1,
-        )
-    )
-
-    sin2_th = (
-        1.0 - cos_th**2
-    )
-
-    amp_weight = (
-        (
-            A_perp
-            / max(
-                fms,
-                1e-30,
-            )
-        )
-        ** 2
-        * sin2_th
-    )
-
-    return (
-        f_minus,
-        f_plus,
-        amp_weight,
-    )
-
-
-def build_exact_kappa_catalog_files():
-    """
-    Build the 52 G catalog using the established exact-kappa implementation
-    from kappa_modulation_depth.py.
-    """
-    from analysis.spin_echo_work.kappa_modulation_depth import (
-        build_essem_catalog_with_kappa,
-    )
-
-    hyperfine_path = Path(HYPERFINE_PATH)
-
-    if not hyperfine_path.exists():
+def load_catalog():
+    if not CATALOG_PATH.exists():
         raise FileNotFoundError(
-            f"Hyperfine table not found: {hyperfine_path}"
+            f"Catalog not found: {CATALOG_PATH}"
         )
-
-    CATALOG_JSON.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    print()
-    print("=" * 78)
-    print("BUILDING EXACT-KAPPA 52 G ESEEM CATALOG")
-    print("=" * 78)
-    print(f"B vector: {B_VECTOR_G.tolist()} G")
-    print(f"|B|:      {B_MAG_G:.6f} G")
-    print(f"JSON:     {CATALOG_JSON}")
-    print(f"CSV:      {CATALOG_CSV}")
-
-    records = build_essem_catalog_with_kappa(
-        hyperfine_path=str(hyperfine_path),
-        B_lab_vec=B_VECTOR_G * 1e-4,
-        orientations=(
-            (1, 1, 1),
-            (1, 1, -1),
-            (1, -1, 1),
-            (-1, 1, 1),
-        ),
-        distance_max_A=DISTANCE_MAX_A,
-        gamma_n_Hz_per_T=GAMMA_C13_KHZ_PER_G * 1e7,
-        p_occ=P_C13,
-        ms=CATALOG_MS,
-        phi_deg=CATALOG_PHI_DEG,
-        out_json=str(CATALOG_JSON),
-        out_csv=str(CATALOG_CSV),
-        read_hf_table_fn=None,
-    )
-
-    print(
-        f"Built {len(records)} exact-kappa records."
-    )
-
-    return records
-
-
-def load_exact_kappa_catalog():
-    """
-    Load the established JSON catalog. Auto-build it once when requested.
-    """
-    if not CATALOG_JSON.exists():
-        if not AUTO_BUILD_CATALOG:
-            raise FileNotFoundError(
-                f"ESEEM catalog not found: {CATALOG_JSON}"
-            )
-
-        build_exact_kappa_catalog_files()
 
     with open(
-        CATALOG_JSON,
+        CATALOG_PATH,
         "r",
         encoding="utf-8",
     ) as f:
-        raw_records = json.load(f)
+        records = json.load(f)
 
-    if isinstance(raw_records, dict):
-        raw_records = raw_records.get(
-            "records",
-            raw_records,
+    allowed = {tuple(int(v) for v in ori) for ori in ALLOWED_ORIENTATIONS}
+    records = [
+        rec for rec in records
+        if canonical_orientation(rec.get("orientation")) in allowed
+    ]
+
+    lookup = {}
+
+    for rec in records:
+        ori = canonical_orientation(
+            rec.get("orientation")
         )
 
-    records = []
-
-    for r in raw_records:
-        try:
-            rec = CatalogRecord(
-                orientation=tuple(
-                    int(x)
-                    for x in r["orientation"]
-                ),
-                site_index=int(
-                    r["site_index"]
-                ),
-                distance_A=float(
-                    r["distance_A"]
-                ),
-                f_minus_kHz=float(
-                    r["f_minus_Hz"]
-                ) / 1e3,
-                f_plus_kHz=float(
-                    r["f_plus_Hz"]
-                ) / 1e3,
-                kappa=float(
-                    r.get(
-                        "kappa",
-                        np.nan,
-                    )
-                ),
-                # Use exact kappa as the physical ranking score.
-                amp_weight=float(
-                    r.get(
-                        "kappa",
-                        r.get(
-                            "amp_weight",
-                            0.0,
-                        ),
-                    )
-                ),
+        site = int(
+            rec.get(
+                "site_index",
+                -1,
             )
+        )
 
-            if (
-                np.isfinite(rec.f_minus_kHz)
-                and np.isfinite(rec.f_plus_kHz)
-            ):
-                records.append(rec)
-
-        except Exception:
+        if ori is None or site < 0:
             continue
 
-    if not records:
-        raise RuntimeError(
-            f"No valid records loaded from {CATALOG_JSON}"
-        )
-
-    # Preserve strongest exact-kappa sites per orientation, as in the old
-    # workflow where catalog strength was used to control the search budget.
-    selected = []
-
-    for ori in (
-        (1, 1, 1),
-        (1, 1, -1),
-        (1, -1, 1),
-        (-1, 1, 1),
-    ):
-        local = [
-            r
-            for r in records
-            if r.orientation == ori
-        ]
-
-        local.sort(
-            key=lambda r: (
-                -np.nan_to_num(
-                    r.kappa,
-                    nan=-np.inf,
-                ),
-                r.site_index,
+        lookup[
+            (
+                ori,
+                site,
             )
+        ] = rec
+
+    print(
+        f"[catalog] records={len(records):,}, "
+        f"lookup keys={len(lookup):,}"
+    )
+
+    return records, lookup
+
+
+# =============================================================================
+# ORIENTATION-SPECIFIC CANDIDATE POOL
+# =============================================================================
+
+def best_saved_row_per_site(
+    nv_attempts,
+):
+    """
+    One best saved attempt per physical C13 hypothesis:
+        (orientation, site_id)
+    restricted to the two allowed orientations.
+    """
+    if nv_attempts.empty:
+        return pd.DataFrame()
+
+    return (
+        nv_attempts.sort_values(
+            [
+                "orientation_tuple",
+                "site_id",
+                "aicc",
+                "red_chi2",
+                "score_primary",
+            ],
+            kind="stable",
+        )
+        .groupby(
+            ["orientation_tuple", "site_id"],
+            as_index=False,
+        )
+        .first()
+    )
+
+
+def make_orientation_locked_candidate_pool(
+    attempts,
+    nv,
+    orientation,
+):
+    good = finite_success(
+        attempts[
+            attempts["nv_index"]
+            == int(nv)
+        ]
+    )
+
+    orientation = tuple(int(v) for v in orientation)
+
+    if orientation not in {tuple(int(v) for v in ori) for ori in ALLOWED_ORIENTATIONS}:
+        raise ValueError(
+            f"NV {nv}: orientation {orientation} is not one of "
+            f"ALLOWED_ORIENTATIONS={ALLOWED_ORIENTATIONS}"
         )
 
-        selected.extend(
-            local[
-                :MAX_CATALOG_SITES_PER_ORIENTATION
+    # HARD PHYSICAL CONSTRAINT:
+    # only carbon sites from this NV's independently known orientation.
+    good = good[
+        good["orientation_tuple"] == orientation
+    ].copy()
+
+    if good.empty:
+        return pd.DataFrame()
+
+    screen = best_saved_row_per_site(
+        good[
+            good["stage"].astype(str)
+            == "screen"
+        ]
+    )
+
+    deep = best_saved_row_per_site(
+        good[
+            good["stage"].astype(str)
+            .isin(
+                [
+                    "multistart",
+                    "refine",
+                ]
+            )
+        ]
+    )
+
+    # Nominate best screen candidates from the CORRECT orientation only.
+    screen = screen.sort_values(
+        [
+            "aicc",
+            "red_chi2",
+        ]
+    ).head(
+        int(
+            POOL_TOP_SCREEN_SITES
+        )
+    )
+
+    # Union screen nominees + every already-deep candidate in correct axis.
+    by_site = {}
+
+    for _, row in screen.iterrows():
+        key = (
+            tuple(row["orientation_tuple"]),
+            int(row["site_id"]),
+        )
+        by_site[key] = row
+
+    for _, row in deep.iterrows():
+        key = (
+            tuple(row["orientation_tuple"]),
+            int(row["site_id"]),
+        )
+
+        old = by_site.get(key)
+
+        if (
+            old is None
+            or float(row["aicc"]) < float(old["aicc"])
+        ):
+            by_site[key] = row
+
+    candidates = pd.DataFrame(
+        [
+            r.to_dict()
+            for r in by_site.values()
+        ]
+    )
+
+    if candidates.empty:
+        return candidates
+
+    candidates = (
+        candidates
+        .sort_values(
+            [
+                "aicc",
+                "red_chi2",
             ]
         )
-
-    print()
-    print("=" * 78)
-    print("ESEEM CATALOG")
-    print("=" * 78)
-    print(f"Catalog file:        {CATALOG_JSON}")
-    print(f"All valid records:   {len(records)}")
-    print(f"Selected for search: {len(selected)}")
-    print(
-        "Selection: strongest exact-kappa sites "
-        f"(max {MAX_CATALOG_SITES_PER_ORIENTATION}/orientation)"
-    )
-    print("=" * 78)
-
-    return selected
-
-
-def build_catalog():
-    """
-    Compatibility wrapper used by main().
-    """
-    if not USE_HYPERFINE_CATALOG:
-        return []
-
-    return load_exact_kappa_catalog()
-
-
-# =============================================================================
-# SPECTRAL FALLBACK
-# =============================================================================
-
-def infer_nyquist_kHz(
-    tau_us,
-):
-    unique_t = np.unique(
-        np.asarray(
-            tau_us,
-            dtype=float,
-        )
-    )
-
-    if unique_t.size < 2:
-        return np.inf
-
-    dt = np.diff(
-        unique_t
-    )
-
-    dt = dt[
-        dt > 0
-    ]
-
-    if dt.size == 0:
-        return np.inf
-
-    min_dt_us = float(
-        np.min(dt)
-    )
-
-    # cycles/us -> MHz -> kHz
-    return (
-        0.5
-        / min_dt_us
-        * 1000.0
-    )
-
-
-def residual_spectral_peaks(
-    tau_us,
-    residual,
-    revival_tau_us,
-    width_us,
-):
-    """
-    Lomb-Scargle peak finder on the first dense revival region.
-
-    Used only as a fallback / diagnostic; the preferred ESEEM frequencies are
-    the Hamiltonian-generated catalog frequencies.
-    """
-    tau_us = np.asarray(
-        tau_us,
-        dtype=float,
-    )
-
-    residual = np.asarray(
-        residual,
-        dtype=float,
-    )
-
-    mask = (
-        np.abs(
-            tau_us
-            - revival_tau_us
-        )
-        <= max(
-            1.25 * width_us,
-            0.30
-            * revival_tau_us,
-        )
-    )
-
-    t = tau_us[mask]
-    r = residual[mask]
-
-    if len(t) < 12:
-        t = tau_us
-        r = residual
-
-    r = (
-        r
-        - np.nanmean(r)
-    )
-
-    fmin = max(
-        1.0,
-        ESEEM_FREQ_RANGE_KHZ[0],
-    )
-
-    fmax = min(
-        ESEEM_FREQ_RANGE_KHZ[1],
-        0.95
-        * infer_nyquist_kHz(t),
-    )
-
-    if (
-        not np.isfinite(fmax)
-        or fmax <= fmin
-    ):
-        return []
-
-    freq_kHz = np.linspace(
-        fmin,
-        fmax,
-        1800,
-    )
-
-    # omega in radians per microsecond:
-    # f_kHz / 1000 = cycles/us.
-    omega = (
-        2.0
-        * np.pi
-        * freq_kHz
-        / 1000.0
-    )
-
-    try:
-        power = lombscargle(
-            t,
-            r,
-            omega,
-            normalize=True,
-            precenter=True,
-        )
-    except Exception:
-        return []
-
-    peaks, _ = find_peaks(
-        power
-    )
-
-    if peaks.size == 0:
-        return []
-
-    order = peaks[
-        np.argsort(
-            power[peaks]
-        )[::-1]
-    ]
-
-    selected = []
-
-    min_sep_kHz = max(
-        8.0,
-        1.0
-        / max(
-            np.ptp(t),
-            1e-6,
-        )
-        * 1000.0
-        * 0.4,
-    )
-
-    for idx in order:
-        f = float(
-            freq_kHz[idx]
-        )
-
-        if all(
-            abs(
-                f - old
+        .head(
+            int(
+                POOL_MAX_UNIQUE_SITES
             )
-            >= min_sep_kHz
-            for old in selected
-        ):
-            selected.append(f)
-
-        if (
-            len(selected)
-            >= NUM_FALLBACK_PEAKS
-        ):
-            break
-
-    return selected
-
-
-# =============================================================================
-# ESEEM CANDIDATE FITTING
-# =============================================================================
-
-def orientation_matches(
-    rec,
-    nv_orientation,
-):
-    ori = np.asarray(
-        nv_orientation,
-        dtype=int,
-    ).ravel()
-
-    if (
-        ori.size != 3
-        or not np.any(ori)
-    ):
-        return True
-
-    return (
-        tuple(
-            int(x)
-            for x in ori
         )
-        == rec.orientation
+        .reset_index(
+            drop=True
+        )
     )
 
+    return candidates
 
-def filter_catalog_for_trace(
-    catalog,
-    nv_orientation,
-    tau_us,
+
+# =============================================================================
+# EQUAL-FOOTING REFIT
+# =============================================================================
+
+def standardized_vectors(
+    t,
+    y,
+    row,
+    expected_revival,
+    warm=None,
 ):
-    nyq = infer_nyquist_kHz(
-        tau_us
+    p0, lb, ub = (
+        oldfit._initial_guess_and_bounds(
+            np.asarray(t, float),
+            np.asarray(y, float),
+            enable_extras=True,
+            fixed_rev_time=None,
+        )
     )
 
-    lo = float(
-        ESEEM_FREQ_RANGE_KHZ[0]
+    pmap = (
+        oldfit._param_index_map(
+            fine_decay
+        )
     )
 
-    hi = min(
+    oldfit._set_osc_amp_bounds(
+        lb,
+        ub,
+        fine_decay,
         float(
-            ESEEM_FREQ_RANGE_KHZ[1]
+            POOL_AMP_BOUNDS[0]
         ),
-        0.95 * nyq,
+        float(
+            POOL_AMP_BOUNDS[1]
+        ),
     )
 
-    out = []
-
-    for rec in catalog:
-        if not orientation_matches(
-            rec,
-            nv_orientation,
-        ):
-            continue
-
-        fm = rec.f_minus_kHz
-        fp = rec.f_plus_kHz
-
-        if not (
-            lo <= fm <= hi
-            and lo <= fp <= hi
-        ):
-            continue
-
-        if (
-            abs(fp - fm)
-            < 1e-3
-        ):
-            continue
-
-        out.append(rec)
-
-    return out
-
-
-def design_eseem_matrix(
-    tau_us,
-    carrier,
-    f_minus_kHz,
-    f_plus_kHz,
-):
-    t = np.asarray(
-        tau_us,
-        dtype=float,
-    )
-
-    c = np.asarray(
-        carrier,
-        dtype=float,
-    )
-
+    # Use saved catalog frequencies, locked tightly.
     f0 = (
-        float(f_minus_kHz)
+        float(
+            row["f0_kHz"]
+        )
         / 1000.0
     )
 
     f1 = (
-        float(f_plus_kHz)
+        float(
+            row["f1_kHz"]
+        )
         / 1000.0
     )
 
-    return np.column_stack(
-        [
-            c
-            * np.cos(
-                2.0 * np.pi * f0 * t
-            ),
-            c
-            * np.sin(
-                2.0 * np.pi * f0 * t
-            ),
-            c
-            * np.cos(
-                2.0 * np.pi * f1 * t
-            ),
-            c
-            * np.sin(
-                2.0 * np.pi * f1 * t
-            ),
+    freq_eps = 1e-6
+
+    for name, val in (
+        ("osc_f0", f0),
+        ("osc_f1", f1),
+    ):
+        ind = pmap[name]
+
+        p0[ind] = val
+        lb[ind] = (
+            val - freq_eps
+        )
+        ub[ind] = (
+            val + freq_eps
+        )
+
+    if (
+        np.isfinite(
+            expected_revival
+        )
+        and "revival_time"
+        in pmap
+    ):
+        ind = pmap[
+            "revival_time"
         ]
-    )
 
-
-def linear_eseem_fit(
-    tau_us,
-    y,
-    yerr,
-    core_curve,
-    core_params,
-    f_minus_kHz,
-    f_plus_kHz,
-):
-    (
-        baseline,
-        contrast,
-        revival_tau_us,
-        width_us,
-        T2_us,
-        T2_exp,
-        taper_alpha,
-    ) = core_params
-
-    carrier = core_carrier(
-        tau_us,
-        revival_tau_us,
-        width_us,
-        T2_us,
-        T2_exp,
-        taper_alpha,
-    )
-
-    X = design_eseem_matrix(
-        tau_us,
-        carrier,
-        f_minus_kHz,
-        f_plus_kHz,
-    )
-
-    ee = safe_sigma(
-        yerr
-    )
-
-    target = (
-        np.asarray(
-            y,
-            dtype=float,
+        p0[ind] = np.clip(
+            float(
+                expected_revival
+            ),
+            lb[ind]
+            + 1e-6,
+            ub[ind]
+            - 1e-6,
         )
-        - np.asarray(
-            core_curve,
-            dtype=float,
+
+    if warm is not None:
+        w = np.asarray(
+            warm,
+            float,
+        )
+
+        if w.shape == p0.shape:
+            p0 = w.copy()
+
+            p0[
+                pmap["osc_f0"]
+            ] = f0
+
+            p0[
+                pmap["osc_f1"]
+            ] = f1
+
+    p0, lb, ub = (
+        oldfit._retie_contrast_to_baseline(
+            p0,
+            lb,
+            ub,
+            pmap,
+            eps=0.01,
         )
     )
 
-    Xw = (
-        X / ee[:, None]
-    )
-
-    yw = (
-        target / ee
-    )
-
-    try:
-        coeff, *_ = np.linalg.lstsq(
-            Xw,
-            yw,
-            rcond=None,
+    eps = (
+        1e-9
+        * np.maximum(
+            1.0,
+            ub - lb,
         )
-    except Exception:
-        return None
-
-    coeff = np.clip(
-        coeff,
-        -ESEEM_QUAD_BOUND,
-        ESEEM_QUAD_BOUND,
     )
 
-    fit_curve = (
-        core_curve
-        + X @ coeff
-    )
-
-    _, red, aicc = calc_fit_stats(
-        y,
-        yerr,
-        fit_curve,
-        7 + 4,
+    p0 = np.minimum(
+        np.maximum(
+            p0,
+            lb + eps,
+        ),
+        ub - eps,
     )
 
     return (
-        coeff,
-        fit_curve,
-        red,
-        aicc,
-    )
-
-
-
-def batch_screen_catalog(
-    tau_us,
-    y,
-    yerr,
-    core_curve,
-    core_params,
-    catalog_records,
-):
-    """
-    Vectorized screening of all physical (f-, f+) candidates for one NV.
-
-    This replaces hundreds of small np.linalg.lstsq calls with one batched
-    normal-equation solve. For ~100–200 candidate sites and ~94 time points,
-    this is substantially faster on CPU and avoids GPU launch overhead.
-
-    Returns
-    -------
-    best_record, best_coeff, best_curve, best_red_chi2, best_aicc
-    """
-    if not catalog_records:
-        return None
-
-    t = np.asarray(tau_us, dtype=float)
-    yy = np.asarray(y, dtype=float)
-    ee = safe_sigma(yerr)
-    core = np.asarray(core_curve, dtype=float)
-
-    (
-        _baseline,
-        _contrast,
-        revival_tau_us,
-        width_us,
-        T2_us,
-        T2_exp,
-        taper_alpha,
-    ) = core_params
-
-    carrier = core_carrier(
-        t,
-        revival_tau_us,
-        width_us,
-        T2_us,
-        T2_exp,
-        taper_alpha,
-    )
-
-    fm = np.asarray(
-        [r.f_minus_kHz for r in catalog_records],
-        dtype=float,
-    )
-    fp = np.asarray(
-        [r.f_plus_kHz for r in catalog_records],
-        dtype=float,
-    )
-
-    # shape: (M, N)
-    phm = (
-        2.0
-        * np.pi
-        * (fm[:, None] / 1000.0)
-        * t[None, :]
-    )
-    php = (
-        2.0
-        * np.pi
-        * (fp[:, None] / 1000.0)
-        * t[None, :]
-    )
-
-    c = carrier[None, :]
-
-    # X shape: (M candidates, N time points, 4 quadratures)
-    X = np.stack(
-        [
-            c * np.cos(phm),
-            c * np.sin(phm),
-            c * np.cos(php),
-            c * np.sin(php),
-        ],
-        axis=2,
-    )
-
-    target = yy - core
-    w = 1.0 / np.maximum(ee, ERR_FLOOR) ** 2
-
-    # Batched weighted normal equations:
-    # A_m = X_m^T W X_m
-    # b_m = X_m^T W r
-    A = np.einsum(
-        "mni,mnj,n->mij",
-        X,
-        X,
-        w,
-        optimize=True,
-    )
-    b = np.einsum(
-        "mni,n,n->mi",
-        X,
-        target,
-        w,
-        optimize=True,
-    )
-
-    # Tiny ridge only for numerical stability when frequencies are nearly
-    # degenerate. It is far below the experimental error scale.
-    ridge = 1e-10
-    A += ridge * np.eye(4)[None, :, :]
-
-    try:
-        # For stacked A with shape (M, 4, 4), explicitly give b a trailing
-        # singleton RHS dimension. This is compatible across NumPy versions:
-        #     (M,4,4) @ (M,4,1) -> (M,4,1)
-        coeff = np.linalg.solve(
-            A,
-            b[..., None],
-        )[..., 0]
-    except np.linalg.LinAlgError:
-        coeff = np.empty((len(catalog_records), 4), dtype=float)
-        for i in range(len(catalog_records)):
-            try:
-                coeff[i] = np.linalg.lstsq(
-                    A[i],
-                    b[i],
-                    rcond=None,
-                )[0]
-            except Exception:
-                coeff[i] = np.nan
-
-    coeff = np.clip(
-        coeff,
-        -ESEEM_QUAD_BOUND,
-        ESEEM_QUAD_BOUND,
-    )
-
-    modulation = np.einsum(
-        "mni,mi->mn",
-        X,
-        coeff,
-        optimize=True,
-    )
-
-    resid = (
-        target[None, :]
-        - modulation
-    ) / ee[None, :]
-
-    chi2 = np.sum(
-        resid * resid,
-        axis=1,
-    )
-
-    n = len(t)
-    k = 11
-    dof = max(1, n - k)
-    red = chi2 / dof
-
-    aic = chi2 + 2.0 * k
-
-    if n > k + 1:
-        aicc = (
-            aic
-            + 2.0
-            * k
-            * (k + 1)
-            / (n - k - 1)
-        )
-    else:
-        aicc = np.full_like(
-            aic,
-            np.inf,
-        )
-
-    valid = (
-        np.isfinite(aicc)
-        & np.all(
-            np.isfinite(coeff),
-            axis=1,
-        )
-    )
-
-    if not np.any(valid):
-        return None
-
-    masked = np.where(
-        valid,
-        aicc,
-        np.inf,
-    )
-
-    best_ind = int(
-        np.argmin(masked)
-    )
-
-    best_curve = (
-        core
-        + modulation[best_ind]
-    )
-
-    return (
-        catalog_records[best_ind],
-        coeff[best_ind],
-        best_curve,
-        float(red[best_ind]),
-        float(aicc[best_ind]),
-    )
-
-def joint_model(
-    tau_us,
-    p,
-    f_minus_kHz,
-    f_plus_kHz,
-):
-    core_p = p[:7]
-    quad = p[7:11]
-
-    core = core_model(
-        tau_us,
-        *core_p,
-    )
-
-    carrier = core_carrier(
-        tau_us,
-        core_p[2],
-        core_p[3],
-        core_p[4],
-        core_p[5],
-        core_p[6],
-    )
-
-    X = design_eseem_matrix(
-        tau_us,
-        carrier,
-        f_minus_kHz,
-        f_plus_kHz,
-    )
-
-    return (
-        core
-        + X @ quad
-    )
-
-
-def refine_joint_fit(
-    tau_us,
-    y,
-    yerr,
-    core_params,
-    quad,
-    f_minus_kHz,
-    f_plus_kHz,
-):
-    core_lb, core_ub = (
-        core_bounds()
-    )
-
-    lb = np.concatenate(
-        [
-            core_lb,
-            np.full(
-                4,
-                -ESEEM_QUAD_BOUND,
-            ),
-        ]
-    )
-
-    ub = np.concatenate(
-        [
-            core_ub,
-            np.full(
-                4,
-                ESEEM_QUAD_BOUND,
-            ),
-        ]
-    )
-
-    p0 = np.concatenate(
-        [
-            core_params,
-            quad,
-        ]
-    )
-
-    p0 = np.clip(
         p0,
-        lb + 1e-9,
-        ub - 1e-9,
+        lb,
+        ub,
     )
 
-    ee = safe_sigma(
-        yerr
+
+def one_equal_fit(
+    t,
+    y,
+    e,
+    row,
+    expected_revival,
+    warm,
+):
+    p0, lb, ub = (
+        standardized_vectors(
+            t,
+            y,
+            row,
+            expected_revival,
+            warm=warm,
+        )
     )
 
-    def residual(p):
-        return (
+    popt, _pcov, _red = (
+        oldfit._fit_least_squares(
+            fine_decay,
+            np.asarray(
+                t,
+                float,
+            ),
             np.asarray(
                 y,
-                dtype=float,
-            )
-            - joint_model(
-                tau_us,
-                p,
-                f_minus_kHz,
-                f_plus_kHz,
-            )
-        ) / ee
-
-    res = least_squares(
-        residual,
-        x0=p0,
-        bounds=(lb, ub),
-        loss=ROBUST_LOSS,
-        f_scale=1.0,
-        max_nfev=20_000,
-        ftol=1e-10,
-        xtol=1e-10,
-        gtol=1e-10,
+                float,
+            ),
+            np.maximum(
+                np.asarray(
+                    e,
+                    float,
+                ),
+                1e-12,
+            ),
+            p0,
+            lb,
+            ub,
+            max_nfev=int(
+                POOL_REFIT_MAX_NFEV
+            ),
+        )
     )
 
-    p = res.x
-
-    curve = joint_model(
-        tau_us,
-        p,
-        f_minus_kHz,
-        f_plus_kHz,
+    pred = curve_from_popt(
+        t,
+        popt,
     )
 
-    _, red, aicc = calc_fit_stats(
-        y,
-        yerr,
-        curve,
-        len(p),
+    chi2, red, aicc = (
+        fit_stats(
+            y,
+            e,
+            pred,
+            len(popt),
+        )
+    )
+
+    # Preserve the old fitter's selection diagnostic as an explicit output.
+    # This is NOT used as a probability; lower is better.
+    pmap = oldfit._param_index_map(fine_decay)
+    score_primary, score_amp_tie = oldfit._score_tuple(
+        popt,
+        red,
+        lb,
+        ub,
+        pmap,
     )
 
     return (
-        p,
-        curve,
+        popt,
+        pred,
+        chi2,
         red,
         aicc,
+        float(score_primary),
+        float(score_amp_tie),
     )
 
 
-def quadratures_to_amp_phase(
-    c,
-    s,
-):
-    amp = float(
-        np.hypot(
-            c,
-            s,
-        )
-    )
-
-    # c cos(wt) + s sin(wt)
-    # = A cos(wt + phi)
-    phi = float(
-        np.arctan2(
-            -s,
-            c,
-        )
-    )
-
-    return amp, phi
-
-
-# =============================================================================
-# SINGLE-NV FIT
-# =============================================================================
-
-def fit_one_nv(
-    nv_index,
-    tau_us,
+def refit_candidate_equal_footing(
+    nv,
+    t,
     y,
-    yerr,
-    nv_orientation,
-    catalog,
+    e,
+    row,
+    expected_revival,
 ):
-    try:
-        y = np.asarray(
-            y,
-            dtype=float,
+    saved = parse_popt(
+        row.get(
+            "popt_json",
+            "",
         )
+    )
 
-        yerr = safe_sigma(
-            yerr
-        )
-
-        core_p, core_curve, core_red, core_aicc = (
-            fit_core(
-                tau_us,
-                y,
-                yerr,
-            )
-        )
-
+    starts = [
         (
-            baseline,
-            contrast,
-            revival_tau_us,
-            width_us,
-            T2_us,
-            T2_exp,
-            taper_alpha,
-        ) = core_p
+            "standard",
+            None,
+        )
+    ]
 
-        fitted_B_G = (
-            1000.0
-            / (
-                GAMMA_C13_KHZ_PER_G
-                * revival_tau_us
+    if POOL_USE_TWO_STARTS:
+        starts.append(
+            (
+                "saved",
+                saved,
             )
         )
 
-        best = None
-        eseem_stage_error = None
+    results = []
 
+    for start_name, warm in starts:
         try:
+            (
+                popt,
+                pred,
+                chi2,
+                red,
+                aicc,
+                score_primary,
+                score_amp_tie,
+            ) = one_equal_fit(
+                t,
+                y,
+                e,
+                row,
+                expected_revival,
+                warm,
+            )
 
-            if USE_ESEEM:
-                local_catalog = (
-                    filter_catalog_for_trace(
-                        catalog,
-                        nv_orientation,
-                        tau_us,
-                    )
-                    if catalog
-                    else []
-                )
-
-                # Fast vectorized screening of every physically allowed
-                # hyperfine candidate for this NV.
-                screened = batch_screen_catalog(
-                    tau_us,
-                    y,
-                    yerr,
-                    core_curve,
-                    core_p,
-                    local_catalog,
-                )
-
-                if screened is not None:
-                    (
-                        rec,
-                        quad,
-                        curve,
+            results.append(
+                {
+                    "start_name":
+                        start_name,
+                    "popt":
+                        popt,
+                    "pred":
+                        pred,
+                    "chi2":
+                        chi2,
+                    "red_chi2":
                         red,
+                    "aicc":
                         aicc,
-                    ) = screened
-
-                    best = (
-                        (aicc, red),
-                        rec,
-                        quad,
-                        curve,
-                        red,
-                        aicc,
-                    )
-
-                # Fallback: use strongest residual spectral peaks.
-                if (
-                    best is None
-                    and ALLOW_SPECTRAL_FALLBACK
-                ):
-                    peaks = residual_spectral_peaks(
-                        tau_us,
-                        y - core_curve,
-                        revival_tau_us,
-                        width_us,
-                    )
-
-                    if len(peaks) >= 2:
-                        pairs = []
-
-                        for i in range(
-                            len(peaks)
-                        ):
-                            for j in range(
-                                i + 1,
-                                len(peaks),
-                            ):
-                                pairs.append(
-                                    (
-                                        min(
-                                            peaks[i],
-                                            peaks[j],
-                                        ),
-                                        max(
-                                            peaks[i],
-                                            peaks[j],
-                                        ),
-                                    )
-                                )
-
-                        for fm, fp in pairs:
-                            out = linear_eseem_fit(
-                                tau_us,
-                                y,
-                                yerr,
-                                core_curve,
-                                core_p,
-                                fm,
-                                fp,
-                            )
-
-                            if out is None:
-                                continue
-
-                            quad, curve, red, aicc = out
-
-                            rec = CatalogRecord(
-                                orientation=(0, 0, 0),
-                                site_index=-1,
-                                distance_A=np.nan,
-                                f_minus_kHz=float(fm),
-                                f_plus_kHz=float(fp),
-                                kappa=np.nan,
-                                amp_weight=np.nan,
-                            )
-
-                            score = (
-                                aicc,
-                                red,
-                            )
-
-                            if (
-                                best is None
-                                or score < best[0]
-                            ):
-                                best = (
-                                    score,
-                                    rec,
-                                    quad,
-                                    curve,
-                                    red,
-                                    aicc,
-                                )
+                    "score_primary":
+                        score_primary,
+                    "score_amp_tie":
+                        score_amp_tie,
+                }
+            )
 
         except Exception as exc:
-            # The core collapse/revival fit is still scientifically useful.
-            # Do not throw away the whole NV because the optional ESEEM stage
-            # had a catalog/numerical problem.
-            eseem_stage_error = str(exc)
-            best = None
-
-        use_eseem = False
-        delta_aicc = 0.0
-
-        if best is not None:
-            (
-                _score,
-                rec,
-                quad,
-                _curve,
-                _red,
-                candidate_aicc,
-            ) = best
-
-            delta_aicc = (
-                core_aicc
-                - candidate_aicc
+            results.append(
+                {
+                    "start_name":
+                        start_name,
+                    "error":
+                        str(exc),
+                }
             )
 
-            if (
-                np.isfinite(
-                    delta_aicc
-                )
-                and delta_aicc
-                >= MIN_DELTA_AICC
-            ):
-                try:
-                    (
-                        joint_p,
-                        joint_curve,
-                        joint_red,
-                        joint_aicc,
-                    ) = refine_joint_fit(
-                        tau_us,
-                        y,
-                        yerr,
-                        core_p,
-                        quad,
-                        rec.f_minus_kHz,
-                        rec.f_plus_kHz,
-                    )
+    good = [
+        r
+        for r in results
+        if "aicc" in r
+        and np.isfinite(
+            r["aicc"]
+        )
+    ]
 
-                    refined_delta = (
-                        core_aicc
-                        - joint_aicc
-                    )
-
-                    if (
-                        np.isfinite(
-                            refined_delta
-                        )
-                        and refined_delta
-                        >= MIN_DELTA_AICC
-                    ):
-                        use_eseem = True
-                        delta_aicc = refined_delta
-
-                        core_p = (
-                            joint_p[:7]
-                        )
-
-                        quad = (
-                            joint_p[7:11]
-                        )
-
-                        fit_curve = (
-                            joint_curve
-                        )
-
-                        red = (
-                            joint_red
-                        )
-
-                        aicc = (
-                            joint_aicc
-                        )
-
-                        (
-                            baseline,
-                            contrast,
-                            revival_tau_us,
-                            width_us,
-                            T2_us,
-                            T2_exp,
-                            taper_alpha,
-                        ) = core_p
-
-                        core_curve = core_model(
-                            tau_us,
-                            *core_p,
-                        )
-
-                        fitted_B_G = (
-                            1000.0
-                            / (
-                                GAMMA_C13_KHZ_PER_G
-                                * revival_tau_us
-                            )
-                        )
-
-                except Exception:
-                    pass
-
-        if not use_eseem:
-            fit_curve = (
-                core_curve
-            )
-
-            red = (
-                core_red
-            )
-
-            aicc = (
-                core_aicc
-            )
-
-            rec = CatalogRecord(
-                orientation=(
-                    tuple(
-                        int(v)
-                        for v in nv_orientation
-                    )
-                    if np.any(
-                        nv_orientation
-                    )
-                    else (0, 0, 0)
+    if not good:
+        return {
+            "nv_index":
+                int(nv),
+            "orientation":
+                str(
+                    row[
+                        "orientation_tuple"
+                    ]
                 ),
-                site_index=-1,
-                distance_A=np.nan,
-                f_minus_kHz=np.nan,
-                f_plus_kHz=np.nan,
-                kappa=np.nan,
-                amp_weight=np.nan,
-            )
-
-            quad = np.zeros(
-                4,
-                dtype=float,
-            )
-
-            delta_aicc = max(
-                0.0,
-                float(
-                    delta_aicc
-                    if np.isfinite(
-                        delta_aicc
-                    )
-                    else 0.0
+            "site_id":
+                int(
+                    row[
+                        "site_id"
+                    ]
                 ),
-            )
+            "status":
+                "fail",
+        }
 
-        amp_minus, phi_minus = (
-            quadratures_to_amp_phase(
-                quad[0],
-                quad[1],
-            )
+    good.sort(
+        key=lambda r: (
+            r["aicc"],
+            r["red_chi2"],
         )
-
-        amp_plus, phi_plus = (
-            quadratures_to_amp_phase(
-                quad[2],
-                quad[3],
-            )
-        )
-
-        ori_out = (
-            rec.orientation
-            if rec.orientation
-            != (0, 0, 0)
-            else None
-        )
-
-        if use_eseem:
-            status = "ok_eseem"
-        elif eseem_stage_error is not None:
-            status = "ok_core_eseem_failed"
-        else:
-            status = "ok_core"
-
-        return FitResult(
-            nv_index=int(
-                nv_index
-            ),
-            status=status,
-
-            red_chi2=float(
-                red
-            ),
-            aicc=float(
-                aicc
-            ),
-
-            baseline=float(
-                baseline
-            ),
-            contrast=float(
-                contrast
-            ),
-            revival_tau_us=float(
-                revival_tau_us
-            ),
-            fitted_B_G=float(
-                fitted_B_G
-            ),
-            width_us=float(
-                width_us
-            ),
-            T2_us=float(
-                T2_us
-            ),
-            T2_exp=float(
-                T2_exp
-            ),
-            taper_alpha=float(
-                taper_alpha
-            ),
-
-            eseem_used=bool(
-                use_eseem
-            ),
-            delta_aicc=float(
-                delta_aicc
-            ),
-
-            site_index=int(
-                rec.site_index
-            ),
-            orientation=ori_out,
-            distance_A=float(
-                rec.distance_A
-            ),
-            kappa=float(
-                rec.kappa
-            ),
-
-            f_minus_kHz=float(
-                rec.f_minus_kHz
-            ),
-            f_plus_kHz=float(
-                rec.f_plus_kHz
-            ),
-
-            amp_minus=float(
-                amp_minus
-            ),
-            phase_minus_rad=float(
-                phi_minus
-            ),
-            amp_plus=float(
-                amp_plus
-            ),
-            phase_plus_rad=float(
-                phi_plus
-            ),
-
-            fit_curve=np.asarray(
-                fit_curve,
-                dtype=float,
-            ),
-            core_curve=np.asarray(
-                core_curve,
-                dtype=float,
-            ),
-        )
-
-    except Exception as exc:
-        print(
-            f"[WARN] NV {nv_index} fit failed: {exc}"
-        )
-
-        return FitResult(
-            nv_index=int(
-                nv_index
-            ),
-            status="failed",
-
-            red_chi2=np.nan,
-            aicc=np.nan,
-
-            baseline=np.nan,
-            contrast=np.nan,
-            revival_tau_us=np.nan,
-            fitted_B_G=np.nan,
-            width_us=np.nan,
-            T2_us=np.nan,
-            T2_exp=np.nan,
-            taper_alpha=np.nan,
-
-            eseem_used=False,
-            delta_aicc=np.nan,
-
-            site_index=-1,
-            orientation=None,
-            distance_A=np.nan,
-            kappa=np.nan,
-
-            f_minus_kHz=np.nan,
-            f_plus_kHz=np.nan,
-
-            amp_minus=np.nan,
-            phase_minus_rad=np.nan,
-            amp_plus=np.nan,
-            phase_plus_rad=np.nan,
-
-            fit_curve=None,
-            core_curve=None,
-        )
-
-
-# =============================================================================
-# FIT ALL NVs
-# =============================================================================
-
-def fit_dataset(
-    nv_list,
-    tau_us,
-    norm_counts,
-    norm_counts_ste,
-    orientations,
-    catalog,
-):
-    nv_indices = resolve_nv_indices(
-        len(nv_list)
     )
+
+    best = good[0]
+
+    out = {
+        "nv_index":
+            int(nv),
+        "orientation":
+            str(
+                row[
+                    "orientation_tuple"
+                ]
+            ),
+        "site_id":
+            int(
+                row[
+                    "site_id"
+                ]
+            ),
+        "status":
+            "ok",
+        "winning_start":
+            best[
+                "start_name"
+            ],
+        "f0_kHz":
+            float(
+                row[
+                    "f0_kHz"
+                ]
+            ),
+        "f1_kHz":
+            float(
+                row[
+                    "f1_kHz"
+                ]
+            ),
+        "kappa":
+            float(
+                row.get(
+                    "kappa",
+                    np.nan,
+                )
+            ),
+        "distance_A":
+            float(
+                row.get(
+                    "distance_A",
+                    np.nan,
+                )
+            ),
+        "chi2":
+            float(
+                best[
+                    "chi2"
+                ]
+            ),
+        "red_chi2":
+            float(
+                best[
+                    "red_chi2"
+                ]
+            ),
+        "aicc":
+            float(
+                best[
+                    "aicc"
+                ]
+            ),
+        "score_primary":
+            float(
+                best[
+                    "score_primary"
+                ]
+            ),
+        "score_amp_tie":
+            float(
+                best[
+                    "score_amp_tie"
+                ]
+            ),
+        "popt_json":
+            json.dumps(
+                np.asarray(
+                    best[
+                        "popt"
+                    ],
+                    float,
+                ).tolist()
+            ),
+    }
+
+    return out
+
+
+def refit_one_nv_orientation_locked(
+    nv,
+    orientation,
+    attempts,
+    t,
+    y,
+    e,
+    expected_revival,
+):
+    pool = (
+        make_orientation_locked_candidate_pool(
+            attempts,
+            nv,
+            orientation,
+        )
+    )
+
+    if pool.empty:
+        return {
+            "nv_index": int(nv),
+            "orientation": tuple(int(v) for v in orientation),
+            "status": "no_candidates",
+            "rows": [],
+        }
+
+    rows = []
+
+    for _, row in pool.iterrows():
+        rows.append(
+            refit_candidate_equal_footing(
+                nv,
+                t,
+                y[nv],
+                e[nv],
+                row,
+                expected_revival,
+            )
+        )
+
+    good = [
+        r
+        for r in rows
+        if r.get(
+            "status"
+        )
+        == "ok"
+    ]
+
+    good.sort(
+        key=lambda r: (
+            r["aicc"],
+            r["red_chi2"],
+        )
+    )
+
+    return {
+        "nv_index": int(nv),
+        "orientation": tuple(int(v) for v in orientation),
+        "status": ("ok" if good else "failed"),
+        "rows": rows,
+    }
+
+
+def run_orientation_locked_refits(
+    attempts,
+    orientation_map,
+    t,
+    y,
+    e,
+    expected_revival,
+):
+    """
+    Equal-footing site refits, but with a hard per-NV orientation constraint.
+
+    The orientation is NEVER inferred from the C13 fit itself.  For NV i, only
+    catalog/attempt rows with orientation == orientation_map[i] are considered.
+    """
+    n_nv = y.shape[0]
+
+    jobs = []
+    missing = []
+
+    for nv in range(n_nv):
+        ori = orientation_map.get(int(nv))
+        if ori is None:
+            missing.append(int(nv))
+            continue
+        jobs.append((int(nv), tuple(int(v) for v in ori)))
+
+    if missing and REQUIRE_KNOWN_ORIENTATION:
+        print(
+            f"[orientation] {len(missing)} NVs lack an orientation and will "
+            f"be skipped: {missing[:20]}"
+            + (" ..." if len(missing) > 20 else "")
+        )
 
     print()
-    print(
-        f"Fitting {len(nv_indices)} NVs "
-        f"with {N_JOBS} CPU worker processes "
-        f"(detected logical CPUs={CPU_COUNT})"
-    )
+    print("=" * 96)
+    print("EQUAL-FOOTING REFIT WITH PER-NV ORIENTATION LOCK")
+    print("=" * 96)
+    print(f"allowed experiment orientations : {ALLOWED_ORIENTATIONS}")
+    print(f"NVs with assigned orientation   : {len(jobs)} / {n_nv}")
+    print(f"top screen sites/orientation    : {POOL_TOP_SCREEN_SITES}")
+    print(f"max sites/NV                    : {POOL_MAX_UNIQUE_SITES}")
+    print(f"common amplitude bounds         : {POOL_AMP_BOUNDS}")
+    print(f"two starts/candidate            : {POOL_USE_TWO_STARTS}")
+    print(f"max_nfev/start                  : {POOL_REFIT_MAX_NFEV}")
+    print(f"workers                          : {POOL_N_JOBS}")
+    print("=" * 96)
 
-    # Use process-level parallelism across independent NV fits.
-    # Limit BLAS/OpenMP to one thread inside each worker, otherwise 14 workers
-    # can each spawn many BLAS threads and make the analysis much slower.
-    with threadpool_limits(limits=1):
-        results = Parallel(
-            n_jobs=N_JOBS,
-            backend=JOBLIB_BACKEND,
-            verbose=5,
-            batch_size=1,
-        )(
-            delayed(
-                fit_one_nv
-            )(
-                int(nv_ind),
-                tau_us,
-                norm_counts[nv_ind],
-                norm_counts_ste[nv_ind],
-                orientations[nv_ind],
-                catalog,
-            )
-            for nv_ind in nv_indices
+    def task(nv, ori):
+        result = refit_one_nv_orientation_locked(
+            nv,
+            ori,
+            attempts,
+            t,
+            y,
+            e,
+            expected_revival,
         )
 
-    return results
+        good = [
+            r for r in result["rows"]
+            if r.get("status") == "ok"
+        ]
+
+        if good:
+            good.sort(key=lambda r: (r["aicc"], r["red_chi2"]))
+            b = good[0]
+
+            # Safety assertion: wrong-orientation hypothesis must never survive.
+            bad = [
+                r for r in good
+                if canonical_orientation(r["orientation"]) != tuple(ori)
+            ]
+            if bad:
+                raise RuntimeError(
+                    f"NV {nv}: wrong-orientation candidates leaked into fit: "
+                    f"{[(x['orientation'], x['site_id']) for x in bad[:5]]}"
+                )
+
+            print(
+                f"[NV {nv:3d}] locked_ori={ori}, "
+                f"site={b['site_id']}, redchi={b['red_chi2']:.3g}, "
+                f"sites={len(good)}"
+            )
+
+        return result
+
+    with threadpool_limits(limits=BLAS_THREADS_PER_WORKER):
+        results = Parallel(
+            n_jobs=POOL_N_JOBS,
+            backend="loky",
+            batch_size=1,
+            verbose=5,
+        )(
+            delayed(task)(nv, ori)
+            for nv, ori in jobs
+        )
+
+    rows = []
+    for result in results:
+        expected_ori = tuple(result["orientation"])
+        for row in result["rows"]:
+            if row.get("status") != "ok":
+                continue
+            actual_ori = canonical_orientation(row["orientation"])
+            if actual_ori != expected_ori:
+                raise RuntimeError(
+                    f"NV {result['nv_index']}: orientation mismatch "
+                    f"{actual_ori} != {expected_ori}"
+                )
+            rows.append(row)
+
+    if not rows:
+        raise RuntimeError("No successful orientation-locked refits.")
+
+    return pd.DataFrame(rows)
 
 
 # =============================================================================
-# RESULTS TABLE
+# RANK EQUAL-FOOTING UNIQUE SITES WITHIN THE LOCKED NV ORIENTATION
 # =============================================================================
 
-def results_to_dataframe(
-    results,
+def rank_equal_footing_sites(
+    refit_df,
+):
+    df = refit_df.copy()
+
+    df["delta_aicc"] = np.nan
+    df["delta_chi2"] = np.nan
+    df["akaike_weight"] = np.nan
+    df["site_rank"] = -1
+
+    for nv, inds in df.groupby(
+        "nv_index"
+    ).groups.items():
+        inds = np.asarray(
+            list(inds),
+            int,
+        )
+
+        aicc = df.loc[
+            inds,
+            "aicc",
+        ].to_numpy(float)
+
+        chi2 = df.loc[
+            inds,
+            "chi2",
+        ].to_numpy(float)
+
+        da = (
+            aicc
+            - np.min(
+                aicc
+            )
+        )
+
+        dc = (
+            chi2
+            - np.min(
+                chi2
+            )
+        )
+
+        logw = (
+            -0.5
+            * da
+        )
+
+        logw -= (
+            np.max(
+                logw
+            )
+        )
+
+        w = np.exp(
+            logw
+        )
+
+        w /= np.sum(
+            w
+        )
+
+        order = np.argsort(
+            aicc
+        )
+
+        rank = np.empty_like(
+            order
+        )
+
+        rank[
+            order
+        ] = np.arange(
+            1,
+            len(order)
+            + 1,
+        )
+
+        df.loc[
+            inds,
+            "delta_aicc",
+        ] = da
+
+        df.loc[
+            inds,
+            "delta_chi2",
+        ] = dc
+
+        df.loc[
+            inds,
+            "akaike_weight",
+        ] = w
+
+        df.loc[
+            inds,
+            "site_rank",
+        ] = rank
+
+    return df.sort_values(
+        [
+            "nv_index",
+            "site_rank",
+        ]
+    ).reset_index(
+        drop=True
+    )
+
+
+def expand_fit_parameter_columns(
+    ranked,
+):
+    """
+    Expand popt_json into human-readable columns.
+
+    fine_decay parameter order:
+      baseline, comb_contrast, revival_time, width0_us, T2_ms, T2_exp,
+      amp_taper_alpha, width_slope, revival_chirp, osc_amp,
+      osc_f0, osc_phi0, osc_f1, osc_phi1
+    """
+    ranked = ranked.copy()
+
+    cols = {
+        "baseline": [],
+        "comb_contrast": [],
+        "revival_time_us": [],
+        "width0_us": [],
+        "T2_ms": [],
+        "T2_us": [],
+        "T2_exp": [],
+        "amp_taper_alpha": [],
+        "width_slope": [],
+        "revival_chirp": [],
+        "osc_amp": [],
+        "fit_f0_kHz": [],
+        "osc_phi0_rad": [],
+        "fit_f1_kHz": [],
+        "osc_phi1_rad": [],
+    }
+
+    for s in ranked["popt_json"]:
+        p = parse_popt(s)
+
+        if p is None:
+            vals = [np.nan] * len(PARAM_NAMES)
+        else:
+            vals = list(map(float, p))
+
+        cols["baseline"].append(vals[0])
+        cols["comb_contrast"].append(vals[1])
+        cols["revival_time_us"].append(vals[2])
+        cols["width0_us"].append(vals[3])
+        cols["T2_ms"].append(vals[4])
+        cols["T2_us"].append(1000.0 * vals[4] if np.isfinite(vals[4]) else np.nan)
+        cols["T2_exp"].append(vals[5])
+        cols["amp_taper_alpha"].append(vals[6])
+        cols["width_slope"].append(vals[7])
+        cols["revival_chirp"].append(vals[8])
+        cols["osc_amp"].append(vals[9])
+        cols["fit_f0_kHz"].append(1000.0 * vals[10] if np.isfinite(vals[10]) else np.nan)
+        cols["osc_phi0_rad"].append(vals[11])
+        cols["fit_f1_kHz"].append(1000.0 * vals[12] if np.isfinite(vals[12]) else np.nan)
+        cols["osc_phi1_rad"].append(vals[13])
+
+    for name, values in cols.items():
+        ranked[name] = values
+
+    return ranked
+
+
+# =============================================================================
+# NON-TRANSITIVE SITE FAMILIES, SAME ORIENTATION ONLY
+# =============================================================================
+
+def assign_families(
+    ranked,
+):
+    """
+    Non-transitive spectral-family grouping within each NV AND orientation.
+    Sites from the two different NV orientations are never placed in the same
+    family.
+    """
+    ranked = ranked.copy()
+    ranked["family_id"] = -1
+    ranked["family_weight"] = np.nan
+    ranked["family_rank"] = -1
+
+    family_rows = []
+
+    for nv, nvsub in ranked.groupby("nv_index", sort=True):
+        next_id = 0
+        nv_families = []
+
+        for ori, sub in nvsub.groupby("orientation", sort=False):
+            sub = sub.sort_values("site_rank")
+            leaders = []
+
+            for idx, row in sub.iterrows():
+                f0 = float(row["f0_kHz"])
+                f1 = float(row["f1_kHz"])
+
+                chosen = None
+                for fam in leaders:
+                    if (
+                        abs(f0 - fam["f0"]) <= FAMILY_TOL_KHZ
+                        and abs(f1 - fam["f1"]) <= FAMILY_TOL_KHZ
+                    ):
+                        chosen = fam
+                        break
+
+                if chosen is None:
+                    chosen = {
+                        "family_id": next_id,
+                        "f0": f0,
+                        "f1": f1,
+                        "leader_site_id": int(row["site_id"]),
+                        "orientation": str(ori),
+                        "members": [],
+                    }
+                    leaders.append(chosen)
+                    next_id += 1
+
+                chosen["members"].append(idx)
+                ranked.loc[idx, "family_id"] = int(chosen["family_id"])
+
+            for fam in leaders:
+                members = ranked.loc[fam["members"]]
+                nv_families.append(
+                    {
+                        "nv_index": int(nv),
+                        "family_id": int(fam["family_id"]),
+                        "orientation": fam["orientation"],
+                        "leader_site_id": int(fam["leader_site_id"]),
+                        "leader_f0_kHz": float(fam["f0"]),
+                        "leader_f1_kHz": float(fam["f1"]),
+                        "n_sites": int(len(members)),
+                        "family_weight": float(members["akaike_weight"].sum()),
+                        "best_delta_aicc": float(members["delta_aicc"].min()),
+                    }
+                )
+
+        famdf = pd.DataFrame(nv_families).sort_values(
+            ["family_weight", "best_delta_aicc"],
+            ascending=[False, True],
+        ).reset_index(drop=True)
+
+        famdf["family_rank"] = np.arange(1, len(famdf) + 1)
+
+        rank_map = dict(zip(famdf["family_id"], famdf["family_rank"]))
+        weight_map = dict(zip(famdf["family_id"], famdf["family_weight"]))
+
+        inds = nvsub.index
+        ranked.loc[inds, "family_rank"] = [
+            rank_map[int(x)] for x in ranked.loc[inds, "family_id"]
+        ]
+        ranked.loc[inds, "family_weight"] = [
+            weight_map[int(x)] for x in ranked.loc[inds, "family_id"]
+        ]
+
+        family_rows.append(famdf)
+
+    families = (
+        pd.concat(family_rows, ignore_index=True)
+        if family_rows
+        else pd.DataFrame()
+    )
+    return ranked, families
+
+
+# =============================================================================
+# SUMMARY
+# =============================================================================
+
+def separation_label(
+    delta_aicc,
+):
+    if not np.isfinite(
+        delta_aicc
+    ):
+        return (
+            "single_site"
+        )
+
+    if delta_aicc < 2:
+        return (
+            "near_degenerate"
+        )
+
+    if delta_aicc < 6:
+        return (
+            "some_separation"
+        )
+
+    if delta_aicc < 10:
+        return (
+            "substantial_separation"
+        )
+
+    return (
+        "large_separation"
+    )
+
+
+def build_summary(
+    ranked,
 ):
     rows = []
 
-    for r in results:
-        row = asdict(r)
-
-        row.pop(
-            "fit_curve",
-            None,
+    for nv, sub in ranked.groupby(
+        "nv_index",
+        sort=True,
+    ):
+        sub = sub.sort_values(
+            "site_rank"
         )
 
-        row.pop(
-            "core_curve",
-            None,
+        first = sub.iloc[0]
+
+        second = (
+            sub.iloc[1]
+            if len(sub) > 1
+            else None
         )
 
-        if row["orientation"] is not None:
-            row["orientation"] = str(
-                tuple(
-                    row["orientation"]
-                )
+        third = (
+            sub.iloc[2]
+            if len(sub) > 2
+            else None
+        )
+
+        d2 = (
+            float(
+                second[
+                    "delta_aicc"
+                ]
             )
-        else:
-            row["orientation"] = ""
+            if second
+            is not None
+            else np.nan
+        )
 
-        rows.append(row)
+        rows.append(
+            {
+                "nv_index":
+                    int(nv),
+                "orientation":
+                    str(
+                        first[
+                            "orientation"
+                        ]
+                    ),
+                "best_site_id":
+                    int(
+                        first[
+                            "site_id"
+                        ]
+                    ),
+                "best_red_chi2":
+                    float(
+                        first[
+                            "red_chi2"
+                        ]
+                    ),
+                "best_score_primary":
+                    float(
+                        first[
+                            "score_primary"
+                        ]
+                    ),
+                "best_aicc":
+                    float(
+                        first[
+                            "aicc"
+                        ]
+                    ),
+                "best_T2_us":
+                    float(
+                        first.get(
+                            "T2_us",
+                            np.nan,
+                        )
+                    ),
+                "best_revival_time_us":
+                    float(
+                        first.get(
+                            "revival_time_us",
+                            np.nan,
+                        )
+                    ),
+                "best_width0_us":
+                    float(
+                        first.get(
+                            "width0_us",
+                            np.nan,
+                        )
+                    ),
+                "best_T2_exp":
+                    float(
+                        first.get(
+                            "T2_exp",
+                            np.nan,
+                        )
+                    ),
+                "best_osc_amp":
+                    float(
+                        first.get(
+                            "osc_amp",
+                            np.nan,
+                        )
+                    ),
+                "best_weight":
+                    float(
+                        first[
+                            "akaike_weight"
+                        ]
+                    ),
+                "best_family_weight":
+                    float(
+                        first[
+                            "family_weight"
+                        ]
+                    ),
+                "best_f0_kHz":
+                    float(
+                        first[
+                            "f0_kHz"
+                        ]
+                    ),
+                "best_f1_kHz":
+                    float(
+                        first[
+                            "f1_kHz"
+                        ]
+                    ),
+                "best_kappa":
+                    float(
+                        first[
+                            "kappa"
+                        ]
+                    ),
+                "best_distance_A":
+                    float(
+                        first[
+                            "distance_A"
+                        ]
+                    ),
+                "second_site_id":
+                    (
+                        int(
+                            second[
+                                "site_id"
+                            ]
+                        )
+                        if second
+                        is not None
+                        else -1
+                    ),
+                "second_delta_aicc":
+                    d2,
+                "third_site_id":
+                    (
+                        int(
+                            third[
+                                "site_id"
+                            ]
+                        )
+                        if third
+                        is not None
+                        else -1
+                    ),
+                "separation_label":
+                    separation_label(
+                        d2
+                    ),
+                "n_two_orientation_hypotheses":
+                    int(
+                        len(
+                            sub
+                        )
+                    ),
+            }
+        )
 
     return pd.DataFrame(
         rows
@@ -2798,253 +1955,1686 @@ def results_to_dataframe(
 
 
 # =============================================================================
-# SUMMARY FIGURE
+# C13 POSITION LOOKUP / VISUALIZATION
 # =============================================================================
 
-def make_summary_figure(
-    tau_us,
-    norm_counts,
-    norm_counts_ste,
-    results,
+def add_catalog_positions(
+    ranked,
+    catalog_lookup,
 ):
-    good_results = [
-        r
-        for r in results
-        if (
-            r.fit_curve is not None
-            and np.all(
-                np.isfinite(
-                    r.fit_curve
-                )
+    ranked = ranked.copy()
+
+    for col in (
+        "x_A",
+        "y_A",
+        "z_A",
+        "A_par_kHz",
+        "A_perp_kHz",
+        "theta_deg",
+    ):
+        ranked[col] = np.nan
+
+    for idx, row in ranked.iterrows():
+        ori = canonical_orientation(
+            row[
+                "orientation"
+            ]
+        )
+
+        site = int(
+            row[
+                "site_id"
+            ]
+        )
+
+        rec = catalog_lookup.get(
+            (
+                ori,
+                site,
             )
         )
-    ]
 
-    if not good_results:
-        raise RuntimeError(
-            "No successful fits."
+        if rec is None:
+            continue
+
+        ranked.loc[
+            idx,
+            "x_A",
+        ] = float(
+            rec.get(
+                "x_A",
+                np.nan,
+            )
         )
 
-    inds = np.array(
+        ranked.loc[
+            idx,
+            "y_A",
+        ] = float(
+            rec.get(
+                "y_A",
+                np.nan,
+            )
+        )
+
+        ranked.loc[
+            idx,
+            "z_A",
+        ] = float(
+            rec.get(
+                "z_A",
+                np.nan,
+            )
+        )
+
+        ranked.loc[
+            idx,
+            "A_par_kHz",
+        ] = float(
+            rec.get(
+                "A_par_Hz",
+                np.nan,
+            )
+        ) / 1000.0
+
+        ranked.loc[
+            idx,
+            "A_perp_kHz",
+        ] = float(
+            rec.get(
+                "A_perp_Hz",
+                np.nan,
+            )
+        ) / 1000.0
+
+        ranked.loc[
+            idx,
+            "theta_deg",
+        ] = float(
+            rec.get(
+                "theta_deg",
+                np.nan,
+            )
+        )
+
+    return ranked
+
+
+def set_3d_equal_limits(
+    ax,
+    xyz,
+):
+    xyz = np.asarray(
+        xyz,
+        float,
+    )
+
+    finite = np.all(
+        np.isfinite(
+            xyz
+        ),
+        axis=1,
+    )
+
+    xyz = xyz[
+        finite
+    ]
+
+    if not len(
+        xyz
+    ):
+        return
+
+    xyz = np.vstack(
         [
-            r.nv_index
-            for r in good_results
-        ],
-        dtype=int,
-    )
-
-    data_median = np.nanmedian(
-        norm_counts[inds],
-        axis=0,
-    )
-
-    data_ste = np.nanmedian(
-        norm_counts_ste[inds],
-        axis=0,
-    )
-
-    fit_stack = np.vstack(
-        [
-            r.fit_curve
-            for r in good_results
+            xyz,
+            np.zeros(
+                (
+                    1,
+                    3,
+                )
+            ),
         ]
     )
 
-    fit_median = np.nanmedian(
-        fit_stack,
+    mins = np.min(
+        xyz,
         axis=0,
     )
 
-    first_mask = (
-        np.abs(
-            tau_us
-            - REVIVAL_TAU_US_THEORY
+    maxs = np.max(
+        xyz,
+        axis=0,
+    )
+
+    center = (
+        0.5
+        * (
+            mins
+            + maxs
         )
-        <= 6.5
     )
 
-    fig, axes = plt.subplots(
+    radius = (
+        0.55
+        * np.max(
+            maxs
+            - mins
+        )
+    )
+
+    radius = max(
+        radius,
+        1.0,
+    )
+
+    ax.set_xlim(
+        center[0]
+        - radius,
+        center[0]
+        + radius,
+    )
+
+    ax.set_ylim(
+        center[1]
+        - radius,
+        center[1]
+        + radius,
+    )
+
+    ax.set_zlim(
+        center[2]
+        - radius,
+        center[2]
+        + radius,
+    )
+
+
+# =============================================================================
+# MAIN ANALYSIS DASHBOARD PDF
+# =============================================================================
+
+def plot_one_nv_page(
+    pdf,
+    nv,
+    t,
+    y,
+    e,
+    ranked,
+    expected_revival,
+):
+    """
+    One-page analysis dashboard.
+
+    Top row:
+      full trace | first-revival zoom | Akaike weights
+
+    Bottom row:
+      3D C13 positions | detailed top-fit table spanning two columns
+    """
+    sub = (
+        ranked[ranked["nv_index"] == int(nv)]
+        .sort_values("site_rank")
+        .copy()
+    )
+
+    if sub.empty:
+        return
+
+    cmap = plt.get_cmap("tab10")
+    colors = {
+        rank: cmap((rank - 1) % 10)
+        for rank in range(1, max(POSITION_TOP_N, AKAIKE_PLOT_TOP_N) + 1)
+    }
+
+    # All candidates on this page belong to the same locked NV orientation.
+
+    fig = plt.figure(figsize=(20.5, 11.2))
+    gs = fig.add_gridspec(
         2,
-        2,
-        figsize=(13, 9),
+        3,
+        height_ratios=[1.0, 1.08],
+        width_ratios=[1.12, 1.06, 1.0],
+        hspace=0.28,
+        wspace=0.25,
     )
 
-    ax = axes[0, 0]
+    ax_full = fig.add_subplot(gs[0, 0])
+    ax_zoom = fig.add_subplot(gs[0, 1])
+    ax_weight = fig.add_subplot(gs[0, 2])
+    ax_pos = fig.add_subplot(gs[1, 0], projection="3d")
+    ax_table = fig.add_subplot(gs[1, 1:3])
 
-    ax.errorbar(
-        2.0 * tau_us,
-        data_median,
-        yerr=data_ste,
+    top3 = sub.head(TOP_UNIQUE_PLOT)
+
+    # ------------------------------------------------------------------
+    # Full trace
+    # ------------------------------------------------------------------
+    ax_full.errorbar(
+        t,
+        y[nv],
+        yerr=e[nv],
         fmt="o",
-        markersize=3.5,
-        capsize=1.5,
-        label="Median data",
+        ms=3.0,
+        capsize=1.0,
+        lw=0.55,
+        label="data",
+        zorder=10,
     )
 
-    ax.plot(
-        2.0 * tau_us,
-        fit_median,
-        linewidth=1.8,
-        label="Median fitted curve",
-    )
+    td_full = np.linspace(float(np.min(t)), float(np.max(t)), DENSE_CURVE_POINTS)
 
-    ax.axvline(
-        REVIVAL_TOTAL_US_THEORY,
-        linestyle="--",
-        linewidth=1,
-        label="52 G 13C revival",
-    )
+    for _, row in top3.iterrows():
+        rank = int(row["site_rank"])
+        popt = parse_popt(row["popt_json"])
+        if popt is None:
+            continue
 
-    ax.set_xlabel(
-        "Total evolution time (us)"
-    )
+        curve = curve_from_popt(td_full, popt)
 
-    ax.set_ylabel(
-        r"Normalized NV$^{-}$ population"
-    )
-
-    ax.set_title(
-        f"Median spin echo — {len(good_results)} fitted NVs"
-    )
-
-    ax.grid(
-        alpha=0.25
-    )
-
-    ax.legend()
-
-    ax = axes[0, 1]
-
-    ax.errorbar(
-        2.0 * tau_us[first_mask],
-        data_median[first_mask],
-        yerr=data_ste[first_mask],
-        fmt="o",
-        markersize=3.5,
-        capsize=1.5,
-        label="Median data",
-    )
-
-    ax.plot(
-        2.0 * tau_us[first_mask],
-        fit_median[first_mask],
-        linewidth=1.8,
-        label="Median fit",
-    )
-
-    ax.axvline(
-        REVIVAL_TOTAL_US_THEORY,
-        linestyle="--",
-        linewidth=1,
-    )
-
-    ax.set_xlabel(
-        "Total evolution time (us)"
-    )
-
-    ax.set_ylabel(
-        r"Normalized NV$^{-}$ population"
-    )
-
-    ax.set_title(
-        "Dense first revival"
-    )
-
-    ax.grid(
-        alpha=0.25
-    )
-
-    ax.legend()
-
-    Bfits = np.array(
-        [
-            r.fitted_B_G
-            for r in good_results
-            if np.isfinite(
-                r.fitted_B_G
-            )
-        ],
-        dtype=float,
-    )
-
-    ax = axes[1, 0]
-
-    ax.hist(
-        Bfits,
-        bins=min(
-            30,
-            max(
-                8,
-                int(
-                    np.sqrt(
-                        len(Bfits)
-                    )
-                ),
+        ax_full.plot(
+            td_full,
+            curve,
+            lw=1.9 if rank == 1 else 1.35,
+            color=colors[rank],
+            label=(
+                f"#{rank} {row['orientation']}, site {int(row['site_id'])}\n"
+                f"χ²r={row['red_chi2']:.2f}, score={row['score_primary']:.2f}"
             ),
+        )
+
+    ax_full.set_xlabel("Total evolution time (µs)")
+    ax_full.set_ylabel("Normalized signal")
+    ax_full.set_title("Full spin-echo trace")
+    ax_full.grid(alpha=0.22)
+    ax_full.legend(fontsize=7.0, loc="best")
+
+    # ------------------------------------------------------------------
+    # First-revival zoom
+    # ------------------------------------------------------------------
+    if np.isfinite(expected_revival):
+        lo = expected_revival - FIRST_REVIVAL_HALF_WIDTH_US
+        hi = expected_revival + FIRST_REVIVAL_HALF_WIDTH_US
+    else:
+        center = float(np.median(t))
+        lo = center - FIRST_REVIVAL_HALF_WIDTH_US
+        hi = center + FIRST_REVIVAL_HALF_WIDTH_US
+
+    mask = (t >= lo) & (t <= hi)
+
+    if np.sum(mask) < 3:
+        mask = np.ones(len(t), dtype=bool)
+        lo = float(np.min(t))
+        hi = float(np.max(t))
+
+    ax_zoom.errorbar(
+        t[mask],
+        y[nv, mask],
+        yerr=e[nv, mask],
+        fmt="o",
+        ms=3.2,
+        capsize=1.1,
+        lw=0.6,
+        zorder=10,
+    )
+
+    td_zoom = np.linspace(lo, hi, DENSE_CURVE_POINTS)
+
+    for _, row in top3.iterrows():
+        rank = int(row["site_rank"])
+        popt = parse_popt(row["popt_json"])
+        if popt is None:
+            continue
+
+        ax_zoom.plot(
+            td_zoom,
+            curve_from_popt(td_zoom, popt),
+            lw=1.9 if rank == 1 else 1.35,
+            color=colors[rank],
+            label=f"#{rank} site {int(row['site_id'])}",
+        )
+
+    if np.isfinite(expected_revival):
+        ax_zoom.axvline(
+            expected_revival,
+            ls="--",
+            lw=0.8,
+            alpha=0.6,
+            label="13C revival",
+        )
+
+    ax_zoom.set_xlabel("Total evolution time (µs)")
+    ax_zoom.set_ylabel("Normalized signal")
+    ax_zoom.set_title("First-revival zoom")
+    ax_zoom.grid(alpha=0.22)
+    ax_zoom.legend(fontsize=7.0, loc="best")
+
+    # ------------------------------------------------------------------
+    # Akaike-weight plot
+    # ------------------------------------------------------------------
+    weight_sub = sub.head(AKAIKE_PLOT_TOP_N).copy()
+    xpos = np.arange(len(weight_sub))
+
+    bar_colors = [
+        colors[int(r)]
+        for r in weight_sub["site_rank"]
+    ]
+
+    bars = ax_weight.bar(
+        xpos,
+        weight_sub["akaike_weight"].to_numpy(float),
+        color=bar_colors,
+        alpha=0.82,
+    )
+
+    # Hatch distinguishes the two NV orientation pools.
+    for bar, (_, row) in zip(bars, weight_sub.iterrows()):
+        ori = canonical_orientation(row["orientation"])
+        if ori == tuple(ALLOWED_ORIENTATIONS[1]):
+            bar.set_hatch("//")
+
+    labels = [
+        (
+            f"#{int(row['site_rank'])}\n"
+            f"{tuple(canonical_orientation(row['orientation']))}\n"
+            f"S{int(row['site_id'])}"
+        )
+        for _, row in weight_sub.iterrows()
+    ]
+
+    ax_weight.set_xticks(xpos)
+    ax_weight.set_xticklabels(labels, fontsize=6.5)
+    ax_weight.set_ylabel("Akaike weight")
+    ax_weight.set_ylim(
+        0.0,
+        max(
+            1.0,
+            1.10 * float(weight_sub["akaike_weight"].max()),
         ),
     )
+    ax_weight.set_title("Relative site support\n(within locked orientation)")
+    ax_weight.grid(alpha=0.20, axis="y")
 
-    ax.axvline(
-        B_MAG_G,
-        linestyle="--",
-        label=(
-            f"ODMR |B| = "
-            f"{B_MAG_G:.2f} G"
+    for x, (_, row) in enumerate(weight_sub.iterrows()):
+        w = float(row["akaike_weight"])
+        ax_weight.text(
+            x,
+            min(0.98, w + 0.025),
+            f"{w:.2f}",
+            ha="center",
+            va="bottom",
+            fontsize=7,
+        )
+
+    # ------------------------------------------------------------------
+    # C13 candidate positions
+    # ------------------------------------------------------------------
+    pos = sub.head(POSITION_TOP_N).copy()
+    xyz_all = []
+
+    ax_pos.scatter(
+        [0.0],
+        [0.0],
+        [0.0],
+        marker="*",
+        s=210,
+        c="black",
+        label="NV",
+        depthshade=False,
+    )
+
+    for _, row in pos.iterrows():
+        rank = int(row["site_rank"])
+        ori = canonical_orientation(row["orientation"])
+
+        xyz = np.asarray(
+            [
+                row.get("x_A", np.nan),
+                row.get("y_A", np.nan),
+                row.get("z_A", np.nan),
+            ],
+            float,
+        )
+
+        if not np.all(np.isfinite(xyz)):
+            continue
+
+        xyz_all.append(xyz)
+
+        ax_pos.plot(
+            [0.0, xyz[0]],
+            [0.0, xyz[1]],
+            [0.0, xyz[2]],
+            lw=0.8,
+            color=colors[rank],
+            alpha=0.50,
+        )
+
+        marker = "o"
+
+        ax_pos.scatter(
+            [xyz[0]],
+            [xyz[1]],
+            [xyz[2]],
+            s=105 if rank <= 3 else 55,
+            color=colors[rank],
+            marker=marker,
+            depthshade=False,
+            label=(
+                f"#{rank} {ori}, site {int(row['site_id'])}"
+            ),
+        )
+
+        ax_pos.text(
+            xyz[0],
+            xyz[1],
+            xyz[2],
+            f" #{rank}:S{int(row['site_id'])}",
+            fontsize=7,
+        )
+
+    if xyz_all:
+        set_3d_equal_limits(ax_pos, np.vstack(xyz_all))
+
+    ax_pos.set_xlabel("x (Å)")
+    ax_pos.set_ylabel("y (Å)")
+    ax_pos.set_zlabel("z (Å)")
+    locked_ori = canonical_orientation(sub.iloc[0]["orientation"])
+    ax_pos.set_title(
+        "Candidate $^{13}$C positions\n"
+        f"locked NV orientation = {locked_ori}"
+    )
+    ax_pos.view_init(elev=24, azim=38)
+    ax_pos.legend(fontsize=6.0, loc="upper left")
+
+    # ------------------------------------------------------------------
+    # Detailed top-fit table
+    # ------------------------------------------------------------------
+    ax_table.axis("off")
+
+    detail = sub.head(FIT_TABLE_TOP_N)
+
+    col_labels = [
+        "Rank",
+        "Orientation",
+        "Site",
+        "χ²r",
+        "Score",
+        "ΔAICc",
+        "Weight",
+        "T2 (µs)",
+        "Revival (µs)",
+        "Width (µs)",
+        "β",
+        "Osc amp",
+        "f0 / f1 (kHz)",
+        "κ",
+        "r (Å)",
+    ]
+
+    cell_text = []
+
+    for _, row in detail.iterrows():
+        cell_text.append(
+            [
+                f"#{int(row['site_rank'])}",
+                str(row["orientation"]),
+                str(int(row["site_id"])),
+                f"{float(row['red_chi2']):.3f}",
+                f"{float(row['score_primary']):.3f}",
+                f"{float(row['delta_aicc']):.2f}",
+                f"{float(row['akaike_weight']):.3f}",
+                f"{float(row.get('T2_us', np.nan)):.1f}",
+                f"{float(row.get('revival_time_us', np.nan)):.3f}",
+                f"{float(row.get('width0_us', np.nan)):.3f}",
+                f"{float(row.get('T2_exp', np.nan)):.3f}",
+                f"{float(row.get('osc_amp', np.nan)):.3f}",
+                (
+                    f"{float(row.get('fit_f0_kHz', np.nan)):.2f} / "
+                    f"{float(row.get('fit_f1_kHz', np.nan)):.2f}"
+                ),
+                f"{float(row.get('kappa', np.nan)):.3g}",
+                f"{float(row.get('distance_A', np.nan)):.2f}",
+            ]
+        )
+
+    table = ax_table.table(
+        cellText=cell_text,
+        colLabels=col_labels,
+        cellLoc="center",
+        colLoc="center",
+        loc="upper center",
+        bbox=[0.0, 0.42, 1.0, 0.54],
+    )
+
+    table.auto_set_font_size(False)
+    table.set_fontsize(7.0)
+    table.scale(1.0, 1.35)
+
+    # Additional best-fit details beneath table.
+    first = sub.iloc[0]
+
+    extra_lines = [
+        (
+            f"Best-fit model details: baseline={first.get('baseline', np.nan):.4f}, "
+            f"comb contrast={first.get('comb_contrast', np.nan):.4f}, "
+            f"taper α={first.get('amp_taper_alpha', np.nan):.3f}, "
+            f"width slope={first.get('width_slope', np.nan):.3f}, "
+            f"revival chirp={first.get('revival_chirp', np.nan):.4f}"
         ),
-    )
+        (
+            f"phases: φ0={first.get('osc_phi0_rad', np.nan):.3f} rad, "
+            f"φ1={first.get('osc_phi1_rad', np.nan):.3f} rad | "
+            f"A∥={first.get('A_par_kHz', np.nan):.2f} kHz, "
+            f"A⊥={first.get('A_perp_kHz', np.nan):.2f} kHz, "
+            f"θ={first.get('theta_deg', np.nan):.1f}°"
+        ),
+        (
+            "Score = old fitter's reduced-χ² + bound-wall penalty; "
+            "Akaike weight is the relative model support across the equal-footing "
+            "orientation-locked candidate set."
+        ),
+    ]
 
-    ax.set_xlabel(
-        "B inferred from revival (G)"
-    )
-
-    ax.set_ylabel(
-        "NV count"
-    )
-
-    ax.set_title(
-        "Revival-derived field"
-    )
-
-    ax.grid(
-        alpha=0.25
-    )
-
-    ax.legend()
-
-    ax = axes[1, 1]
-
-    core_n = sum(
-        not r.eseem_used
-        for r in good_results
-    )
-
-    eseem_n = sum(
-        r.eseem_used
-        for r in good_results
-    )
-
-    ax.bar(
-        ["Core only", "Core + ESEEM"],
-        [core_n, eseem_n],
-    )
-
-    ax.set_ylabel(
-        "NV count"
-    )
-
-    ax.set_title(
-        f"ESEEM accepted if ΔAICc ≥ {MIN_DELTA_AICC:g}"
-    )
-
-    ax.grid(
-        axis="y",
-        alpha=0.25,
+    ax_table.text(
+        0.01,
+        0.32,
+        "\n".join(extra_lines),
+        transform=ax_table.transAxes,
+        va="top",
+        ha="left",
+        fontsize=8.0,
+        family="monospace",
     )
 
     fig.suptitle(
-        "Physics-informed spin-echo fit summary\n"
-        f"B = {B_VECTOR_G.tolist()} G, "
-        f"|B| = {B_MAG_G:.3f} G",
+        (
+            f"NV {nv} | best {first['orientation']} / site {int(first['site_id'])} | "
+            f"χ²r={first['red_chi2']:.3f} | score={first['score_primary']:.3f} | "
+            f"weight={first['akaike_weight']:.3f} | "
+            f"T2={first.get('T2_us', np.nan):.1f} µs | "
+            f"revival={first.get('revival_time_us', np.nan):.3f} µs"
+        ),
+        fontsize=13,
+    )
+
+    fig.tight_layout(rect=[0.0, 0.0, 1.0, 0.955])
+
+    pdf.savefig(fig, bbox_inches="tight")
+    plt.close(fig)
+
+
+def save_dashboard_pdf(
+    path,
+    t,
+    y,
+    e,
+    ranked,
+    expected_revival,
+):
+    if PLOT_NV_INDICES is None:
+        nvs = sorted(
+            ranked[
+                "nv_index"
+            ].astype(
+                int
+            ).unique()
+        )
+    else:
+        allowed = set(
+            int(x)
+            for x in PLOT_NV_INDICES
+        )
+
+        nvs = [
+            nv
+            for nv in sorted(
+                ranked[
+                    "nv_index"
+                ].astype(
+                    int
+                ).unique()
+            )
+            if nv in allowed
+        ]
+
+    with PdfPages(
+        path
+    ) as pdf:
+        for nv in nvs:
+            plot_one_nv_page(
+                pdf,
+                nv,
+                t,
+                y,
+                e,
+                ranked,
+                expected_revival,
+            )
+
+    print(
+        f"Saved: {path}"
+    )
+
+
+# =============================================================================
+# RESIDUAL SPECTROSCOPY
+# =============================================================================
+
+def residual_peak_table(
+    t,
+    y,
+    e,
+    ranked,
+):
+    if not RUN_RESIDUAL_SPECTROSCOPY:
+        return pd.DataFrame()
+
+    dt = np.diff(
+        np.unique(
+            np.asarray(
+                t,
+                float,
+            )
+        )
+    )
+
+    dt = dt[
+        dt > 0
+    ]
+
+    if not len(
+        dt
+    ):
+        return pd.DataFrame()
+
+    nyquist_khz = (
+        500.0
+        / float(
+            np.min(
+                dt
+            )
+        )
+    )
+
+    fmax = (
+        min(
+            float(
+                RESIDUAL_FREQ_MAX_KHZ
+            ),
+            nyquist_khz,
+        )
+        if RESIDUAL_FREQ_MAX_KHZ
+        is not None
+        else nyquist_khz
+    )
+
+    if (
+        fmax
+        <= RESIDUAL_FREQ_MIN_KHZ
+    ):
+        return pd.DataFrame()
+
+    freq = np.linspace(
+        float(
+            RESIDUAL_FREQ_MIN_KHZ
+        ),
+        fmax,
+        int(
+            RESIDUAL_GRID_POINTS
+        ),
+    )
+
+    omega = (
+        2.0
+        * np.pi
+        * freq
+        / 1000.0
+    )
+
+    rows = []
+
+    for nv, sub in ranked.groupby(
+        "nv_index",
+        sort=True,
+    ):
+        best = sub.sort_values(
+            "site_rank"
+        ).iloc[0]
+
+        popt = parse_popt(
+            best[
+                "popt_json"
+            ]
+        )
+
+        if popt is None:
+            continue
+
+        pred = curve_from_popt(
+            t,
+            popt,
+        )
+
+        rr = (
+            (
+                y[nv]
+                - pred
+            )
+            / np.maximum(
+                e[nv],
+                1e-12,
+            )
+        )
+
+        rr -= np.mean(
+            rr
+        )
+
+        power = lombscargle(
+            t,
+            rr,
+            omega,
+            normalize=True,
+        )
+
+        order = np.argsort(
+            power
+        )[::-1]
+
+        selected = []
+
+        for ind in order:
+            f = float(
+                freq[
+                    ind
+                ]
+            )
+
+            if any(
+                abs(
+                    f
+                    - oldf
+                )
+                <= FAMILY_TOL_KHZ
+                for oldf, _p
+                in selected
+            ):
+                continue
+
+            selected.append(
+                (
+                    f,
+                    float(
+                        power[
+                            ind
+                        ]
+                    ),
+                )
+            )
+
+            if (
+                len(
+                    selected
+                )
+                >= RESIDUAL_N_PEAKS
+            ):
+                break
+
+        for rank, (
+            f,
+            pwr,
+        ) in enumerate(
+            selected,
+            start=1,
+        ):
+            rows.append(
+                {
+                    "nv_index":
+                        int(nv),
+                    "residual_peak_rank":
+                        int(rank),
+                    "freq_kHz":
+                        f,
+                    "power":
+                        pwr,
+                }
+            )
+
+    return pd.DataFrame(
+        rows
+    )
+
+
+# =============================================================================
+# BOOTSTRAP / CROSS VALIDATION WITH RANKED ORIENTATION POOL
+# =============================================================================
+
+def row_refit_for_new_data(
+    t,
+    y,
+    e,
+    row,
+    expected_revival,
+    max_nfev,
+):
+    # Re-use equal-footing bound construction, but override budget locally.
+    warm = parse_popt(
+        row[
+            "popt_json"
+        ]
+    )
+
+    p0, lb, ub = (
+        standardized_vectors(
+            t,
+            y,
+            row,
+            expected_revival,
+            warm=warm,
+        )
+    )
+
+    popt, _pcov, _red = (
+        oldfit._fit_least_squares(
+            fine_decay,
+            np.asarray(
+                t,
+                float,
+            ),
+            np.asarray(
+                y,
+                float,
+            ),
+            np.maximum(
+                np.asarray(
+                    e,
+                    float,
+                ),
+                1e-12,
+            ),
+            p0,
+            lb,
+            ub,
+            max_nfev=int(
+                max_nfev
+            ),
+        )
+    )
+
+    pred = curve_from_popt(
+        t,
+        popt,
+    )
+
+    chi2, red, aicc = (
+        fit_stats(
+            y,
+            e,
+            pred,
+            len(
+                popt
+            ),
+        )
+    )
+
+    return (
+        popt,
+        pred,
+        chi2,
+        red,
+        aicc,
+    )
+
+
+def bootstrap_one_nv(
+    nv,
+    ranked,
+    t,
+    y,
+    e,
+    expected_revival,
+):
+    candidates = (
+        ranked[
+            ranked[
+                "nv_index"
+            ]
+            == int(
+                nv
+            )
+        ]
+        .sort_values(
+            "site_rank"
+        )
+        .head(
+            BOOTSTRAP_TOP_SITES
+        )
+    )
+
+    if len(
+        candidates
+    ) < 2:
+        return pd.DataFrame()
+
+    best = candidates.iloc[
+        0
+    ]
+
+    best_popt = parse_popt(
+        best[
+            "popt_json"
+        ]
+    )
+
+    truth = curve_from_popt(
+        t,
+        best_popt,
+    )
+
+    candidate_rows = [
+        row
+        for _, row
+        in candidates.iterrows()
+    ]
+
+    def one_rep(rep):
+        rng = np.random.default_rng(
+            RANDOM_SEED
+            + 100000
+            * int(
+                nv
+            )
+            + int(
+                rep
+            )
+        )
+
+        yb = (
+            truth
+            + rng.normal(
+                0.0,
+                e[nv],
+            )
+        )
+
+        fits = []
+
+        for row in candidate_rows:
+            try:
+                (
+                    _popt,
+                    _pred,
+                    _chi2,
+                    red,
+                    aicc,
+                ) = (
+                    row_refit_for_new_data(
+                        t,
+                        yb,
+                        e[nv],
+                        row,
+                        expected_revival,
+                        BOOTSTRAP_MAX_NFEV,
+                    )
+                )
+
+                fits.append(
+                    (
+                        aicc,
+                        red,
+                        int(
+                            row[
+                                "site_id"
+                            ]
+                        ),
+                    )
+                )
+
+            except Exception:
+                continue
+
+        if not fits:
+            return None
+
+        fits.sort(
+            key=lambda x: (
+                x[0],
+                x[1],
+            )
+        )
+
+        return fits[
+            0
+        ]
+
+    with threadpool_limits(
+        limits=1
+    ):
+        reps = Parallel(
+            n_jobs=POST_N_JOBS,
+            backend="loky",
+            batch_size=1,
+        )(
+            delayed(one_rep)(
+                i
+            )
+            for i
+            in range(
+                int(
+                    BOOTSTRAP_N
+                )
+            )
+        )
+
+    reps = [
+        r
+        for r in reps
+        if r
+        is not None
+    ]
+
+    if not reps:
+        return pd.DataFrame()
+
+    raw = pd.DataFrame(
+        reps,
+        columns=[
+            "aicc",
+            "red_chi2",
+            "site_id",
+        ],
+    )
+
+    out = (
+        raw.groupby(
+            "site_id",
+            as_index=False,
+        )
+        .size()
+        .rename(
+            columns={
+                "size":
+                    "wins"
+            }
+        )
+        .sort_values(
+            "wins",
+            ascending=False,
+        )
+    )
+
+    out[
+        "nv_index"
+    ] = int(
+        nv
+    )
+
+    out[
+        "bootstrap_successful_reps"
+    ] = len(
+        raw
+    )
+
+    out[
+        "bootstrap_win_fraction"
+    ] = (
+        out[
+            "wins"
+        ]
+        / len(
+            raw
+        )
+    )
+
+    return out
+
+
+def run_bootstrap(
+    ranked,
+    t,
+    y,
+    e,
+    expected_revival,
+):
+    if not RUN_BOOTSTRAP:
+        return pd.DataFrame()
+
+    frames = []
+
+    available = set(
+        ranked[
+            "nv_index"
+        ].astype(
+            int
+        )
+    )
+
+    for nv in BOOTSTRAP_NV_INDICES:
+        nv = int(
+            nv
+        )
+
+        if nv not in available:
+            continue
+
+        print(
+            f"[bootstrap] NV {nv}: "
+            f"{BOOTSTRAP_N} replicas, "
+            f"top {BOOTSTRAP_TOP_SITES} "
+            "orientation+site hypotheses from the two experiment orientations"
+        )
+
+        df = bootstrap_one_nv(
+            nv,
+            ranked,
+            t,
+            y,
+            e,
+            expected_revival,
+        )
+
+        if not df.empty:
+            frames.append(
+                df
+            )
+
+    return (
+        pd.concat(
+            frames,
+            ignore_index=True,
+        )
+        if frames
+        else pd.DataFrame()
+    )
+
+
+def cross_validate_one_nv(
+    nv,
+    ranked,
+    t,
+    y,
+    e,
+    expected_revival,
+):
+    candidates = (
+        ranked[
+            ranked[
+                "nv_index"
+            ]
+            == int(
+                nv
+            )
+        ]
+        .sort_values(
+            "site_rank"
+        )
+        .head(
+            CV_TOP_SITES
+        )
+    )
+
+    if len(
+        candidates
+    ) < 2:
+        return pd.DataFrame()
+
+    rows = [
+        row
+        for _, row
+        in candidates.iterrows()
+    ]
+
+    n = len(
+        t
+    )
+
+    ntrain = int(
+        round(
+            CV_TRAIN_FRACTION
+            * n
+        )
+    )
+
+    ntrain = max(
+        len(
+            PARAM_NAMES
+        )
+        + 5,
+        ntrain,
+    )
+
+    ntrain = min(
+        ntrain,
+        n - 3,
+    )
+
+    def one_rep(rep):
+        rng = np.random.default_rng(
+            RANDOM_SEED
+            + 200000
+            * int(
+                nv
+            )
+            + int(
+                rep
+            )
+        )
+
+        perm = rng.permutation(
+            n
+        )
+
+        train = np.sort(
+            perm[
+                :ntrain
+            ]
+        )
+
+        test = np.sort(
+            perm[
+                ntrain:
+            ]
+        )
+
+        out = []
+
+        for row in rows:
+            try:
+                (
+                    popt,
+                    _pred,
+                    _chi2,
+                    _red,
+                    _aicc,
+                ) = (
+                    row_refit_for_new_data(
+                        t[
+                            train
+                        ],
+                        y[
+                            nv,
+                            train,
+                        ],
+                        e[
+                            nv,
+                            train,
+                        ],
+                        row,
+                        expected_revival,
+                        CV_MAX_NFEV,
+                    )
+                )
+
+                pred_test = curve_from_popt(
+                    t[
+                        test
+                    ],
+                    popt,
+                )
+
+                test_chi2 = float(
+                    np.sum(
+                        (
+                            (
+                                y[
+                                    nv,
+                                    test,
+                                ]
+                                - pred_test
+                            )
+                            / np.maximum(
+                                e[
+                                    nv,
+                                    test,
+                                ],
+                                1e-12,
+                            )
+                        )
+                        ** 2
+                    )
+                )
+
+                out.append(
+                    {
+                        "rep":
+                            int(
+                                rep
+                            ),
+                        "site_id":
+                            int(
+                                row[
+                                    "site_id"
+                                ]
+                            ),
+                        "test_chi2":
+                            test_chi2,
+                    }
+                )
+
+            except Exception:
+                continue
+
+        return out
+
+    with threadpool_limits(
+        limits=1
+    ):
+        reps = Parallel(
+            n_jobs=POST_N_JOBS,
+            backend="loky",
+            batch_size=1,
+        )(
+            delayed(one_rep)(
+                i
+            )
+            for i in range(
+                int(
+                    CV_REPEATS
+                )
+            )
+        )
+
+    raw_rows = [
+        x
+        for rep in reps
+        for x in rep
+    ]
+
+    if not raw_rows:
+        return pd.DataFrame()
+
+    raw = pd.DataFrame(
+        raw_rows
+    )
+
+    agg = (
+        raw.groupby(
+            "site_id",
+            as_index=False,
+        )
+        .agg(
+            mean_test_chi2=(
+                "test_chi2",
+                "mean",
+            ),
+            median_test_chi2=(
+                "test_chi2",
+                "median",
+            ),
+            std_test_chi2=(
+                "test_chi2",
+                "std",
+            ),
+            cv_successful_reps=(
+                "rep",
+                "nunique",
+            ),
+        )
+        .sort_values(
+            "mean_test_chi2"
+        )
+        .reset_index(
+            drop=True
+        )
+    )
+
+    agg[
+        "nv_index"
+    ] = int(
+        nv
+    )
+
+    agg[
+        "predictive_rank"
+    ] = np.arange(
+        1,
+        len(
+            agg
+        )
+        + 1,
+    )
+
+    return agg
+
+
+def run_cross_validation(
+    ranked,
+    t,
+    y,
+    e,
+    expected_revival,
+):
+    if not RUN_CROSS_VALIDATION:
+        return pd.DataFrame()
+
+    frames = []
+
+    available = set(
+        ranked[
+            "nv_index"
+        ].astype(
+            int
+        )
+    )
+
+    for nv in CV_NV_INDICES:
+        nv = int(
+            nv
+        )
+
+        if nv not in available:
+            continue
+
+        print(
+            f"[CV] NV {nv}: "
+            f"{CV_REPEATS} splits, "
+            f"top {CV_TOP_SITES} "
+            "orientation+site hypotheses from the two experiment orientations"
+        )
+
+        df = (
+            cross_validate_one_nv(
+                nv,
+                ranked,
+                t,
+                y,
+                e,
+                expected_revival,
+            )
+        )
+
+        if not df.empty:
+            frames.append(
+                df
+            )
+
+    return (
+        pd.concat(
+            frames,
+            ignore_index=True,
+        )
+        if frames
+        else pd.DataFrame()
+    )
+
+
+# =============================================================================
+# GLOBAL SUMMARY
+# =============================================================================
+
+def make_global_summary(
+    summary,
+):
+    fig, axes = plt.subplots(
+        2,
+        2,
+        figsize=(
+            13,
+            9,
+        ),
+    )
+
+    ax = axes[
+        0,
+        0,
+    ]
+
+    vals = summary[
+        "second_delta_aicc"
+    ].to_numpy(float)
+
+    vals = vals[
+        np.isfinite(
+            vals
+        )
+    ]
+
+    ax.hist(
+        vals,
+        bins=35,
+    )
+
+    ax.set_xlabel(
+        "ΔAICc: second site − best site"
+    )
+
+    ax.set_ylabel(
+        "NV count"
+    )
+
+    ax.set_title(
+        "Same-orientation site separation"
+    )
+
+    ax.grid(
+        alpha=0.2
+    )
+
+    ax = axes[
+        0,
+        1,
+    ]
+
+    ax.hist(
+        summary[
+            "best_weight"
+        ].dropna(),
+        bins=30,
+    )
+
+    ax.set_xlabel(
+        "Best-site Akaike weight"
+    )
+
+    ax.set_ylabel(
+        "NV count"
+    )
+
+    ax.set_title(
+        "Confidence within the independently assigned NV orientation"
+    )
+
+    ax.grid(
+        alpha=0.2
+    )
+
+    ax = axes[
+        1,
+        0,
+    ]
+
+    ax.scatter(
+        summary[
+            "best_red_chi2"
+        ],
+        summary[
+            "second_delta_aicc"
+        ],
+        s=16,
+    )
+
+    ax.set_xlabel(
+        "Best reduced χ²"
+    )
+
+    ax.set_ylabel(
+        "ΔAICc to second site"
+    )
+
+    ax.set_title(
+        "Fit quality vs site discrimination"
+    )
+
+    ax.grid(
+        alpha=0.2
+    )
+
+    ax = axes[
+        1,
+        1,
+    ]
+
+    cats = [
+        "near_degenerate",
+        "some_separation",
+        "substantial_separation",
+        "large_separation",
+    ]
+
+    vals = [
+        int(
+            (
+                summary[
+                    "separation_label"
+                ]
+                == c
+            ).sum()
+        )
+        for c in cats
+    ]
+
+    ax.bar(
+        np.arange(
+            4
+        ),
+        vals,
+    )
+
+    ax.set_xticks(
+        np.arange(
+            4
+        )
+    )
+
+    ax.set_xticklabels(
+        [
+            "Δ<2",
+            "2–6",
+            "6–10",
+            "≥10",
+        ]
+    )
+
+    ax.set_ylabel(
+        "NV count"
+    )
+
+    ax.set_title(
+        "Confidence classes"
+    )
+
+    ax.grid(
+        alpha=0.2,
+        axis="y",
+    )
+
+    fig.suptitle(
+        (
+            f"{RESULT_TAG}: orientation-constrained "
+            f"$^{{13}}$C site inference | "
+            f"{len(summary)} NVs"
+        ),
         fontsize=14,
     )
 
@@ -3053,446 +3643,24 @@ def make_summary_figure(
     return fig
 
 
-# =============================================================================
-# MULTIPAGE PDF
-# =============================================================================
-
-def save_fit_pdf(
+def save_table(
+    df,
     path,
-    tau_us,
-    norm_counts,
-    norm_counts_ste,
-    results,
-    zoom_first_revival=False,
 ):
-    plots_per_page = (
-        PDF_COLS
-        * PDF_ROWS
+    if (
+        df is None
+        or df.empty
+    ):
+        return
+
+    df.to_csv(
+        path,
+        index=False,
     )
-
-    with PdfPages(path) as pdf:
-        for start in range(
-            0,
-            len(results),
-            plots_per_page,
-        ):
-            page = results[
-                start
-                : start
-                + plots_per_page
-            ]
-
-            fig, axes = plt.subplots(
-                PDF_ROWS,
-                PDF_COLS,
-                figsize=(
-                    5.0 * PDF_COLS,
-                    3.5 * PDF_ROWS,
-                ),
-                squeeze=False,
-            )
-
-            axes = axes.ravel()
-
-            for slot, r in enumerate(
-                page
-            ):
-                ax = axes[slot]
-
-                nv = r.nv_index
-
-                if zoom_first_revival:
-                    mask = (
-                        np.abs(
-                            tau_us
-                            - REVIVAL_TAU_US_THEORY
-                        )
-                        <= 6.5
-                    )
-                else:
-                    mask = np.ones(
-                        tau_us.size,
-                        dtype=bool,
-                    )
-
-                x = (
-                    2.0
-                    * tau_us[mask]
-                )
-
-                ax.errorbar(
-                    x,
-                    norm_counts[nv, mask],
-                    yerr=norm_counts_ste[nv, mask],
-                    fmt="o",
-                    markersize=2.7,
-                    capsize=1.0,
-                    linewidth=0.6,
-                    label="Data",
-                )
-
-                if r.core_curve is not None:
-                    ax.plot(
-                        x,
-                        r.core_curve[mask],
-                        linewidth=1.0,
-                        linestyle="--",
-                        label="Core",
-                    )
-
-                if r.fit_curve is not None:
-                    ax.plot(
-                        x,
-                        r.fit_curve[mask],
-                        linewidth=1.4,
-                        label="Fit",
-                    )
-
-                ax.axvline(
-                    REVIVAL_TOTAL_US_THEORY,
-                    linestyle=":",
-                    linewidth=0.8,
-                )
-
-                title = (
-                    f"NV {nv} | "
-                    f"{r.status}"
-                )
-
-                if np.isfinite(
-                    r.red_chi2
-                ):
-                    title += (
-                        f" | χ²r={r.red_chi2:.2f}"
-                    )
-
-                ax.set_title(
-                    title,
-                    fontsize=8.5,
-                )
-
-                ax.set_xlabel(
-                    "Total evolution (us)",
-                    fontsize=8,
-                )
-
-                ax.set_ylabel(
-                    r"Norm. NV$^{-}$ pop.",
-                    fontsize=8,
-                )
-
-                ax.tick_params(
-                    labelsize=7,
-                )
-
-                ax.grid(
-                    alpha=0.22
-                )
-
-                ax.legend(
-                    fontsize=6,
-                )
-
-                if r.eseem_used:
-                    text = (
-                        f"f-={r.f_minus_kHz:.0f} kHz\n"
-                        f"f+={r.f_plus_kHz:.0f} kHz\n"
-                        f"ΔAICc={r.delta_aicc:.1f}"
-                    )
-
-                    ax.text(
-                        0.02,
-                        0.03,
-                        text,
-                        transform=ax.transAxes,
-                        fontsize=6,
-                        va="bottom",
-                    )
-
-            for slot in range(
-                len(page),
-                len(axes),
-            ):
-                axes[slot].axis(
-                    "off"
-                )
-
-            label = (
-                "First-revival zoom"
-                if zoom_first_revival
-                else "Full spin echo"
-            )
-
-            fig.suptitle(
-                f"{label} — "
-                f"{start + 1}–"
-                f"{start + len(page)} "
-                f"of {len(results)}",
-                fontsize=14,
-                y=0.995,
-            )
-
-            fig.tight_layout(
-                rect=[
-                    0,
-                    0,
-                    1,
-                    0.975,
-                ]
-            )
-
-            pdf.savefig(
-                fig,
-                bbox_inches="tight",
-            )
-
-            plt.close(
-                fig
-            )
 
     print(
         f"Saved: {path}"
     )
-
-
-def save_fit_checkpoint_npz(
-    output_base,
-    tau_us,
-    norm_counts,
-    norm_counts_ste,
-    results,
-):
-    """
-    Save everything needed to replot the fit WITHOUT re-running optimization.
-
-    This checkpoint is intentionally written before summary/PDF generation so
-    a later plotting error does not lose an expensive fit.
-    """
-    if not SAVE_CHECKPOINT_NPZ:
-        return None
-
-    n_nv = len(results)
-    n_t = len(tau_us)
-
-    fit_curves = np.full(
-        (n_nv, n_t),
-        np.nan,
-        dtype=float,
-    )
-    core_curves = np.full(
-        (n_nv, n_t),
-        np.nan,
-        dtype=float,
-    )
-
-    nv_indices = np.empty(
-        n_nv,
-        dtype=int,
-    )
-    status = np.empty(
-        n_nv,
-        dtype="U64",
-    )
-
-    for i, r in enumerate(results):
-        nv_indices[i] = int(r.nv_index)
-        status[i] = str(r.status)
-
-        if r.fit_curve is not None:
-            arr = np.asarray(
-                r.fit_curve,
-                dtype=float,
-            ).ravel()
-            if arr.size == n_t:
-                fit_curves[i] = arr
-
-        if r.core_curve is not None:
-            arr = np.asarray(
-                r.core_curve,
-                dtype=float,
-            ).ravel()
-            if arr.size == n_t:
-                core_curves[i] = arr
-
-    checkpoint_path = Path(
-        str(output_base)
-        + "_fit_checkpoint.npz"
-    )
-
-    np.savez_compressed(
-        checkpoint_path,
-        source_file_stem=np.asarray(
-            [str(FILE_STEM)]
-        ),
-        B_vector_G=np.asarray(
-            B_VECTOR_G,
-            dtype=float,
-        ),
-        B_magnitude_G=np.asarray(
-            [B_MAG_G],
-            dtype=float,
-        ),
-        tau_us=np.asarray(
-            tau_us,
-            dtype=float,
-        ),
-        total_evolution_us=(
-            2.0
-            * np.asarray(
-                tau_us,
-                dtype=float,
-            )
-        ),
-        norm_counts=np.asarray(
-            norm_counts,
-            dtype=float,
-        ),
-        norm_counts_ste=np.asarray(
-            norm_counts_ste,
-            dtype=float,
-        ),
-        nv_indices=nv_indices,
-        status=status,
-        fit_curves=fit_curves,
-        core_curves=core_curves,
-    )
-
-    print(
-        f"Saved fit checkpoint: "
-        f"{checkpoint_path}"
-    )
-
-    return checkpoint_path
-
-
-# =============================================================================
-# SAVE RESULTS
-# =============================================================================
-
-def save_outputs(
-    output_base,
-    tau_us,
-    norm_counts,
-    norm_counts_ste,
-    results,
-    summary_fig,
-):
-    df = results_to_dataframe(
-        results
-    )
-
-    if SAVE_CSV:
-        csv_path = Path(
-            str(output_base)
-            + "_fit_results.csv"
-        )
-
-        df.to_csv(
-            csv_path,
-            index=False,
-        )
-
-        print(
-            f"Saved: {csv_path}"
-        )
-
-    if SAVE_RESULTS:
-        serializable = {
-            "source_file_stem":
-                FILE_STEM,
-
-            "B_vector_G":
-                B_VECTOR_G.tolist(),
-
-            "B_magnitude_G":
-                B_MAG_G,
-
-            "c13_larmor_kHz":
-                C13_LARMOR_KHZ,
-
-            "revival_tau_us_theory":
-                REVIVAL_TAU_US_THEORY,
-
-            "revival_total_us_theory":
-                REVIVAL_TOTAL_US_THEORY,
-
-            "tau_us":
-                tau_us.tolist(),
-
-            "fit_results":
-                df.to_dict(
-                    orient="records"
-                ),
-        }
-
-        dm.save_raw_data(
-            serializable,
-            output_base,
-        )
-
-        print(
-            f"Saved analysis data: "
-            f"{output_base}"
-        )
-
-    if SAVE_SUMMARY_PNG:
-        path = Path(
-            str(output_base)
-            + "_summary.png"
-        )
-
-        summary_fig.savefig(
-            path,
-            dpi=300,
-            bbox_inches="tight",
-        )
-
-        print(
-            f"Saved: {path}"
-        )
-
-    if SAVE_SUMMARY_PDF:
-        path = Path(
-            str(output_base)
-            + "_summary.pdf"
-        )
-
-        summary_fig.savefig(
-            path,
-            bbox_inches="tight",
-        )
-
-        print(
-            f"Saved: {path}"
-        )
-
-    if SAVE_FULL_FIT_PDF:
-        save_fit_pdf(
-            Path(
-                str(output_base)
-                + "_all_nv_full_fits.pdf"
-            ),
-            tau_us,
-            norm_counts,
-            norm_counts_ste,
-            results,
-            zoom_first_revival=False,
-        )
-
-    if SAVE_FIRST_REVIVAL_PDF:
-        save_fit_pdf(
-            Path(
-                str(output_base)
-                + "_all_nv_first_revival_fits.pdf"
-            ),
-            tau_us,
-            norm_counts,
-            norm_counts_ste,
-            results,
-            zoom_first_revival=True,
-        )
-
-    return df
 
 
 # =============================================================================
@@ -3500,150 +3668,310 @@ def save_outputs(
 # =============================================================================
 
 def main():
-    kpl.init_kplotlib()
+    paths = discover_paths()
 
     (
-        data,
-        nv_list,
-        tau_us,
-        total_evolution_us,
-        norm_counts,
-        norm_counts_ste,
-        orientations,
-    ) = load_single_file(
-        FILE_STEM
+        attempts,
+        ckpt,
+        t,
+        y,
+        e,
+        expected_revival,
+    ) = load_inputs(
+        paths
     )
+
+    # Orientation is an independent physical constraint.  Determine it first,
+    # then fit C13 sites ONLY from the corresponding orientation-specific pool.
+    orientation_map, orientation_quality, orientation_source = load_orientation_map()
+
+    print(
+        "[orientation] per-NV orientation is locked before C13 fitting; "
+        f"allowed experiment orientations={ALLOWED_ORIENTATIONS}"
+    )
+
+    catalog_records, catalog_lookup = load_catalog()
+
+    outdir = (
+        Path(
+            OUTPUT_DIR
+        )
+        if OUTPUT_DIR
+        is not None
+        else paths.prefix.parent
+    )
+
+    outdir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    base = outdir / (
+        paths.prefix.name
+        + "_orientation_locked_confidence_v6"
+    )
+
+    # Save the independent orientation assignment for auditability.
+    if not orientation_quality.empty:
+        save_table(
+            orientation_quality,
+            Path(str(base) + "_orientation_assignments.csv"),
+        )
+
+    # Equal-footing refit ONLY inside each NV's locked orientation pool.
+    refit_df = run_orientation_locked_refits(
+        attempts,
+        orientation_map,
+        t,
+        y,
+        e,
+        expected_revival,
+    )
+
+    ranked = (
+        rank_equal_footing_sites(
+            refit_df
+        )
+    )
+
+    ranked, families = (
+        assign_families(
+            ranked
+        )
+    )
+
+    # Expand all fitted model parameters into explicit analysis columns.
+    ranked = expand_fit_parameter_columns(
+        ranked
+    )
+
+    ranked = (
+        add_catalog_positions(
+            ranked,
+            catalog_lookup,
+        )
+    )
+
+    summary = build_summary(
+        ranked
+    )
+
+    top10 = ranked[
+        ranked[
+            "site_rank"
+        ]
+        <= TOP_UNIQUE_SAVE
+    ].copy()
+
+    residuals = (
+        residual_peak_table(
+            t,
+            y,
+            e,
+            ranked,
+        )
+    )
+
+    bootstrap = (
+        run_bootstrap(
+            ranked,
+            t,
+            y,
+            e,
+            expected_revival,
+        )
+    )
+
+    cv = (
+        run_cross_validation(
+            ranked,
+            t,
+            y,
+            e,
+            expected_revival,
+        )
+    )
+
+    if SAVE_CONFIDENCE_TABLES:
+        save_table(
+            ranked,
+            Path(
+                str(base)
+                + "_all_equal_footing_sites.csv"
+            ),
+        )
+
+        save_table(
+            top10,
+            Path(
+                str(base)
+                + "_top10_unique_sites.csv"
+            ),
+        )
+
+        save_table(
+            summary,
+            Path(
+                str(base)
+                + "_nv_confidence_summary.csv"
+            ),
+        )
+
+        save_table(
+            families,
+            Path(
+                str(base)
+                + "_site_families.csv"
+            ),
+        )
+
+        save_table(
+            residuals,
+            Path(
+                str(base)
+                + "_residual_peaks.csv"
+            ),
+        )
+
+        save_table(
+            bootstrap,
+            Path(
+                str(base)
+                + "_bootstrap_site_stability.csv"
+            ),
+        )
+
+        save_table(
+            cv,
+            Path(
+                str(base)
+                + "_heldout_prediction.csv"
+            ),
+        )
+
+    if SAVE_MAIN_THREE_PANEL_PDF:
+        save_dashboard_pdf(
+            Path(
+                str(base)
+                + "_dashboard_full_zoom_weights_positions_details.pdf"
+            ),
+            t,
+            y,
+            e,
+            ranked,
+            expected_revival,
+        )
+
+    fig = make_global_summary(
+        summary
+    )
+
+    if SAVE_GLOBAL_SUMMARY:
+        png = Path(
+            str(base)
+            + "_global_summary.png"
+        )
+
+        pdf = Path(
+            str(base)
+            + "_global_summary.pdf"
+        )
+
+        fig.savefig(
+            png,
+            dpi=300,
+            bbox_inches="tight",
+        )
+
+        fig.savefig(
+            pdf,
+            bbox_inches="tight",
+        )
+
+        print(
+            f"Saved: {png}"
+        )
+
+        print(
+            f"Saved: {pdf}"
+        )
 
     print()
+    print("=" * 96)
+    print("ORIENTATION-LOCKED CONFIDENCE V6 COMPLETE")
+    print("=" * 96)
     print(
-        "Building physics priors..."
-    )
-
-    catalog = build_catalog()
-
-    if (
-        USE_ESEEM
-        and USE_HYPERFINE_CATALOG
-        and not catalog
-    ):
-        print(
-            "No hyperfine catalog available; "
-            "spectral fallback will be used."
-        )
-
-    results = fit_dataset(
-        nv_list,
-        tau_us,
-        norm_counts,
-        norm_counts_ste,
-        orientations,
-        catalog,
-    )
-
-    successful = [
-        r
-        for r in results
-        if r.status != "failed"
-    ]
-
-    eseem_count = sum(
-        r.eseem_used
-        for r in successful
-    )
-
-    print()
-    print("=" * 78)
-    print("FIT SUMMARY")
-    print("=" * 78)
-    print(
-        f"Successful fits: "
-        f"{len(successful)} / "
-        f"{len(results)}"
+        f"NVs analyzed                   : "
+        f"{len(summary)}"
     )
     print(
-        f"ESEEM accepted:  "
-        f"{eseem_count}"
+        f"experiment orientations        : "
+        f"{ALLOWED_ORIENTATIONS}"
     )
-
-    Bvals = np.array(
-        [
-            r.fitted_B_G
-            for r in successful
-            if np.isfinite(
-                r.fitted_B_G
-            )
-        ],
-        dtype=float,
+    print(
+        f"equal-footing site fits        : "
+        f"{len(ranked)}"
     )
-
-    if Bvals.size:
-        print(
-            f"Median B from revival: "
-            f"{np.nanmedian(Bvals):.3f} G"
-        )
-
-    T2vals = np.array(
-        [
-            r.T2_us
-            for r in successful
-            if np.isfinite(
-                r.T2_us
-            )
-        ],
-        dtype=float,
+    print(
+        f"top-3 identity                 : "
+        f"unique site_id within each NV's locked orientation"
     )
-
-    if T2vals.size:
-        print(
-            f"Median T2: "
-            f"{np.nanmedian(T2vals):.2f} us"
-        )
-
-    print("=" * 78)
-
-    # Create the output name immediately after fitting and save a complete
-    # checkpoint BEFORE any plotting. This protects the expensive fit if a
-    # later plotting/PDF step raises an exception.
-    output_base = (
-        get_output_base()
+    print(
+        f"dense points/fit curve         : "
+        f"{DENSE_CURVE_POINTS}"
     )
-
-    save_fit_checkpoint_npz(
-        output_base,
-        tau_us,
-        norm_counts,
-        norm_counts_ste,
-        results,
+    print(
+        f"13C positions shown/NV         : "
+        f"{POSITION_TOP_N}"
     )
-
-    summary_fig = (
-        make_summary_figure(
-            tau_us,
-            norm_counts,
-            norm_counts_ste,
-            results,
-        )
+    print(
+        f"Akaike hypotheses plotted/NV   : "
+        f"{AKAIKE_PLOT_TOP_N}"
     )
-
-    df = save_outputs(
-        output_base,
-        tau_us,
-        norm_counts,
-        norm_counts_ste,
-        results,
-        summary_fig,
+    print(
+        f"fit-detail rows shown/NV       : "
+        f"{FIT_TABLE_TOP_N}"
     )
+    print(
+        "fit columns                    : score, AICc, Akaike weight, T2, "
+        "revival, width, beta, amplitudes, phases, frequencies, hyperfine"
+    )
+    print(
+        f"near-degenerate ΔAICc<2        : "
+        f"{int((summary['separation_label'] == 'near_degenerate').sum())}"
+    )
+    print(
+        f"large-separation ΔAICc>=10     : "
+        f"{int((summary['separation_label'] == 'large_separation').sum())}"
+    )
+    print("=" * 96)
 
-    if SHOW_SUMMARY:
+    if SHOW_GLOBAL_SUMMARY:
         plt.show(
             block=True
         )
     else:
         plt.close(
-            summary_fig
+            fig
         )
 
-    return df, results
+    return {
+        "allowed_orientations": ALLOWED_ORIENTATIONS,
+        "orientation_map": orientation_map,
+        "orientation_quality": orientation_quality,
+        "ranked_sites":
+            ranked,
+        "families":
+            families,
+        "summary":
+            summary,
+        "residuals":
+            residuals,
+        "bootstrap":
+            bootstrap,
+        "cross_validation":
+            cv,
+    }
 
 
 if __name__ == "__main__":
