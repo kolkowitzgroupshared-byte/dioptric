@@ -914,63 +914,64 @@ def do_resonance(nv_list):
     # for _ in range(2):
     #     resonance.main(nv_list, num_steps, num_reps, num_runs, freqs=freqs)
 
-def do_deer_hahn(nv_list):
-    # freq_center = 0.174
-    # freq_range = 0.024
-    # num_steps =  48
-    # num_reps = 6
-    num_reps =2
-    num_runs =300
-    # num_runs = 2
-    # freqs = calculate_freqs(freq_center, freq_range, num_steps)
-    # freqs = np.arange(20, 330 + 2, 2)
-    freqs = np.arange(110, 200, 2)
-    freqs = freqs / 1000
-    # Remove duplicates and sort
-    freqs = sorted(set(freqs))
-    num_steps = len(freqs)
-    for _ in range(2):
-        do_widefield_image_sample(nv_sig, 50)
-        deer_hahn.main(
-            nv_list,
-            num_steps=len(freqs),
-            num_reps=num_reps,
-            num_runs=num_runs,
-            freqs=freqs,
-
-            # 0 = NV microwave
-            # 1 = P1 / RF
-            uwave_ind_list=[0, 1],
-
-            tau_ns=18_000,
-            nv_pi_ns=256,
-            rf_pi_ns=100,
-        )
-
 # def do_deer_hahn(nv_list):
-#     num_reps = 1
-#     num_runs = 600
-#     bands_mhz = [
-#         (76, 94, 0.2),  
-#         (188, 210, 0.2),
-#         (248, 276, 0.2),
-#     ]
-#     for _ in range(2):
+#     # freq_center = 0.174
+#     # freq_range = 0.024
+#     # num_steps =  48
+#     # num_reps = 6
+#     num_reps =2
+#     num_runs =400
+#     # num_runs = 2
+#     # freqs = calculate_freqs(freq_center, freq_range, num_steps)
+#     # freqs = np.arange(20, 330 + 2, 2)
+#     # freqs = np.arange(110, 200, 2)
+#     freqs = np.arange(50, 285 + 1, 1)
+#     freqs = freqs / 1000
+#     # Remove duplicates and sort
+#     freqs = sorted(set(freqs))
+#     num_steps = len(freqs)
+#     for _ in range(3):
 #         do_widefield_image_sample(nv_sig, 50)
+#         deer_hahn.main(
+#             nv_list,
+#             num_steps=len(freqs),
+#             num_reps=num_reps,
+#             num_runs=num_runs,
+#             freqs=freqs,
 
-#         for f0, f1, df in bands_mhz:
-#             freqs = np.arange(f0, f1 + df, df) / 1000  # MHz -> GHz
-#             freqs = sorted(set(freqs))
-#             num_steps = len(freqs)
+#             # 0 = NV microwave
+#             # 1 = P1 / RF
+#             uwave_ind_list=[0, 1],
 
-#             deer_hahn.main(
-#                 nv_list,
-#                 num_steps,
-#                 num_reps,
-#                 num_runs,
-#                 freqs=freqs,
-#                 uwave_ind_list=[0, 1, 2],
-#             )
+#             tau_ns=18_000,
+#             nv_pi_ns=256,
+#             rf_pi_ns=128,
+#         )
+
+def do_deer_hahn(nv_list):
+    num_reps = 3
+    num_runs = 300
+    bands_mhz = [
+        (70, 105, 1.0),
+        (188, 210, 1.0),
+        (250, 275, 1.0),
+    ]
+    for _ in range(3):
+        do_widefield_image_sample(nv_sig, 50)
+
+        for f0, f1, df in bands_mhz:
+            freqs = np.arange(f0, f1 + df, df) / 1000  # MHz -> GHz
+            freqs = sorted(set(freqs))
+            num_steps = len(freqs)
+
+            deer_hahn.main(
+                nv_list,
+                num_steps,
+                num_reps,
+                num_runs,
+                freqs=freqs,
+                uwave_ind_list=[0, 1, 2],
+            )
 
 def do_deer_hahn_rabi(nv_list):
     min_tau = 16

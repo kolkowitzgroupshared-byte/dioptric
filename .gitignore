@@ -133,3 +133,23 @@ dmypy.json
 
 #mac stuff
 .DS_Store
+
+# Purcell/runtime generated state and caches
+experiment_running.flag
+analysis/.resonance_fit_cache/
+
+# Generated spectroscopy / ESEEM catalogs
+analysis/spin_echo_work/essem_freq_kappa_catalog_*.csv
+analysis/spin_echo_work/essem_freq_kappa_catalog_*.json
+analysis/spin_echo_work/*.b64
+deer_spectra.csv
+deer_transitions.csv
+
+# Generated plots / diagnostics / temporary arrays
+spin_echo*.gif
+filter_functions.pdf
+temp_readings.csv
+test_*.npy
+
+# Export bundles are regenerated from their source files
+share_with_qm/*.zip

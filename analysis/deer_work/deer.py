@@ -598,10 +598,10 @@ if __name__ == "__main__":
     fig = create_comprehensive_plot(
         B_vector, frequency_GHz, concentrations=[0.5, 1.0, 2.0, 5.0]
     )
-    plt.savefig(
-        "/home/claude/p1_comprehensive_analysis.png", dpi=300, bbox_inches="tight"
-    )
-    print("✓ Saved: p1_comprehensive_analysis.png")
+    # plt.savefig(
+    #     "/home/claude/p1_comprehensive_analysis.png", dpi=300, bbox_inches="tight"
+    # )
+    # print("✓ Saved: p1_comprehensive_analysis.png")
 
     # Export numerical data
     B_field, spectrum, info = simulate_spectrum(B_vector, frequency_GHz)

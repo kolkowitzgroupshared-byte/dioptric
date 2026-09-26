@@ -619,9 +619,10 @@ def plot_all(
 # =============================================================================
 def main():
     # === USER CONFIGURATION ===
-    B_vec = np.array([-50.59318864, -12.17874298, -3.46780984])  # Gauss
+    # B_vec = np.array([-50.59318864, -12.17874298, -3.46780984])  # Gauss
+    B_vec = np.array([-48.55, -18.75, -5.97])  # Gauss
     concentrations = [5, 25, 75, 100, 200, 500, 1000]  # ppb
-    mw_pulse_us = 1.0  # microseconds (Ω=250 kHz)
+    mw_pulse_us = 0.136  # microseconds (Ω=250 kHz)
     freq_range = (10, 300)  # MHz
     n_points = 4000
     save_dir = r"analysis/deer_work"
