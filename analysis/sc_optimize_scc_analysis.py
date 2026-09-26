@@ -26,7 +26,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-from utils import data_manager as dm
+from utils import data_manager as dm                
 from utils import kplotlib as kpl
 from utils import widefield
 
