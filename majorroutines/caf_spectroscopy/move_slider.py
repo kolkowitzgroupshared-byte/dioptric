@@ -69,4 +69,4 @@ def main(slider_num: int, slot_num: int):
 
 if __name__ == "__main__":
     # If run directly, you'll need to pass arguments now since defaults were removed
-    main(1, 0)
+    main(3, 1)

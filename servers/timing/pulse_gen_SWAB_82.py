@@ -129,9 +129,22 @@ class PulseGenSwab82(PulseGen, LabradServer):
         # Run the operation
         state = OutputState(digital_channels, analog_0_voltage, analog_1_voltage)
         self.pulse_streamer.constant(state)
-        
-    @setting(7, digital_channels="*i", analog_channels="*i", analog_voltages="*v[]", period="v[]")
-    def square_wave(self, c, digital_channels=[], analog_channels=[], analog_voltages=[], period=1000):
+
+    @setting(
+        7,
+        digital_channels="*i",
+        analog_channels="*i",
+        analog_voltages="*v[]",
+        period="v[]",
+    )
+    def square_wave(
+        self,
+        c,
+        digital_channels=[],
+        analog_channels=[],
+        analog_voltages=[],
+        period=1000,
+    ):
         """
         OPX-like square-wave helper for the Swabian Pulse Streamer.
         """
@@ -142,7 +155,9 @@ class PulseGenSwab82(PulseGen, LabradServer):
         period = int(round(float(period)))
 
         if len(analog_channels) != len(analog_voltages):
-            raise ValueError("analog_channels and analog_voltages must have the same length")
+            raise ValueError(
+                "analog_channels and analog_voltages must have the same length"
+            )
 
         args = [digital_channels, analog_channels, analog_voltages, period]
         seq_args_string = tb.encode_seq_args(args)
@@ -158,6 +173,11 @@ class PulseGenSwab82(PulseGen, LabradServer):
         """
 
         self.pulse_streamer.forceFinal()
+
+    @setting(8, returns="b")
+    def has_finished(self, c):
+        """True once the streamed sequence has finished all its reps."""
+        return self.pulse_streamer.hasFinished()
 
     @setting(6)
     def reset(self, c):

@@ -1,8 +1,4 @@
-"""
-press play to see sequence. pulsed single shot lifetime measurement
-
-@author:alyssa-matthews
-"""
+""" """
 
 import numpy as np
 from pulsestreamer import OutputState, Sequence
@@ -30,9 +26,11 @@ def _vkey_from_arg(x):
 
 
 def get_seq(pulse_streamer, config, args):
-    readout_delay_ns, exc_ns, detect_ns, laser_vkey_arg, laser_power = args
+    wait_ns, pol_ns, gap_ns, exc_ns, detect_ns, laser_vkey_arg, laser_power = args
 
-    readout_delay_ns = _as_int64("readout_delay_ns", readout_delay_ns)
+    wait_ns = _as_int64("wait_ns", wait_ns)
+    pol_ns = _as_int64("pol_ns", pol_ns)
+    gap_ns = _as_int64("gap_ns", gap_ns)
     exc_ns = _as_int64("exc_ns", exc_ns)
     detect_ns = _as_int64("detect_ns", detect_ns)
     laser_vkey = _vkey_from_arg(laser_vkey_arg)
@@ -48,9 +46,9 @@ def get_seq(pulse_streamer, config, args):
     )
 
     meas_buffer = np.int64(1000)
-    # front_buffer = np.int64(laser_delay)
+    front_buffer = np.int64(laser_delay)
 
-    period = np.int64(exc_ns + detect_ns + meas_buffer + readout_delay_ns)
+    period = np.int64(front_buffer + wait_ns + pol_ns + detect_ns + meas_buffer)
 
     seq = Sequence()
 
@@ -64,23 +62,21 @@ def get_seq(pulse_streamer, config, args):
     # gate 0 -> readout 1
     # gate 1 -> readout 2
     apd_train = [
-        # (int(front_buffer), LOW),
-        (int(readout_delay_ns), HIGH),
-        # detect while exciting
-        (int(exc_ns), HIGH),
-        # one decay bin after laser off
+        (int(front_buffer), LOW),
+        (int(wait_ns), LOW),
+        (int(pol_ns), LOW),
         (int(detect_ns), HIGH),
         (int(meas_buffer), LOW),
     ]
     seq.setDigital(do_apd_gate, apd_train)
 
     laser_train = [
-        # (int(front_buffer), LOW),
-        (int(readout_delay_ns), LOW),
-        # laser on during excitation
+        (int(front_buffer), LOW),
+        (int(wait_ns), LOW),
+        (int(pol_ns), HIGH),
+        (int(gap_ns), LOW),
         (int(exc_ns), HIGH),
-        # laser off for decay bin
-        (int(detect_ns), LOW),
+        (int(detect_ns - gap_ns - exc_ns), LOW),
         (int(meas_buffer), LOW),
     ]
     tb.process_laser_seq(seq, laser_vkey, laser_train)
@@ -95,7 +91,7 @@ if __name__ == "__main__":
     cfg = common.get_config_dict()
 
     # args = [readout_delay_ns, exc_ns, detect_ns, laser_vkey, laser_power]
-    args = [1000, 2000, 500, "SPIN_READOUT", None]
+    args = [0, 1e3, 100, 100, 1e3, "SPIN_READOUT", None]
     # ^ first arg should be a variable
     seq, final, ret = get_seq(None, cfg, args)
     print("Period (ns):", ret[0])

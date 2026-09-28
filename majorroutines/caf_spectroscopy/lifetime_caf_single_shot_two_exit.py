@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-performs single shot lifetime measurements for caf. can do either continuous or pulsed depending on sequence selected
-
-@author:alyssa-matthews
-"""
+""" """
 
 import csv
 import json
@@ -52,22 +48,24 @@ def main(
         slider_3.set_filter(slider_3_pos)
 
     # Handle the readout_times list for both sequences
-    # Expected format passed from wrapper: [delay_ns, exc_ns, detect_ns]
-    if len(readout_times) >= 3:
-        delay_ns = int(
-            readout_times[0]
-        )  # readout_delay OR recovery_delay depending on sequence
-        pulse_time = int(readout_times[1])  # exc_ns
-        readout_time = int(readout_times[2])  # detect_ns (decay bin after laser off)
+    # Expected format passed from wrapper: [wait_ns, pol_ns, gap_ns, exc_ns, detect_ns]
+    if len(readout_times) >= 5:
+        wait_time = int(readout_times[0])  # dark time
+        polarize_time = int(readout_times[1])  # pol_ns
+        gap_time = int(readout_times[2])  # gap_ns
+        pulse_time = int(readout_times[3])  # exc_ns
+        readout_time = int(
+            readout_times[4]
+        )  # detect_ns (decay bin after polarizing laser off)
     else:
-        # Fallback if only 2 arguments are provided
-        delay_ns = 0
-        readout_time = int(readout_times[0])  # detect_ns
+        # Fallback if only 3 arguments are provided
+        wait_time = int(readout_times[0])  # dark time
+        polarize_time = 0
+        gap_time = 0
         pulse_time = int(readout_times[1])  # exc_ns
+        readout_time = int(readout_times[2])  # detect_ns
 
-    calc_readout_time = (
-        delay_ns + pulse_time + readout_time
-    )  # gate is open for full exc + decay bin
+    calc_readout_time = readout_time  # gate is open for full exc + decay bin
 
     # Set the virtual laser key
     laser_vkey = "SPIN_READOUT"
@@ -77,7 +75,9 @@ def main(
     # Map variables to the exact format expected by BOTH sequence files
     # args = [delay_ns, exc_ns, detect_ns, laser_vkey, laser_power]
     seq_args = [
-        delay_ns,
+        wait_time,
+        polarize_time,
+        gap_time,
         pulse_time,
         readout_time,
         laser_vkey,
@@ -124,12 +124,16 @@ def main(
         "laser_vkey": laser_vkey,
         "slider_1_pos": filter_pos[0],
         "slider_3_pos": filter_pos[1],
-        "delay_ns": delay_ns,
-        "delay_ns-units": "ns",
-        "readout_time": readout_time,
-        "readout_time-units": "ns",
+        "wait_time": wait_time,
+        "wait_time_ns-units": "ns",
+        "polarize_time": polarize_time,
+        "polarize_time_ns-units": "ns",
+        "gap_time": gap_time,
+        "gap_time_ns-units": "ns",
         "pulse_time": pulse_time,
         "pulse_time-units": "ns",
+        "readout_time": readout_time,
+        "readout_time-units": "ns",
         "calc_readout_time": calc_readout_time,
         "calc_readout_time-units": "ns",
         "num_reps": num_reps,
@@ -213,25 +217,8 @@ def main(
 
     # Final save mapping
     raw_data = {
-        "start_timestamp": start_timestamp,
+        **static_data,
         "time_elapsed": time_elapsed,
-        "sequence_file": sequence_file,
-        "nv_sig": nv_sig,
-        "laser_power": laser_power,
-        "laser_vkey": laser_vkey,
-        "slider_1_pos": filter_pos[0],
-        "slider_3_pos": filter_pos[1],
-        "delay_ns": delay_ns,
-        "delay_ns-units": "ns",
-        "readout_time": readout_time,
-        "readout_time-units": "ns",
-        "pulse_time": pulse_time,
-        "pulse_time-units": "ns",
-        "calc_readout_time": calc_readout_time,
-        "calc_readout_time-units": "ns",
-        "num_bins": num_bins,
-        "num_reps": num_reps,
-        "num_runs": num_runs,
         "runs_completed": runs_completed,
         "binned_samples": binned_samples.tolist(),
         "bin_centers": bin_centers_ns.tolist(),
@@ -241,7 +228,7 @@ def main(
     dm.save_figure(fig, file_path)
     file_path = dm.get_file_path(__file__, start_timestamp, repr_th_name)
     dm.save_raw_data(raw_data, file_path)
-    folder_path, file_name = os.path.split(file_path)
+    # folder_path, file_name = os.path.split(file_path)
     # lifetime_json_to_csv(file_name, folder_path)
     print("FIN --")
 

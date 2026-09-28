@@ -167,13 +167,17 @@ def do_th_lifetime_measurement(caf_sig):
 
 
 def do_lifetime_caf_single_shot(th_sig):
+    # # choose filters
+    # do_move_slider(1, 0)
+    # do_move_slider(3, 1)
+
     lifetime_caf_single_shot.main(
         nv_sig=th_sig,
         apd_indices=[0],
-        readout_times=[500, 1000, 5000],  # delay, excitation, detection
-        filter_pos=[3, 0],
-        num_reps=200000,
-        num_runs=100,
+        readout_times=[1e6, 20e3, 50e3],  # delay, excitation, detection
+        filter_pos=[0, 1],
+        num_reps=20000,
+        num_runs=50,
         num_bins=500,
         sequence_file="lifetime_caf_single_pulse.py",
         # lifetime_caf_single_pulse or lifetime_caf_single_on
