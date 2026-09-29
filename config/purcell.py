@@ -196,7 +196,7 @@ config |= {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
                 # "frequency": 2.8421,
-                "frequency": 148,
+                "frequency": 0.198,
                 "rabi_period": 276,
                 "pi_pulse": 128, ## loop
                 # "pi_pulse": 256, ## resonator
