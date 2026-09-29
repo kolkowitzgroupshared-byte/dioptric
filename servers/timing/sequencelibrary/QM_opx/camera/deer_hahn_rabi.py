@@ -1,10 +1,21 @@
 # -*- coding: utf-8 -*-
 """
-Widefield DEER-style echo with RF Rabi (sweep RF pulse duration)
+Widefield DEER-Hahn Rabi sequence.
 
-- Keep RF frequency fixed in the sig gen (sit on one peak)
-- Sweep RF pulse length to see Rabi oscillations in the DEER contrast
-- Centers RF pulse on NV pi pulse (optional but default True)
+Sweep the P1/RF pulse duration while keeping the NV Hahn echo fixed.
+
+Timing:
+    NV:  pi/2 -- tau -- pi -- tau -- pi/2
+
+For each Rabi point, the P1 pulse is centered on the NV pi pulse:
+
+    t_RF,start = tau + (t_pi,NV - t_RF) / 2
+
+Channel convention (same as deer_hahn.py):
+    uwave_ind_list[0] = selected NV microwave source
+    uwave_ind_list[1] = P1 / RF source
+
+All programmed times are quantized to the OPX 4 ns clock.
 
 @author: schand
 """
@@ -18,52 +29,82 @@ from servers.timing.sequencelibrary.QM_opx import seq_utils
 from servers.timing.sequencelibrary.QM_opx.camera import base_scc_sequence
 
 
-# Map uwave index -> DO element name (same as your working freq sweep)
 UWAVE_DO_ELEM_BY_IND = {
     0: "do_sig_gen_STAN_sg394_0_dm",
     1: "do_sig_gen_STAN_sg394_1_dm",
-    2: "do_sig_gen_STAN_sg394_3_dm",  # RF chain
 }
 
 
 def _ns_to_cc(ns: float) -> int:
-    """Quantize ns to 4 ns and convert to OPX clock cycles."""
-    ns_q = int(4 * round(ns / 4))
+    """Quantize ns to the 4 ns OPX clock and convert to clock cycles."""
+    ns_q = int(4 * round(float(ns) / 4))
     return seq_utils.convert_ns_to_cc(ns_q)
 
 
 def get_seq(
     base_scc_seq_args,
-    rf_len_ns_list,            # <-- sweep these (ns)
+    rf_len_ns_list,
+    tau_ns=18_000,
+    nv_pi_ns=256,
+    center_rf_on_nv_pi=True,
     num_reps=1,
-    tau_ns=18_000,             # echo tau (ns)
-    nv_pi_ns=100,              # NV pi length for centering (ns) (digital gate length)
-    center_rf_on_nv_pi=True,   # True = your "centered RF" style
 ):
-    base_scc_seq_args[-1] = [0, 1] # NV-only (example)
-    reference = True
+    """
+    Build the DEER-Hahn Rabi sequence.
+
+    Parameters
+    ----------
+    base_scc_seq_args
+        Standard SCC sequence arguments. The final item must contain
+        [NV_ind, RF_ind].
+    rf_len_ns_list
+        P1/RF pulse durations for the sequence steps, in ns.
+        The host routine may repeat each duration twice for ON/OFF
+        frequency referencing.
+    tau_ns
+        Hahn tau in ns. Total free evolution is 2*tau.
+    nv_pi_ns
+        Actual NV pi-pulse duration used for centering.
+    center_rf_on_nv_pi
+        If True, center the variable P1 pulse on the NV pi pulse.
+    num_reps
+        Repetitions supplied by stream_load().
+    """
+    reference = False
     buffer_cc = seq_utils.get_widefield_operation_buffer()
+
+    if len(rf_len_ns_list) == 0:
+        raise ValueError("rf_len_ns_list cannot be empty.")
+
+    rf_len_ns_list = [
+        int(4 * round(float(val) / 4))
+        for val in rf_len_ns_list
+    ]
+
+    if any(val <= 0 for val in rf_len_ns_list):
+        raise ValueError("All P1/RF pulse durations must be > 0 ns.")
 
     tau_cc = _ns_to_cc(tau_ns)
     nv_pi_cc = _ns_to_cc(nv_pi_ns)
+    rf_len_cc_list = [
+        _ns_to_cc(val)
+        for val in rf_len_ns_list
+    ]
 
-    # Precompute RF pulse durations (cc) on host
-    rf_len_cc_list = [_ns_to_cc(x) for x in rf_len_ns_list]
-    max_rf_cc = max(rf_len_cc_list)
-
-    # Basic feasibility checks for centering
     if center_rf_on_nv_pi:
-        for rf_cc in rf_len_cc_list:
-            # pre_cc = tau - (rf-nv)/2 must be >= 0  -> rf <= 2*tau + nv
-            if rf_cc > (2 * tau_cc + nv_pi_cc):
+        max_rf_cc = 2 * tau_cc + nv_pi_cc
+
+        for rf_cc, rf_ns in zip(
+            rf_len_cc_list,
+            rf_len_ns_list,
+        ):
+            if rf_cc > max_rf_cc:
                 raise ValueError(
-                    f"RF pulse too long for centering: rf_len ~ {rf_cc}cc exceeds 2*tau+nv_pi."
+                    "P1/RF pulse is too long to remain centered on the "
+                    "NV pi pulse: "
+                    f"{rf_ns} ns > approximately "
+                    f"{2*tau_ns + nv_pi_ns} ns."
                 )
-            # if rf_cc < nv_pi_cc:
-            #     raise ValueError(
-            #         f"RF pulse shorter than NV pi ({nv_pi_ns} ns) cannot be centered on NV pi."
-            #     )
-                
 
     with qua.program() as seq:
         seq_utils.init()
@@ -72,53 +113,64 @@ def get_seq(
         rf_len_cc = qua.declare(int)
 
         def uwave_macro(uwave_ind_list, rf_len_cc):
-            # Expect uwave_ind_list = [nv0, nv1, rf]
-            nv_inds = [uwave_ind_list[0], uwave_ind_list[1]]
-            rf_ind = [2]
+            if len(uwave_ind_list) != 2:
+                raise ValueError(
+                    "DEER-Hahn Rabi expects exactly "
+                    "[NV_ind, RF_ind]."
+                )
 
-            nv_elems = [UWAVE_DO_ELEM_BY_IND[i] for i in nv_inds]
-            rf_elem = UWAVE_DO_ELEM_BY_IND[rf_ind[0]]
+            nv_ind = uwave_ind_list[0]
+            rf_ind = uwave_ind_list[1]
 
-            # 1) Start together
-            qua.align(*nv_elems, rf_elem)
+            nv_elem = UWAVE_DO_ELEM_BY_IND[nv_ind]
+            rf_elem = UWAVE_DO_ELEM_BY_IND[rf_ind]
 
-            # 2) NV pi/2
-            seq_utils.macro_pi_on_2_pulse(nv_inds)
+            # Start together.
+            qua.align(nv_elem, rf_elem)
 
-            # Start "tau" from end of pi/2 pulses
-            qua.align(*nv_elems, rf_elem)
+            # NV pi/2.
+            seq_utils.macro_pi_on_2_pulse([nv_ind])
 
-            # 3) Schedule RF 
+            # Define t=0 after the first pi/2.
+            qua.align(nv_elem, rf_elem)
+
+            # P1/RF pulse.
             if center_rf_on_nv_pi:
-                # delta = (Lrf - Lnv)/2  (integer)
-                delta_cc = (rf_len_cc - nv_pi_cc) >> 1
-                pre_cc = tau_cc - delta_cc
+                # Center P1 pulse on the NV pi pulse:
+                # tau + (NVpi - RFlen)/2.
+                rf_start_cc = (
+                    tau_cc
+                    + ((nv_pi_cc - rf_len_cc) >> 1)
+                )
             else:
-                pre_cc = tau_cc
+                rf_start_cc = tau_cc
 
-            qua.wait(pre_cc, rf_elem)
-            seq_utils.macro_pi_pulse(rf_ind, duration_cc=rf_len_cc)
+            qua.wait(rf_start_cc, rf_elem)
+            seq_utils.macro_pi_pulse(
+                [rf_ind],
+                duration_cc=rf_len_cc,
+            )
 
-            # Optional: pad RF element so total macro length is constant vs rf_len
-            # (helps keep heating/duty-cycle consistent)
-            rf_cc = max_rf_cc - rf_len_cc
-            qua.wait(rf_cc, rf_elem)
+            # Central NV pi at exactly tau.
+            qua.wait(tau_cc, nv_elem)
+            seq_utils.macro_pi_pulse([nv_ind])
 
-            # 4) NV pi at exactly tau after the pi/2
-            for e in nv_elems:
-                qua.wait(tau_cc, e)
-            seq_utils.macro_pi_pulse(nv_inds)
+            # Second Hahn arm.
+            qua.wait(tau_cc, nv_elem)
+            seq_utils.macro_pi_on_2_pulse([nv_ind])
 
-            # 5) second tau, then final NV pi/2
-            for e in nv_elems:
-                qua.wait(tau_cc, e)
-            seq_utils.macro_pi_on_2_pulse(nv_inds)
+            # Finish only after both timelines are complete.
+            qua.align(nv_elem, rf_elem)
+            qua.wait(
+                buffer_cc,
+                nv_elem,
+                rf_elem,
+            )
 
-            # 6) buffer and exit
-            qua.align(*nv_elems, rf_elem)
-            qua.wait(buffer_cc)
-
-        with qua.for_each_(rf_len_cc, rf_len_cc_list):
+        with qua.for_each_(
+            rf_len_cc,
+            rf_len_cc_list,
+        ):
             base_scc_sequence.macro(
                 base_scc_seq_args,
                 uwave_macro,
@@ -127,8 +179,7 @@ def get_seq(
                 reference=reference,
             )
 
-    seq_ret_vals = []
-    return seq, seq_ret_vals
+    return seq, []
 
 
 if __name__ == "__main__":
@@ -136,16 +187,18 @@ if __name__ == "__main__":
     config = config_module.config
     opx_config = config_module.opx_config
 
+    opx_config["pulses"]["yellow_spin_pol"]["length"] = 1e3
+
     qm_opx_args = config["DeviceIDs"]["QM_opx_args"]
     qmm = QuantumMachinesManager(**qm_opx_args)
     opx = qmm.open_qm(opx_config)
 
     try:
-        # Example: sweep RF pulse length 0.2–8 us
-        rf_len_ns_list = [200, 400, 800, 1200, 1600, 2000, 2600, 3200, 4000, 6000, 8000]
+        # Example only: around a ~100 ns P1 pi pulse.
+        rf_len_ns_list = list(range(20, 1001, 20))
 
         seq, _ = get_seq(
-            base_scc_seq_args=[
+            [
                 [[108.477, 107.282], [109.356, 108.789]],
                 [220, 220],
                 [1.0, 1.0],
@@ -153,17 +206,22 @@ if __name__ == "__main__":
                 [124, 124],
                 [1.0, 1.0],
                 [False, False],
-                [0, 1, 2],  # NV0, NV1, RF
+                [0, 1],
             ],
-            rf_len_ns_list=rf_len_ns_list,
-            num_reps=1,
-            tau_ns=15_000,
-            nv_pi_ns=100,
+            rf_len_ns_list,
+            tau_ns=18_000,
+            nv_pi_ns=256,
             center_rf_on_nv_pi=True,
+            num_reps=1,
         )
 
-        sim_config = SimulationConfig(duration=int(350e3 / 4))
-        sim = opx.simulate(seq, sim_config)
+        sim_config = SimulationConfig(
+            duration=int(300e3 / 4)
+        )
+        sim = opx.simulate(
+            seq,
+            sim_config,
+        )
         samples = sim.get_simulated_samples()
         samples.con1.plot()
         plt.show(block=True)
