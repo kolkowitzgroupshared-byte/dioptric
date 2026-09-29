@@ -99,15 +99,20 @@ def get_output_folder(source_file, time_stamp=None, subfolder=None, create=False
 
     pc_name = socket.gethostname()
     branch_name = _get_branch_name()
-    source_name = Path(source_file).stem
+    source_path = Path(source_file)
+    source_name = source_path.stem
     date_folder = "_".join(time_stamp.split("_")[0:2])
-    folder_path = (
-        nvdata_dir
-        / f"pc_{pc_name}"
-        / f"branch_{branch_name}"
-        / source_name
-        / date_folder
-    )
+
+    branch_root = nvdata_dir / f"pc_{pc_name}" / f"branch_{branch_name}"
+
+    # Keep the entire spin-echo analysis workspace under one parent directory.
+    # This applies automatically to existing and future callers living in
+    # analysis/spin_echo_work, while leaving every other experiment unchanged.
+    source_parts = {part.lower() for part in source_path.parts}
+    if "spin_echo_work" in source_parts:
+        branch_root = branch_root / "spin_echo"
+
+    folder_path = branch_root / source_name / date_folder
     if subfolder is not None:
         folder_path = folder_path / subfolder
     if create:

@@ -4,7 +4,7 @@ import numpy as np,pandas as pd
 from scipy.optimize import least_squares
 from analysis.spin_echo_work import fitter_module_for_spin_echo as oldfit
 
-ROOT=Path(r"\\192.168.0.197\G\nvdata\pc_NVOffice\branch_master\sc_spin_echo_physics_fit_52G_nv_pillar_array\2026_09")
+ROOT=Path(r"\\192.168.0.197\G\nvdata\pc_NVOffice\branch_master\spin_echo\sc_c13_spin_echo_physics_fit_52G_nv_pillar_array\2026_09")
 CK=ROOT/"2026_09_21-21_09_41-spin_echo_old_protocol_ranked_52G_fit_checkpoint.npz"
 V6=ROOT/"2026_09_21-21_09_41-spin_echo_old_protocol_ranked_52G_orientation_locked_confidence_v6_all_equal_footing_sites.csv"
 ORI=ROOT/"2026_09_21-21_09_41-spin_echo_old_protocol_ranked_52G_orientation_locked_confidence_v6_orientation_assignments.csv"

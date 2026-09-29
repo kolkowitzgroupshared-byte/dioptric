@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
 REPO=Path(__file__).resolve().parents[2];sys.path.insert(0,str(REPO))
-from analysis.spin_echo_work import sc_spin_echo_physics_fit_52G_v8b_multic13 as m
+from analysis.spin_echo_work import sc_c13_spin_echo_physics_fit_52G_v8b_multic13 as m
 SUFFIXES={"summary":"_nv_summary.csv","candidates":"_candidate_fits.csv",
           "orders":"_model_orders.csv","profiles":"_t2_profiles.csv"}
 def read_run(summary_path):

@@ -5,7 +5,7 @@ import numpy as np,pandas as pd
 from joblib import Parallel,delayed
 from threadpoolctl import threadpool_limits
 REPO=Path(__file__).resolve().parents[2];sys.path.insert(0,str(REPO))
-from analysis.spin_echo_work import sc_spin_echo_physics_fit_52G_v8b_multic13 as m
+from analysis.spin_echo_work import sc_c13_spin_echo_physics_fit_52G_v8b_multic13 as m
 def sample_blocks(resid,rng,block=5):
     n=len(resid);out=[]
     while len(out)<n:

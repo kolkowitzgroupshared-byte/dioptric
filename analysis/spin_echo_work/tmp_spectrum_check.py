@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.signal import lombscargle, find_peaks, savgol_filter
-root=r"\\192.168.0.197\G\nvdata\pc_NVOffice\branch_master\sc_spin_echo_physics_fit_52G_nv_pillar_array\2026_09"
+root=r"\\192.168.0.197\G\nvdata\pc_NVOffice\branch_master\spin_echo\sc_c13_spin_echo_physics_fit_52G_nv_pillar_array\2026_09"
 z=np.load(root+r"\2026_09_21-21_09_41-spin_echo_old_protocol_ranked_52G_fit_checkpoint.npz",allow_pickle=True)
 t=z["times_us"].astype(float)
 y=z["norm_counts"].astype(float)

@@ -3,7 +3,7 @@ import json,sys
 from pathlib import Path
 import numpy as np
 ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(ROOT))
-from analysis.spin_echo_work import sc_spin_echo_physics_fit_52G_v8b_multic13 as m
+from analysis.spin_echo_work import sc_c13_spin_echo_physics_fit_52G_v8b_multic13 as m
 raw=json.load(open(ROOT/"analysis/spin_echo_work/essem_freq_kappa_catalog_22A_52G.json"))
 records=[]
 for s in raw:
