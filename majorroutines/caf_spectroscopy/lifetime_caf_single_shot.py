@@ -140,6 +140,8 @@ def main(
     for run_ind in range(num_runs):
         print(f" \nRun index: {run_ind}")
 
+        run_start = time.perf_counter()
+
         if tool_belt.safe_stop():
             break
 
@@ -156,9 +158,14 @@ def main(
         # C. Wait for the sequence to physically finish playing
         time.sleep(run_time_s + 0.1)
 
+        before_read = time.perf_counter() - run_start
+
         # D. Read the completely processed array
         run_binned_samples = counter_server.read_histogram()
         binned_samples += numpy.array(run_binned_samples, dtype=numpy.int64)
+
+        after_read = time.perf_counter() - run_start
+        print(f"Run read time: {after_read - before_read:.3f} s")
 
         # E. Clean up the hardware
         counter_server.stop_histogram()
@@ -172,6 +179,9 @@ def main(
             },
             file_path,
         )
+
+        overhead_s = time.perf_counter() - run_start - run_time_s
+        print(f"Run overhead: {overhead_s:.3f} s")
 
     tool_belt.reset_cfm()
 

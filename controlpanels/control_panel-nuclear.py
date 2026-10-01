@@ -14,9 +14,17 @@ import sys
 import time
 from random import shuffle
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import websocket
+
+# False: no windows during the run, figures appear only at the end
+# (in the detached viewer). Set True for routines that plot live,
+# e.g. stationary_count or monitor_power.
+live_plots = False
+if not live_plots:
+    matplotlib.use("Agg")
 
 from majorroutines.caf_spectroscopy import (
     double_lifetime_recovery_from_nv,
@@ -24,6 +32,7 @@ from majorroutines.caf_spectroscopy import (
     lifetime_caf,
     lifetime_caf_recovery,
     lifetime_caf_single_shot,
+    lifetime_caf_single_shot_fast,
     monitor_power,
     move_slider,
     sideillum_resonance,
@@ -149,7 +158,7 @@ def do_th_lifetime_measurement(caf_sig):
         caf_sig,
         apd_indices=[0],
         readout_times=time_args,
-        filter_pos=[1, 3],  # [2, 1],  # Slider 1 and 3  0, 2
+        filter_pos=[0, 1],  # [2, 1],  # Slider 1 and 3  0, 2
         num_reps=100000,
         num_runs=1,
         num_bins=2000,
@@ -174,16 +183,34 @@ def do_lifetime_caf_single_shot(th_sig):
     lifetime_caf_single_shot.main(
         nv_sig=th_sig,
         apd_indices=[0],
-        readout_times=[1e6, 20e3, 50e3],  # delay, excitation, detection
+        readout_times=[0, 1500, 5000],  # delay, excitation, detection
         filter_pos=[0, 1],
-        num_reps=20000,
-        num_runs=50,
-        num_bins=500,
+        num_reps=200000,
+        num_runs=80,
+        num_bins=325,
         sequence_file="lifetime_caf_single_pulse.py",
         # lifetime_caf_single_pulse or lifetime_caf_single_on
         # pulse = 0, 1500, 2000
         # on = 0, 19500, 20000
         laser_power=2,
+    )
+    return
+
+
+def do_lifetime_caf_single_shot_fast(yipth_sig):
+
+    lifetime_caf_single_shot_fast.main(
+        nv_sig=th_sig,
+        apd_indices=[0],
+        readout_times=[0e6, 2e3, 5e3],  # delay, excitation, detection
+        filter_pos=[0, 1],
+        num_reps=6e7,
+        num_runs=50,
+        num_bins=1000,
+        sequence_file="lifetime_caf_single_pulse_fast.py",
+        laser_power=2,
+        save_every=10,
+        presat_time_ms=100,  # laser on before each run to saturate; 0 = off
     )
     return
 
@@ -616,6 +643,56 @@ def do_pulse_streamer_constant(
         pulse_streamer.reset()
 
 
+import pickle
+import subprocess
+import tempfile
+
+_FIG_VIEWER_CODE = r"""
+import os, pickle, sys
+import matplotlib.pyplot as plt
+try:
+    from utils import kplotlib as kpl
+    kpl.init_kplotlib()
+except Exception:
+    pass
+path = sys.argv[1]
+with open(path, "rb") as f:
+    figs = pickle.load(f)
+os.remove(path)
+plt.ioff()
+plt.show()
+"""
+
+
+def show_figures_detached():
+    """Hand all open figures off to a separate process so the windows stay
+    open after this script exits, without blocking the next run"""
+    figs = []
+    for num in plt.get_fignums():
+        fig = plt.figure(num)
+        try:
+            pickle.dumps(fig)
+            figs.append(fig)
+        except Exception as exc:
+            print(f"Could not detach figure {num}: {exc}")
+    if not figs:
+        return
+    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as f:
+        pickle.dump(figs, f)
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join(p for p in sys.path if p)
+    flags = 0
+    if sys.platform == "win32":
+        flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+    subprocess.Popen(
+        [sys.executable, "-c", _FIG_VIEWER_CODE, f.name],
+        env=env,
+        creationflags=flags,
+        close_fds=True,
+    )
+    plt.close("all")
+
+
 if __name__ == "__main__":
     kpl.init_kplotlib()
 
@@ -645,7 +722,8 @@ if __name__ == "__main__":
         # do_power_monitor()
         # do_stationary_count(th_sig, disable_opt=True)
         # do_lifetime_measurement(th_sig)
-        do_lifetime_caf_single_shot(th_sig)
+        do_lifetime_caf_single_shot_fast(th_sig)
+        # do_lifetime_caf_single_shot(th_sig)
         # do_lifetime_caf_recovery(th_sig)
         # do_th_lifetime_measurement(th_sig)
         # do_awg_test()
@@ -693,4 +771,5 @@ if __name__ == "__main__":
         cxn = common.labrad_connect()
         cxn.disconnect()
         tb.reset_safe_stop()
-        plt.show(block=True)
+        # plt.show(block=True)
+        show_figures_detached()

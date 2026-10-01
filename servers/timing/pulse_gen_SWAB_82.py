@@ -174,10 +174,13 @@ class PulseGenSwab82(PulseGen, LabradServer):
 
         self.pulse_streamer.forceFinal()
 
-    @setting(8, returns="b")
-    def has_finished(self, c):
-        """True once the streamed sequence has finished all its reps."""
-        return self.pulse_streamer.hasFinished()
+    ## Alyssa added this!!! \/
+    # @setting(8, returns="b")
+    # def has_finished(self, c):
+    #     """True once the streamed sequence has finished all its reps."""
+    #     return self.pulse_streamer.hasFinished()
+
+    ## Alyssa added this!! ^
 
     @setting(6)
     def reset(self, c):

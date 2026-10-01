@@ -47,7 +47,7 @@ def get_seq(pulse_streamer, config, args):
         config["Optics"]["PhysicalLasers"][laser_name]["delay"],
     )
 
-    meas_buffer = np.int64(1000)
+    meas_buffer = np.int64(500)
     # front_buffer = np.int64(laser_delay)
 
     period = np.int64(exc_ns + detect_ns + meas_buffer + readout_delay_ns)

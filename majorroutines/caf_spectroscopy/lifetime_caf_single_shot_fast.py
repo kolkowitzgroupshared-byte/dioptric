@@ -19,7 +19,29 @@ import matplotlib.pyplot as plt
 import numpy
 
 import utils.tool_belt as tool_belt
+from utils import common
 from utils import data_manager as dm
+from utils.constants import ModMode, VirtualLaserKey
+
+
+def laser_on_constant(pulsegen_server, laser_vkey):
+    """Hold the laser on via pulse streamer constant(), wired the same way
+    tool_belt.process_laser_seq wires it inside the sequence.
+    """
+    laser_name = tool_belt.get_physical_laser_name(laser_vkey)
+    config = common.get_config_dict()
+    pulser_wiring = config["Wiring"]["PulseGen"]
+    mod_mode = config["Optics"]["PhysicalLasers"][laser_name]["mod_mode"]
+
+    if mod_mode is ModMode.DIGITAL:
+        pulsegen_server.constant([pulser_wiring[f"do_{laser_name}_dm"]])
+    elif mod_mode is ModMode.ANALOG:
+        laser_power = tool_belt.get_virtual_laser_dict(laser_vkey).get("laser_power")
+        if laser_power is None:
+            raise ValueError(f"No laser_power set for {laser_vkey} (analog mod)")
+        pulsegen_server.constant(
+            [], [pulser_wiring[f"ao_{laser_name}_am"]], [float(laser_power)]
+        )
 
 
 def wait_for_sequence(pulsegen_server, run_time_s, timeout_s, settle_s=0.05):
@@ -52,6 +74,7 @@ def main(
     sequence_file,  # Moved up! Required positional argument
     laser_power=None,
     save_every=10,  # incremental raw data save every N runs
+    presat_time_ms=0,  # laser on for this long before each run to saturate; 0 = off
 ):
     if len(apd_indices) > 1:
         msg = "Currently lifetime only supports single APDs!!"
@@ -63,13 +86,13 @@ def main(
     pulsegen_server = tool_belt.get_server_pulse_streamer()
     counter_server = tool_belt.get_server_counter()
 
-    if not hasattr(pulsegen_server, "has_finished"):
-        msg = (
-            "Pulse streamer server has no has_finished setting. Restart the "
-            "pulse_gen_SWAB_82 server, then restart this Python console so the "
-            "LabRAD connection picks up the new setting."
-        )
-        raise RuntimeError(msg)
+    # if not hasattr(pulsegen_server, "has_finished"):
+    #     msg = (
+    #         "Pulse streamer server has no has_finished setting. Restart the "
+    #         "pulse_gen_SWAB_82 server, then restart this Python console so the "
+    #         "LabRAD connection picks up the new setting."
+    #     )
+    #     raise RuntimeError(msg)
 
     if len(filter_pos) != 0:
         slider_1 = tool_belt.get_server_slider_1()
@@ -118,7 +141,9 @@ def main(
     seq_time = ret_vals[0]
 
     seq_time_s = seq_time / (10**9)  # s
-    expected_run_time = num_runs * (num_reps * seq_time_s + 0.2)  # s
+    expected_run_time = num_runs * (
+        num_reps * seq_time_s + presat_time_ms / 1e3 + 0.2
+    )  # s
     expected_run_time_m = expected_run_time / 60  # m
     print(" \nExpected run time: {:.2f} minutes. ".format(expected_run_time_m))
 
@@ -139,7 +164,7 @@ def main(
     readout_time_ps = int(1000 * calc_readout_time)
     bin_size_ps = int(readout_time_ps / num_bins)
     run_time_s = num_reps * seq_time_s  # Calculate exact time one run takes
-    finish_timeout_s = max(1.0, 0.1 * run_time_s)
+    # finish_timeout_s = max(1.0, 0.1 * run_time_s)
 
     # Running total of counts, read cumulatively from the hardware histogram
     binned_samples = numpy.zeros(num_bins, dtype=numpy.int64)
@@ -165,6 +190,8 @@ def main(
         "num_reps": num_reps,
         "num_runs": num_runs,
         "num_bins": num_bins,
+        "presat_time_ms": presat_time_ms,
+        "presat_time_ms-units": "ms",
     }
 
     # Arm the hardware histogram ONCE. It accumulates across all runs; the pulse
@@ -182,15 +209,33 @@ def main(
             if tool_belt.safe_stop():
                 break
 
+            # Pre-saturate: hold the laser on, then hand straight over to the sequence
+            if presat_time_ms > 0:
+                laser_on_constant(pulsegen_server, VirtualLaserKey[laser_vkey])
+                # busy-wait, time.sleep on Windows can overshoot by several ms
+                t_end = time.perf_counter() + presat_time_ms / 1e3
+                while time.perf_counter() < t_end:
+                    pass
+                # constant() replaces the uploaded sequence, so re-load it.
+                # The laser stays on until stream_start takes over.
+                pulsegen_server.stream_load(sequence_file, seq_args_string)
+
             # Fire the laser sequence and wait for the streamer to report done
             pulsegen_server.stream_start(int(num_reps))
-            wait_for_sequence(pulsegen_server, run_time_s, finish_timeout_s)
+            time.sleep(run_time_s + 0.1)
+
+            after_start = time.perf_counter() - run_start
+            print(f"Run time: {after_start:.3f} s")
 
             # Cumulative read: this is the total over all completed runs
+            before_read = time.perf_counter() - run_start
             binned_samples = numpy.array(
                 counter_server.read_histogram(), dtype=numpy.int64
             )
             runs_completed = run_ind + 1
+            after_read = time.perf_counter() - run_start
+
+            print(f"Run read time: {after_read - before_read:.3f} s")
 
             # Save the data incrementally, but not every run
             if runs_completed % save_every == 0:
@@ -205,6 +250,7 @@ def main(
 
             overhead_s = time.perf_counter() - run_start - run_time_s
             print(f"Run overhead: {overhead_s:.3f} s")
+
     finally:
         counter_server.stop_histogram()
 
