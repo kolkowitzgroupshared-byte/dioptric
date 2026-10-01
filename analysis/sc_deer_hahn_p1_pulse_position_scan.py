@@ -27,6 +27,7 @@ from utils import widefield
 
 FILE_STEM = [
     "2026_09_29-16_06_48-qnami-nv0_2026_02_20",
+    "2026_09_29-17_35_28-qnami-nv0_2026_02_20",
 ]
 
 DYNAMIC_THRESHOLD = False
@@ -264,8 +265,6 @@ def main():
     )
     ax.legend()
 
-    fig.tight_layout()
-
     # ---------------------------------------------------------
     # Heatmap
     # ---------------------------------------------------------
@@ -309,8 +308,6 @@ def main():
         ax=ax_h,
         label="Raw DEER contrast (ON - OFF)",
     )
-
-    fig_h.tight_layout()
 
     # ---------------------------------------------------------
     # Save

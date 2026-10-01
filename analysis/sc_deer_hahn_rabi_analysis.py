@@ -41,9 +41,14 @@ FILE_STEM = [
     "2026_09_28-07_53_23-qnami-nv0_2026_02_20",          
     ]
 
+FILE_STEM = [
+    "2026_09_30-12_42_22-qnami-nv0_2026_02_20",
+    "2026_09_30-03_16_46-qnami-nv0_2026_02_20",          
+    ]
+
 # Keep False if you want to analyze the raw SCC count contrast exactly as
 # in the current standalone DEER-Hahn analysis.
-DYNAMIC_THRESHOLD = True
+DYNAMIC_THRESHOLD = True\
 
 PDF_WIDTH = 8.5
 TOP_N = 20

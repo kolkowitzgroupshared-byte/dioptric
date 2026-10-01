@@ -28,6 +28,7 @@ Outputs:
 import csv
 import io
 import os
+import sys
 import traceback
 
 import matplotlib.pyplot as plt
@@ -906,16 +907,45 @@ def main():
             f"Number of significant full-range lines: {len(p1_transitions_full)}",
         ]
 
-        fig.text(
-            0.07,
-            0.91,
-            "\n".join(summary_lines),
-            va="top",
-            ha="left",
-            fontsize=10,
-            family="monospace",
-        )
+        # fig, ax = plt.subplots(figsize=(11, 7.5))
+        # for nv_ind in range(num_nvs_counts):
+        #     ax.plot(
+        #         freqs_mhz,
+        #         avg_contrast[nv_ind],
+        #         lw=0.6,
+        #         alpha=0.20,
+        #     )
 
+        # median_curve = np.nanmedian(avg_contrast, axis=0)
+        # ax.plot(freqs_mhz, median_curve, lw=2.0, label="Median")
+        # overlay_p1_lines(
+        #     ax,
+        #     p1_transitions_in_range,
+        #     label_once=True,
+        #     alpha=0.50,
+        # )
+        # ax.axhline(0, linestyle="--", linewidth=0.8, alpha=0.5)
+        # ax.set_xlabel("P1 / RF frequency (MHz)")
+        # ax.set_ylabel("DEER contrast")
+        # ax.set_title(
+        #     f"Widefield DEER - selected 2.777-GHz orientation\n"
+        #     f"{dataset_label} | N={num_nvs_counts}"
+        # )
+        # ax.legend()
+        # ax.grid(alpha=0.2)
+        # pdf.savefig(fig)
+
+        # fig.text(
+        #     0.07,
+        #     0.91,
+        #     "\n".join(summary_lines),
+        #     va="top",
+        #     ha="left",
+        #     fontsize=10,
+        #     family="monospace",
+        # )
+        # plt.show(block=True)
+        # sys.exit()
         fig.text(
             0.07,
             0.28,
