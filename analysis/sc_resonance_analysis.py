@@ -48,7 +48,6 @@ def voigt(
         amp1 * norm_voigt(freq, width, width, center1)
         + amp2 * norm_voigt(freq, width, width, center2)
         + bg_offset
-        # + bg_slope * freq
     )
 
 

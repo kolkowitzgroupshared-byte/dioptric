@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
-from analysis.spin_echo_work import sc_spin_echo_physics_fit_52G_v8b_multic13 as v8
-ROOT = Path(r"\\192.168.0.197\G\nvdata\pc_NVOffice\branch_master\sc_spin_echo_physics_fit_52G_nv_pillar_array\2026_09")
+from analysis.spin_echo_work import sc_c13_spin_echo_physics_fit_52G_v8b_multic13 as v8
+ROOT = Path(r"\\192.168.0.197\G\nvdata\pc_NVOffice\branch_master\spin_echo\sc_c13_spin_echo_physics_fit_52G_nv_pillar_array\2026_09")
 ck = np.load(next(ROOT.glob("*ranked_52G_fit_checkpoint.npz")), allow_pickle=True)
 t = ck["times_us"].astype(float)
 y = ck["norm_counts"].astype(float)

@@ -31,7 +31,7 @@ from utils import kplotlib as kpl
 # Import your fitting module only for its model/plot helper functions.
 # Importing it does NOT execute main().
 from analysis.spin_echo_work import (
-    sc_spin_echo_physics_fit_52G_nv_pillar_array as fitmod,
+    sc_c13_spin_echo_physics_fit_52G_nv_pillar_array as fitmod,
 )
 
 
@@ -40,8 +40,8 @@ from analysis.spin_echo_work import (
 # =============================================================================
 
 FIT_RESULTS_CSV = Path(
-    r"G:\nvdata\pc_NVOffice\branch_master"
-    r"\sc_spin_echo_physics_fit_52G_nv_pillar_array"
+    r"G:\nvdata\pc_NVOffice\branch_master\spin_echo"
+    r"\sc_c13_spin_echo_physics_fit_52G_nv_pillar_array"
     r"\2026_09"
     r"\2026_09_21-15_48_27-spin_echo_physics_fit_52G_fit_results.csv"
 )

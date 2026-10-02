@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import least_squares
 REPO=Path(__file__).resolve().parents[2]; sys.path.insert(0,str(REPO))
-from analysis.spin_echo_work import sc_spin_echo_physics_fit_52G_v8_multic13 as v8
-ROOT=Path(r"\\192.168.0.197\G\nvdata\pc_NVOffice\branch_master\sc_spin_echo_physics_fit_52G_nv_pillar_array\2026_09")
+from analysis.spin_echo_work import sc_c13_spin_echo_physics_fit_52G_v8_multic13 as v8
+ROOT=Path(r"\\192.168.0.197\G\nvdata\pc_NVOffice\branch_master\spin_echo\sc_c13_spin_echo_physics_fit_52G_nv_pillar_array\2026_09")
 z=np.load(next(ROOT.glob("*ranked_52G_fit_checkpoint.npz")),allow_pickle=True)
 t=z["times_us"].astype(float); Y=z["norm_counts"].astype(float); E=np.maximum(z["norm_counts_ste"].astype(float),1e-4)
 V=pd.read_csv(next(ROOT.glob("*v6_all_equal_footing_sites.csv")))

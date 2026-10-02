@@ -28,6 +28,7 @@ Outputs:
 import csv
 import io
 import os
+import sys
 import traceback
 
 import matplotlib.pyplot as plt
@@ -40,14 +41,28 @@ from utils import kplotlib as kpl
 from utils import widefield
 
 
+# FILE_STEM = [
+#             "2026_09_24-17_24_18-qnami-nv0_2026_02_20",
+#             "2026_09_24-19_57_56-qnami-nv0_2026_02_20",
+#             "2026_09_24-22_45_13-qnami-nv0_2026_02_20",
+#             "2026_09_25-02_45_17-qnami-nv0_2026_02_20",
+#             "2026_09_25-06_04_42-qnami-nv0_2026_02_20",
+#             "2026_09_25-09_28_49-qnami-nv0_2026_02_20",
+#             ]
+
+# FILE_STEM = ["2026_09_26-02_01_14-qnami-nv0_2026_02_20"]
+
+# FILE_STEM = ["2026_09_26-15_19_45-qnami-nv0_2026_02_20",
+#              "2026_09_26-18_04_56-qnami-nv0_2026_02_20",
+#              "2026_09_26-20_49_00-qnami-nv0_2026_02_20",
+#              ]
+
 FILE_STEM = [
-            "2026_09_24-17_24_18-qnami-nv0_2026_02_20",
-            "2026_09_24-19_57_56-qnami-nv0_2026_02_20",
-            "2026_09_24-22_45_13-qnami-nv0_2026_02_20",
-            "2026_09_25-02_45_17-qnami-nv0_2026_02_20",
-            "2026_09_25-06_04_42-qnami-nv0_2026_02_20",
-            "2026_09_25-09_28_49-qnami-nv0_2026_02_20",
-            ]
+             "2026_09_28-18_00_37-qnami-nv0_2026_02_20",
+             "2026_09_29-00_44_53-qnami-nv0_2026_02_20",
+             "2026_09_29-07_14_51-qnami-nv0_2026_02_20",
+             "2026_09_29-14_10_23-qnami-nv0_2026_02_20",
+             ]
 DYNAMIC_THRESHOLD = False
 NV_PER_PAGE = 12
 TOP_N = 20
@@ -65,7 +80,6 @@ TARGET_NV_INDICES = np.array(
     [0, 8, 9, 11, 12, 14, 15, 21, 22, 24, 26, 27, 29, 31, 32, 33, 35, 39, 41, 44, 46, 48, 50, 53, 57, 61, 64, 66, 67, 70, 72, 73, 75, 79, 81, 82, 83, 84, 86, 87, 88, 90, 91, 92, 93, 95, 97, 98, 102, 106, 108, 110, 111, 114, 116, 117, 118, 119, 125, 126, 129, 132, 133, 134, 136, 139, 140, 141, 142, 146, 151, 156, 157, 159, 160, 162, 163, 166, 168, 170, 171, 173, 174, 175, 177, 178, 179, 182, 184, 185, 192, 193, 196, 197, 198, 199, 200, 202, 204, 206, 207, 208],
     dtype=int,
 )
-
 
 # ============================================================
 # P1 simulation overlay for the current QNami field
@@ -109,9 +123,6 @@ JT_COLORS = [
     "#009E73",  # JT-C: green
     "#CC79A7",  # JT-D: purple
 ]
-
-
-
 
 def build_p1_spin_operators():
     """P1 operators for S=1/2 x I=1."""
@@ -896,16 +907,45 @@ def main():
             f"Number of significant full-range lines: {len(p1_transitions_full)}",
         ]
 
-        fig.text(
-            0.07,
-            0.91,
-            "\n".join(summary_lines),
-            va="top",
-            ha="left",
-            fontsize=10,
-            family="monospace",
-        )
+        # fig, ax = plt.subplots(figsize=(11, 7.5))
+        # for nv_ind in range(num_nvs_counts):
+        #     ax.plot(
+        #         freqs_mhz,
+        #         avg_contrast[nv_ind],
+        #         lw=0.6,
+        #         alpha=0.20,
+        #     )
 
+        # median_curve = np.nanmedian(avg_contrast, axis=0)
+        # ax.plot(freqs_mhz, median_curve, lw=2.0, label="Median")
+        # overlay_p1_lines(
+        #     ax,
+        #     p1_transitions_in_range,
+        #     label_once=True,
+        #     alpha=0.50,
+        # )
+        # ax.axhline(0, linestyle="--", linewidth=0.8, alpha=0.5)
+        # ax.set_xlabel("P1 / RF frequency (MHz)")
+        # ax.set_ylabel("DEER contrast")
+        # ax.set_title(
+        #     f"Widefield DEER - selected 2.777-GHz orientation\n"
+        #     f"{dataset_label} | N={num_nvs_counts}"
+        # )
+        # ax.legend()
+        # ax.grid(alpha=0.2)
+        # pdf.savefig(fig)
+
+        # fig.text(
+        #     0.07,
+        #     0.91,
+        #     "\n".join(summary_lines),
+        #     va="top",
+        #     ha="left",
+        #     fontsize=10,
+        #     family="monospace",
+        # )
+        # plt.show(block=True)
+        # sys.exit()
         fig.text(
             0.07,
             0.28,
