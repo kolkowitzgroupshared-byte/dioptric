@@ -106,9 +106,9 @@ def do_red_calibration_image(nv_sig, coords_list, force_laser_key=None, num_reps
 
 
 def do_scanning_image_full_roi(nv_sig):
-    total_range = 60
+    total_range = 48
     scan_range = 12
-    num_steps = 15
+    num_steps = 12
     image_sample.scanning_full_roi(nv_sig, total_range, scan_range, num_steps)
 
 
@@ -941,40 +941,58 @@ def do_deer_hahn(nv_list):
             rf_pi_ns=400,
         )
 
+# def do_deer_hahn_rabi(nv_list):
+#     for _ in range(6):
+#         do_widefield_image_sample(nv_sig, 50)
+#         deer_hahn_rabi.main(
+#         nv_list=nv_list,
+#         num_steps=31,
+#         num_reps=10,
+#         num_runs=300,
+#         min_rf_len_ns=16,
+#         max_rf_len_ns=496,
+#         rf_freq_ghz=0.202,
+#         uwave_ind_list=[0, 1],
+#         tau_ns=18_000,
+#         nv_pi_ns=256,
+#         ref_detuning_ghz=0.6,
+#         )
+
 def do_deer_hahn_rabi(nv_list):
-    for _ in range(6):
+    for _ in range(3):
         do_widefield_image_sample(nv_sig, 50)
         deer_hahn_rabi.main(
-        nv_list=nv_list,
-        num_steps=31,
-        num_reps=10,
-        num_runs=300,
-        min_rf_len_ns=16,
-        max_rf_len_ns=496,
-        rf_freq_ghz=0.198,
-        uwave_ind_list=[0, 1],
-        tau_ns=18_000,
-        nv_pi_ns=256,
-        ref_detuning_ghz=0.6,
+            nv_list=nv_list,
+            num_steps=51,
+            num_reps=10,
+            num_runs=300,
+            min_rf_len_ns=16,
+            max_rf_len_ns=2016,
+            rf_freq_ghz=0.202,
+            uwave_ind_list=[0, 1],
+            tau_ns=18_000,
+            nv_pi_ns=256,
+            ref_detuning_ghz=0.6,
         )
-
-
+        
 def do_deer_hahn_p1_pulse_position_scan(nv_list):
-    deer_hahn_p1_pulse_position_scan.main(
-        nv_list=nv_list,
-        num_steps=31,
-        num_reps=6,
-        num_runs=100,
-        min_rf_center_offset_ns=-17_500,
-        max_rf_center_offset_ns=17_500,
-        rf_freq_ghz=0.198,
-        rf_len_ns=400,
-        uwave_ind_list=[0, 1],
-        tau_ns=18_000,
-        nv_pi_ns=256,
-        ref_detuning_ghz=0.6,
-        dynamic_thresh=True,
-    )
+    for _ in range(3):
+        do_widefield_image_sample(nv_sig, 50)
+        deer_hahn_p1_pulse_position_scan.main(
+            nv_list=nv_list,
+            num_steps=31,
+            num_reps=6,
+            num_runs=100,
+            min_rf_center_offset_ns=-17_500,
+            max_rf_center_offset_ns=17_500,
+            rf_freq_ghz=0.202,
+            rf_len_ns=400,
+            uwave_ind_list=[0, 1],
+            tau_ns=18_000,
+            nv_pi_ns=256,
+            ref_detuning_ghz=0.6,
+            dynamic_thresh=False,
+        )
 
 def do_resonance_zoom(nv_list):
     # for freq_center in (2.85761751, 2.812251747511455):
@@ -1629,12 +1647,12 @@ def do_opx_constant_ac():
     # opx.stream_start()
 
     # Yellow
-    opx.constant_ac(
-        [],  # Digital channels
-        [7],  # Analog channels
-        [0.15],  # Analog voltages
-        [0],  # Analog frequencies
-    )
+    # opx.constant_ac(
+    #     [],  # Digital channels
+    #     [7],  # Analog channels
+    #     [0.45],  # Analog voltages
+    #     [0],  # Analog frequencies
+    # )
     # opx.constant_ac([4])  # Just laser
     # Red
     # freqs = [65, 75, 85]
@@ -1666,7 +1684,7 @@ def do_opx_constant_ac():
     opx.constant_ac(
         [4],  # Digital channels
         [3, 4],  # Analog channels
-        [0.02, 0.02],  # Analog voltages
+        [0.11, 0.11],  # Analog voltages
         [101.0, 101.0],  # Analog frequencies
     )
     # Green + red
@@ -1700,7 +1718,7 @@ def do_opx_constant_ac():
     # opx.constant_ac(
     #     [4],  # Digital channels11
     #     [3, 4, 7],  # Analog channels
-    #     [0.08, 0.08, 0.35],  # Analog voltages
+    #     [0.08, 0.08, 0.45],  # Analog voltages
     #     [99.0, 99.0, 0],  # Analog frequencies
     # )
     # # Red + green + Yellow
@@ -1785,35 +1803,6 @@ def compile_speed_test(nv_list):
     print(stop - start)
 
 
-def piezo_voltage_to_pixel_calibration():
-    cal_voltage_coords = np.array(
-        [(1.1, 0.2), (0.20000000000000012, 0.7196152422706632), (0.19999999999999973, -0.319615242270663)], dtype="float32"
-    )
-    cal_pixel_coords = np.array(
-        [[247.886, 242.951], [234.037, 253.065], [232.579, 236.378]], dtype="float32"
-    )
-    # Compute the affine transformation matrix
-    M = cv2.getAffineTransform(cal_voltage_coords, cal_pixel_coords)
-    # Convert the 2x3 matrix to a 3x3 matrix
-    M = np.vstack([M, [0, 0, 1]])
-    M_inv = np.linalg.inv(M)
-
-    # Format and print the affine matrix as a list of lists
-    affine_voltage2pixel = M.tolist()
-    inverse_affine_voltage2pixel = M_inv.tolist()
-    print("affine_voltage2pixel = [")
-    for row in affine_voltage2pixel:
-        print("    [{:.8f}, {:.8f}, {:.8f}],".format(row[0], row[1], row[2]))
-    print("]")
-
-    print("\nInverse affine matrix (M_inv) as a list of lists:")
-    print("[")
-    for row in inverse_affine_voltage2pixel:
-        print(f"    [{row[0]:.8f}, {row[1]:.8f}, {row[2]:.8f}],")
-    print("]")
-    return M_inv
-
-
 # Load the saved NV coordinates and radii from the .npz file
 def load_nv_coords(
     file_path="slmsuite/nv_blob_detection/nv_blob_filtered_multiple_nv302.npz",
@@ -1885,6 +1874,33 @@ def scan_equilateral_triangle(nv_sig, center_coord=(0, 0), radius=0.2):
         do_scanning_image_sample(nv_sig)
 
 
+def piezo_voltage_to_pixel_calibration():
+    cal_voltage_coords = np.array(
+        [(-0.9, -1.4), (-1.799, -0.88), (-1.80, -1.92)], dtype="float32"
+    )
+    cal_pixel_coords = np.array(
+        [[179.697, 146.071], [147.079, 172.928], [141.982, 136.912]], dtype="float32"
+    )
+    # Compute the affine transformation matrix
+    M = cv2.getAffineTransform(cal_voltage_coords, cal_pixel_coords)
+    # Convert the 2x3 matrix to a 3x3 matrix
+    M = np.vstack([M, [0, 0, 1]])
+    M_inv = np.linalg.inv(M)
+
+    # Format and print the affine matrix as a list of lists
+    affine_voltage2pixel = M.tolist()
+    inverse_affine_voltage2pixel = M_inv.tolist()
+    print("affine_voltage2pixel = [")
+    for row in affine_voltage2pixel:
+        print("    [{:.8f}, {:.8f}, {:.8f}],".format(row[0], row[1], row[2]))
+    print("]")
+
+    print("\nInverse affine matrix (M_inv) as a list of lists:")
+    print("[")
+    for row in inverse_affine_voltage2pixel:
+        print(f"    [{row[0]:.8f}, {row[1]:.8f}, {row[2]:.8f}],")
+    print("]")
+    return M_inv
     
 ### Run the file
 if __name__ == "__main__":
@@ -1892,12 +1908,12 @@ if __name__ == "__main__":
     green_coords_key = f"coords-{green_laser}"
     red_coords_key = f"coords-{red_laser}"
     pixel_coords_key = "pixel_coords"
-    sample_name = "qnami"
+    sample_name = "johnson"
     magnet_angle = 90
     date_str = "2026_02_20"
-    sample_coords = [-1.20, -1.2]
-    z_coord = 0.0
-    # z_coord = -2.2
+    sample_coords = [-1.50, -1.4]
+    # z_coord = 1.65
+    z_coord = 2.0
     
     
     config = common.get_config_dict()
@@ -1945,24 +1961,25 @@ if __name__ == "__main__":
 
     # sys.exit()
 
-    # pixel_coords_list =[
-    #     [194.039, 189.963], 
-    #     [319.015, 83.106], 
-    #     [192.998, 353.981], 
-    #     [17.982, 41.943],
-    # ]
-    # green_coords_list = [
-    #     [97.678, 98.174],
-    #     [73.663, 115.461],
-    #     [100.662, 68.901],
-    #     [126.909, 127.772],
-    # ]
-    # red_coords_list = [
-    #     [66.867, 67.736],
-    #     [47.207, 81.378],
-    #     [69.587, 44.02],
-    #     [90.267, 92.212],
-    # ]
+    pixel_coords_list =[
+        [150.534, 133.46], 
+        # [194.039, 189.963], 
+        [319.015, 83.106], 
+        [192.998, 353.981], 
+        [17.982, 41.943],
+    ]
+    green_coords_list = [
+        [100.52, 100.927],
+        [73.663, 115.461],
+        [100.662, 68.901],
+        [126.909, 127.772],
+    ]
+    red_coords_list = [
+        [66.867, 67.736],
+        [47.207, 81.378],
+        [69.587, 44.02],
+        [90.267, 92.212],
+    ]
     
     # -------------------------------------------
     # num_nvs
@@ -2074,7 +2091,7 @@ if __name__ == "__main__":
     #         scc_dur_list[nv_ind] = int(round(val))
 
     # print("Number optimized:", sum(v is not None for v in scc_duration_list))
-    print("SCC durations:", scc_duration_list)
+    # print("SCC durations:", scc_duration_list)
     
     pol_duration_list = [1000] * num_nvs
     ion_duration_list = [600] * num_nvs
@@ -2153,7 +2170,7 @@ if __name__ == "__main__":
         #     scc_amp_list,
         # )
 
-        do_compensate_for_drift(nv_sig)
+        # do_compensate_for_drift(nv_sig)
         
         # do_red_calibration_image(
         #     nv_sig,
@@ -2173,13 +2190,15 @@ if __name__ == "__main__":
         # do_scanning_image_full_roi(nv_sig)
 
         # scan_equilateral_triangle(nv_sig, center_coord=sample_coords, radius=0.6)
+        # piezo_voltage_to_pixel_calibration()
         # do_image_nv_list(nv_list)
         # do_image_single_nv(nv_sig)
-        # z_range = np.linspace(-4.2, -3.2, 11)
+        # z_range = np.linspace(1.0, 2.0, 11)
         # for z in z_range:
         #     nv_sig.coords[CoordsKey.Z] = z
-        #     # do_scanning_image_sample(nv_sig)
-        #     do_widefield_image_sample(nv_sig, 50)
+        #     do_scanning_image_sample(nv_sig)
+        #     # do_scanning_image_sample_zoom(nv_sig)
+        #     # do_widefield_image_sample(nv_sig, 50)
         
         # x_range = np.linspace(-2.0, 6.0, 6)
         # y_range = np.linspace(-2.0, 6.0, 6)
@@ -2285,7 +2304,7 @@ if __name__ == "__main__":
         
         # do_deer_hahn(nv_list)
         # do_deer_hahn_rabi(nv_list)
-        do_deer_hahn_p1_pulse_position_scan(nv_list)
+        # do_deer_hahn_p1_pulse_position_scan(nv_list)
 
         # do_simple_correlation_test(nv_list)
         # do_two_block_hahn_spatial_correlation(nv_list)

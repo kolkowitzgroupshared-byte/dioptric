@@ -558,62 +558,62 @@ def plot_nv_detection(img_array, nv_coords):
 if __name__ == "__main__":
     kpl.init_kplotlib()
     # Load the image data
-    # data = dm.get_raw_data(
-    #     file_stem="2026_03_20-18_05_10-qnami-nv0_2026_02_20", load_npz=True
-    # )
+    data = dm.get_raw_data(
+        file_stem="2026_10_01-21_47_04-combined_image_array", load_npz=True
+    )
     # img_array = np.array(data["ref_img_array"])
-    # img_array = np.array(data["img_array"])
+    img_array = np.array(data["img_array"])
     
     # Apply the blob detection and Gaussian fitting
-    # sigma = 1.0
-    # lower_threshold = 0.1
-    # upper_threshold = None
-    # smoothing_sigma = 0.0
-    # integration_radius= 2
-    # nv_coordinates, integrated_counts, spot_sizes = detect_nv_coordinates_blob(
-    #     img_array,
-    #     sigma=sigma,
-    #     lower_threshold=lower_threshold,
-    #     upper_threshold=upper_threshold,
-    #     smoothing_sigma=smoothing_sigma,
-    #     integration_radius=integration_radius,
-    # )
-    # filtered_nv_coords = nv_coordinates
-    # filtered_counts = integrated_counts
-    # # Verify if reversing coordinates resolves the offset
-    # default_radius = 2
-    # fig, ax = plt.subplots()
-    # title = "24ms, Ref"
-    # cax = kpl.imshow(ax, img_array, title=title, cbar_label="Photons")
-    # ax.set_title("NV Detection with Blob")
-    # ax.axis("off")
+    sigma = 2.0
+    lower_threshold = 0.015
+    upper_threshold = None
+    smoothing_sigma = 0.0
+    integration_radius= 2
+    nv_coordinates, integrated_counts, spot_sizes = detect_nv_coordinates_blob(
+        img_array,
+        sigma=sigma,
+        lower_threshold=lower_threshold,
+        upper_threshold=upper_threshold,
+        smoothing_sigma=smoothing_sigma,
+        integration_radius=integration_radius,
+    )
+    filtered_nv_coords = nv_coordinates
+    filtered_counts = integrated_counts
+    # Verify if reversing coordinates resolves the offset
+    default_radius = 2
+    fig, ax = plt.subplots()
+    title = "24ms, Ref"
+    cax = kpl.imshow(ax, img_array, title=title, cbar_label="Photons")
+    ax.set_title("NV Detection with Blob")
+    ax.axis("off")
 
-    # for idx, (x, y) in enumerate(filtered_nv_coords, start=1):  # Swapped y, x to x, y
-    #     circ = plt.Circle((x, y), default_radius, color="red", linewidth=1, fill=False)
-    #     ax.add_patch(circ)
-    #     ax.text(
-    #         x,
-    #         y - default_radius - 1,
-    #         f"{idx}",
-    #         # color="black",
-    #         fontsize=8,
-    #         ha="center",
-    #         va="center",
-    #     )
+    for idx, (x, y) in enumerate(filtered_nv_coords, start=1):  # Swapped y, x to x, y
+        circ = plt.Circle((x, y), default_radius, color="red", linewidth=1, fill=False)
+        ax.add_patch(circ)
+        ax.text(
+            x,
+            y - default_radius - 1,
+            f"{idx}",
+            # color="black",
+            fontsize=8,
+            ha="center",
+            va="center",
+        )
  
-    # print(f"Detected NV coordinates (optimized): {len(filtered_nv_coords)}")
+    print(f"Detected NV coordinates (optimized): {len(filtered_nv_coords)}")
 
-    # Save the results
-    # save_results(
-    #     filtered_nv_coords,
-    #     filtered_counts,
-    #     path="slmsuite/nv_blob_detection",
-    #     filename="nv_blob_1487nvs.npz",
-    # )
+    # # Save the results
+    save_results(
+        filtered_nv_coords,
+        filtered_counts,
+        path="slmsuite/nv_blob_detection",
+        filename="nv_blob_885nvs.npz",
+    )
 
     # full ROI -- multiple images save in the same file
     # process_scan_file(file_stem="2026_03_13-00_01_52-qnami-nv0_2026_02_20")
-    process_scan_file(file_stem="2026_06_08-18_52_22-qnami-nv0_2026_02_20")
+    # process_scan_file(file_stem="2026_10_01-21_43_17-johnson-nv0_2026_02_20")
     
     kpl.show(block=True)
 

@@ -273,13 +273,6 @@ if __name__ == "__main__":
     try:
         # Example:
         # 400 ns P1 pulse, sweep center over almost full Hahn window.
-        offsets_ns = list(
-            range(
-                -17_500,
-                17_501,
-                5,
-            )
-        )
 
         seq, _ = get_seq(
             [
@@ -292,7 +285,7 @@ if __name__ == "__main__":
                 [False, False],
                 [0, 1],
             ],
-            offsets_ns,
+            [-5000, 5000], ##
             rf_len_ns=400,
             tau_ns=18_000,
             nv_pi_ns=256,
@@ -300,7 +293,7 @@ if __name__ == "__main__":
         )
 
         sim_config = SimulationConfig(
-            duration=int(300e3 / 4)
+            duration=int(200e3 / 4)
         )
         sim = opx.simulate(
             seq,

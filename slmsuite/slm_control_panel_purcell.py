@@ -240,7 +240,7 @@ def circles():
 # region "nv phase calulation"
 def calibration_triangle():
     # Define parameters for the equilateral triangle
-    center = (710, 530)  # Center of the triangle
+    center = (710, 550)  # Center of the triangle
     # side_length = 80  # Length of each side of the triangle
     side_length = 150  # Length of each side of the triangle
 
@@ -549,10 +549,10 @@ try:
     # wavefront_calibration()
     # load_wavefront_calibration()
     
-    compute_and_write_nvs_phase()
+    # compute_and_write_nvs_phase()
     # write_pre_computed_nvs_phase()
     
-    # calibration_triangle()
+    calibration_triangle()
     # write_pre_computed_triangle()
     
     # circles()

@@ -71,9 +71,14 @@ calibration_coords_nv3 = {
 #     [0.00140560, 0.01479702, -1.73286644],
 # ]
 
+# pixel_to_sample_affine_transformation_matrix = [
+#     [0.06108861, -0.00533755, -12.74624750],
+#     [0.00748424, 0.06162394, -16.62683414],
+# ]
+
 pixel_to_sample_affine_transformation_matrix = [
-    [0.06108861, -0.00533755, -12.74624750],
-    [0.00748424, 0.06162394, -16.62683414],
+    [0.02470551, -0.00346857, -4.83284846],
+    [0.00701627, 0.02788312, -6.73371684],
 ]
 
 
@@ -196,7 +201,7 @@ config |= {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
                 # "frequency": 2.8421,
-                "frequency": 0.198,
+                "frequency": 0.202,
                 "rabi_period": 276,
                 "pi_pulse": 128, ## loop
                 # "pi_pulse": 256, ## resonator
@@ -228,7 +233,7 @@ config |= {
         "readout_mode": 1,  # 16 for double horizontal readout rate (em mode)
         # "readout_mode": 6,  # Fast conventional
         # "roi": (122, 126, 250, 250),  # offsetX, offsetY, width, height
-        "roi": (55, 87, 375, 375),  # offsetX, offsetY, width, height
+        "roi": (100, 110, 300, 300),  # offsetX, offsetY, width, height
         # "roi": None,  # offsetX, offsetY, width, height
         "scale": 5 / 0.6,  # pixels / micron
     },
@@ -255,7 +260,7 @@ config |= {
             VirtualLaserKey.IMAGING: {
                 "physical_name": green_laser,
                 # "duration": 60e6,
-                "duration": 6e6,
+                "duration": 12e6,
             },
             # SBC: created for calibration only
             VirtualLaserKey.RED_IMAGING: {
@@ -304,7 +309,7 @@ config |= {
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 10e3},
             VirtualLaserKey.WIDEFIELD_SPIN_POL: {
                 "physical_name": yellow_laser,
-                "duration": 100e3,
+                "duration": 50e3,
             },
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 1e6},
             VirtualLaserKey.WIDEFIELD_CHARGE_READOUT: {
@@ -339,8 +344,8 @@ config |= {
                 "control_mode": PosControlMode.STREAM,
                 "delay": int(1e6),  # 5 ms for PIFOC xyz
                 "nm_per_unit": 1000,
-                # "optimize_range": 0.09,
-                "optimize_range": 0.8,
+                "optimize_range": 0.2,
+                # "optimize_range": 0.8,
                 "units": "Voltage (V)",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
             },
@@ -348,7 +353,7 @@ config |= {
                 "control_mode": PosControlMode.SEQUENCE,
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
-                "optimize_range": 1.0,
+                "optimize_range": 1.2,
                 "units": "MHz",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
                 "aod": True,
@@ -1040,8 +1045,8 @@ opx_config = {
     ### Analog
     "waveforms": {
         # Green AOD
-        "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
-        # "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
+        # "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
+        "green_aod_cw-opti": {"type": "constant", "sample": 0.11},
         "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.08},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
