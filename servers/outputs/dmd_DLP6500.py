@@ -508,7 +508,7 @@ class DmdDlp6500(LabradServer):
             white / 255 = pass
         """
         self._require_dmd()
-        self._show_pass_all(zero_block=True)
+        self._show_pass_all(zero_block=False)
         # pass
         
     @setting(2, zero_block="b")

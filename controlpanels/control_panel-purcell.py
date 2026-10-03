@@ -1681,12 +1681,12 @@ def do_opx_constant_ac():
     # )
     # opx.constant_ac([1])  # Just laser
     # Green
-    opx.constant_ac(
-        [4],  # Digital channels
-        [3, 4],  # Analog channels
-        [0.11, 0.11],  # Analog voltages
-        [101.0, 101.0],  # Analog frequencies
-    )
+    # opx.constant_ac(
+    #     [4],  # Digital channels
+    #     [3, 4],  # Analog channels
+    #     [0.11, 0.11],  # Analog voltages
+    #     [101.0, 101.0],  # Analog frequencies
+    # )
     # Green + red
     # opx.constant_ac(
     #     [4, 1],  # Digital channels
@@ -1715,12 +1715,12 @@ def do_opx_constant_ac():
     # )
 
     # # Green + yellow
-    # opx.constant_ac(
-    #     [4],  # Digital channels11
-    #     [3, 4, 7],  # Analog channels
-    #     [0.08, 0.08, 0.45],  # Analog voltages
-    #     [99.0, 99.0, 0],  # Analog frequencies
-    # )
+    opx.constant_ac(
+        [4],  # Digital channels11
+        [3, 4, 7],  # Analog channels
+        [0.06, 0.06, 0.45],  # Analog voltages
+        [101.0, 101.0, 0],  # Analog frequencies
+    )
     # # Red + green + Yellow
     # opx.constant_ac(
     #     [4, 1],  # Digital channels1
@@ -1911,9 +1911,9 @@ if __name__ == "__main__":
     sample_name = "johnson"
     magnet_angle = 90
     date_str = "2026_02_20"
-    sample_coords = [-1.50, -1.4]
+    sample_coords = [-1.1, -1.5]
     # z_coord = 1.65
-    z_coord = 2.0
+    z_coord = 0.3
     
     
     config = common.get_config_dict()
@@ -1961,25 +1961,24 @@ if __name__ == "__main__":
 
     # sys.exit()
 
-    pixel_coords_list =[
-        [150.534, 133.46], 
-        # [194.039, 189.963], 
-        [319.015, 83.106], 
-        [192.998, 353.981], 
-        [17.982, 41.943],
-    ]
-    green_coords_list = [
-        [100.52, 100.927],
-        [73.663, 115.461],
-        [100.662, 68.901],
-        [126.909, 127.772],
-    ]
-    red_coords_list = [
-        [66.867, 67.736],
-        [47.207, 81.378],
-        [69.587, 44.02],
-        [90.267, 92.212],
-    ]
+    # pixel_coords_list =[
+    #     [131.019, 140.977], 
+    #     [241.988, 50.004], 
+    #     [225.999, 285.019], 
+    #     [17.025, 45.956],
+    # ]
+    # green_coords_list = [
+    #     [101.55, 102.378],
+    #     [79.695, 115.557],
+    #     [88.862, 74.203],
+    #     [118.927, 122.19],
+    # ]
+    # red_coords_list = [
+    #     [66.867, 67.736],
+    #     [47.207, 81.378],
+    #     [69.587, 44.02],
+    #     [90.267, 92.212],
+    # ]
     
     # -------------------------------------------
     # num_nvs
@@ -2042,25 +2041,25 @@ if __name__ == "__main__":
         for i in range(num_nvs)
     ]
 
-    # scc_amp_list = [
-    #     round(
-    #         widefield.red_qua_amp_fn_2d(red_coords_list[i]),
-    #         4,
-    #     )
-    #     for i in range(num_nvs)
-    # ]
+    scc_amp_list = [
+        round(
+            widefield.red_qua_amp_fn_2d(red_coords_list[i]),
+            4,
+        )
+        for i in range(num_nvs)
+    ]
     
-    scc_amp_data = dm.get_raw_data(
-        file_stem="2026_09_17-15_31_19-optimal_scc_parameters_robust",
-        load_npz=True,
-    )
+    # scc_amp_data = dm.get_raw_data(
+    #     file_stem="2026_09_17-15_31_19-optimal_scc_parameters_robust",
+    #     load_npz=True,
+    # )
 
     # AOD amplitude multiplier
-    scc_amp_dict = scc_amp_data["optimal_values"]
-    scc_amp_list = [
-        round(scc_amp_dict.get(i, scc_amp_dict.get(str(i))), 4)
-        for i in range(len(scc_amp_dict))
-    ]
+    # scc_amp_dict = scc_amp_data["optimal_values"]
+    # scc_amp_list = [
+    #     round(scc_amp_dict.get(i, scc_amp_dict.get(str(i))), 4)
+    #     for i in range(len(scc_amp_dict))
+    # ]
 
     # Put optimized durations back at the original NV indices
     # for local_ind, nv_ind in enumerate(selected_inds):
@@ -2095,7 +2094,7 @@ if __name__ == "__main__":
     
     pol_duration_list = [1000] * num_nvs
     ion_duration_list = [600] * num_nvs
-    # scc_duration_list = [88] * num_nvs
+    scc_duration_list = [88] * num_nvs
 
 
     # sys.exit()
@@ -2178,7 +2177,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_widefield_image_sample(nv_sig, 50)     
+        # do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 200)
 
         # for nv in nv_list: 
@@ -2193,7 +2192,7 @@ if __name__ == "__main__":
         # piezo_voltage_to_pixel_calibration()
         # do_image_nv_list(nv_list)
         # do_image_single_nv(nv_sig)
-        # z_range = np.linspace(1.0, 2.0, 11)
+        # z_range = np.linspace(-2.0, 2.0, 41)
         # for z in z_range:
         #     nv_sig.coords[CoordsKey.Z] = z
         #     do_scanning_image_sample(nv_sig)

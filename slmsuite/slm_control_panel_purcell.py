@@ -240,9 +240,9 @@ def circles():
 # region "nv phase calulation"
 def calibration_triangle():
     # Define parameters for the equilateral triangle
-    center = (710, 550)  # Center of the triangle
+    center = (720, 540)  # Center of the triangle
     # side_length = 80  # Length of each side of the triangle
-    side_length = 150  # Length of each side of the triangle
+    side_length = 140  # Length of each side of the triangle
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
     theta = np.linspace(0, 2 * np.pi, 4)[:-1]  # Exclude the last point to avoid overlap
@@ -446,7 +446,7 @@ def compute_and_write_nvs_phase():
         shape=(4096, 2048),
         spot_vectors=thorcam_coords_xy,
         basis="ij",
-        spot_amp=spot_weights,
+        # spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally
@@ -549,10 +549,10 @@ try:
     # wavefront_calibration()
     # load_wavefront_calibration()
     
-    # compute_and_write_nvs_phase()
+    compute_and_write_nvs_phase()
     # write_pre_computed_nvs_phase()
     
-    calibration_triangle()
+    # calibration_triangle()
     # write_pre_computed_triangle()
     
     # circles()

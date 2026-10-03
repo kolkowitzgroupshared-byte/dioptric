@@ -33,19 +33,19 @@ green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
 calibration_coords_pixel = [
-    [319.015, 83.106], 
-    [192.998, 353.981], 
-    [17.982, 41.943],
+    [241.988, 50.004], 
+    [225.999, 285.019], 
+    [17.025, 45.956],
 ]
 calibration_coords_green = [
-    [73.663, 115.461],
-    [100.662, 68.901],
-    [126.909, 127.772],
+    [79.695, 115.557],
+    [88.862, 74.203],
+    [118.927, 122.19],
 ]
 calibration_coords_red = [
     [47.207, 81.378],
     [69.587, 44.02],
-    [90.267, 92.212]
+    [90.267, 92.212],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -158,7 +158,9 @@ config |= {
             # "slmsuite/nv_blob_detection/nv_blob_402nvs_reordered_inside_dmd.npz"
             # "slmsuite/nv_blob_detection/nv_blob_366nvs_reordered_inside_dmd.npz"
             # "slmsuite/nv_blob_detection/nv_blob_351nvs_reordered_inside_dmd.npz"
-            "calibrations/purcell/current/active_nv_coords.npz"
+            # "calibrations/purcell/current/active_nv_coords.npz"
+            "slmsuite/nv_blob_detection/nv_blob_538nvs_reordered.npz"
+            
         ),
         "slm_fourier_calib_path": (
             "calibrations/purcell/current/slm_fourier.h5"
@@ -232,8 +234,8 @@ config |= {
         # See camera server file for details
         "readout_mode": 1,  # 16 for double horizontal readout rate (em mode)
         # "readout_mode": 6,  # Fast conventional
-        # "roi": (122, 126, 250, 250),  # offsetX, offsetY, width, height
-        "roi": (100, 110, 300, 300),  # offsetX, offsetY, width, height
+        # "roi": (55, 55, 375, 375),  # offsetX, offsetY, width, height
+        "roi": (100, 95, 300, 300),  # offsetX, offsetY, width, height
         # "roi": None,  # offsetX, offsetY, width, height
         "scale": 5 / 0.6,  # pixels / micron
     },
@@ -353,7 +355,7 @@ config |= {
                 "control_mode": PosControlMode.SEQUENCE,
                 "delay": int(400e3),  # 400 us for galvo
                 "nm_per_unit": 1000,
-                "optimize_range": 1.2,
+                "optimize_range": 1.4,
                 "units": "MHz",
                 "opti_virtual_laser_key": VirtualLaserKey.IMAGING,
                 "aod": True,
@@ -1046,8 +1048,8 @@ opx_config = {
     "waveforms": {
         # Green AOD
         # "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
-        "green_aod_cw-opti": {"type": "constant", "sample": 0.11},
-        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.08},
+        "green_aod_cw-opti": {"type": "constant", "sample": 0.06},
+        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.15},
@@ -1056,13 +1058,13 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.25},
+        "yellow_imaging": {"type": "constant", "sample": 0.35},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3513},# 1176NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2923},
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2911},  ## 631NVs 50ms
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3311},  ## 631NVs 50ms
         # "yellow_charge_readout": {"type": "constant", "sample": 0.3611},  ## 631NVs 50ms
-        "yellow_charge_readout": {"type": "constant", "sample": 0.2518},  ## 212NVs 50ms two orientation
+        "yellow_charge_readout": {"type": "constant", "sample": 0.4518},  ## 212NVs 50ms two orientation
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2133}, ## 631NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2043}, ## 631NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.1710}, ## 415NVs
