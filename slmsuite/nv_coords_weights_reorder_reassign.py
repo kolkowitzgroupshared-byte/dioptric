@@ -762,10 +762,10 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_10_02-22_06_28-combined_image_array", load_npz=True
+        file_stem="2026_10_05-23_01_57-johnson-nv0_2026_10_02", load_npz=True
     )
-    img_array = data["img_array"]
-    # img_array = np.array(data["ref_img_array"])
+    # img_array = data["img_array"]
+    img_array = np.array(data["ref_img_array"])
 
     # file_path="slmsuite/nv_blob_detection/nv_blob_6837nvs.npz"
     # file_path="slmsuite/nv_blob_detection/nv_blob_6904nvs.npz"
@@ -783,7 +783,7 @@ if __name__ == "__main__":
     config = common.get_config_dict()
     file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
     # file_path="slmsuite/nv_blob_detection/nv_blob_948nvs.npz"
-    file_path="slmsuite/nv_blob_detection/nv_blob_543nvs.npz"
+    file_path="slmsuite/nv_blob_detection/nv_blob_370nvs.npz"
     print(file_path)
     nv_coordinates, spot_weights = load_nv_coords(file_path=file_path)
     
@@ -882,7 +882,7 @@ if __name__ == "__main__":
     # nv_coordinates[:, 1] += dy
 
     
-    reference_nv = [131.019, 140.977]
+    reference_nv = [151.281, 152.016]
     filtered_reordered_coords, filtered_reordered_spot_weights, include_indices = (
         filter_and_reorder_nv_coords(
             nv_coordinates, spot_weights, reference_nv, min_distance=4.0
@@ -988,7 +988,8 @@ if __name__ == "__main__":
     # filtered_reordered_spot_weights = calcualted_spot_weights
     # Manually remove NVs with specified indices
 
-    indices_to_remove = []
+    indices_to_remove = [1, 13, 303, 369]
+    # indices_to_remove = []
     filtered_reordered_coords_0 = [
         coord
         for i, coord in enumerate(filtered_reordered_coords)
@@ -1181,7 +1182,7 @@ if __name__ == "__main__":
     print("NV Index | Coords    |   previous weights")
     print("-" * 60)
     for idx, (coords, weight) in enumerate(
-        zip(filtered_reordered_coords[:20], filtered_reordered_spot_weights[:20])
+        zip(filtered_reordered_coords, filtered_reordered_spot_weights)
     ):
         print(f"{idx + 1:<8} | {coords} | {weight:.3f}")
 
@@ -1210,11 +1211,11 @@ if __name__ == "__main__":
         np.asarray(filtered_reordered_coords, dtype=float),
         3,
     )
-    save_results(
-        filtered_reordered_coords,
-        filtered_reordered_spot_weights,
-        filename="slmsuite/nv_blob_detection/nv_blob_538nvs_reordered.npz",
-    )
+    # save_results(
+    #     filtered_reordered_coords,
+    #     filtered_reordered_spot_weights,
+    #     filename="slmsuite/nv_blob_detection/nv_blob_366nvs_reordered.npz",
+    # )
 
     # # Plot the original image with circles around each NV
     fig, ax = plt.subplots()
@@ -1225,13 +1226,13 @@ if __name__ == "__main__":
         circ = plt.Circle(coord, sigma, color="lightblue", fill=False, linewidth=0.5)
         ax.add_patch(circ)
         # Place text just above the circle
-        # ax.text(
-        #     coord[0],
-        #     coord[1] - sigma - 1,
-        #     str(idx),
-        #     color="white",
-        #     fontsize=8,
-        #     ha="center",
-        # )
+        ax.text(
+            coord[0],
+            coord[1] - sigma - 1,
+            str(idx),
+            color="red",
+            fontsize=8,
+            ha="center",
+        )
     # selector = ManualPolygonSelector(ax)
     plt.show(block=True)

@@ -240,8 +240,7 @@ def circles():
 # region "nv phase calulation"
 def calibration_triangle():
     # Define parameters for the equilateral triangle
-    center = (720, 540)  # Center of the triangle
-    # side_length = 80  # Length of each side of the triangle
+    center = (720, 530)  # Center of the triangle
     side_length = 140  # Length of each side of the triangle
 
     # Calculate the coordinates of the three vertices of the equilateral triangle
@@ -249,7 +248,7 @@ def calibration_triangle():
     x_triangle = center[0] + side_length * np.cos(theta + np.pi / 6)  # X coordinates
     y_triangle = center[1] + side_length * np.sin(theta + np.pi / 6)  # Y coordinates
     
-    # x_triangle = [849.90381057, 560.09618943, 720.0]
+    # x_triangle = [821.24355653, 598.75644347, 700.0]
     # sys.exit()
     # Combine the coordinates into a grid format
     triangle_points = np.vstack((x_triangle, y_triangle))
@@ -334,7 +333,7 @@ def apply_affine(M, coords):
 
 def nuvu2thorcam_slm(
     coords,
-    calib_path="calibrations/purcell/current/nuvu_to_thorcam_slm.npz",
+    calib_path="slmsuite/calibration/nuvu_to_thorcam_slm.npz",
 ):
     data = np.load(calib_path, allow_pickle=True)
     M = np.asarray(data["M_nuvu_to_thorcam_slm"], dtype=np.float32)
@@ -367,7 +366,15 @@ def load_nv_coords():
 # Load coordinates and weights
 # ----------------------------
 nuvu_pixel_coords, spot_weights = load_nv_coords()
-
+# nuvu_pixel_coords = nuvu_pixel_coords[:100]
+# spot_weights = spot_weights[:100]
+# nuvu_pixel_coords =np.array([
+#         [151.281, 152.016], 
+#         [34.561, 45.033],
+#         [239.042, 286.076], 
+#         [207.044, 89.981],    
+#     ])
+                            
 data_spot_weight = dm.get_raw_data(
     # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
     # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"

@@ -33,19 +33,19 @@ green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
 calibration_coords_pixel = [
-    [241.988, 50.004], 
-    [225.999, 285.019], 
-    [17.025, 45.956],
+    [9.753, 61.398],
+    [212.392, 294.388], 
+    [240.068, 109.831], 
 ]
 calibration_coords_green = [
-    [79.695, 115.557],
-    [88.862, 74.203],
-    [118.927, 122.19],
+    [123.164, 119.359],
+    [93.912, 72.664],
+    [83.732, 104.634],
 ]
 calibration_coords_red = [
-    [47.207, 81.378],
-    [69.587, 44.02],
-    [90.267, 92.212],
+    [87.337, 85.35],
+    [64.086, 46.983],
+    [55.506, 72.766],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -65,11 +65,6 @@ calibration_coords_nv3 = {
     green_laser_aod: calibration_coords_green[2],
     red_laser_aod: calibration_coords_red[2],
 }
-
-# pixel_to_sample_affine_transformation_matrix = [
-#     [0.01476835, -0.00148369, -1.42104908],
-#     [0.00140560, 0.01479702, -1.73286644],
-# ]
 
 # pixel_to_sample_affine_transformation_matrix = [
 #     [0.06108861, -0.00533755, -12.74624750],
@@ -159,8 +154,7 @@ config |= {
             # "slmsuite/nv_blob_detection/nv_blob_366nvs_reordered_inside_dmd.npz"
             # "slmsuite/nv_blob_detection/nv_blob_351nvs_reordered_inside_dmd.npz"
             # "calibrations/purcell/current/active_nv_coords.npz"
-            "slmsuite/nv_blob_detection/nv_blob_538nvs_reordered.npz"
-            
+            "slmsuite/nv_blob_detection/nv_blob_366nvs_reordered.npz"
         ),
         "slm_fourier_calib_path": (
             "calibrations/purcell/current/slm_fourier.h5"
@@ -1059,19 +1053,8 @@ opx_config = {
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.35},
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.3513},# 1176NVs
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.2923},
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.2911},  ## 631NVs 50ms
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.3311},  ## 631NVs 50ms
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.3611},  ## 631NVs 50ms
-        "yellow_charge_readout": {"type": "constant", "sample": 0.4518},  ## 212NVs 50ms two orientation
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.2133}, ## 631NVs
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.2043}, ## 631NVs
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.1710}, ## 415NVs
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.1693}, ## 402NVs
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.160}, ## 366NVs
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.1582}, ## 404NVs
-        "yellow_spin_pol": {"type": "constant", "sample": 0.33},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.350},
+        "yellow_spin_pol": {"type": "constant", "sample": 0.40},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other
         "aod_cw": {"type": "constant", "sample": 0.35},

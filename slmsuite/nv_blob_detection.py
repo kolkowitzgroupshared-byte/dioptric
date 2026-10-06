@@ -552,66 +552,140 @@ def plot_nv_detection(img_array, nv_coords):
         ax.text(x, y - 3, f"{x:.1f}, {y:.1f}", color="white", fontsize=8, ha="center")
 
     kpl.show(block=True)
+    
+def detect_nvs_from_image(
+    file_stem,
+    sigma=2.0,
+    lower_threshold=0.04,
+    upper_threshold=None,
+    smoothing_sigma=0.0,
+    integration_radius=2,
+    save=False,
+    save_filename=None,
+    plot_title="NV Detection",
+):
+    """
+    Load an image, detect NV centers, refine their coordinates with 2D Gaussian
+    fitting, optionally save the results, and plot the detected NVs.
+
+    Returns
+    -------
+    nv_coords : np.ndarray
+        Gaussian-refined NV coordinates, rounded to 3 decimals.
+    spot_weights : np.ndarray
+        Integrated intensity for each detected NV.
+    spot_sizes : np.ndarray
+        Estimated spot sizes / FWHM values.
+    img_array : np.ndarray
+        Image used for the detection.
+    """
+
+    # ------------------------------------------------------------
+    # Load image
+    # ------------------------------------------------------------
+    data = dm.get_raw_data(
+        file_stem=file_stem,
+        load_npz=True,
+    )
+    try:
+        img_array = np.asarray(data["img_array"], dtype=float)
+    except KeyError:
+        img_array = np.asarray(data["ref_img_array"], dtype=float)
+
+    # ------------------------------------------------------------
+    # Detect NVs + Gaussian refinement
+    # ------------------------------------------------------------
+    nv_coords, spot_weights, spot_sizes = detect_nv_coordinates_blob(
+        img_array,
+        sigma=sigma,
+        lower_threshold=lower_threshold,
+        upper_threshold=upper_threshold,
+        smoothing_sigma=smoothing_sigma,
+        integration_radius=integration_radius,
+    )
+
+    # Standardize final coordinate format
+    nv_coords = np.round(
+        np.asarray(nv_coords, dtype=float),
+        3,
+    )
+
+    spot_weights = np.asarray(spot_weights, dtype=float)
+
+    print(f"Detected NVs: {len(nv_coords)}")
+
+    # ------------------------------------------------------------
+    # Plot
+    # ------------------------------------------------------------
+    fig, ax = plt.subplots()
+
+    kpl.imshow(
+        ax,
+        img_array,
+        title=plot_title,
+        cbar_label="Photons",
+    )
+
+    ax.axis("off")
+
+    for idx, (x, y) in enumerate(nv_coords):
+        circ = plt.Circle(
+            (x, y),
+            sigma,
+            color="lightblue",
+            fill=False,
+            linewidth=0.5,
+        )
+        ax.add_patch(circ)
+
+        # Uncomment if indices are useful
+        # ax.text(
+        #     x,
+        #     y - sigma - 1,
+        #     str(idx),
+        #     color="white",
+        #     fontsize=8,
+        #     ha="center",
+        # )
+
+    # ------------------------------------------------------------
+    # Save
+    # ------------------------------------------------------------
+    if save:
+        if save_filename is None:
+            save_filename = f"nv_blob_{len(nv_coords)}nvs.npz"
+
+        save_results(
+            nv_coords,
+            spot_weights,
+            path="slmsuite/nv_blob_detection",
+            filename=save_filename,
+        )
+
+        print(f"Saved NV detection: {save_filename}")
+
+    return nv_coords, spot_weights, spot_sizes, img_array
 
 # Main section of the code
 if __name__ == "__main__":
     kpl.init_kplotlib()
-    # Load the image data
-    # data = dm.get_raw_data(
-    #     file_stem="2026_10_02-21_07_52-combined_image_array", load_npz=True
-    # )
-    # # img_array = np.array(data["ref_img_array"])
-    # img_array = np.array(data["img_array"])
-    
-    # # Apply the blob detection and Gaussian fitting
-    # sigma = 2.0
-    # lower_threshold = 0.03
-    # upper_threshold = None
-    # smoothing_sigma = 0.0
-    # integration_radius= 2
-    # nv_coordinates, integrated_counts, spot_sizes = detect_nv_coordinates_blob(
-    #     img_array,
-    #     sigma=sigma,
-    #     lower_threshold=lower_threshold,
-    #     upper_threshold=upper_threshold,
-    #     smoothing_sigma=smoothing_sigma,
-    #     integration_radius=integration_radius,
-    # )
-    # filtered_nv_coords = nv_coordinates
-    # filtered_counts = integrated_counts
-    # # Verify if reversing coordinates resolves the offset
-    # default_radius = 2
-    # fig, ax = plt.subplots()
-    # title = "24ms, Ref"
-    # cax = kpl.imshow(ax, img_array, title=title, cbar_label="Photons")
-    # ax.set_title("NV Detection with Blob")
-    # ax.axis("off")
 
-    # for idx, (x, y) in enumerate(filtered_nv_coords, start=1):  # Swapped y, x to x, y
-    #     circ = plt.Circle((x, y), default_radius, color="red", linewidth=1, fill=False)
-    #     ax.add_patch(circ)
-    #     ax.text(
-    #         x,
-    #         y - default_radius - 1,
-    #         f"{idx}",
-    #         # color="black",
-    #         fontsize=8,
-    #         ha="center",
-    #         va="center",
-    #     )
- 
-    # print(f"Detected NV coordinates (optimized): {len(filtered_nv_coords)}")
-
-    # # Save the results
-    # save_results(
-    #     filtered_nv_coords,
-    #     filtered_counts,
-    #     path="slmsuite/nv_blob_detection",
-    #     filename="nv_blob_543nvs.npz",
+    # ------------------------------------------------------------
+    # 1. Create combined image from scan
+    # ------------------------------------------------------------
+    # process_scan_file(
+    #     file_stem="2026_10_05-20_10_49-johnson-nv0_2026_10_02"
     # )
 
-    # full ROI -- multiple images save in the same file
-    process_scan_file(file_stem="2026_02_14-12_00_21-johnson-nv0_2025_10_21")
-    process_scan_file(file_stem="2026_10_02-21_06_29-johnson-nv0_2026_02_20")
-    
+    # ------------------------------------------------------------
+    # 2. Detect NVs from combined image
+    # ------------------------------------------------------------
+    nv_coords, spot_weights, spot_sizes, img_array = detect_nvs_from_image(
+        file_stem="2026_10_05-23_01_57-johnson-nv0_2026_10_02",
+        sigma=2.0,
+        lower_threshold=0.04,
+        integration_radius=2,
+        save=True,
+        plot_title="24ms, Ref",
+    )
     kpl.show(block=True)

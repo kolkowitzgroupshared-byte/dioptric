@@ -50,10 +50,10 @@ if len(pixel_coords_list) >= 3:
     # New pixel coordinate for which we want to find the corresponding red coordinate
     new_pixel_coord = np.array(
     [       
-        [97.659, 98.16],
-        [73.633, 115.445],
-        [100.648, 68.88],
-        [126.881, 127.741],
+        [100.611, 99.502],
+        [123.164, 119.359],
+        [93.912, 72.664],
+        [83.732, 104.634],
     ],
         dtype=np.float32,
     )
@@ -92,10 +92,10 @@ else:
     # New pixel coordinates to transform
     new_pixel_coord = np.array(
         [
-        [101.55, 102.378],
-        [79.695, 115.557],
-        [88.862, 74.203],
-        [118.927, 122.19],
+        [100.676, 99.485],
+        [118.265, 121.632],
+        [89.063, 73.449],
+        [89.121, 108.998],
         ],
         dtype=np.float32,
     )
@@ -452,6 +452,5 @@ yx = invert_amp_for_power(target_power, yellow_params, yellow_x.min(), yellow_x.
 print(f"Green amplitude for {target_power:.0f} µW:", round(gx, 4))
 print(f"Red   amplitude for {target_power:.0f} µW:", round(rx, 4))
 print(f"Yellow   amplitude for {target_power:.0f} µW:", round(yx))
-
 
 plt.show(block=True)

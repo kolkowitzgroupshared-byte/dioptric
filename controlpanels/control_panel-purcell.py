@@ -108,7 +108,7 @@ def do_red_calibration_image(nv_sig, coords_list, force_laser_key=None, num_reps
 def do_scanning_image_full_roi(nv_sig):
     total_range = 48
     scan_range = 12
-    num_steps = 12
+    num_steps = 15
     image_sample.scanning_full_roi(nv_sig, total_range, scan_range, num_steps)
 
 
@@ -1681,12 +1681,12 @@ def do_opx_constant_ac():
     # )
     # opx.constant_ac([1])  # Just laser
     # Green
-    # opx.constant_ac(
-    #     [4],  # Digital channels
-    #     [3, 4],  # Analog channels
-    #     [0.11, 0.11],  # Analog voltages
-    #     [101.0, 101.0],  # Analog frequencies
-    # )
+    opx.constant_ac(
+        [4],  # Digital channels
+        [3, 4],  # Analog channels
+        [0.08, 0.08],  # Analog voltages
+        [101.0, 101.0],  # Analog frequencies
+    )
     # Green + red
     # opx.constant_ac(
     #     [4, 1],  # Digital channels
@@ -1715,12 +1715,12 @@ def do_opx_constant_ac():
     # )
 
     # # Green + yellow
-    opx.constant_ac(
-        [4],  # Digital channels11
-        [3, 4, 7],  # Analog channels
-        [0.06, 0.06, 0.45],  # Analog voltages
-        [101.0, 101.0, 0],  # Analog frequencies
-    )
+    # opx.constant_ac(
+    #     [4],  # Digital channels11
+    #     [3, 4, 7],  # Analog channels
+    #     [0.06, 0.06, 0.45],  # Analog voltages
+    #     [101.0, 101.0, 0],  # Analog frequencies
+    # )
     # # Red + green + Yellow
     # opx.constant_ac(
     #     [4, 1],  # Digital channels1
@@ -1910,11 +1910,10 @@ if __name__ == "__main__":
     pixel_coords_key = "pixel_coords"
     sample_name = "johnson"
     magnet_angle = 90
-    date_str = "2026_02_20"
-    sample_coords = [-1.1, -1.5]
-    # z_coord = 1.65
-    z_coord = 0.3
-    
+    date_str = "2026_10_02"
+    sample_coords = [0.0, 0.1]
+    # z_coord = -0.3
+    z_coord = -0.1    
     
     config = common.get_config_dict()
     file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
@@ -1962,22 +1961,23 @@ if __name__ == "__main__":
     # sys.exit()
 
     # pixel_coords_list =[
-    #     [131.019, 140.977], 
-    #     [241.988, 50.004], 
-    #     [225.999, 285.019], 
-    #     [17.025, 45.956],
+    #     [151.281, 152.016], 
+    #     [9.753, 61.398],
+    #     [212.392, 294.388], 
+    #     [240.068, 109.831], 
+        
     # ]
     # green_coords_list = [
-    #     [101.55, 102.378],
-    #     [79.695, 115.557],
-    #     [88.862, 74.203],
-    #     [118.927, 122.19],
+    #     [100.611, 99.502],
+    #     [123.164, 119.359],
+    #     [93.912, 72.664],
+    #     [83.732, 104.634],
     # ]
     # red_coords_list = [
-    #     [66.867, 67.736],
-    #     [47.207, 81.378],
-    #     [69.587, 44.02],
-    #     [90.267, 92.212],
+    #     [69.247, 68.872],
+    #     [87.337, 85.35],
+    #     [64.086, 46.983],
+    #     [55.506, 72.766],
     # ]
     
     # -------------------------------------------
@@ -2115,14 +2115,14 @@ if __name__ == "__main__":
             coords=coords,
             threshold=threshold_list[ind],
             pulse_durations={
-                VirtualLaserKey.SCC: scc_duration_list[ind],
-                VirtualLaserKey.ION: ion_duration_list[ind],
                 VirtualLaserKey.CHARGE_POL: pol_duration_list[ind],
+                VirtualLaserKey.ION: ion_duration_list[ind],
+                VirtualLaserKey.SCC: scc_duration_list[ind], 
             },
             pulse_amps={
-                VirtualLaserKey.SCC: scc_amp_list[ind],
-                VirtualLaserKey.ION: scc_amp_list[ind],  
                 VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
+                VirtualLaserKey.ION: scc_amp_list[ind],  
+                VirtualLaserKey.SCC: scc_amp_list[ind],
             },
         )
         nv_list.append(nv_sig)
@@ -2133,7 +2133,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    # nv_sig.expected_counts = 1850
+    # nv_sig.expected_counts = 1207.0
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:200]
     print(f"length of NVs list:{len(nv_list)}")
@@ -2169,7 +2169,7 @@ if __name__ == "__main__":
         #     scc_amp_list,
         # )
 
-        # do_compensate_for_drift(nv_sig)
+        do_compensate_for_drift(nv_sig)
         
         # do_red_calibration_image(
         #     nv_sig,
@@ -2178,7 +2178,7 @@ if __name__ == "__main__":
         # )
 
         # do_widefield_image_sample(nv_sig, 50)     
-        # do_widefield_image_sample(nv_sig, 200)
+        # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list: 
         #     do_scanning_image_sample_zoom(nv)
@@ -2192,7 +2192,7 @@ if __name__ == "__main__":
         # piezo_voltage_to_pixel_calibration()
         # do_image_nv_list(nv_list)
         # do_image_single_nv(nv_sig)
-        # z_range = np.linspace(-2.0, 2.0, 41)
+        # z_range = np.linspace(-2.5, 0.5, 31)
         # for z in z_range:
         #     nv_sig.coords[CoordsKey.Z] = z
         #     do_scanning_image_sample(nv_sig)
@@ -2256,9 +2256,9 @@ if __name__ == "__main__":
         # do_charge_correlation(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
-        # do_optimize_pol_amp(nv_list)
+        do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
-        # do_optimize_readout_amp(nv_list)
+        do_optimize_readout_amp(nv_list)
         # do_optimize_readout_amp_repeated_readout(nv_list)
         # do_optimize_pol_duration(nv_list)
     
