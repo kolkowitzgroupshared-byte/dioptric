@@ -97,14 +97,14 @@ if __name__ == "__main__":
     kpl.init_kplotlib()
     # Load the image array (replace this with your own method for loading image data)
     data = dm.get_raw_data(
-        file_stem="2026_10_05-22_15_10-johnson-nv0_2026_10_02", load_npz=True
+        file_stem="2026_10_06-22_55_08-johnson-nv0_2026_10_02", load_npz=True
     )
     img_array = np.array(data["img_array"])
     fig, ax = plt.subplots()
     img_plot = kpl.imshow(ax, img_array, cbar_label="Photons")
     plt.show(block=True)
     # List of initial peak yellow coordinates
-    initial_peaks = np.array([[31.672, 30.862], [94.142, 274.545], [272.434, 98.969]])
+    initial_peaks = np.array([[31.882, 30.146], [94.408, 274.084], [272.818, 99.375]])
     
     # red calibration
     # initial_peaks = np.array([[123.486, 9.115], [16.951, 242.751], [237.556, 240.186]])
@@ -114,7 +114,7 @@ if __name__ == "__main__":
     # Fit Gaussian to each peak
     optimized_coords = []
     for peak in initial_peaks:
-        coords, _ = fit_gaussian_2d_local(img_array, peak, size=6)
+        coords, _ = fit_gaussian_2d_local(img_array, peak, size=4)
         optimized_coords.append(coords)
 
     optimized_coords = np.array(optimized_coords)

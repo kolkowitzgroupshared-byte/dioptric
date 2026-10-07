@@ -366,8 +366,8 @@ def load_nv_coords():
 # Load coordinates and weights
 # ----------------------------
 nuvu_pixel_coords, spot_weights = load_nv_coords()
-# nuvu_pixel_coords = nuvu_pixel_coords[:100]
-# spot_weights = spot_weights[:100]
+nuvu_pixel_coords = nuvu_pixel_coords[:300]
+spot_weights = spot_weights[:300]
 # nuvu_pixel_coords =np.array([
 #         [151.281, 152.016], 
 #         [34.561, 45.033],

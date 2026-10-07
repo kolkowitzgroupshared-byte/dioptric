@@ -38,14 +38,14 @@ calibration_coords_pixel = [
     [240.068, 109.831], 
 ]
 calibration_coords_green = [
-    [123.164, 119.359],
-    [93.912, 72.664],
-    [83.732, 104.634],
+    [123.18, 119.327],
+    [93.925, 72.647],
+    [83.771, 104.623],
 ]
 calibration_coords_red = [
-    [87.337, 85.35],
-    [64.086, 46.983],
-    [55.506, 72.766],
+    [87.35, 85.324],
+    [64.096, 46.97],
+    [55.538, 72.758],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -135,7 +135,7 @@ config |= {
         ),
         "dmd_DLP6500_device_id": 0,
         "dmd_DLP6500_init_state": "pass_zero_block",
-        "dmd_DLP6500_zero_radius_px": 11,
+        "dmd_DLP6500_zero_radius_px": 18,
         # Important: load final NV-chain file, not just triangle_affine_onpass.npz
         "dmd_DLP6500_init_calib_path": (
             "calibrations/purcell/current/dmd_nv_chain.npz"
@@ -154,7 +154,8 @@ config |= {
             # "slmsuite/nv_blob_detection/nv_blob_366nvs_reordered_inside_dmd.npz"
             # "slmsuite/nv_blob_detection/nv_blob_351nvs_reordered_inside_dmd.npz"
             # "calibrations/purcell/current/active_nv_coords.npz"
-            "slmsuite/nv_blob_detection/nv_blob_366nvs_reordered.npz"
+            # "slmsuite/nv_blob_detection/nv_blob_418nvs_reordered.npz"
+            "slmsuite/nv_blob_detection/nv_blob_300nvs_reordered.npz"
         ),
         "slm_fourier_calib_path": (
             "calibrations/purcell/current/slm_fourier.h5"
@@ -217,7 +218,7 @@ config |= {
     "Camera": {
         "server_name": "camera_NUVU_hnu512gamma",
         "resolution": (512, 512),
-        "spot_radius": 3.0,  # Radius for integrating NV counts in a camera image
+        "spot_radius": 2.0,  # Radius for integrating NV counts in a camera image
         "bias_clamp": 300,  # (changing this won't actually change the value on the camera currently)
         "em_gain": 5000,
         # "em_gain": 10,
@@ -298,8 +299,8 @@ config |= {
             },
             VirtualLaserKey.WIDEFIELD_IMAGING: {
                 "physical_name": yellow_laser,
-                "duration": 100e6,
-                # "duration": 50e6,
+                # "duration": 100e6,
+                "duration": 50e6,
                 # "duration": 24e6,
             },
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 10e3},
@@ -1042,7 +1043,7 @@ opx_config = {
     "waveforms": {
         # Green AOD
         # "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
-        "green_aod_cw-opti": {"type": "constant", "sample": 0.06},
+        "green_aod_cw-opti": {"type": "constant", "sample": 0.11},
         "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
@@ -1053,7 +1054,7 @@ opx_config = {
         "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.35},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.350},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.40},
         "yellow_spin_pol": {"type": "constant", "sample": 0.40},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other

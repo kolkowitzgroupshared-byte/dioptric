@@ -1164,6 +1164,7 @@ if __name__ == "__main__":
     file_id = "2026_07_08-22_48_57-qnami-nv0_2026_02_20" ## readout amp
     file_id = "2026_07_14-20_28_11-qnami-nv0_2026_02_20" ## readout amp two readout
     file_id = "2026_08_18-02_18_38-qnami-nv0_2026_02_20"  ## pol duration
+    file_id = "2026_10_06-04_53_23-johnson-nv0_2026_10_02" ## readout amp
     
     if run_new_processing:
         raw_data = dm.get_raw_data(
@@ -1192,6 +1193,7 @@ if __name__ == "__main__":
     # analyzed_file_id = "2026_07_09-13_04_44-optimization_processed_full_2026_07_08-22_48_57-qnami-nv0_2026_02_20"
     analyzed_file_id = "2026_07_15-16_13_25-optimization_processed_full_2026_07_14-20_28_11-qnami-nv0_2026_02_20"
     analyzed_file_id = "2026_08_18-11_51_54-optimization_processed_full_2026_08_18-02_18_38-qnami-nv0_2026_02_20" ## pol duration
+    analyzed_file_id = "2026_10_06-14_45_10-optimization_processed_full_2026_10_06-04_53_23-johnson-nv0_2026_10_02"
     analyzed = dm.get_raw_data(
         file_stem=analyzed_file_id,
         load_npz=True,

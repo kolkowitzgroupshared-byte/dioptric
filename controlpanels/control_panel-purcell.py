@@ -161,7 +161,7 @@ def do_optimize_pol_amp(nv_list):
     # num_reps = 150
     # num_runs = 5
     num_reps = 10
-    num_runs = 200
+    num_runs = 300
     min_amp = 0.5
     max_amp = 1.5
     return optimize_charge_state_histograms.optimize_pol_amp(
@@ -188,9 +188,9 @@ def do_optimize_readout_amp(nv_list):
     # num_reps = 150
     # num_runs = 5
     num_reps = 10
-    num_runs = 200
-    min_amp = 0.7
-    max_amp = 1.3
+    num_runs = 400
+    min_amp = 0.8
+    max_amp = 1.2
     return optimize_charge_state_histograms.optimize_readout_amp(
         nv_list, num_steps, num_reps, num_runs, min_amp, max_amp
     )
@@ -204,8 +204,8 @@ def do_optimize_readout_amp_repeated_readout(nv_list):
     # num_runs = 5
     # num_reps = 10
     num_runs = 400
-    min_amp = 0.7
-    max_amp = 1.3
+    min_amp = 0.8
+    max_amp = 1.2
     return optimize_charge_state_histograms.optimize_readout_amp_repeated_readout(
         nv_list, num_steps, num_reps, num_runs, min_amp, max_amp
     )
@@ -1911,14 +1911,14 @@ if __name__ == "__main__":
     sample_name = "johnson"
     magnet_angle = 90
     date_str = "2026_10_02"
-    sample_coords = [0.0, 0.1]
-    # z_coord = -0.3
+    sample_coords = [0.1, 0.0]
     z_coord = -0.1    
+    # z_coord = 0.4
+
     
     config = common.get_config_dict()
     file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
     pixel_coords_list = load_nv_coords(file_path=file_path).tolist()
-
     green_coords_list = [
         [
             round(coord, 3)
@@ -1961,23 +1961,25 @@ if __name__ == "__main__":
     # sys.exit()
 
     # pixel_coords_list =[
+    #     [151.893, 147.049],
     #     [151.281, 152.016], 
     #     [9.753, 61.398],
     #     [212.392, 294.388], 
-    #     [240.068, 109.831], 
-        
+    #     [240.068, 109.831],      
     # ]
     # green_coords_list = [
-    #     [100.611, 99.502],
-    #     [123.164, 119.359],
-    #     [93.912, 72.664],
-    #     [83.732, 104.634],
+    #     [100.446, 100.369],
+    #     [100.632, 99.485],
+    #     [123.18, 119.327],
+    #     [93.925, 72.647],
+    #     [83.771, 104.623],
     # ]
     # red_coords_list = [
-    #     [69.247, 68.872],
-    #     [87.337, 85.35],
-    #     [64.086, 46.983],
-    #     [55.506, 72.766],
+    #     [69.264, 68.859],
+    #     [69.264, 68.859],
+    #     [87.35, 85.324],
+    #     [64.096, 46.97],
+    #     [55.538, 72.758],
     # ]
     
     # -------------------------------------------
@@ -2135,7 +2137,7 @@ if __name__ == "__main__":
     # nv_sig.expected_counts =  3093.0
     # nv_sig.expected_counts = 1207.0
     # nv_list = nv_list[::-1]  # flipping the order of NVs
-    # nv_list = nv_list[:200]
+    # nv_list = nv_list[:300]
     print(f"length of NVs list:{len(nv_list)}")
     # sys.exit()
     # endregion
@@ -2237,7 +2239,7 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        # do_charge_state_histograms(nv_list)
+        do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
@@ -2259,7 +2261,7 @@ if __name__ == "__main__":
         do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
         do_optimize_readout_amp(nv_list)
-        # do_optimize_readout_amp_repeated_readout(nv_list)
+        do_optimize_readout_amp_repeated_readout(nv_list)
         # do_optimize_pol_duration(nv_list)
     
         # do_optimize_readout_duration(nv_list)
