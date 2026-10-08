@@ -489,7 +489,7 @@ def write_pre_computed_circles():
     # cam_plot()
     
 def write_pre_computed_triangle():
-    phase = np.load("slmsuite\phase\slm_calibration_triangle_20260611_150224.npy")
+    phase = np.load("slmsuite\phase\slm_calibration_triangle_20260721_161807.npy")
     slm.write(phase, settle=True)
     # cam_plot()
 

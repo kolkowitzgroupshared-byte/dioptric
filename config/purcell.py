@@ -33,19 +33,19 @@ green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
 calibration_coords_pixel = [
-    [9.753, 61.398],
-    [212.392, 294.388], 
-    [240.068, 109.831], 
+    [30.253, 121.586],
+    [211.907, 254.224], 
+    [221.412, 42.427], 
 ]
 calibration_coords_green = [
-    [123.18, 119.327],
-    [93.925, 72.647],
-    [83.771, 104.623],
+    [121.208, 108.132],
+    [92.985, 79.884],
+    [85.162, 117.232],
 ]
 calibration_coords_red = [
-    [87.35, 85.324],
-    [64.096, 46.97],
-    [55.538, 72.758],
+    [86.004, 76.359],
+    [63.167, 52.886],
+    [56.528, 83.126],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -313,7 +313,6 @@ config |= {
                 "physical_name": yellow_laser,
                 # "duration": 1e9,
                 # "duration": 500e6,
-                # "duration": 100e6,
                 "duration": 50e6,
                 # "duration": 24e6,  # for red calibration
             },
@@ -1043,7 +1042,7 @@ opx_config = {
     "waveforms": {
         # Green AOD
         # "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
-        "green_aod_cw-opti": {"type": "constant", "sample": 0.11},
+        "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
         "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},

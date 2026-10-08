@@ -762,7 +762,7 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_10_06-19_51_06-johnson-nv0_2026_10_02", load_npz=True
+        file_stem="2026_10_07-18_23_51-johnson-nv0_2026_10_02", load_npz=True
     )
     # img_array = data["img_array"]
     img_array = np.array(data["ref_img_array"])
@@ -783,7 +783,7 @@ if __name__ == "__main__":
     config = common.get_config_dict()
     file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
     # file_path="slmsuite/nv_blob_detection/nv_blob_948nvs.npz"
-    file_path="slmsuite/nv_blob_detection/nv_blob_419nvs.npz"
+    # file_path="slmsuite/nv_blob_detection/nv_blob_419nvs.npz"
     print(file_path)
     nv_coordinates, spot_weights = load_nv_coords(file_path=file_path)
     
@@ -988,7 +988,7 @@ if __name__ == "__main__":
     # filtered_reordered_spot_weights = calcualted_spot_weights
     # Manually remove NVs with specified indices
 
-    indices_to_remove = [1]
+    indices_to_remove = []
     # indices_to_remove = []
     filtered_reordered_coords_0 = [
         coord
@@ -1229,7 +1229,7 @@ if __name__ == "__main__":
         ax.text(
             coord[0],
             coord[1] - sigma - 1,
-            str(idx),
+            str(idx + 1),
             color="red",
             fontsize=8,
             ha="center",
