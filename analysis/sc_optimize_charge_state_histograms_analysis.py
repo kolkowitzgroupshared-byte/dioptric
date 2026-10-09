@@ -1150,9 +1150,7 @@ def plot_prep_vs_readout_optimal_only(
 if __name__ == "__main__":
     kpl.init_kplotlib()
 
-
     run_new_processing = False
-    
     
     # -------------------------------------------------------------------------
     # Option A: process new raw data with CPU parallel fitting.
@@ -1165,6 +1163,8 @@ if __name__ == "__main__":
     file_id = "2026_07_14-20_28_11-qnami-nv0_2026_02_20" ## readout amp two readout
     file_id = "2026_08_18-02_18_38-qnami-nv0_2026_02_20"  ## pol duration
     file_id = "2026_10_06-04_53_23-johnson-nv0_2026_10_02" ## readout amp
+    file_id = "2026_10_07-07_26_04-johnson-nv0_2026_10_02" ## readout amp
+    file_id = "2026_10_07-03_07_25-johnson-nv0_2026_10_02" ## pol duration
     
     if run_new_processing:
         raw_data = dm.get_raw_data(
@@ -1193,7 +1193,9 @@ if __name__ == "__main__":
     # analyzed_file_id = "2026_07_09-13_04_44-optimization_processed_full_2026_07_08-22_48_57-qnami-nv0_2026_02_20"
     analyzed_file_id = "2026_07_15-16_13_25-optimization_processed_full_2026_07_14-20_28_11-qnami-nv0_2026_02_20"
     analyzed_file_id = "2026_08_18-11_51_54-optimization_processed_full_2026_08_18-02_18_38-qnami-nv0_2026_02_20" ## pol duration
-    analyzed_file_id = "2026_10_06-14_45_10-optimization_processed_full_2026_10_06-04_53_23-johnson-nv0_2026_10_02"
+    analyzed_file_id = "2026_10_06-14_45_10-optimization_processed_full_2026_10_06-04_53_23-johnson-nv0_2026_10_02"## readout amp
+    analyzed_file_id = "2026_10_07-10_32_46-optimization_processed_full_2026_10_07-07_26_04-johnson-nv0_2026_10_02" ## readout amp
+    analyzed_file_id = "2026_10_07-10_38_11-optimization_processed_full_2026_10_07-03_07_25-johnson-nv0_2026_10_02" ## pol duration
     analyzed = dm.get_raw_data(
         file_stem=analyzed_file_id,
         load_npz=True,
@@ -1244,7 +1246,7 @@ if __name__ == "__main__":
     inspect_nv_inds = [0, 1, 2, 3, 10, 50, 100, 500]
     inspect_nv_inds = np.random.choice(
     np.arange(631),
-    size=20,
+    size=100,
     replace=False,
     ).tolist()
     for nv_ind in inspect_nv_inds:
