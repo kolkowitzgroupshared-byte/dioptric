@@ -188,7 +188,7 @@ def do_optimize_readout_amp(nv_list):
     # num_reps = 150
     # num_runs = 5
     num_reps = 10
-    num_runs = 400
+    num_runs =300
     min_amp = 0.8
     max_amp = 1.2
     return optimize_charge_state_histograms.optimize_readout_amp(
@@ -892,25 +892,23 @@ def do_calibrate_iq_delay(nv_list):
 
 def do_resonance(nv_list):
     freq_center = 2.87
-    # freq_range = 0.36
-    # num_steps = 65
     freq_range = 0.260
-    num_steps = 51
+    num_steps = 45
     num_reps = 4
-    num_runs = 500
+    num_runs = 200
     freqs = calculate_freqs(freq_center, freq_range, num_steps)
     ##
     # Remove duplicates and sort
     freqs = sorted(set(freqs))
     num_steps = len(freqs)
-    for _ in range(1):
+    for _ in range(2):
         resonance.main(
             nv_list,
             num_steps,
             num_reps,
             num_runs,
             freqs=freqs,
-            uwave_ind_list=[1],
+            uwave_ind_list=[0],
         )
     # for _ in range(2):
     #     resonance.main(nv_list, num_steps, num_reps, num_runs, freqs=freqs)
@@ -1041,7 +1039,7 @@ def do_rabi(nv_list):
     num_reps = 10
     num_runs = 300
     # num_runs = 5
-    uwave_ind_list = [0, 1]
+    uwave_ind_list = [0]
     # uwave_ind_list = [2]
     rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
 
@@ -1647,12 +1645,12 @@ def do_opx_constant_ac():
     # opx.stream_start()
 
     # Yellow
-    # opx.constant_ac(
-    #     [],  # Digital channels
-    #     [7],  # Analog channels
-    #     [0.45],  # Analog voltages
-    #     [0],  # Analog frequencies
-    # )
+    opx.constant_ac(
+        [],  # Digital channels
+        [7],  # Analog channels
+        [0.45],  # Analog voltages
+        [0],  # Analog frequencies
+    )
     # opx.constant_ac([4])  # Just laser
     # Red
     # freqs = [65, 75, 85]
@@ -1681,12 +1679,12 @@ def do_opx_constant_ac():
     # )
     # opx.constant_ac([1])  # Just laser
     # Green
-    opx.constant_ac(
-        [4],  # Digital channels
-        [3, 4],  # Analog channels
-        [0.08, 0.08],  # Analog voltages
-        [101.0, 101.0],  # Analog frequencies
-    )
+    # opx.constant_ac(
+    #     [4],  # Digital channels
+    #     [3, 4],  # Analog channels
+    #     [0.08, 0.08],  # Analog voltages
+    #     [101.0, 101.0],  # Analog frequencies
+    # )
     # Green + red
     # opx.constant_ac(
     #     [4, 1],  # Digital channels
@@ -1710,7 +1708,7 @@ def do_opx_constant_ac():
     # opx.constant_ac(
     #     [1],  # Digital channels
     #     [2, 6],  # Analog channels
-    #     [0.16, 0.16],  # Analog voltages
+    #     [0.08, 0.08],  # Analog voltages
     #     [72.0, 72.0],  # Analog frequencies
     # )
 
@@ -1962,24 +1960,21 @@ if __name__ == "__main__":
 
     # pixel_coords_list =[
     #     [151.893, 147.049],
-    #     [151.281, 152.016], 
-    #     [9.753, 61.398],
-    #     [212.392, 294.388], 
-    #     [240.068, 109.831],      
+    #     [30.253, 121.586],
+    #     [211.907, 254.224], 
+    #     [221.412, 42.427],      
     # ]
     # green_coords_list = [
-    #     [100.446, 100.369],
-    #     [100.632, 99.485],
-    #     [123.18, 119.327],
-    #     [93.925, 72.647],
-    #     [83.771, 104.623],
+    #     [100.445, 100.499],
+    #     [121.203, 108.074],
+    #     [92.976, 79.881],
+    #     [85.248, 117.243],
     # ]
     # red_coords_list = [
-    #     [69.264, 68.859],
-    #     [69.264, 68.859],
-    #     [87.35, 85.324],
-    #     [64.096, 46.97],
-    #     [55.538, 72.758],
+    #     [69.282, 69.997],
+    #     [86.246, 76.639],
+    #     [63.334, 53.049],
+    #     [56.775, 83.386],
     # ]
     
     # -------------------------------------------
@@ -2095,7 +2090,7 @@ if __name__ == "__main__":
     # print("SCC durations:", scc_duration_list)
     
     pol_duration_list = [1000] * num_nvs
-    ion_duration_list = [600] * num_nvs
+    ion_duration_list = [1000] * num_nvs
     scc_duration_list = [88] * num_nvs
 
 
@@ -2122,9 +2117,9 @@ if __name__ == "__main__":
                 VirtualLaserKey.SCC: scc_duration_list[ind], 
             },
             pulse_amps={
-                VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
-                VirtualLaserKey.ION: scc_amp_list[ind],  
-                VirtualLaserKey.SCC: scc_amp_list[ind],
+                # VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
+                # VirtualLaserKey.ION: scc_amp_list[ind],  
+                # VirtualLaserKey.SCC: scc_amp_list[ind],
             },
         )
         nv_list.append(nv_sig)
@@ -2239,7 +2234,7 @@ if __name__ == "__main__":
         # coords_key = red_laser
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
-        do_charge_state_histograms(nv_list)
+        # do_charge_state_histograms(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
@@ -2258,10 +2253,10 @@ if __name__ == "__main__":
         # do_charge_correlation(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
-        do_optimize_pol_amp(nv_list)
+        # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
         do_optimize_readout_amp(nv_list)
-        do_optimize_readout_amp_repeated_readout(nv_list)
+        # do_optimize_readout_amp_repeated_readout(nv_list)
         # do_optimize_pol_duration(nv_list)
     
         # do_optimize_readout_duration(nv_list)
