@@ -38,14 +38,14 @@ calibration_coords_pixel = [
     [221.412, 42.427], 
 ]
 calibration_coords_green = [
-    [121.208, 108.132],
-    [92.985, 79.884],
-    [85.162, 117.232],
+    [121.203, 108.074],
+    [92.976, 79.881],
+    [85.248, 117.243],
 ]
 calibration_coords_red = [
-    [86.004, 76.359],
-    [63.167, 52.886],
-    [56.528, 83.126],
+    [86.246, 76.639],
+    [63.334, 53.049],
+    [56.775, 83.386],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -188,11 +188,11 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_0",
                 "uwave_power": 11.0,
-                "frequency": 2.7773,
-                "rabi_period": 276,
+                "frequency": 2.7815,
+                "rabi_period": 312,
                 # "pi_pulse": 136, ## loop
-                "pi_pulse": 256, ## resonator
-                "pi_on_2_pulse": 68,
+                "pi_pulse": 152, ## resonator
+                "pi_on_2_pulse": 76,
             },
             1: {
                 "physical_name": "sig_gen_STAN_sg394_1",
@@ -311,8 +311,6 @@ config |= {
             # LaserKey.WIDEFIELD_SPIN_POL: {"physical_name": yellow_laser, "duration": 1e6},
             VirtualLaserKey.WIDEFIELD_CHARGE_READOUT: {
                 "physical_name": yellow_laser,
-                # "duration": 1e9,
-                # "duration": 500e6,
                 "duration": 50e6,
                 # "duration": 24e6,  # for red calibration
             },
@@ -1043,17 +1041,17 @@ opx_config = {
         # Green AOD
         # "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
         "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
-        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.11},
+        "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.13},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.15},
         # Red AOD
-        "red_aod_cw-opti": {"type": "constant", "sample": 0.11},
-        "red_aod_cw-ion": {"type": "constant", "sample": 0.11},
-        "red_aod_cw-scc": {"type": "constant", "sample": 0.11},
+        "red_aod_cw-opti": {"type": "constant", "sample": 0.15},
+        "red_aod_cw-ion": {"type": "constant", "sample": 0.15},
+        "red_aod_cw-scc": {"type": "constant", "sample": 0.15},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.35},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.40},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.3884},
         "yellow_spin_pol": {"type": "constant", "sample": 0.40},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other

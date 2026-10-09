@@ -8,18 +8,29 @@ from scipy.optimize import curve_fit
 # pixel_coords_list = [[119.522, 118.997], [111.538, 95.186], [96.194, 118.343]]
 # red_coords_list = [[82.395, 81.819], [76.707, 62.056], [63.349, 80.092]]
 
+# green_coords_list =[
+#     [73.715, 115.446],
+#     [100.72, 68.894],
+#     [126.953, 127.76],
+#     ]
+# pixel_coords_list = green_coords_list
+# red_coords_list = [
+#     [47.273, 81.38],
+#     [69.645, 44.033],
+#     [90.325, 92.229],
+#     ]
+
 green_coords_list =[
-    [73.715, 115.446],
-    [100.72, 68.894],
-    [126.953, 127.76],
+    [121.208, 108.132],
+    [92.985, 79.884],
+    [85.162, 117.232],
     ]
 pixel_coords_list = green_coords_list
 red_coords_list = [
-    [47.273, 81.38],
-    [69.645, 44.033],
-    [90.325, 92.229],
+    [86.004, 76.359],
+    [63.167, 52.886],
+    [56.528, 83.126],
     ]
-
 # Given pixel coordinates and corresponding red coordinates
 # pixel_coords_list = np.array(
 #     [
@@ -50,10 +61,10 @@ if len(pixel_coords_list) >= 3:
     # New pixel coordinate for which we want to find the corresponding red coordinate
     new_pixel_coord = np.array(
     [       
-        [100.446, 100.369], 
-        [121.263, 108.114], 
-        [92.868, 79.779], 
-        [85.156, 117.066]
+        [100.462, 100.525],
+        [121.243, 108.109],
+        [93.013, 79.927],
+        [85.255, 117.248],
     ],
         dtype=np.float32,
     )

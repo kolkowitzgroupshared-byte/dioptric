@@ -188,7 +188,7 @@ def do_optimize_readout_amp(nv_list):
     # num_reps = 150
     # num_runs = 5
     num_reps = 10
-    num_runs =200
+    num_runs =300
     min_amp = 0.8
     max_amp = 1.2
     return optimize_charge_state_histograms.optimize_readout_amp(
@@ -594,8 +594,8 @@ def do_optimize_green(nv_sig):
 
 def do_optimize_red(nv_sig, ref_nv_sig):
     opti_coords = []
-    axes_list = [Axes.X, Axes.Y]
-    # axes_list = [Axes.Y, Axes.X]
+    # axes_list = [Axes.X, Axes.Y]
+    axes_list = [Axes.Y, Axes.X]
     # shuffle(axes_list)
     for ind in range(1):
         axes = axes_list[ind]
@@ -892,25 +892,23 @@ def do_calibrate_iq_delay(nv_list):
 
 def do_resonance(nv_list):
     freq_center = 2.87
-    # freq_range = 0.36
-    # num_steps = 65
     freq_range = 0.260
-    num_steps = 51
+    num_steps = 45
     num_reps = 4
-    num_runs = 500
+    num_runs = 200
     freqs = calculate_freqs(freq_center, freq_range, num_steps)
     ##
     # Remove duplicates and sort
     freqs = sorted(set(freqs))
     num_steps = len(freqs)
-    for _ in range(1):
+    for _ in range(2):
         resonance.main(
             nv_list,
             num_steps,
             num_reps,
             num_runs,
             freqs=freqs,
-            uwave_ind_list=[1],
+            uwave_ind_list=[0],
         )
     # for _ in range(2):
     #     resonance.main(nv_list, num_steps, num_reps, num_runs, freqs=freqs)
@@ -1041,7 +1039,7 @@ def do_rabi(nv_list):
     num_reps = 10
     num_runs = 300
     # num_runs = 5
-    uwave_ind_list = [0, 1]
+    uwave_ind_list = [0]
     # uwave_ind_list = [2]
     rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
 
@@ -1967,16 +1965,16 @@ if __name__ == "__main__":
     #     [221.412, 42.427],      
     # ]
     # green_coords_list = [
-    #     [100.374, 100.477],
-    #     [121.208, 108.132],
-    #     [92.985, 79.884],
-    #     [85.162, 117.232],
+    #     [100.445, 100.499],
+    #     [121.203, 108.074],
+    #     [92.976, 79.881],
+    #     [85.248, 117.243],
     # ]
     # red_coords_list = [
-    #     [69.076, 69.763],
-    #     [86.004, 76.359],
-    #     [63.167, 52.886],
-    #     [56.528, 83.126],
+    #     [69.282, 69.997],
+    #     [86.246, 76.639],
+    #     [63.334, 53.049],
+    #     [56.775, 83.386],
     # ]
     
     # -------------------------------------------
@@ -2092,7 +2090,7 @@ if __name__ == "__main__":
     # print("SCC durations:", scc_duration_list)
     
     pol_duration_list = [1000] * num_nvs
-    ion_duration_list = [600] * num_nvs
+    ion_duration_list = [1000] * num_nvs
     scc_duration_list = [88] * num_nvs
 
 
@@ -2119,9 +2117,9 @@ if __name__ == "__main__":
                 VirtualLaserKey.SCC: scc_duration_list[ind], 
             },
             pulse_amps={
-                VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
-                VirtualLaserKey.ION: scc_amp_list[ind],  
-                VirtualLaserKey.SCC: scc_amp_list[ind],
+                # VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
+                # VirtualLaserKey.ION: scc_amp_list[ind],  
+                # VirtualLaserKey.SCC: scc_amp_list[ind],
             },
         )
         nv_list.append(nv_sig)

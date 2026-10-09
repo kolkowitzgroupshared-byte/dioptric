@@ -1043,47 +1043,47 @@ if __name__ == "__main__":
     # include_indices = [i for i, val in enumerate(prep_fidelity_list) if val >= 0.4 or val is None]
     # include_indices =  [i for i, val in enumerate(snr_float) if val >= 0.02]
     
-    data = dm.get_raw_data(
-        # file_stem="2026_03_25-16_28_08-charge_state_analysis_hist_data_raw_data", load_npz=True
-        # file_stem="2026_03_25-18_15_53-charge_state_analysis_hist_data_raw_data", load_npz=True
-        # file_stem= "2026_07_15-15_17_51-single_step_charge_hist_single_cpu_2026_07_15-13_03_24-qnami-nv0_2026_02_20",
-        # file_stem= "2026_08_04-13_47_40-single_step_charge_hist_single_cpu_2026_08_04-13_21_07-qnami-nv0_2026_02_20",
-        # file_stem= "2026_08_08-16_47_43-single_step_charge_hist_single_cpu_2026_08_08-16_44_44-qnami-nv0_2026_02_20",
-        # file_stem= "2026_08_08-18_51_29-single_step_charge_hist_single_cpu_2026_08_08-18_48_51-qnami-nv0_2026_02_20",
-        file_stem= "2026_08_08-21_33_29-single_step_charge_hist_single_cpu_2026_08_08-20_30_31-qnami-nv0_2026_02_20",
-        load_npz=True,
-    )
-    print (data.keys())
-    fidelity_data = data["single_step_charge_histogram"]
-    readout_fidelity_list = fidelity_data["readout_fidelity"]
-    prep_fidelity_list = fidelity_data["prep_fidelity"]
-    
-    # data_spot_weight = dm.get_raw_data(
-    # # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
-    # # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+    data_spot_weight = dm.get_raw_data(
+    # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+    # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
     # file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
-    # )
-    # spot_weights = np.asarray(data_spot_weight["optimal_weights"], dtype=float)
-    # spot_weights = np.squeeze(spot_weights)
+    # file_stem= "2026_07_11-14_54_21-repeated_readout_survival_with_slm_weights_2026_07_11-04_37_50-qnami-nv0_2026_02_20"
+    # file_stem="2026_07_18-23_11_48-reoptimized_slm_score_survival_focused_2026_07_18-11_10_09-qnami-nv0_2026_02_20"
+    # file_stem="2026_07_22-15_53_45-reoptimized_slm_score_survival_focused_2026_07_22-04_39_34-qnami-nv0_2026_02_20"
+    # file_stem="2026_08_05-14_57_39-reoptimized_slm_score_survival_focused_2026_08_05-04_43_20-qnami-nv0_2026_02_20"
+    # "2026_08_12-16_41_26-reoptimized_slm_score_survival_focused_2026_08_12-10_12_17-qnami-nv0_2026_02_20" ### 631NVs
+    # "2026_08_19-22_37_18-reoptimized_slm_score_survival_focused_2026_08_19-02_30_47-qnami-nv0_2026_02_20" ## 631NVs 50ms
+    # "2026_09_10-18_37_14-repeated_readout_slm_processed_2026_09_10-04_40_32-qnami-nv0_2026_02_20" ## 631NVs 50ms
+    "2026_10_07-21_30_33-optimization_processed_full_2026_10_07-20_38_47-johnson-nv0_2026_10_02"
+    )
+    spot_weights = data_spot_weight["optimal_weights"]
+    # spot_weights  = data_spot_weight["slm_amplitude_weight"]
+
+    spot_weights = curve_extreme_weights_simple(
+            spot_weights, scaling_factor=1.0
+        )
+    spot_weights = np.array(spot_weights)
     
-    # analysis_data = dm.get_raw_data(
-    #     # file_stem="2026_06_15-01_24_30-qnami-nv0_2026_02_20-ref-only-multinv-charge-analysis",
+    filtered_reordered_spot_weights = spot_weights
+    
+    
+    ####fildelity
+    # data = dm.get_raw_data(
+    #     # file_stem="2026_03_25-16_28_08-charge_state_analysis_hist_data_raw_data", load_npz=True
+    #     # file_stem="2026_03_25-18_15_53-charge_state_analysis_hist_data_raw_data", load_npz=True
+    #     # file_stem= "2026_07_15-15_17_51-single_step_charge_hist_single_cpu_2026_07_15-13_03_24-qnami-nv0_2026_02_20",
+    #     # file_stem= "2026_08_04-13_47_40-single_step_charge_hist_single_cpu_2026_08_04-13_21_07-qnami-nv0_2026_02_20",
+    #     # file_stem= "2026_08_08-16_47_43-single_step_charge_hist_single_cpu_2026_08_08-16_44_44-qnami-nv0_2026_02_20",
+    #     # file_stem= "2026_08_08-18_51_29-single_step_charge_hist_single_cpu_2026_08_08-18_48_51-qnami-nv0_2026_02_20",
+    #     file_stem= "2026_08_08-21_33_29-single_step_charge_hist_single_cpu_2026_08_08-20_30_31-qnami-nv0_2026_02_20",
     #     load_npz=True,
     # )
-    # analysis = analysis_data["charge_hist_multinv_binomial"]
-
-    # one_nv_inds = np.where(
-    #     np.asarray(analysis["ok"], dtype=bool)
-    #     & (np.rint(analysis["n_nvs_est"]).astype(int) == 1)
-    # )[0]
-    # include_indices = [
-    #     i for i, val in enumerate(readout_fidelity_list)
-    #     if (val is None) or (isinstance(val, (int, float)) and not math.isnan(val) and val >= 0.7)
-    # ]
-    # include_indices = list(range(len(filtered_reordered_coords)))
-    # include_indices = one_nv_inds
+    # print (data.keys())
+    # fidelity_data = data["single_step_charge_histogram"]
+    # readout_fidelity_list = fidelity_data["readout_fidelity"]
+    # prep_fidelity_list = fidelity_data["prep_fidelity"]    
     
-    
+    ####snrs
     # snr_data = dm.get_raw_data(
     #         file_stem="2026_09_15-23_15_59-scc_snr_check_analysis",
     #         load_npz=True)
@@ -1211,11 +1211,11 @@ if __name__ == "__main__":
         np.asarray(filtered_reordered_coords, dtype=float),
         3,
     )
-    # save_results(
-    #     filtered_reordered_coords[:300],
-    #     filtered_reordered_spot_weights[:300],
-    #     filename="slmsuite/nv_blob_detection/nv_blob_300nvs_reordered.npz",
-    # )
+    save_results(
+        filtered_reordered_coords,
+        filtered_reordered_spot_weights,
+        filename="slmsuite/nv_blob_detection/nv_blob_300nvs_reordered.npz",
+    )
 
     # # Plot the original image with circles around each NV
     fig, ax = plt.subplots()

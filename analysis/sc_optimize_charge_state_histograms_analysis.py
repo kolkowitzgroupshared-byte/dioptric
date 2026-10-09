@@ -25,7 +25,7 @@ os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
 import sys
 import traceback
-
+from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -256,7 +256,6 @@ def fit_bimodal_nv_step_job(
 # =============================================================================
 # Main CPU parallel processing
 # =============================================================================
-
 
 def process_and_plot(
     raw_data,
@@ -1066,6 +1065,156 @@ def recompute_optimal_step_index_from_processed(
     }
 
 
+def fit_pol_amp_optimum(
+    step_vals,
+    prep_fidelity,
+    skip_first=2,
+    fit_half_window=3,
+):
+    """
+    Fit prep fidelity vs polarization amplitude around the maximum.
+
+    Model:
+        y = y0 - curvature * (x - x0)^2
+
+    Returns a continuous optimal polarization amplitude x0.
+
+    If the maximum is at the edge of the sweep, or the fit is unreliable,
+    return the best measured amplitude instead of extrapolating.
+    """
+
+    x = np.asarray(step_vals, dtype=float)
+    y = np.asarray(prep_fidelity, dtype=float)
+
+    # Skip unwanted initial steps
+    x = x[skip_first:]
+    y = y[skip_first:]
+
+    good = np.isfinite(x) & np.isfinite(y)
+    x = x[good]
+    y = y[good]
+
+    if len(x) < 3:
+        raise ValueError("Not enough valid points for polarization-amplitude fit.")
+
+    # Sort by amplitude
+    order = np.argsort(x)
+    x = x[order]
+    y = y[order]
+
+    # Best measured point
+    max_ind = int(np.nanargmax(y))
+    measured_opt_x = float(x[max_ind])
+    measured_opt_y = float(y[max_ind])
+
+    # If maximum is at the sweep boundary, there is no demonstrated peak.
+    # Do not extrapolate outside the measured range.
+    if max_ind == 0 or max_ind == len(x) - 1:
+        return {
+            "optimal_step_val": measured_opt_x,
+            "optimal_prep_fidelity": measured_opt_y,
+            "fit_success": False,
+            "fit_reason": "maximum_at_boundary",
+            "fit_params": None,
+            "fit_x": None,
+            "fit_y": None,
+        }
+
+    # Select points around the observed maximum
+    lo = max(0, max_ind - fit_half_window)
+    hi = min(len(x), max_ind + fit_half_window + 1)
+
+    x_fit_data = x[lo:hi]
+    y_fit_data = y[lo:hi]
+
+    if len(x_fit_data) < 3:
+        return {
+            "optimal_step_val": measured_opt_x,
+            "optimal_prep_fidelity": measured_opt_y,
+            "fit_success": False,
+            "fit_reason": "too_few_local_points",
+            "fit_params": None,
+            "fit_x": None,
+            "fit_y": None,
+        }
+
+    def peak_model(x, y0, x0, curvature):
+        return y0 - curvature * (x - x0) ** 2
+
+    # Initial guesses
+    x0_guess = measured_opt_x
+    y0_guess = measured_opt_y
+
+    x_span = max(np.ptp(x_fit_data), 1e-9)
+    y_span = max(np.ptp(y_fit_data), 1e-4)
+
+    curvature_guess = y_span / (0.5 * x_span) ** 2
+
+    try:
+        popt, pcov = curve_fit(
+            peak_model,
+            x_fit_data,
+            y_fit_data,
+            p0=[
+                y0_guess,
+                x0_guess,
+                curvature_guess,
+            ],
+            bounds=(
+                [
+                    0.0,
+                    np.min(x_fit_data),
+                    0.0,
+                ],
+                [
+                    1.05,
+                    np.max(x_fit_data),
+                    np.inf,
+                ],
+            ),
+            maxfev=20000,
+        )
+
+        y0, x0, curvature = popt
+
+        # Reject pathological fit
+        if (
+            not np.isfinite(x0)
+            or not np.isfinite(y0)
+            or curvature <= 0
+            or x0 < np.min(x_fit_data)
+            or x0 > np.max(x_fit_data)
+        ):
+            raise RuntimeError("Unphysical quadratic peak fit.")
+
+        xx = np.linspace(
+            np.min(x_fit_data),
+            np.max(x_fit_data),
+            300,
+        )
+        yy = peak_model(xx, *popt)
+
+        return {
+            "optimal_step_val": float(x0),
+            "optimal_prep_fidelity": float(y0),
+            "fit_success": True,
+            "fit_reason": "quadratic_peak",
+            "fit_params": np.asarray(popt, dtype=float),
+            "fit_x": xx,
+            "fit_y": yy,
+        }
+
+    except Exception:
+        return {
+            "optimal_step_val": measured_opt_x,
+            "optimal_prep_fidelity": measured_opt_y,
+            "fit_success": False,
+            "fit_reason": "fit_failed",
+            "fit_params": None,
+            "fit_x": None,
+            "fit_y": None,
+        }
+
 def plot_prep_vs_readout_optimal_only(
     analyzed_data,
     weights=(1, 1, 1),
@@ -1150,9 +1299,7 @@ def plot_prep_vs_readout_optimal_only(
 if __name__ == "__main__":
     kpl.init_kplotlib()
 
-
     run_new_processing = False
-    
     
     # -------------------------------------------------------------------------
     # Option A: process new raw data with CPU parallel fitting.
@@ -1165,6 +1312,8 @@ if __name__ == "__main__":
     file_id = "2026_07_14-20_28_11-qnami-nv0_2026_02_20" ## readout amp two readout
     file_id = "2026_08_18-02_18_38-qnami-nv0_2026_02_20"  ## pol duration
     file_id = "2026_10_06-04_53_23-johnson-nv0_2026_10_02" ## readout amp
+    file_id = "2026_10_07-20_38_47-johnson-nv0_2026_10_02" ## readout amp
+    file_id = "2026_10_08-02_03_09-johnson-nv0_2026_10_02" ## pol amp
     
     if run_new_processing:
         raw_data = dm.get_raw_data(
@@ -1194,12 +1343,14 @@ if __name__ == "__main__":
     analyzed_file_id = "2026_07_15-16_13_25-optimization_processed_full_2026_07_14-20_28_11-qnami-nv0_2026_02_20"
     analyzed_file_id = "2026_08_18-11_51_54-optimization_processed_full_2026_08_18-02_18_38-qnami-nv0_2026_02_20" ## pol duration
     analyzed_file_id = "2026_10_06-14_45_10-optimization_processed_full_2026_10_06-04_53_23-johnson-nv0_2026_10_02"
+    analyzed_file_id = "2026_10_07-21_30_33-optimization_processed_full_2026_10_07-20_38_47-johnson-nv0_2026_10_02"
+    analyzed_file_id = "2026_10_08-12_18_54-optimization_processed_full_2026_10_08-02_03_09-johnson-nv0_2026_10_02" ## pol amp
     analyzed = dm.get_raw_data(
         file_stem=analyzed_file_id,
         load_npz=True,
     )
 
-    new_weights = (1, 1, 1)
+    new_weights = (1, 0, 0)
 
     print("GPU available:", GPU_AVAILABLE)
 
@@ -1241,10 +1392,10 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # Plot only selected NVs. Do not plot all 1176 with block=True.
     # -------------------------------------------------------------------------
-    inspect_nv_inds = [0, 1, 2, 3, 10, 50, 100, 500]
+    # inspect_nv_inds = [0, 1, 2, 3, 10, 50, 100, 500]
     inspect_nv_inds = np.random.choice(
-    np.arange(631),
-    size=20,
+    np.arange(300),
+    size=100,
     replace=False,
     ).tolist()
     for nv_ind in inspect_nv_inds:

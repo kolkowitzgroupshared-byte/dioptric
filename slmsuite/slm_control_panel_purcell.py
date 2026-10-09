@@ -357,50 +357,10 @@ def load_nv_coords():
     print(f"len of nv coords: {len(nv_coordinates)}")
     return nv_coordinates, spot_weights
 
-# nuvu_pixel_coords, spot_weights = load_nv_coords()
-# # nuvu_pixel_coords = np.array([[215.025, 203.863], [308.628, 103.893], [238.142, 328.739], [63.706, 100.683]])
-# thorcam_coords_xy = nuvu2thorcam_calibration(nuvu_pixel_coords).T
-# thorcam_coords_xy = nuvu2thorcam_calibration(nuvu_pixel_coords).T
-
 # ----------------------------
 # Load coordinates and weights
 # ----------------------------
 nuvu_pixel_coords, spot_weights = load_nv_coords()
-nuvu_pixel_coords = nuvu_pixel_coords[:300]
-spot_weights = spot_weights[:300]
-# nuvu_pixel_coords =np.array([
-#         [151.281, 152.016], 
-#         [34.561, 45.033],
-#         [239.042, 286.076], 
-#         [207.044, 89.981],    
-#     ])
-                            
-data_spot_weight = dm.get_raw_data(
-    # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
-    # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
-    # file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
-    # file_stem= "2026_07_11-14_54_21-repeated_readout_survival_with_slm_weights_2026_07_11-04_37_50-qnami-nv0_2026_02_20"
-    # file_stem="2026_07_18-23_11_48-reoptimized_slm_score_survival_focused_2026_07_18-11_10_09-qnami-nv0_2026_02_20"
-    # file_stem="2026_07_22-15_53_45-reoptimized_slm_score_survival_focused_2026_07_22-04_39_34-qnami-nv0_2026_02_20"
-    # file_stem="2026_08_05-14_57_39-reoptimized_slm_score_survival_focused_2026_08_05-04_43_20-qnami-nv0_2026_02_20"
-    # "2026_08_12-16_41_26-reoptimized_slm_score_survival_focused_2026_08_12-10_12_17-qnami-nv0_2026_02_20" ### 631NVs
-    # "2026_08_19-22_37_18-reoptimized_slm_score_survival_focused_2026_08_19-02_30_47-qnami-nv0_2026_02_20" ## 631NVs 50ms
-    "2026_09_10-18_37_14-repeated_readout_slm_processed_2026_09_10-04_40_32-qnami-nv0_2026_02_20" ## 631NVs 50ms
-)
-# spot_weights = data_spot_weight["optimal_weights"]
-# spot_weights  = data_spot_weight["slm_amplitude_weight"]
-
-# spot_weights = curve_extreme_weights_simple(
-#         spot_weights, scaling_factor=1.0
-#     )
-# spot_weights = np.array(spot_weights)
-
-# If weights are 2D, choose one row/column as needed.
-# This keeps the most common case: shape (N,)
-# if spot_weights.ndim != 1:
-#     print("spot_weights original shape after squeeze:", spot_weights.shape)
-#     spot_weights = spot_weights.ravel()
-
 # Transform Nuvu coordinates to ThorCam coordinates
 thorcam_coords = nuvu2thorcam_slm(nuvu_pixel_coords)  # shape: (N, 2)
 thorcam_coords_xy = thorcam_coords.T                  # shape: (2, N)
