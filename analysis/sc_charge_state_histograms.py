@@ -427,7 +427,7 @@ def plot_avg_images(raw_data):
 
 if __name__ == "__main__":
     kpl.init_kplotlib()
-    file_stem = "2026_10_07-21_54_56-johnson-nv0_2026_10_02"
+    file_stem = "2026_10_09-15_21_59-johnson-nv0_2026_10_02"
     data = dm.get_raw_data(file_stem=file_stem, load_npz=True)
     process_and_plot(data, do_plot_histograms=True)
     # analyzed_data = dm.get_raw_data(

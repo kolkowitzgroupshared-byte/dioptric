@@ -1050,8 +1050,8 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.15},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.15},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.35},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.3884},
+        "yellow_imaging": {"type": "constant", "sample": 0.45},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.3940},
         "yellow_spin_pol": {"type": "constant", "sample": 0.40},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other

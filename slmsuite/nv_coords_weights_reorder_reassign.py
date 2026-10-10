@@ -1043,45 +1043,60 @@ if __name__ == "__main__":
     # include_indices = [i for i, val in enumerate(prep_fidelity_list) if val >= 0.4 or val is None]
     # include_indices =  [i for i, val in enumerate(snr_float) if val >= 0.02]
     
-    data_spot_weight = dm.get_raw_data(
-    # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
-    # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
-    # file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
-    # file_stem= "2026_07_11-14_54_21-repeated_readout_survival_with_slm_weights_2026_07_11-04_37_50-qnami-nv0_2026_02_20"
-    # file_stem="2026_07_18-23_11_48-reoptimized_slm_score_survival_focused_2026_07_18-11_10_09-qnami-nv0_2026_02_20"
-    # file_stem="2026_07_22-15_53_45-reoptimized_slm_score_survival_focused_2026_07_22-04_39_34-qnami-nv0_2026_02_20"
-    # file_stem="2026_08_05-14_57_39-reoptimized_slm_score_survival_focused_2026_08_05-04_43_20-qnami-nv0_2026_02_20"
-    # "2026_08_12-16_41_26-reoptimized_slm_score_survival_focused_2026_08_12-10_12_17-qnami-nv0_2026_02_20" ### 631NVs
-    # "2026_08_19-22_37_18-reoptimized_slm_score_survival_focused_2026_08_19-02_30_47-qnami-nv0_2026_02_20" ## 631NVs 50ms
-    # "2026_09_10-18_37_14-repeated_readout_slm_processed_2026_09_10-04_40_32-qnami-nv0_2026_02_20" ## 631NVs 50ms
-    "2026_10_07-21_30_33-optimization_processed_full_2026_10_07-20_38_47-johnson-nv0_2026_10_02"
-    )
-    spot_weights = data_spot_weight["optimal_weights"]
-    # spot_weights  = data_spot_weight["slm_amplitude_weight"]
-
-    spot_weights = curve_extreme_weights_simple(
-            spot_weights, scaling_factor=1.0
-        )
-    spot_weights = np.array(spot_weights)
-    
-    filtered_reordered_spot_weights = spot_weights
-    
-    
-    ####fildelity
-    # data = dm.get_raw_data(
-    #     # file_stem="2026_03_25-16_28_08-charge_state_analysis_hist_data_raw_data", load_npz=True
-    #     # file_stem="2026_03_25-18_15_53-charge_state_analysis_hist_data_raw_data", load_npz=True
-    #     # file_stem= "2026_07_15-15_17_51-single_step_charge_hist_single_cpu_2026_07_15-13_03_24-qnami-nv0_2026_02_20",
-    #     # file_stem= "2026_08_04-13_47_40-single_step_charge_hist_single_cpu_2026_08_04-13_21_07-qnami-nv0_2026_02_20",
-    #     # file_stem= "2026_08_08-16_47_43-single_step_charge_hist_single_cpu_2026_08_08-16_44_44-qnami-nv0_2026_02_20",
-    #     # file_stem= "2026_08_08-18_51_29-single_step_charge_hist_single_cpu_2026_08_08-18_48_51-qnami-nv0_2026_02_20",
-    #     file_stem= "2026_08_08-21_33_29-single_step_charge_hist_single_cpu_2026_08_08-20_30_31-qnami-nv0_2026_02_20",
-    #     load_npz=True,
+    # data_spot_weight = dm.get_raw_data(
+    # # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+    # # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+    # # file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
+    # # file_stem= "2026_07_11-14_54_21-repeated_readout_survival_with_slm_weights_2026_07_11-04_37_50-qnami-nv0_2026_02_20"
+    # # file_stem="2026_07_18-23_11_48-reoptimized_slm_score_survival_focused_2026_07_18-11_10_09-qnami-nv0_2026_02_20"
+    # # file_stem="2026_07_22-15_53_45-reoptimized_slm_score_survival_focused_2026_07_22-04_39_34-qnami-nv0_2026_02_20"
+    # # file_stem="2026_08_05-14_57_39-reoptimized_slm_score_survival_focused_2026_08_05-04_43_20-qnami-nv0_2026_02_20"
+    # # "2026_08_12-16_41_26-reoptimized_slm_score_survival_focused_2026_08_12-10_12_17-qnami-nv0_2026_02_20" ### 631NVs
+    # # "2026_08_19-22_37_18-reoptimized_slm_score_survival_focused_2026_08_19-02_30_47-qnami-nv0_2026_02_20" ## 631NVs 50ms
+    # # "2026_09_10-18_37_14-repeated_readout_slm_processed_2026_09_10-04_40_32-qnami-nv0_2026_02_20" ## 631NVs 50ms
+    # # "2026_10_07-21_30_33-optimization_processed_full_2026_10_07-20_38_47-johnson-nv0_2026_10_02"
+    # "2026_10_09-14_30_46-recomputed_summary_w_1_2_2_2026_10_09-14_09_10-optimization_processed_full_2026_10_09-13_23_31-johnson-nv0_2026_10_02"
     # )
-    # print (data.keys())
+    # spot_weights = data_spot_weight["optimal_weights"]
+    # # spot_weights  = data_spot_weight["slm_amplitude_weight"]
+
+    # spot_weights = curve_extreme_weights_simple(
+    #         spot_weights, scaling_factor=1.0
+    #     )
+    # spot_weights = np.array(spot_weights)
+    
+    # filtered_reordered_spot_weights = spot_weights
+    
+    
+    ###fildelity
+    data = dm.get_raw_data(
+        # file_stem="2026_03_25-16_28_08-charge_state_analysis_hist_data_raw_data", load_npz=True
+        # file_stem="2026_03_25-18_15_53-charge_state_analysis_hist_data_raw_data", load_npz=True
+        # file_stem= "2026_07_15-15_17_51-single_step_charge_hist_single_cpu_2026_07_15-13_03_24-qnami-nv0_2026_02_20",
+        # file_stem= "2026_08_04-13_47_40-single_step_charge_hist_single_cpu_2026_08_04-13_21_07-qnami-nv0_2026_02_20",
+        # file_stem= "2026_08_08-16_47_43-single_step_charge_hist_single_cpu_2026_08_08-16_44_44-qnami-nv0_2026_02_20",
+        # file_stem= "2026_08_08-18_51_29-single_step_charge_hist_single_cpu_2026_08_08-18_48_51-qnami-nv0_2026_02_20",
+        # file_stem= "2026_08_08-21_33_29-single_step_charge_hist_single_cpu_2026_08_08-20_30_31-qnami-nv0_2026_02_20",
+        file_stem = "2026_10_09-14_59_33-charge_state_analysis_hist_data_raw_data",
+        load_npz=True,
+    )
+    print (data.keys())
     # fidelity_data = data["single_step_charge_histogram"]
     # readout_fidelity_list = fidelity_data["readout_fidelity"]
     # prep_fidelity_list = fidelity_data["prep_fidelity"]    
+    readout_fidelity_list = data["readout_fidelity_list"]
+    prep_fidelity_list = data["prep_fidelity_list"]   
+    
+    include_indices = [
+        i
+        for i, (v1, v2) in enumerate(zip(readout_fidelity_list, prep_fidelity_list))
+        if (v1 is not None and v2 is not None)
+        and all(isinstance(x, (int, float)) for x in (v1, v2))
+        and not (math.isnan(v1) or math.isnan(v2))
+        and v1 >= 0.80 and v2 >= 0.50
+    ]
+    filtered_reordered_coords = [filtered_reordered_coords[i] for i in include_indices]
+    filtered_reordered_spot_weights = [filtered_reordered_spot_weights[i] for i in include_indices]
     
     ####snrs
     # snr_data = dm.get_raw_data(
@@ -1098,14 +1113,6 @@ if __name__ == "__main__":
     # print(f"Number selected: {len(selected_inds)}")
     # print(f"Selected indices: {selected_inds}")
     # include_indices = selected_inds
-    # include_indices = [
-    #     i
-    #     for i, (v1, v2) in enumerate(zip(readout_fidelity_list, prep_fidelity_list))
-    #     if (v1 is not None and v2 is not None)
-    #     and all(isinstance(x, (int, float)) for x in (v1, v2))
-    #     and not (math.isnan(v1) or math.isnan(v2))
-    #     and v1 >= 0.98 and v2 >= 0.60
-    # ]
     # print(np.sort(list(include_indices)))
     # filtered_reordered_coords = [filtered_reordered_coords[i] for i in include_indices]
     # updated_spot_weights = [filtered_reordered_spot_weights[i] for i in include_indices]
@@ -1117,12 +1124,12 @@ if __name__ == "__main__":
     # reference_nv = filtered_reordered_coords[0]
     # filtered_reordered_coords, filtered_reordered_spot_weights, include_indices = (
     #     filter_and_reorder_nv_coords(
-    #         filtered_reordered_coords, updated_spot_weights, reference_nv, min_distance=8.0
+    #         filtered_reordered_coords, filtered_reordered_spot_weights, reference_nv, min_distance=8.0
     #     )
     # )
 
     # aom_voltage = 0.2923
-    aom_voltage = 0.37
+    aom_voltage = 0.3940
     a, b, c = 1.5133e04, 2.6976, -38.63  # UPDATED 2025-09-17
 
     total_power = a * (aom_voltage) ** b + c
@@ -1211,11 +1218,11 @@ if __name__ == "__main__":
         np.asarray(filtered_reordered_coords, dtype=float),
         3,
     )
-    save_results(
-        filtered_reordered_coords,
-        filtered_reordered_spot_weights,
-        filename="slmsuite/nv_blob_detection/nv_blob_300nvs_reordered.npz",
-    )
+    # save_results(
+    #     filtered_reordered_coords,
+    #     filtered_reordered_spot_weights,
+    #     filename="slmsuite/nv_blob_detection/nv_blob_300nvs_reordered.npz",
+    # )
 
     # # Plot the original image with circles around each NV
     fig, ax = plt.subplots()
