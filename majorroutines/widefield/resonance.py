@@ -334,7 +334,25 @@ def main(
         # load_iq=True,
     )
 
-    ### Process and plot
+    ### save the data
+    timestamp = dm.get_time_stamp()
+    raw_data |= {
+        "timestamp": timestamp,
+        "freqs": freqs,
+        "freq-units": "GHz",
+        # "freq_range": freq_range,
+        # "freq_center": freq_center,
+    }
+
+    repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
+    repr_nv_name = repr_nv_sig.name
+    file_path = dm.get_file_path(__file__, timestamp, repr_nv_name)
+    if "img_arrays" in raw_data:
+        keys_to_compress = ["img_arrays"]
+    else:
+        keys_to_compress = None
+    dm.save_raw_data(raw_data, file_path, keys_to_compress)
+    
 
     try:
         counts = raw_data["counts"]
@@ -354,27 +372,9 @@ def main(
         fit_fig = None
 
     ### Clean up and return
-
     tb.reset_cfm()
     kpl.show()
 
-    timestamp = dm.get_time_stamp()
-    raw_data |= {
-        "timestamp": timestamp,
-        "freqs": freqs,
-        "freq-units": "GHz",
-        # "freq_range": freq_range,
-        # "freq_center": freq_center,
-    }
-
-    repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
-    repr_nv_name = repr_nv_sig.name
-    file_path = dm.get_file_path(__file__, timestamp, repr_nv_name)
-    if "img_arrays" in raw_data:
-        keys_to_compress = ["img_arrays"]
-    else:
-        keys_to_compress = None
-    dm.save_raw_data(raw_data, file_path, keys_to_compress)
     if raw_fig is not None:
         dm.save_figure(raw_fig, file_path)
     if fit_fig is not None:

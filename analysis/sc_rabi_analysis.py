@@ -1678,6 +1678,10 @@ if __name__ == "__main__":
     
     ##qnami array sample 
     file_stem = ["2026_10_09-03_23_28-johnson-nv0_2026_10_02"]  ### resonator 
+    
+    ##qnami array sample 
+    file_stem = ["2026_10_10-14_05_56-johnson-nv0_2026_10_02"]  ### loop
+    
           
     data = dm.get_raw_data(
         file_stem=file_stem,

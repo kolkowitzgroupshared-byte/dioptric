@@ -1314,6 +1314,8 @@ if __name__ == "__main__":
     file_id = "2026_10_06-04_53_23-johnson-nv0_2026_10_02" ## readout amp
     file_id = "2026_10_07-20_38_47-johnson-nv0_2026_10_02" ## readout amp
     file_id = "2026_10_08-02_03_09-johnson-nv0_2026_10_02" ## pol amp
+    # file_id = "2026_10_09-13_23_31-johnson-nv0_2026_10_02" ## readout amp
+    file_id = "2026_10_09-13_23_31-johnson-nv0_2026_10_02" ## readout amp
     
     if run_new_processing:
         raw_data = dm.get_raw_data(
@@ -1340,16 +1342,17 @@ if __name__ == "__main__":
     # analyzed_file_id = "2026_06_30-18_16_28-optimization_processed_full_2026_06_24-23_33_18-qnami-nv0_2026_02_20"
     # analyzed_file_id = "2026_07_09-13_04_44-optimization_processed_full_2026_07_08-22_48_57-qnami-nv0_2026_02_20"
     analyzed_file_id = "2026_07_15-16_13_25-optimization_processed_full_2026_07_14-20_28_11-qnami-nv0_2026_02_20"
-    analyzed_file_id = "2026_08_18-11_51_54-optimization_processed_full_2026_08_18-02_18_38-qnami-nv0_2026_02_20" 
-    analyzed_file_id = "2026_10_06-14_45_10-optimization_processed_full_2026_10_06-04_53_23-johnson-nv0_2026_10_02" 
-    analyzed_file_id = "2026_10_07-21_30_33-optimization_processed_full_2026_10_07-20_38_47-johnson-nv0_2026_10_02" 
-    # analyzed_file_id = "2026_10_08-12_18_54-optimization_processed_full_2026_10_08-02_03_09-johnson-nv0_2026_10_02" 
+    analyzed_file_id = "2026_08_18-11_51_54-optimization_processed_full_2026_08_18-02_18_38-qnami-nv0_2026_02_20" ## pol duration
+    analyzed_file_id = "2026_10_06-14_45_10-optimization_processed_full_2026_10_06-04_53_23-johnson-nv0_2026_10_02"
+    analyzed_file_id = "2026_10_07-21_30_33-optimization_processed_full_2026_10_07-20_38_47-johnson-nv0_2026_10_02"
+    analyzed_file_id = "2026_10_08-12_18_54-optimization_processed_full_2026_10_08-02_03_09-johnson-nv0_2026_10_02" ## pol amp
+    analyzed_file_id = "2026_10_09-14_09_10-optimization_processed_full_2026_10_09-13_23_31-johnson-nv0_2026_10_02"
     analyzed = dm.get_raw_data(
         file_stem=analyzed_file_id,
         load_npz=True,
     )
 
-    new_weights = (1, 0, 0)
+    new_weights = (1, 2, 2)
 
     print("GPU available:", GPU_AVAILABLE)
 
@@ -1401,13 +1404,10 @@ if __name__ == "__main__":
     file_name = f"recomputed_summary_w_{weights_str}_{analyzed_file_id}"
     file_path = dm.get_file_path(__file__, timestamp, file_name)
 
-    # dm.save_raw_data(
-    #     make_json_safe(summary),
-    #     file_path,
-    # )
-
-    
-
+    dm.save_raw_data(
+        make_json_safe(summary),
+        file_path,
+    )
     print("Saved recomputed summary:", file_path)
     sys.exit()
     # -------------------------------------------------------------------------
