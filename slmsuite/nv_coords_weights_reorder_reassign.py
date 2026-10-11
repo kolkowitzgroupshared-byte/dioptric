@@ -1095,6 +1095,9 @@ if __name__ == "__main__":
         and not (math.isnan(v1) or math.isnan(v2))
         and v1 >= 0.80 and v2 >= 0.50
     ]
+    include_indices = [3, 4, 5, 6, 8, 10, 14, 16, 19, 20, 24, 26,27, 28, 29, 31, 32, 33, 34, 35, 43, 45, 46,47, 48, 50, 55, 56, 58, 60, 63, 68, 69, 70,72, 73, 75, 78, 79, 80, 81, 84, 86, 88, 91,96, 101, 103, 106, 107, 108, 110, 118, 120,121, 125, 127, 129, 137, 138, 139, 140, 141, 144, 149, 156, 157, 160, 161, 163, 164, 166, 167, 169, 171, 172, 173, 178, 179, 181, 184, 185, 187, 188, 190, 192, 198, 200, 203, 205, 207, 208, 209, 210, 212, 213, 216, 220,221, 223, 224, 225, 227, 234, 239, 240, 241, 243, 245, 246, 247, 249, 251, 252, 253, 258, 260, 261, 265, 268, 269, 272, 273, 274, 276, 278, 279, 280, 281, 282, 283, 289, 290, 293, 294, 295, 296, 297]
+    
+    include_indices = [0] + include_indices  # Ensure the first NV is always included
     filtered_reordered_coords = [filtered_reordered_coords[i] for i in include_indices]
     filtered_reordered_spot_weights = [filtered_reordered_spot_weights[i] for i in include_indices]
     
