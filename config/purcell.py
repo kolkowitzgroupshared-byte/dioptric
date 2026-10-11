@@ -187,12 +187,14 @@ config |= {
         "VirtualSigGens": {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_0",
-                "uwave_power": 11.0,
-                "frequency": 2.7815,
-                "rabi_period": 312,
-                # "pi_pulse": 136, ## loop
-                "pi_pulse": 152, ## resonator
-                "pi_on_2_pulse": 76,
+                "uwave_power": 9.0,
+                # "frequency": 2.7815,
+                "frequency": 2.7876,
+                "rabi_period": 192,
+                "pi_pulse": 96, ## loop
+                # "rabi_period": 312,
+                # "pi_pulse": 156, ## resonator
+                "pi_on_2_pulse": 48,
             },
             1: {
                 "physical_name": "sig_gen_STAN_sg394_1",
