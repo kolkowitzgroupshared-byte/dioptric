@@ -771,20 +771,12 @@ def do_optimize_aod_access_time(nv_list):
 def do_scc_snr_check(nv_list):
     num_reps = 200
     num_runs = 40
-    # num_runs = 20
-    # num_runs = 160 * 4
-    # num_runs = 3
-    scc_snr_check.main(nv_list, num_reps, num_runs, uwave_ind_list=[0, 1])
+    scc_snr_check.main(nv_list, num_reps, num_runs, uwave_ind_list=[0])
 
 
 def do_bootstrapped_pulse_error_tomography(nv_list):
     num_reps = 11
     num_runs = 200
-    # num_runs = 10
-    # num_runs = 1100
-    # bootstrapped_pulse_error_tomography.main(
-    #     nv_list, num_reps, num_runs, uwave_ind_list=[1]
-    # )
     for _ in range(2):
         bootstrapped_pulse_error_tomography.main(
             nv_list, num_reps, num_runs, uwave_ind_list=[1]
@@ -1083,11 +1075,11 @@ def do_spin_echo(nv_list):
     # revival_period = int(28.6e3 / 2) ### 65.14G
     # revival_period = int(29.90e3 / 2) ### 62.14G
     # revival_period = int(31.2e3 / 2) ### 59.69G
-    revival_period = int(35.66e3 / 2)  # ~52.39 G
+    # revival_period = int(35.66e3 / 2)  # ~52.39 G
+    revival_period = int(55.77e3 / 2)  # ~33.39 G
     min_tau = 200
     taus = []
     revival_width = 6e3
-    # revival_width = 4e3
     decay = np.linspace(min_tau, min_tau + revival_width, 6)
     taus.extend(decay.tolist())
     gap = np.linspace(min_tau + revival_width, revival_period - revival_width, 8)
@@ -1111,49 +1103,13 @@ def do_spin_echo(nv_list):
 
     # Experiment settings
     num_steps = len(taus)
-
-    # Automatic taus setup, linear spacing
-    # min_tau = 200
-    # max_tau = 84e3 + min_tau
-    # num_steps = 29
-
     num_reps = 3
     num_runs = 600
-    # num_runs = 2
-    # spin_echo.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau)
-    # spin_echo.main(nv_list, num_steps, num_reps, num_runs, taus=taus)
-    for ind in range(3):
+    
+    for _ in range(3):
         do_widefield_image_sample(nv_sig, 50)
         spin_echo.main(nv_list, num_steps, num_reps, num_runs, taus=taus)
 
-
-# def do_spin_echo(nv_list):
-#     min_tau = 200  # ns
-#     revival_period = int(20e3) ##20 gauss
-#     taus = []
-#     revival_width = 6e3
-#     decay = np.linspace(min_tau, min_tau + revival_width, 6)
-#     taus.extend(decay.tolist())
-#     gap = np.linspace(min_tau + revival_width, revival_period - revival_width, 6)
-#     taus.extend(gap[1:-1].tolist())
-#     first_revival = np.linspace(
-#         revival_period - revival_width, revival_period + revival_width, 61
-#     )
-#     taus.extend(first_revival.tolist())
-#     # Round to clock-cycle-compatible units
-#     taus = [round(el / 4) * 4 for el in taus]
-#     # Remove duplicates and sort
-#     taus = sorted(set(taus))
-#     num_steps = len(taus)
-#     num_reps = 3
-#     num_runs = 600
-
-#     print(
-#         f"[Spin Echo] Running with {num_steps} τ values, revival_period={revival_period}"
-#     )
-
-#     for _ in range(1):
-#         spin_echo.main(nv_list, num_steps, num_reps, num_runs, taus=taus)
 
 def do_two_block_hahn_correlation(nv_list):
     tau = 44
@@ -1170,24 +1126,7 @@ def do_two_block_hahn_correlation(nv_list):
 
 def do_two_block_hahn_correlation_dm(nv_list):
     tau = 15e3  # your revival tau (ns)
-    # tau = 44  # your revival tau (ns)
-
-    # def lags_log_div4_ns(tmin_ns, tmax_ns, n):
-    #     # logspace, then round to nearest multiple of 4 ns
-    #     l = np.logspace(np.log10(tmin_ns), np.log10(tmax_ns), n)
-    #     l = np.unique((np.round(l / 4) * 4).astype(int))
-    #     l = l[(l >= tmin_ns) & (l <= tmax_ns)]
-    #     return l.tolist()
-
     lags_A = widefield.generate_divisible_by_4(int(0.2e3), int(20e3), 66)
-
-    # Bands
-    # lags_A = lags_log_div4_ns(16, int(50e3),  45)
-    # lags_B = lags_log_div4_ns(int(50e3), int(50e6), 35)
-    # lags_C = lags_log_div4_ns(int(50e6), int(2e9), 25)
-    # lags_A = lags_log_div4_ns(int(0.2e3), int(200e3), 45)  # 0.25–200 us
-    # lags_B = lags_log_div4_ns(int(200e3), int(20e6), 35)    # 0.2 ms–20 ms
-
     num_reps = 4
 
     # Fast band: cheap waits
@@ -2174,7 +2113,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)     
+        do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list: 

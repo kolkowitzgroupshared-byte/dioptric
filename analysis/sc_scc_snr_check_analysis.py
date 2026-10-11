@@ -46,7 +46,8 @@ from utils import widefield
 # FILE_STEM = "2026_09_21-13_03_32-qnami-nv0_2026_02_20"
 # FILE_STEM = "2026_09_22-11_53_14-qnami-nv0_2026_02_20"
 # FILE_STEM = "2026_09_22-14_50_48-qnami-nv0_2026_02_20"
-FILE_STEM = "2026_09_23-12_00_41-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_23-12_00_41-qnami-nv0_2026_02_20"
+FILE_STEM = "2026_10_10-23_11_55-johnson-nv0_2026_10_02"
 
 
 

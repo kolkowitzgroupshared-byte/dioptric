@@ -156,6 +156,7 @@ config |= {
             # "calibrations/purcell/current/active_nv_coords.npz"
             # "slmsuite/nv_blob_detection/nv_blob_418nvs_reordered.npz"
             "slmsuite/nv_blob_detection/nv_blob_300nvs_reordered.npz"
+            # "slmsuite/nv_blob_detection/nv_blob_115nvs_reordered.npz"
         ),
         "slm_fourier_calib_path": (
             "calibrations/purcell/current/slm_fourier.h5"
@@ -189,7 +190,7 @@ config |= {
                 "physical_name": "sig_gen_STAN_sg394_0",
                 "uwave_power": 9.0,
                 # "frequency": 2.7815,
-                "frequency": 2.7876,
+                "frequency": 2.78459,
                 "rabi_period": 192,
                 "pi_pulse": 96, ## loop
                 # "rabi_period": 312,
@@ -1052,8 +1053,9 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.15},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.15},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.45},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.3940},
+        "yellow_imaging": {"type": "constant", "sample": 0.40},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.3940}, ##300NVs
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.2940},
         "yellow_spin_pol": {"type": "constant", "sample": 0.40},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other
