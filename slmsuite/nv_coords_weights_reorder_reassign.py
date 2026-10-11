@@ -1086,18 +1086,30 @@ if __name__ == "__main__":
     # prep_fidelity_list = fidelity_data["prep_fidelity"]    
     readout_fidelity_list = data["readout_fidelity_list"]
     prep_fidelity_list = data["prep_fidelity_list"]   
-    
-    include_indices = [
-        i
-        for i, (v1, v2) in enumerate(zip(readout_fidelity_list, prep_fidelity_list))
-        if (v1 is not None and v2 is not None)
-        and all(isinstance(x, (int, float)) for x in (v1, v2))
-        and not (math.isnan(v1) or math.isnan(v2))
-        and v1 >= 0.80 and v2 >= 0.50
+    #selected_indices_278459 
+    include_indices= [
+    0, 3, 4, 5, 6, 8, 10, 14, 16, 19, 24,
+    27, 28, 29, 31, 33, 34, 35, 43, 45, 46,
+    47, 48, 50, 56, 58, 60, 68, 70, 72, 73,
+    75, 78, 79, 80, 81, 84, 86, 88, 91, 96,
+    101, 103, 106, 107, 110, 118, 120, 121, 125, 127,
+    129, 138, 140, 141, 144, 149, 156, 157, 160, 161,
+    163, 164, 166, 169, 171, 172, 178, 179, 181, 184,
+    185, 187, 188, 190, 192, 198, 200, 205, 207, 208,
+    209, 210, 213, 216, 220, 221, 223, 224, 227, 234,
+    240, 241, 243, 245, 246, 247, 251, 252, 253, 258,
+    260, 261, 265, 268, 269, 272, 274, 278, 281, 282,
+    283, 290, 293, 295
     ]
-    include_indices = [3, 4, 5, 6, 8, 10, 14, 16, 19, 20, 24, 26,27, 28, 29, 31, 32, 33, 34, 35, 43, 45, 46,47, 48, 50, 55, 56, 58, 60, 63, 68, 69, 70,72, 73, 75, 78, 79, 80, 81, 84, 86, 88, 91,96, 101, 103, 106, 107, 108, 110, 118, 120,121, 125, 127, 129, 137, 138, 139, 140, 141, 144, 149, 156, 157, 160, 161, 163, 164, 166, 167, 169, 171, 172, 173, 178, 179, 181, 184, 185, 187, 188, 190, 192, 198, 200, 203, 205, 207, 208, 209, 210, 212, 213, 216, 220,221, 223, 224, 225, 227, 234, 239, 240, 241, 243, 245, 246, 247, 249, 251, 252, 253, 258, 260, 261, 265, 268, 269, 272, 273, 274, 276, 278, 279, 280, 281, 282, 283, 289, 290, 293, 294, 295, 296, 297]
     
-    include_indices = [0] + include_indices  # Ensure the first NV is always included
+    # include_indice  = [
+    #     i
+    #     for i, (v1, v2) in enumerate(zip(readout_fidelity_list, prep_fidelity_list))
+    #     if (v1 is not None and v2 is not None)
+    #     and all(isinstance(x, (int, float)) for x in (v1, v2))
+    #     and not (math.isnan(v1) or math.isnan(v2))
+    #     and v1 >= 0.80 and v2 >= 0.50
+    # ]
     filtered_reordered_coords = [filtered_reordered_coords[i] for i in include_indices]
     filtered_reordered_spot_weights = [filtered_reordered_spot_weights[i] for i in include_indices]
     
@@ -1221,11 +1233,11 @@ if __name__ == "__main__":
         np.asarray(filtered_reordered_coords, dtype=float),
         3,
     )
-    # save_results(
-    #     filtered_reordered_coords,
-    #     filtered_reordered_spot_weights,
-    #     filename="slmsuite/nv_blob_detection/nv_blob_300nvs_reordered.npz",
-    # )
+    save_results(
+        filtered_reordered_coords,
+        filtered_reordered_spot_weights,
+        filename="slmsuite/nv_blob_detection/nv_blob_115nvs_reordered.npz",
+    )
 
     # # Plot the original image with circles around each NV
     fig, ax = plt.subplots()
