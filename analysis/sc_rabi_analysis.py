@@ -1744,7 +1744,7 @@ if __name__ == "__main__":
         # Histogram
         period_bin_width=8,
         period_round_to=4,
-        period_keep_range=(0, 1000),
+        period_keep_range=(200, 400),
 
         # Save
         save_individual_pdf=True,

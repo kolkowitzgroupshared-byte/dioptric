@@ -1337,14 +1337,13 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # Option B: load processed data and recompute optima.
     # -------------------------------------------------------------------------
-    # analyzed_file_id = "2026_06_26-01_41_43-optimization_processed_full_raw_data"
     # analyzed_file_id = "2026_06_30-18_16_28-optimization_processed_full_2026_06_24-23_33_18-qnami-nv0_2026_02_20"
     # analyzed_file_id = "2026_07_09-13_04_44-optimization_processed_full_2026_07_08-22_48_57-qnami-nv0_2026_02_20"
     analyzed_file_id = "2026_07_15-16_13_25-optimization_processed_full_2026_07_14-20_28_11-qnami-nv0_2026_02_20"
-    analyzed_file_id = "2026_08_18-11_51_54-optimization_processed_full_2026_08_18-02_18_38-qnami-nv0_2026_02_20" ## pol duration
-    analyzed_file_id = "2026_10_06-14_45_10-optimization_processed_full_2026_10_06-04_53_23-johnson-nv0_2026_10_02"
-    analyzed_file_id = "2026_10_07-21_30_33-optimization_processed_full_2026_10_07-20_38_47-johnson-nv0_2026_10_02"
-    analyzed_file_id = "2026_10_08-12_18_54-optimization_processed_full_2026_10_08-02_03_09-johnson-nv0_2026_10_02" ## pol amp
+    analyzed_file_id = "2026_08_18-11_51_54-optimization_processed_full_2026_08_18-02_18_38-qnami-nv0_2026_02_20" 
+    analyzed_file_id = "2026_10_06-14_45_10-optimization_processed_full_2026_10_06-04_53_23-johnson-nv0_2026_10_02" 
+    analyzed_file_id = "2026_10_07-21_30_33-optimization_processed_full_2026_10_07-20_38_47-johnson-nv0_2026_10_02" 
+    # analyzed_file_id = "2026_10_08-12_18_54-optimization_processed_full_2026_10_08-02_03_09-johnson-nv0_2026_10_02" 
     analyzed = dm.get_raw_data(
         file_stem=analyzed_file_id,
         load_npz=True,
@@ -1359,11 +1358,31 @@ if __name__ == "__main__":
         weights=new_weights,
     )
 
-    plot_prep_vs_readout_optimal_only(
+    # -------------------------------------------------------------------------
+    # Plot + save population summary
+    # -------------------------------------------------------------------------
+    fig_summary = plot_prep_vs_readout_optimal_only(
         analyzed,
         weights=new_weights,
         skip_first=2,
     )
+
+    timestamp = dm.get_time_stamp()
+    weights_str = "_".join(str(w) for w in new_weights)
+
+    summary_fig_name = (
+        f"prep_vs_readout_optimal_w_{weights_str}_"
+        f"{analyzed_file_id}"
+    )
+    summary_fig_path = dm.get_file_path(
+        __file__,
+        timestamp,
+        summary_fig_name,
+    )
+
+    dm.save_figure(fig_summary, summary_fig_path)
+
+    print(f"Saved summary figure: {summary_fig_path}")
     kpl.show(block=True)
     
     print("used_gpu:", summary.get("used_gpu", False))
@@ -1387,8 +1406,10 @@ if __name__ == "__main__":
     #     file_path,
     # )
 
-    print("Saved recomputed summary:", file_path)
+    
 
+    print("Saved recomputed summary:", file_path)
+    sys.exit()
     # -------------------------------------------------------------------------
     # Plot only selected NVs. Do not plot all 1176 with block=True.
     # -------------------------------------------------------------------------
