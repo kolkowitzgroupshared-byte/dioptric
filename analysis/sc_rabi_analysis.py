@@ -1298,7 +1298,6 @@ if __name__ == "__main__":
         period_bin_width=4,
         period_round_to=4,
         period_keep_range=(175, 215),
-        period_keep_range=(00, 400),
 
         # Save
         save_individual_pdf=True,

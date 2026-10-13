@@ -884,8 +884,8 @@ def do_calibrate_iq_delay(nv_list):
 
 def do_resonance(nv_list):
     freq_center = 2.87
-    freq_range = 0.260
-    num_steps = 45
+    freq_range = 0.240
+    num_steps = 48
     num_reps = 4
     num_runs = 200
     freqs = calculate_freqs(freq_center, freq_range, num_steps)
@@ -902,8 +902,6 @@ def do_resonance(nv_list):
             freqs=freqs,
             uwave_ind_list=[0],
         )
-    # for _ in range(2):
-    #     resonance.main(nv_list, num_steps, num_reps, num_runs, freqs=freqs)
 
 def do_deer_hahn(nv_list):
     num_reps =10
@@ -930,23 +928,6 @@ def do_deer_hahn(nv_list):
             nv_pi_ns=256,
             rf_pi_ns=400,
         )
-
-# def do_deer_hahn_rabi(nv_list):
-#     for _ in range(6):
-#         do_widefield_image_sample(nv_sig, 50)
-#         deer_hahn_rabi.main(
-#         nv_list=nv_list,
-#         num_steps=31,
-#         num_reps=10,
-#         num_runs=300,
-#         min_rf_len_ns=16,
-#         max_rf_len_ns=496,
-#         rf_freq_ghz=0.202,
-#         uwave_ind_list=[0, 1],
-#         tau_ns=18_000,
-#         nv_pi_ns=256,
-#         ref_detuning_ghz=0.6,
-#         )
 
 def do_deer_hahn_rabi(nv_list):
     for _ in range(3):
@@ -2110,7 +2091,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_widefield_image_sample(nv_sig, 50)     
+        # do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list: 
