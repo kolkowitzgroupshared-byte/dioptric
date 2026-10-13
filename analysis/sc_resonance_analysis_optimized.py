@@ -2049,12 +2049,20 @@ if __name__ == "__main__":
     #     "2026_10_08-21_50_49-johnson-nv0_2026_10_02"
     # ]
     # This line is missing the quotes and should be added to the file_ids list.
-    # file_ids = [
-    #     "2026_10_10-04_13_23-johnson-nv0_2026_10_02"
-    # ]
+    file_ids = [
+        "2026_10_10-04_13_23-johnson-nv0_2026_10_02"
+    ]
     # This line is missing the quotes and should be added to the file_ids list.
     file_ids = [
             "2026_10_10-20_37_51-johnson-nv0_2026_10_02"
         ]
+    # This line is missing the quotes and should be added to the file_ids list.
+    file_ids = [
+        "2026_10_11-15_18_46-johnson-nv0_2026_10_02"
+    ]
+    # This line is missing the quotes and should be added to the file_ids list.
+    file_ids = [
+        "2026_10_11-20_23_46-johnson-nv0_2026_10_02"
+    ]
     # Run analysis using the final active file_ids assignment above.
     analyze(file_ids)

@@ -1,29 +1,43 @@
-﻿# Exact NV / QM repository subset
+# QM review package — exact repository subset
 
-This package preserves the production repository hierarchy for the files most relevant to Quantum Machines review.
+Source repository: kolkowitzgroupshared-byte/dioptric  
+Source commit: 6fbe4cc788374d00b2c934045685ca775493e436
 
-Source checkout: C:\Users\saroj\Github\dioptric
-Git commit: 6fbe4cc788374d00b2c934045685ca775493e436
+This package preserves the real repository hierarchy for the NV-array / QM code paths most relevant to review.
 
-## Important distinction
+## Control panel
 
-- Conditional/adaptive charge preparation contains host-to-running-QUA feedback.
-- Hahn/spin_echo does NOT use host feedback during the spin experiment.
-- spin_echo.py is included to show the real polarization -> pi/2 - tau - pi - tau - pi/2 -> SCC -> camera workflow.
+`controlpanels/control_panel-purcell.py` is intentionally **trimmed**. It contains only these production entry points:
 
-## Verbatim production files
+- `do_widefield_image_sample` — retained because the production spin-echo wrapper calls it before an echo run.
+- `do_charge_state_conditional_init`
+- `do_adaptive_charge_initialization`
+- `do_spin_echo`
 
-All files under majorroutines/, servers/, and controlpanels/ in this package are byte-for-byte copies from the current checkout.
+Their function bodies are copied verbatim from the source control panel. The unrelated control-panel experiments, sample definitions, analysis helpers, and launch code are omitted.
 
-## Config
+The production `do_spin_echo()` body references the global `nv_sig` for the pre-run image. That global is defined in the omitted sample-definition portion of the full control panel; this package preserves that reference rather than silently rewriting the production logic.
 
-config/purcell_QM_RELEVANT_EXCERPT.py is the only excerpt. It begins after the DeviceIDs/private-network block, which was deliberately excluded before sharing externally. The production lines that are included were not rewritten.
+## Main workflows
 
-## Current working-tree status
+### Conditional/adaptive charge preparation
+Host camera processing determines charge state and can update the target selection used by the running QUA program.
 
-Only unrelated analysis files were modified when this package was generated:
- M analysis/sc_deer_hahn.py
- M analysis/sc_deer_hahn_p1_pulse_position_scan.py
-?? share_with_qm/qm_exact_repo_subset_2026-09-30/
+### Spin echo
+The spin-echo experiment does **not** use host feedback during the Hahn-echo sequence. The relevant path is:
 
-Those modified analysis files are NOT included in this package.
+`controlpanels/control_panel-purcell.py`
+→ `majorroutines/widefield/spin_echo.py`
+→ `servers/timing/sequencelibrary/QM_opx/camera/spin_echo.py`
+→ `base_scc_sequence.py`
+→ `seq_utils.py`
+
+with polarization → π/2 → τ → π → τ → π/2 → SCC → camera readout.
+
+## Verbatim files
+
+Except for the intentionally trimmed control panel and the sanitized config excerpt, the included source files are copied from the source commit without rewriting.
+
+## Configuration
+
+`config/purcell_QM_RELEVANT_EXCERPT.py` retains the relevant production configuration structure while omitting the DeviceIDs/private-network block containing internal addresses, VISA endpoints, cluster identifiers, and instrument serial numbers.

@@ -884,16 +884,16 @@ def do_calibrate_iq_delay(nv_list):
 
 def do_resonance(nv_list):
     freq_center = 2.87
-    freq_range = 0.260
-    num_steps = 45
+    freq_range = 0.240
+    num_steps = 48
     num_reps = 4
-    num_runs = 300
+    num_runs = 200
     freqs = calculate_freqs(freq_center, freq_range, num_steps)
     ##
     # Remove duplicates and sort
     freqs = sorted(set(freqs))
     num_steps = len(freqs)
-    for _ in range(1):
+    for _ in range(2):
         resonance.main(
             nv_list,
             num_steps,
@@ -902,8 +902,6 @@ def do_resonance(nv_list):
             freqs=freqs,
             uwave_ind_list=[0],
         )
-    # for _ in range(2):
-    #     resonance.main(nv_list, num_steps, num_reps, num_runs, freqs=freqs)
 
 def do_deer_hahn(nv_list):
     num_reps =10
@@ -930,23 +928,6 @@ def do_deer_hahn(nv_list):
             nv_pi_ns=256,
             rf_pi_ns=400,
         )
-
-# def do_deer_hahn_rabi(nv_list):
-#     for _ in range(6):
-#         do_widefield_image_sample(nv_sig, 50)
-#         deer_hahn_rabi.main(
-#         nv_list=nv_list,
-#         num_steps=31,
-#         num_reps=10,
-#         num_runs=300,
-#         min_rf_len_ns=16,
-#         max_rf_len_ns=496,
-#         rf_freq_ghz=0.202,
-#         uwave_ind_list=[0, 1],
-#         tau_ns=18_000,
-#         nv_pi_ns=256,
-#         ref_detuning_ghz=0.6,
-#         )
 
 def do_deer_hahn_rabi(nv_list):
     for _ in range(3):
@@ -1029,11 +1010,12 @@ def do_rabi(nv_list):
     max_tau = 480 + min_tau
     num_steps = 31
     num_reps = 10
-    num_runs = 300
+    num_runs = 100
     # num_runs = 5
     uwave_ind_list = [0]
     # uwave_ind_list = [2]
-    rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
+    for _ in range(2):
+        rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
 
 
 def do_widefield_coherence_test(nv_list, evol_time, seq_type):
@@ -1564,18 +1546,14 @@ def do_opx_constant_ac():
     # print((stop - start) / num_reps)
 
     # Microwave test
-    # if True:
-    #     sig_gen = cxn.sig_gen_STAN_sg394_3
-    #     amp = 2
-    #     chan = 3
-    # else:
-    #     sig_gen = cxn.sig_gen_STAN_sg394_2
-    #     amp = 10
-    #     chan = 10
-    # sig_gen.set_amp(amp)  # 12
-    # sig_gen.set_freq(1.0)
-    # sig_gen.uwave_on()
-    # opx.constant_ac([chan])
+    sig_gen = cxn.sig_gen_STAN_sg394_0
+    freq = 1.0  #GHZ
+    amp = 10 #dBm
+    chan = 9
+    sig_gen.set_amp(amp)  
+    sig_gen.set_freq(freq)
+    sig_gen.uwave_on()
+    opx.constant_ac([chan])
 
     # Camera frame rate test
     # seq_args = [500]
@@ -1904,16 +1882,16 @@ if __name__ == "__main__":
     #     [221.412, 42.427],      
     # ]
     # green_coords_list = [
-    #     [100.445, 100.499],
-    #     [121.203, 108.074],
-    #     [92.976, 79.881],
-    #     [85.248, 117.243],
+    #     [100.407, 100.497],
+    #     [121.17, 108.081],
+    #     [92.967, 79.884],
+    #     [85.202, 117.228],
     # ]
     # red_coords_list = [
-    #     [69.282, 69.997],
-    #     [86.246, 76.639],
-    #     [63.334, 53.049],
-    #     [56.775, 83.386],
+    #     [69.282, 70.028],
+    #     [86.219, 76.644],
+    #     [63.327, 53.051],
+    #     [56.737, 83.373],
     # ]
     
     # -------------------------------------------
@@ -2069,7 +2047,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    # nv_sig.expected_counts = 1207.0
+    nv_sig.expected_counts = 800.0
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:300]
     print(f"length of NVs list:{len(nv_list)}")
@@ -2113,7 +2091,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_widefield_image_sample(nv_sig, 50)     
+        # do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list: 
@@ -2234,7 +2212,6 @@ if __name__ == "__main__":
         # do_rabi(nv_list)
         # do_resonance_zoom(nv_list)
         # do_spin_echo(nv_list)
-        # do_spin_echo_1(nv_list)
         # do_ramsey(nv_list)
         
         # do_deer_hahn(nv_list)
