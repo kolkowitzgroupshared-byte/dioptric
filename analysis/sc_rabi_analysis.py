@@ -1636,7 +1636,7 @@ if __name__ == "__main__":
     # file_stem = ["2025_10_24-03_41_53-johnson-nv0_2025_10_21"] ## 2.78, 2.84
     # file_stem = ["2025_10_24-23_14_38-johnson-nv0_2025_10_21"] ## 2.78, 2.84
     # file_stem = ["2025_10_25-05_55_59-johnson-nv0_2025_10_21"] ## 2.78, 2.84
-    # file_stem = ["2025_10_28-09_07_10-johnson-nv0_2025_10_21"]
+    # file_stem = ["2025_10_28-09_07_10-johnson-n!v0_2025_10_21"]
     # file_stem = ["2025_11_13-05_41_07-johnson-nv0_2025_10_21"]  ## 2.91, 2.94
 
     # ##### Testing flexible loop
@@ -1644,44 +1644,51 @@ if __name__ == "__main__":
     #              "2026_02_02-13_49_00-johnson-nv0_2025_10_21",
     #              ]  ## 2.77
     # file_stem = ["2026_02_02-17_08_15-johnson-nv0_2025_10_21"]  ## 2.91, 2.94
-    # file_stem = ["2026_02_02-21_30_27-johnson-nv0_2025_10_21"]
+    file_stem = ["2026_02_02-21_30_27-johnson-nv0_2025_10_21"]
     # file_stem = ["2026_02_03-04_16_43-johnson-nv0_2025_10_21"]
 
     ##148 MHz deer
     # file_stem =  ["2026_02_04-14_02_35-johnson-nv0_2025_10_21"]
-    file_stem = ["2026_02_02-21_30_27-johnson-nv0_2025_10_21"] 
+    # file_stem = ["2026_02_02-21_30_27-johnson-nv0_2025_10_21"] 
     
     ##qnami array sample
-    file_stem = ["2026_02_20-04_26_28-rubin-nv0_2026_02_15"]  ### loop 
-    # file_stem = ["2026_02_22-00_11_44-rubin-nv0_2026_02_15"]  ### resonator 
+    # file_stem = ["2026_02_20-04_26_28-rubin-nv0_2026_02_15"]  ### loop 
+    # # file_stem = ["2026_02_22-00_11_44-rubin-nv0_2026_02_15"]  ### resonator 
     
-    ##qnami array sample 1277
-    file_stem = ["2026_03_28-07_59_17-qnami-nv0_2026_02_20"]  ### loop     
+    # ##qnami array sample 1277
+    # file_stem = ["2026_03_28-07_59_17-qnami-nv0_2026_02_20"]  ### loop     
     
-    ##qnami array sample 1277
-    file_stem = ["2026_09_08-20_08_21-qnami-nv0_2026_02_20"]  ### loop     
+    # ##qnami array sample 1277
+    # file_stem = ["2026_09_08-20_08_21-qnami-nv0_2026_02_20"]  ### loop     
          
-    ##qnami array sample 631
-    file_stem = ["2026_09_11-13_46_26-qnami-nv0_2026_02_20"]  ### loop     
+    # ##qnami array sample 631
+    # file_stem = ["2026_09_11-13_46_26-qnami-nv0_2026_02_20"]  ### loop     
 
-    ##qnami array sample 631
-    file_stem = ["2026_09_12-02_21_34-qnami-nv0_2026_02_20"]  ### loop
+    # ##qnami array sample 631
+    # file_stem = ["2026_09_12-02_21_34-qnami-nv0_2026_02_20"]  ### loop
     
     # #qnami array sample 212
     # file_stem = ["2026_09_16-08_26_27-qnami-nv0_2026_02_20"]  ### loop
 
     ##qnami array sample 212
-    file_stem = ["2026_09_21-20_21_01-qnami-nv0_2026_02_20"]  ### loop  
+    # file_stem = ["2026_09_21-20_21_01-qnami-nv0_2026_02_20"]  ### loop  
     
     ##qnami array sample 212
-    file_stem = ["2026_09_23-18_32_19-qnami-nv0_2026_02_20"]  ### resonator 
+    # file_stem = ["2026_09_23-18_32_19-qnami-nv0_2026_02_20"]  ### resonator 
     
-    ##qnami array sample 
-    file_stem = ["2026_10_09-03_23_28-johnson-nv0_2026_10_02"]  ### resonator 
+    ##johnson sample 
+    # file_stem = ["2026_10_09-03_23_28-johnson-nv0_2026_10_02"]  ### resonator 
     
-    ##qnami array sample 
-    file_stem = ["2026_10_10-14_05_56-johnson-nv0_2026_10_02"]  ### loop
+    ##johnson sample 
+    # file_stem = ["2026_10_10-14_05_56-johnson-nv0_2026_10_02"]  ### loop
     
+    # file_stem = ["2026_10_12-04_57_44-johnson-nv0_2026_10_02"]  ### loop
+    
+    file_stem = ["2026_10_12-13_22_09-johnson-nv0_2026_10_02"]
+    
+    file_stem = ["2026_10_12-18_36_08-johnson-nv0_2026_10_02"]
+    
+    file_stem = ["2026_10_12-20_34_10-johnson-nv0_2026_10_02"]
           
     data = dm.get_raw_data(
         file_stem=file_stem,
@@ -1695,10 +1702,9 @@ if __name__ == "__main__":
     counts = np.asarray(
         data["counts"]
     )
-
+    print(f"  counts={counts.shape} {counts.dtype}")
     sig_counts = counts[0]
     ref_counts = counts[1]
-
     avg_counts, avg_counts_ste = (
         widefield.process_counts(
             nv_list,
@@ -1748,7 +1754,7 @@ if __name__ == "__main__":
         # Histogram
         period_bin_width=8,
         period_round_to=4,
-        period_keep_range=(200, 400),
+        period_keep_range=(00, 400),
 
         # Save
         save_individual_pdf=True,

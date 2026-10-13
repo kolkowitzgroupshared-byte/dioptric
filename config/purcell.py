@@ -38,14 +38,14 @@ calibration_coords_pixel = [
     [221.412, 42.427], 
 ]
 calibration_coords_green = [
-    [121.203, 108.074],
-    [92.976, 79.881],
-    [85.248, 117.243],
+    [121.17, 108.081],
+    [92.967, 79.884],
+    [85.202, 117.228],
 ]
 calibration_coords_red = [
-    [86.246, 76.639],
-    [63.334, 53.049],
-    [56.775, 83.386],
+    [86.219, 76.644],
+    [63.327, 53.051],
+    [56.737, 83.373],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -188,9 +188,10 @@ config |= {
         "VirtualSigGens": {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_0",
-                "uwave_power": 9.0,
+                "uwave_power": 11.0,
                 # "frequency": 2.7815,
-                "frequency": 2.78459,
+                # "frequency": 2.79908,
+                "frequency": 2.76683,
                 "rabi_period": 192,
                 "pi_pulse": 96, ## loop
                 # "rabi_period": 312,
@@ -419,8 +420,8 @@ config |= {
             "do_laser_COBO_638_dm": 3,  # red TTL
             # microwaves (TTL gate to SGs)
             # "do_sig_gen_BERK_bnc835_gate": 4,
-            "do_sig_gen_STAN_sg394_1_gate": 4,
             "do_sig_gen_STAN_sg394_0_gate": 5,
+            "do_sig_gen_STAN_sg394_1_gate": 4,
             # analog (for the yellow AOM amplitude)
             "ao_laser_OPTO_589_am": 0,  # yellow analog modulation
         },
