@@ -770,7 +770,7 @@ def do_optimize_aod_access_time(nv_list):
 
 def do_scc_snr_check(nv_list):
     num_reps = 200
-    num_runs = 40
+    num_runs = 20
     scc_snr_check.main(nv_list, num_reps, num_runs, uwave_ind_list=[0])
 
 
@@ -1882,16 +1882,16 @@ if __name__ == "__main__":
     #     [221.412, 42.427],      
     # ]
     # green_coords_list = [
-    #     [100.407, 100.497],
-    #     [121.17, 108.081],
-    #     [92.967, 79.884],
-    #     [85.202, 117.228],
+    #     [100.334, 100.491],
+    #     [121.119, 108.066],
+    #     [92.913, 79.886],
+    #     [85.136, 117.228],
     # ]
     # red_coords_list = [
-    #     [69.282, 70.028],
-    #     [86.219, 76.644],
-    #     [63.327, 53.051],
-    #     [56.737, 83.373],
+    #     [69.222, 70.022],
+    #     [86.177, 76.631],
+    #     [63.282, 53.052],
+    #     [56.683, 83.371],
     # ]
     
     # -------------------------------------------
@@ -2010,7 +2010,21 @@ if __name__ == "__main__":
     ion_duration_list = [1000] * num_nvs
     scc_duration_list = [88] * num_nvs
 
-
+    # selected_inds = [
+    # 0, 3, 4, 5, 6, 8, 10, 14, 16, 19,
+    # 24, 27, 28, 29, 31, 33, 34, 35, 43, 45, 46,
+    # 47, 48, 50, 56, 58, 60, 68, 70, 72, 73,
+    # 75, 78, 79, 80, 81, 84, 86, 88, 91, 96,
+    # 101, 103, 106, 107, 108, 110, 118, 120, 121,
+    # 125, 127, 129, 137, 138, 140, 141, 144, 149,
+    # 156, 157, 161, 163, 164, 166, 171,
+    # 172, 173, 178, 179, 181, 184, 185, 187, 188,
+    # 190, 192, 198, 200, 202, 205, 207,
+    # 208, 209, 210, 213, 216, 220, 221, 223, 224,
+    # 227, 234, 239, 240, 241, 243, 245, 246, 247,
+    # 251, 252, 253, 258, 260, 261, 265, 268, 269,
+    # 272, 274, 278, 281, 282, 283, 290, 293, 295,
+    # 296]
     # sys.exit()
     # nv_list[i] will have the ith coordinates from the above lists
     nv_list: list[NVSig] = []
@@ -2047,7 +2061,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    nv_sig.expected_counts = 800.0
+    # nv_sig.expected_counts = 800.0
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:300]
     print(f"length of NVs list:{len(nv_list)}")
@@ -2182,7 +2196,7 @@ if __name__ == "__main__":
         # do_check_readout_fidelity(nv_list)
         # do_optimize_aod_access_time(nv_list)
 
-        # do_scc_snr_check(nv_list)
+        do_scc_snr_check(nv_list)
         # do_optimize_scc_duration(nv_list)
         # do_optimize_scc_amp(nv_list)
         # optimize_scc_amp_and_duration(nv_list)
@@ -2207,7 +2221,7 @@ if __name__ == "__main__":
         # do_calibrate_iq_delay(nv_list)
         # do_rabi(nv_list)
         # do_power_rabi(nv_list)
-        do_resonance(nv_list)
+        # do_resonance(nv_list)
         # do_optimize_scc_amp(nv_list)
         # do_rabi(nv_list)
         # do_resonance_zoom(nv_list)

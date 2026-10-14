@@ -115,7 +115,7 @@ def process_and_plot(data):
     ax.set_ylabel("SNR")
 
 
-def main(nv_list, num_reps, num_runs, uwave_ind_list=[0, 1]):
+def main(nv_list, num_reps, num_runs, uwave_ind_list):
     ### Some initial setup
     num_steps = 1
 
@@ -145,9 +145,7 @@ def main(nv_list, num_reps, num_runs, uwave_ind_list=[0, 1]):
     )
 
     ### Report results and cleanup
-
     timestamp = dm.get_time_stamp()
-
     repr_nv_name = widefield.get_repr_nv_sig(nv_list).name
     file_path = dm.get_file_path(__file__, timestamp, repr_nv_name)
     dm.save_raw_data(data, file_path)

@@ -1088,19 +1088,20 @@ if __name__ == "__main__":
     prep_fidelity_list = data["prep_fidelity_list"]   
     #selected_indices_278459 
     include_indices= [
-    0, 3, 4, 5, 6, 8, 10, 14, 16, 19, 24,
-    27, 28, 29, 31, 33, 34, 35, 43, 45, 46,
+    0, 3, 4, 5, 6, 8, 10, 14, 16, 19,
+    24, 27, 28, 29, 31, 33, 34, 35, 43, 45, 46,
     47, 48, 50, 56, 58, 60, 68, 70, 72, 73,
     75, 78, 79, 80, 81, 84, 86, 88, 91, 96,
-    101, 103, 106, 107, 110, 118, 120, 121, 125, 127,
-    129, 138, 140, 141, 144, 149, 156, 157, 160, 161,
-    163, 164, 166, 169, 171, 172, 178, 179, 181, 184,
-    185, 187, 188, 190, 192, 198, 200, 205, 207, 208,
-    209, 210, 213, 216, 220, 221, 223, 224, 227, 234,
-    240, 241, 243, 245, 246, 247, 251, 252, 253, 258,
-    260, 261, 265, 268, 269, 272, 274, 278, 281, 282,
-    283, 290, 293, 295
-    ]
+    101, 103, 106, 107, 108, 110, 118, 120, 121,
+    125, 127, 129, 137, 138, 140, 141, 144, 149,
+    156, 157, 161, 163, 164, 166, 171,
+    172, 173, 178, 179, 181, 184, 185, 187, 188,
+    190, 192, 198, 200, 202, 205, 207,
+    208, 209, 210, 213, 216, 220, 221, 223, 224,
+    227, 234, 239, 240, 241, 243, 245, 246, 247,
+    251, 252, 253, 258, 260, 261, 265, 268, 269,
+    272, 274, 278, 281, 282, 283, 290, 293, 295,
+    296]
     
     # include_indice  = [
     #     i
@@ -1233,11 +1234,11 @@ if __name__ == "__main__":
         np.asarray(filtered_reordered_coords, dtype=float),
         3,
     )
-    save_results(
-        filtered_reordered_coords,
-        filtered_reordered_spot_weights,
-        filename="slmsuite/nv_blob_detection/nv_blob_115nvs_reordered.npz",
-    )
+    # save_results(
+    #     filtered_reordered_coords,
+    #     filtered_reordered_spot_weights,
+    #     filename="slmsuite/nv_blob_detection/nv_blob_119nvs_reordered.npz",
+    # )
 
     # # Plot the original image with circles around each NV
     fig, ax = plt.subplots()

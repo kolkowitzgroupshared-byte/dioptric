@@ -46,8 +46,8 @@ from utils import kplotlib as kpl
 # USER CONFIGURATION
 # =============================================================================
 
-B_VEC = np.array([-48.55, -18.75, -5.97], dtype=float)  # Gauss
-
+# B_VEC = np.array([-48.55, -18.75, -5.97], dtype=float)  # Gauss
+B_VEC = np.array([-10.12, -27.02, 11.82], dtype=float)  # Gauss
 # Calibrated here so the selected NV family is ~2.7773 GHz for this B vector.
 D_NV = 2870.4  # MHz
 

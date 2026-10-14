@@ -25,7 +25,6 @@ from utils import widefield
 # =============================================================================
 # USER SETTINGS
 # =============================================================================
-
 # FILE_STEM = "2026_09_15-22_34_35-qnami-nv0_2026_02_20"
 # FILE_STEM = "2026_09_15-23_47_59-qnami-nv0_2026_02_20"
 # FILE_STEM = "2026_09_16-10_27_40-qnami-nv0_2026_02_20"
@@ -47,11 +46,11 @@ from utils import widefield
 # FILE_STEM = "2026_09_22-11_53_14-qnami-nv0_2026_02_20"
 # FILE_STEM = "2026_09_22-14_50_48-qnami-nv0_2026_02_20"
 # FILE_STEM = "2026_09_23-12_00_41-qnami-nv0_2026_02_20"
-FILE_STEM = "2026_10_10-23_11_55-johnson-nv0_2026_10_02"
-
-
-
-X_AXIS = "scc_duration"       # "scc_amp" or "scc_duration"
+# FILE_STEM = "2026_10_10-23_11_55-johnson-nv0_2026_10_02"
+# FILE_STEM = "2026_10_13-13_08_29-johnson-nv0_2026_10_02"
+# FILE_STEM = "2026_10_13-20_20_26-johnson-nv0_2026_10_02"
+FILE_STEM = "2026_10_13-22_04_43-johnson-nv0_2026_10_02"
+X_AXIS = "nv_index"       # "scc_amp" or "scc_duration" or "nv_index"  
 STEP_IND = 0
 APPLY_THRESHOLD = True
 
@@ -63,18 +62,12 @@ SAVE_FIGURE = True
 PLOT_AMP_DURATION_SNR = True
 SAVE_JOINT_FIGURE = True
 ANNOTATE_NV_INDICES = False
-
 SAVE_BASENAME = "scc_snr_check_analysis"
-
-
 ROI_CENTER = (125, 125)
-
 
 # =============================================================================
 # ANALYSIS
 # =============================================================================
-
-
 def process_data(data):
 
     nv_list = data["nv_list"]
@@ -223,15 +216,16 @@ def process_data(data):
 
     return df, metadata
 
-
 # =============================================================================
 # PLOT
 # =============================================================================
-
-
 def plot_snr(df, metadata):
 
-    if X_AXIS == "scc_amp":
+    if X_AXIS == "nv_index":
+        x = df["NV Index"]
+        xlabel = "NV index"
+
+    elif X_AXIS == "scc_amp":
         x = df["SCC AOD Multiplier"]
         xlabel = "SCC AOD amplitude multiplier"
 
@@ -241,11 +235,13 @@ def plot_snr(df, metadata):
 
     else:
         raise ValueError(
-            "X_AXIS must be 'scc_amp' or 'scc_duration'"
+            "X_AXIS must be 'nv_index', 'scc_amp', or 'scc_duration'"
         )
 
     snr = df["SNR"].to_numpy()
     snr_ste = df["SNR STE"].to_numpy()
+
+    x = np.asarray(x, dtype=float)
 
     valid = (
         np.isfinite(x)
@@ -253,7 +249,7 @@ def plot_snr(df, metadata):
         & np.isfinite(snr_ste)
     )
 
-    x = np.asarray(x)[valid]
+    x = x[valid]
     snr = snr[valid]
     snr_ste = snr_ste[valid]
 
@@ -385,12 +381,9 @@ def plot_amp_duration_snr(df, metadata):
 
     return fig
 
-
 # =============================================================================
 # SAVE
 # =============================================================================
-
-
 def save_results(df, metadata, fig, joint_fig=None):
 
     timestamp = dm.get_time_stamp()
