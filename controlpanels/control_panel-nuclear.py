@@ -198,21 +198,23 @@ def do_lifetime_caf_single_shot(th_sig):
 
 
 def do_lifetime_caf_single_shot_fast(yipth_sig):
+    do_move_slider(1, 2)
+    do_move_slider(3, 0)
 
-    lifetime_caf_single_shot_fast.main(
-        nv_sig=th_sig,
-        apd_indices=[0],
-        readout_times=[0e6, 2e3, 5e3],  # delay, excitation, detection
-        filter_pos=[0, 1],
-        num_reps=6e7,
-        num_runs=50,
-        num_bins=1000,
-        sequence_file="lifetime_caf_single_pulse_fast.py",
-        laser_power=2,
-        save_every=10,
-        presat_time_ms=100,  # laser on before each run to saturate; 0 = off
-    )
-    return
+    # lifetime_caf_single_shot_fast.main(
+    #     nv_sig=th_sig,
+    #     apd_indices=[0],
+    #     readout_times=[0, 20e6, 5e6],  # delay, excitation, detection
+    #     filter_pos=[2, 3],
+    #     num_reps=2e3,
+    #     num_runs=20,
+    #     num_bins=1000,
+    #     sequence_file="lifetime_caf_single_pulse_fast.py",
+    #     laser_power=2,
+    #     save_every=10,
+    #     presat_time_ms=0,  # laser on before each run to saturate; 0 = off
+    # )
+    # return
 
 
 def do_lifetime_caf_recovery(th_sig):

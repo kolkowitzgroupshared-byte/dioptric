@@ -127,6 +127,7 @@ config |= {
         # "awg_KEYS_33600A_com": "TCPIP0::192.168.0.139::5025::SOCKET",
         "awg_KEYS_33600A_com": "TCPIP0::192.168.0.139::inst0::INSTR",
         "laser_461": "192.168.0.158",
+        "picomotor_8742_serial": "106918",
     },
     ###
     "Microwaves": {
