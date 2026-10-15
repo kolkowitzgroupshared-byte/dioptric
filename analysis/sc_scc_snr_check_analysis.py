@@ -63,7 +63,6 @@ FILE_STEM = "2026_10_14-22_46_40-johnson-nv0_2026_10_02"
 FILE_STEM = "2026_10_14-22_46_40-johnson-nv0_2026_10_02"
 FILE_STEM = "2026_10_14-23_02_59-johnson-nv0_2026_10_02"
 
-
 X_AXIS = "scc_duration"       # "scc_amp" or "scc_duration" or "nv_index"  
 STEP_IND = 0
 APPLY_THRESHOLD = True

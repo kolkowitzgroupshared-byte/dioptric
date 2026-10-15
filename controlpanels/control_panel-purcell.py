@@ -1005,15 +1005,11 @@ def do_resonance_dualgen(nv_list, uwave_ind_list=[0, 1]):
 
 def do_rabi(nv_list):
     min_tau = 16
-    # max_tau = 240 + min_tau
-    # max_tau = 360 + min_tau
     max_tau = 480 + min_tau
     num_steps = 31
     num_reps = 10
-    num_runs = 400
-    # num_runs = 5
+    num_runs = 300
     uwave_ind_list = [0]
-    # uwave_ind_list = [2]
     for _ in range(2):
         rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
 
@@ -1034,18 +1030,11 @@ def do_widefield_coherence_test(nv_list, evol_time, seq_type):
 
 def do_ac_stark(nv_list):
     min_tau = 0
-    # max_tau = 240 + min_tau
-    # max_tau = 360 + min_tau
     max_tau = 480 + min_tau
     num_steps = 31
     num_reps = 10
-    # num_runs = 100
     num_runs = 50
-    # num_runs = 2
-
-    # uwave_ind_list = [1]
     uwave_ind_list = [0, 1]
-
     ac_stark.main(
         nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
     )
