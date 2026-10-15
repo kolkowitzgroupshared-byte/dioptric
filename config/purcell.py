@@ -38,14 +38,14 @@ calibration_coords_pixel = [
     [221.412, 42.427], 
 ]
 calibration_coords_green = [
-    [121.119, 108.066],
-    [92.913, 79.886],
-    [85.136, 117.228],
+    [121.085, 108.089],
+    [92.874, 79.901],
+    [85.098, 117.244],
 ]
 calibration_coords_red = [
-    [86.177, 76.631],
-    [63.282, 53.052],
-    [56.683, 83.371],
+    [86.149, 76.649],
+    [63.25, 53.063],
+    [56.652, 83.384],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -1036,8 +1036,8 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.15},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.15},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.40},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.3940}, ##300NVs
+        "yellow_imaging": {"type": "constant", "sample": 0.35},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.30}, ##300NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2940},
         "yellow_spin_pol": {"type": "constant", "sample": 0.40},
         "yellow_shelving": {"type": "constant", "sample": 0.20},

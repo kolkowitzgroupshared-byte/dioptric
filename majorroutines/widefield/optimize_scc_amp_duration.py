@@ -156,6 +156,7 @@ def optimize_scc_amp_and_duration(
     max_amp,
     min_duration,
     max_duration,
+    uwave_ind_list,
 ):
     """
     Main function to optimize SCC parameters over amplitude and duration.
@@ -190,7 +191,6 @@ def optimize_scc_amp_and_duration(
     step_vals = np.array(list(itertools.product(duration_vals, amp_vals)))
     # step_vals = np.array(np.meshgrid(duration_vals, amp_vals)).T.reshape(-1, 2)
     num_steps = num_amp_steps * num_dur_steps
-    uwave_ind_list = [0, 1]
     # uwave_ind_list = [1]  # iq modulated
     pulse_gen = tb.get_server_pulse_gen()
 

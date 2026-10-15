@@ -49,8 +49,13 @@ from utils import widefield
 # FILE_STEM = "2026_10_10-23_11_55-johnson-nv0_2026_10_02"
 # FILE_STEM = "2026_10_13-13_08_29-johnson-nv0_2026_10_02"
 # FILE_STEM = "2026_10_13-20_20_26-johnson-nv0_2026_10_02"
-FILE_STEM = "2026_10_13-22_04_43-johnson-nv0_2026_10_02"
-X_AXIS = "nv_index"       # "scc_amp" or "scc_duration" or "nv_index"  
+# FILE_STEM = "2026_10_13-22_04_43-johnson-nv0_2026_10_02"
+FILE_STEM = "2026_10_13-22_41_43-johnson-nv0_2026_10_02"
+FILE_STEM = "2026_10_14-13_22_12-johnson-nv0_2026_10_02"
+FILE_STEM = "2026_10_14-16_44_48-johnson-nv0_2026_10_02"
+FILE_STEM = "2026_10_14-16_58_51-johnson-nv0_2026_10_02"
+
+X_AXIS = "scc_duration"       # "scc_amp" or "scc_duration" or "nv_index"  
 STEP_IND = 0
 APPLY_THRESHOLD = True
 

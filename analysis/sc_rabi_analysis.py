@@ -1241,8 +1241,7 @@ if __name__ == "__main__":
     file_stem = ["2026_10_13-17_00_35-johnson-nv0_2026_10_02",
                  "2026_10_13-18_37_45-johnson-nv0_2026_10_02"]
     
-    file_stem = ["2026_10_13-20_20_26-johnson-nv0_2026_10_02",
-                 ]
+    file_stem = ["2026_10_13-20_20_26-johnson-nv0_2026_10_02"]
           
     data = dm.get_raw_data(
         file_stem=file_stem,
