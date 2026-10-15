@@ -592,8 +592,8 @@ def do_optimize_green(nv_sig):
 
 def do_optimize_red(nv_sig, ref_nv_sig):
     opti_coords = []
-    # axes_list = [Axes.X, Axes.Y]
-    axes_list = [Axes.Y, Axes.X]
+    axes_list = [Axes.X, Axes.Y]
+    # axes_list = [Axes.Y, Axes.X]
     # shuffle(axes_list)
     for ind in range(1):
         axes = axes_list[ind]
@@ -727,8 +727,8 @@ def do_optimize_scc_duration(nv_list):
 
 
 def do_optimize_scc_amp(nv_list):
-    min_tau = 0.4
-    max_tau = 1.6
+    min_tau = 0.8
+    max_tau = 1.2
     num_steps = 21
     num_reps = 15
     num_runs = 200
@@ -884,10 +884,10 @@ def do_calibrate_iq_delay(nv_list):
 
 def do_resonance(nv_list):
     freq_center = 2.87
-    freq_range = 0.240
-    num_steps = 48
-    num_reps = 4
-    num_runs = 200
+    freq_range = 0.20
+    num_steps = 41
+    num_reps = 3
+    num_runs = 500
     freqs = calculate_freqs(freq_center, freq_range, num_steps)
     ##
     # Remove duplicates and sort
@@ -1005,15 +1005,11 @@ def do_resonance_dualgen(nv_list, uwave_ind_list=[0, 1]):
 
 def do_rabi(nv_list):
     min_tau = 16
-    # max_tau = 240 + min_tau
-    # max_tau = 360 + min_tau
     max_tau = 480 + min_tau
     num_steps = 31
     num_reps = 10
-    num_runs = 100
-    # num_runs = 5
+    num_runs = 300
     uwave_ind_list = [0]
-    # uwave_ind_list = [2]
     for _ in range(2):
         rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
 
@@ -1034,18 +1030,11 @@ def do_widefield_coherence_test(nv_list, evol_time, seq_type):
 
 def do_ac_stark(nv_list):
     min_tau = 0
-    # max_tau = 240 + min_tau
-    # max_tau = 360 + min_tau
     max_tau = 480 + min_tau
     num_steps = 31
     num_reps = 10
-    # num_runs = 100
     num_runs = 50
-    # num_runs = 2
-
-    # uwave_ind_list = [1]
     uwave_ind_list = [0, 1]
-
     ac_stark.main(
         nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
     )
@@ -1877,21 +1866,21 @@ if __name__ == "__main__":
 
     # pixel_coords_list =[
     #     [151.893, 147.049],
-    #     [30.253, 121.586],
-    #     [211.907, 254.224], 
-    #     [221.412, 42.427],      
+    #     [68.942, 52.819],
+    #     [168.963, 261.389] , 
+    #     [255.325, 177.995],      
     # ]
     # green_coords_list = [
-    #     [100.306, 100.527],
-    #     [121.085, 108.089],
-    #     [92.874, 79.901],
-    #     [85.098, 117.244],
+    #     [100.302, 100.503],
+    #     [112.23, 119.374],
+    #     [100.598, 79.769],
+    #     [83.026, 92.275],
     # ]
     # red_coords_list = [
-    #     [69.199, 70.051],
-    #     [86.149, 76.649],
-    #     [63.25, 53.063],
-    #     [56.652, 83.384],
+    #     [69.232, 69.885], 
+    #     [78.764, 85.537], 
+    #     [69.585, 53.036], 
+    #     [55.08, 62.872],
     # ]
     
     # -------------------------------------------
@@ -2006,7 +1995,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    nv_sig.expected_counts = 830.0
+    nv_sig.expected_counts = 810.0
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:100]
     print(f"length of NVs list:{len(nv_list)}")
@@ -2131,7 +2120,7 @@ if __name__ == "__main__":
 
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
-        do_optimize_readout_amp(nv_list)
+        # do_optimize_readout_amp(nv_list)
         # do_optimize_readout_amp_repeated_readout(nv_list)
         # do_optimize_pol_duration(nv_list)
     
@@ -2166,9 +2155,9 @@ if __name__ == "__main__":
         # do_calibrate_iq_delay(nv_list)
         # do_rabi(nv_list)
         # do_power_rabi(nv_list)
-        # do_resonance(nv_list)
+        do_resonance(nv_list)
         # do_optimize_scc_amp(nv_list)
-        # do_rabi(nv_list)
+        do_rabi(nv_list)
         # do_resonance_zoom(nv_list)
         # do_spin_echo(nv_list)
         # do_ramsey(nv_list)

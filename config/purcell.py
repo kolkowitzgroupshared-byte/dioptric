@@ -33,19 +33,19 @@ green_laser_aod = "laser_INTE_520_aod"
 red_laser_aod = "laser_COBO_638_aod"
 
 calibration_coords_pixel = [
-    [30.253, 121.586],
-    [211.907, 254.224], 
-    [221.412, 42.427], 
+    [68.942, 52.819],
+    [168.963, 261.389] , 
+    [255.325, 177.995],    
 ]
 calibration_coords_green = [
-    [121.085, 108.089],
-    [92.874, 79.901],
-    [85.098, 117.244],
+    [112.23, 119.374],
+    [100.598, 79.769],
+    [83.026, 92.275],
 ]
 calibration_coords_red = [
-    [86.149, 76.649],
-    [63.25, 53.063],
-    [56.652, 83.384],
+    [78.764, 85.537], 
+    [69.585, 53.036], 
+    [55.08, 62.872],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -175,7 +175,7 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_0",
                 "uwave_power": 11.0,
-                "frequency": 2.7920,
+                "frequency": 2.7930,
                 "rabi_period": 192, ## loop
                 "pi_pulse": 96, ## loop
                 "pi_on_2_pulse": 48, ## loop
@@ -1030,16 +1030,16 @@ opx_config = {
         "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.13},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
-        "green_aod_cw-scc": {"type": "constant", "sample": 0.15},
+        "green_aod_cw-scc": {"type": "constant", "sample": 0.13},
         # Red AOD
-        "red_aod_cw-opti": {"type": "constant", "sample": 0.15},
-        "red_aod_cw-ion": {"type": "constant", "sample": 0.15},
-        "red_aod_cw-scc": {"type": "constant", "sample": 0.15},
+        "red_aod_cw-opti": {"type": "constant", "sample": 0.13},
+        "red_aod_cw-ion": {"type": "constant", "sample": 0.13},
+        "red_aod_cw-scc": {"type": "constant", "sample": 0.13},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.35},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.30}, ##300NVs
+        "yellow_charge_readout": {"type": "constant", "sample": 0.2832}, ##300NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2940},
-        "yellow_spin_pol": {"type": "constant", "sample": 0.40},
+        "yellow_spin_pol": {"type": "constant", "sample": 0.36},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other
         "aod_cw": {"type": "constant", "sample": 0.35},

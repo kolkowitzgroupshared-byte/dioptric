@@ -762,7 +762,7 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_10_07-18_23_51-johnson-nv0_2026_10_02", load_npz=True
+        file_stem="2026_10_14-19_56_25-johnson-nv0_2026_10_02", load_npz=True
     )
     # img_array = data["img_array"]
     img_array = np.array(data["ref_img_array"])
@@ -1043,29 +1043,30 @@ if __name__ == "__main__":
     # include_indices = [i for i, val in enumerate(prep_fidelity_list) if val >= 0.4 or val is None]
     # include_indices =  [i for i, val in enumerate(snr_float) if val >= 0.02]
     
-    # data_spot_weight = dm.get_raw_data(
-    # # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
-    # # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
-    # # file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
-    # # file_stem= "2026_07_11-14_54_21-repeated_readout_survival_with_slm_weights_2026_07_11-04_37_50-qnami-nv0_2026_02_20"
-    # # file_stem="2026_07_18-23_11_48-reoptimized_slm_score_survival_focused_2026_07_18-11_10_09-qnami-nv0_2026_02_20"
-    # # file_stem="2026_07_22-15_53_45-reoptimized_slm_score_survival_focused_2026_07_22-04_39_34-qnami-nv0_2026_02_20"
-    # # file_stem="2026_08_05-14_57_39-reoptimized_slm_score_survival_focused_2026_08_05-04_43_20-qnami-nv0_2026_02_20"
-    # # "2026_08_12-16_41_26-reoptimized_slm_score_survival_focused_2026_08_12-10_12_17-qnami-nv0_2026_02_20" ### 631NVs
-    # # "2026_08_19-22_37_18-reoptimized_slm_score_survival_focused_2026_08_19-02_30_47-qnami-nv0_2026_02_20" ## 631NVs 50ms
-    # # "2026_09_10-18_37_14-repeated_readout_slm_processed_2026_09_10-04_40_32-qnami-nv0_2026_02_20" ## 631NVs 50ms
-    # # "2026_10_07-21_30_33-optimization_processed_full_2026_10_07-20_38_47-johnson-nv0_2026_10_02"
+    data_spot_weight = dm.get_raw_data(
+    # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+    # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
+    # file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
+    # file_stem= "2026_07_11-14_54_21-repeated_readout_survival_with_slm_weights_2026_07_11-04_37_50-qnami-nv0_2026_02_20"
+    # file_stem="2026_07_18-23_11_48-reoptimized_slm_score_survival_focused_2026_07_18-11_10_09-qnami-nv0_2026_02_20"
+    # file_stem="2026_07_22-15_53_45-reoptimized_slm_score_survival_focused_2026_07_22-04_39_34-qnami-nv0_2026_02_20"
+    # file_stem="2026_08_05-14_57_39-reoptimized_slm_score_survival_focused_2026_08_05-04_43_20-qnami-nv0_2026_02_20"
+    # "2026_08_12-16_41_26-reoptimized_slm_score_survival_focused_2026_08_12-10_12_17-qnami-nv0_2026_02_20" ### 631NVs
+    # "2026_08_19-22_37_18-reoptimized_slm_score_survival_focused_2026_08_19-02_30_47-qnami-nv0_2026_02_20" ## 631NVs 50ms
+    # "2026_09_10-18_37_14-repeated_readout_slm_processed_2026_09_10-04_40_32-qnami-nv0_2026_02_20" ## 631NVs 50ms
+    # "2026_10_07-21_30_33-optimization_processed_full_2026_10_07-20_38_47-johnson-nv0_2026_10_02"
     # "2026_10_09-14_30_46-recomputed_summary_w_1_2_2_2026_10_09-14_09_10-optimization_processed_full_2026_10_09-13_23_31-johnson-nv0_2026_10_02"
-    # )
-    # spot_weights = data_spot_weight["optimal_weights"]
-    # # spot_weights  = data_spot_weight["slm_amplitude_weight"]
+    "2026_10_14-19_32_12-recomputed_summary_w_1_2_2_2026_10_14-19_25_31-optimization_processed_full_2026_10_14-19_19_54-johnson-nv0_2026_10_02"
+    )
+    spot_weights = data_spot_weight["optimal_weights"]
+    # spot_weights  = data_spot_weight["slm_amplitude_weight"]
 
-    # spot_weights = curve_extreme_weights_simple(
-    #         spot_weights, scaling_factor=1.0
-    #     )
-    # spot_weights = np.array(spot_weights)
-    
-    # filtered_reordered_spot_weights = spot_weights
+    spot_weights = curve_extreme_weights_simple(
+            spot_weights, scaling_factor=1.5
+        )
+    spot_weights = np.array(spot_weights)
+    print (min(spot_weights), max(spot_weights))
+    filtered_reordered_spot_weights = spot_weights
     
     
     ###fildelity
@@ -1087,21 +1088,21 @@ if __name__ == "__main__":
     readout_fidelity_list = data["readout_fidelity_list"]
     prep_fidelity_list = data["prep_fidelity_list"]   
     #selected_indices_278459 
-    include_indices= [
-    0, 3, 4, 5, 6, 8, 10, 14, 16, 19,
-    24, 27, 28, 29, 31, 33, 34, 35, 43, 45, 46,
-    47, 48, 50, 56, 58, 60, 68, 70, 72, 73,
-    75, 78, 79, 80, 81, 84, 86, 88, 91, 96,
-    101, 103, 106, 107, 108, 110, 118, 120, 121,
-    125, 127, 129, 137, 138, 140, 141, 144, 149,
-    156, 157, 161, 163, 164, 166, 171,
-    172, 173, 178, 179, 181, 184, 185, 187, 188,
-    190, 192, 198, 200, 202, 205, 207,
-    208, 209, 210, 213, 216, 220, 221, 223, 224,
-    227, 234, 239, 240, 241, 243, 245, 246, 247,
-    251, 252, 253, 258, 260, 261, 265, 268, 269,
-    272, 274, 278, 281, 282, 283, 290, 293, 295,
-    296]
+    # include_indices= [
+    # 0, 3, 4, 5, 6, 8, 10, 14, 16, 19,
+    # 24, 27, 28, 29, 31, 33, 34, 35, 43, 45, 46,
+    # 47, 48, 50, 56, 58, 60, 68, 70, 72, 73,
+    # 75, 78, 79, 80, 81, 84, 86, 88, 91, 96,
+    # 101, 103, 106, 107, 108, 110, 118, 120, 121,
+    # 125, 127, 129, 137, 138, 140, 141, 144, 149,
+    # 156, 157, 161, 163, 164, 166, 171,
+    # 172, 173, 178, 179, 181, 184, 185, 187, 188,
+    # 190, 192, 198, 200, 202, 205, 207,
+    # 208, 209, 210, 213, 216, 220, 221, 223, 224,
+    # 227, 234, 239, 240, 241, 243, 245, 246, 247,
+    # 251, 252, 253, 258, 260, 261, 265, 268, 269,
+    # 272, 274, 278, 281, 282, 283, 290, 293, 295,
+    # 296]
     
     # include_indice  = [
     #     i
@@ -1111,8 +1112,8 @@ if __name__ == "__main__":
     #     and not (math.isnan(v1) or math.isnan(v2))
     #     and v1 >= 0.80 and v2 >= 0.50
     # ]
-    filtered_reordered_coords = [filtered_reordered_coords[i] for i in include_indices]
-    filtered_reordered_spot_weights = [filtered_reordered_spot_weights[i] for i in include_indices]
+    # filtered_reordered_coords = [filtered_reordered_coords[i] for i in include_indices]
+    # filtered_reordered_spot_weights = [filtered_reordered_spot_weights[i] for i in include_indices]
     
     ####snrs
     # snr_data = dm.get_raw_data(
@@ -1145,7 +1146,7 @@ if __name__ == "__main__":
     # )
 
     # aom_voltage = 0.2923
-    aom_voltage = 0.3940
+    aom_voltage = 0.28
     a, b, c = 1.5133e04, 2.6976, -38.63  # UPDATED 2025-09-17
 
     total_power = a * (aom_voltage) ** b + c
@@ -1234,11 +1235,11 @@ if __name__ == "__main__":
         np.asarray(filtered_reordered_coords, dtype=float),
         3,
     )
-    # save_results(
-    #     filtered_reordered_coords,
-    #     filtered_reordered_spot_weights,
-    #     filename="slmsuite/nv_blob_detection/nv_blob_119nvs_reordered.npz",
-    # )
+    save_results(
+        filtered_reordered_coords,
+        filtered_reordered_spot_weights,
+        filename="slmsuite/nv_blob_detection/nv_blob_119nvs_reordered.npz",
+    )
 
     # # Plot the original image with circles around each NV
     fig, ax = plt.subplots()
