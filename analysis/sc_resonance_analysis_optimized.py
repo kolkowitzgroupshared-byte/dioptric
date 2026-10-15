@@ -2064,5 +2064,9 @@ if __name__ == "__main__":
     file_ids = [
         "2026_10_11-20_23_46-johnson-nv0_2026_10_02"
     ]
+    file_ids = [
+        "2026_10_13-07_05_10-johnson-nv0_2026_10_02",
+        "2026_10_13-02_53_21-johnson-nv0_2026_10_02"
+    ]
     # Run analysis using the final active file_ids assignment above.
     analyze(file_ids)

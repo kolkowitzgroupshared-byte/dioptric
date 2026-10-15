@@ -475,6 +475,7 @@ def _main(
         num_runs,
         run_fn=run_fn,
         num_exps=num_exps,
+        uwave_ind_list=[]
     )
     ### Processing
 

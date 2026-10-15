@@ -6,8 +6,9 @@ Designed for Dioptric wide-field NV data.
 
 Key changes:
 - cast counts to float32 before SNR calculation
-- no longer reuse the duration model for amplitude scans
-- use a local weighted quadratic near each measured SNR maximum
+- amplitude scans use a local weighted quadratic near each measured SNR maximum
+- duration scans use slope*(t-delay)*exp[-(t-delay)/decay]
+- duration optimum is obtained analytically as delay + decay
 - never extrapolate outside the measured scan
 - reject non-concave/poor fits and fall back to the measured maximum
 - duration optima can be quantized to 4 ns
@@ -25,6 +26,7 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from scipy.optimize import curve_fit
 
 from utils import data_manager as dm
 from utils import kplotlib as kpl
@@ -36,17 +38,22 @@ from utils import widefield
 # =============================================================================
 
 # FILE_STEM = "2026_09_15-04_51_20-qnami-nv0_2026_02_20"
-FILE_STEM = "2026_09_17-03_23_08-qnami-nv0_2026_02_20"
+# FILE_STEM = "2026_09_17-03_23_08-qnami-nv0_2026_02_20"
+FILE_STEM = "2026_10_14-16_05_00-johnson-nv0_2026_10_02"
 
 # "amplitude" or "duration"
-MODE = "amplitude"
+MODE = "duration"
 
 AMPLITUDE_VALID_RANGE = (0.4, 1.6)
 DURATION_VALID_RANGE_NS = (0.0, 400.0)
 DURATION_QUANTUM_NS = 4.0
 
-LOCAL_FIT_POINTS = 8
+LOCAL_FIT_POINTS = 18
 MAX_VERTEX_UNCERTAINTY_FRACTION = 0.30
+
+# Duration physical-model fit settings
+DURATION_MIN_FIT_POINTS = 4
+DURATION_MAX_OPTIMUM_UNCERTAINTY_FRACTION = 0.35
 
 SHOW_SUMMARY_PLOTS = True
 SHOW_INDIVIDUAL_PLOTS = False
@@ -144,6 +151,10 @@ class PeakEstimate:
     raw_y_max: float
     fit_x: np.ndarray | None = None
     fit_y: np.ndarray | None = None
+    delay: float = np.nan
+    slope: float = np.nan
+    decay: float = np.nan
+    continuous_x_opt: float = np.nan
 
 def safe_sigma(sigma):
     """Replace invalid/zero uncertainties with a robust positive value."""
@@ -205,7 +216,7 @@ def quadratic_value(coeff, x, x0):
     return a * dx**2 + b * dx + c
 
 
-def estimate_peak(
+def estimate_amplitude_peak(
     x,
     y,
     yerr,
@@ -384,11 +395,231 @@ def estimate_peak(
     )
 
 
+
+# =============================================================================
+# DURATION MODEL: PHYSICAL RISE-DECAY FIT
+# =============================================================================
+
+
+def duration_fit_fn(tau, delay, slope, dec):
+    """
+    SCC duration fit used in the original optimizer:
+
+        SNR(tau) = slope * (tau - delay) * exp[-(tau - delay) / dec]
+
+    For this model, the analytic maximum occurs at:
+
+        tau_opt = delay + dec
+    """
+    tau = np.asarray(tau, dtype=float) - delay
+    return slope * tau * np.exp(-tau / dec)
+
+
+def estimate_duration_peak(
+    x,
+    y,
+    yerr,
+    valid_range,
+    quantum=DURATION_QUANTUM_NS,
+):
+    """
+    Fit a single SCC-duration sweep with the physical rise-decay model.
+
+    If the fit fails, is poorly constrained, or predicts an optimum outside
+    the measured scan, fall back to the best measured duration.
+    """
+    x = np.asarray(x, dtype=float).ravel()
+    y = np.asarray(y, dtype=float).ravel()
+    yerr = np.asarray(yerr, dtype=float).ravel()
+
+    if not (x.size == y.size == yerr.size):
+        raise ValueError("x, y and yerr must have equal length.")
+
+    lo, hi = valid_range
+
+    mask = (
+        np.isfinite(x)
+        & np.isfinite(y)
+        & (x >= lo)
+        & (x <= hi)
+    )
+
+    if np.sum(mask) == 0:
+        return PeakEstimate(
+            np.nan, np.nan, np.nan,
+            "none", "no_valid_points",
+            np.nan, np.nan,
+        )
+
+    xx = x[mask]
+    yy = y[mask]
+    ss = safe_sigma(yerr[mask])
+
+    order = np.argsort(xx)
+    xx = xx[order]
+    yy = yy[order]
+    ss = ss[order]
+
+    i_max = int(np.nanargmax(yy))
+    raw_x = float(xx[i_max])
+    raw_y = float(yy[i_max])
+
+    def fallback(status, x_unc=np.nan, delay=np.nan, slope=np.nan, decay=np.nan):
+        reported_x = quantize(raw_x, quantum)
+        reported_x = float(np.clip(reported_x, lo, hi))
+        return PeakEstimate(
+            x_opt=reported_x,
+            y_opt=raw_y,
+            x_unc=x_unc,
+            method="measured_max",
+            status=status,
+            raw_x_max=raw_x,
+            raw_y_max=raw_y,
+            delay=delay,
+            slope=slope,
+            decay=decay,
+            continuous_x_opt=raw_x,
+        )
+
+    if xx.size < DURATION_MIN_FIT_POINTS:
+        return fallback("too_few_points")
+
+    span = hi - lo
+    if span <= 0:
+        return fallback("zero_scan_span")
+
+    # Since tau_opt = delay + dec, seed the fit from the best measured point.
+    # A small positive delay is usually more stable than starting exactly at 0.
+    delay_guess = max(
+        lo,
+        min(
+            0.10 * raw_x,
+            raw_x - max(0.05 * span, 1e-6),
+        ),
+    )
+
+    dec_guess = max(
+        raw_x - delay_guess,
+        0.10 * span,
+        1e-6,
+    )
+
+    # At the model maximum, y_max = slope * dec / e.
+    slope_guess = raw_y * np.e / dec_guess
+    if not np.isfinite(slope_guess) or slope_guess <= 0:
+        slope_guess = max(np.nanmax(np.abs(yy)), 1e-6) / max(dec_guess, 1e-6)
+
+    p0 = [
+        float(delay_guess),
+        float(slope_guess),
+        float(dec_guess),
+    ]
+
+    # Keep delay below the observed maximum. This strongly suppresses
+    # unphysical solutions where the fit manufactures a peak before the data.
+    delay_upper = min(raw_x, hi)
+
+    lower_bounds = [
+        lo,
+        0.0,
+        1e-9,
+    ]
+
+    upper_bounds = [
+        delay_upper,
+        np.inf,
+        max(10.0 * span, 1.0),
+    ]
+
+    if not lower_bounds[0] < upper_bounds[0]:
+        return fallback("delay_bounds_invalid")
+
+    try:
+        popt, pcov = curve_fit(
+            duration_fit_fn,
+            xx,
+            yy,
+            p0=p0,
+            sigma=ss,
+            absolute_sigma=True,
+            bounds=(lower_bounds, upper_bounds),
+            maxfev=50000,
+        )
+    except Exception as exc:
+        return fallback(f"fit_failed_{type(exc).__name__}")
+
+    delay, slope, dec = [float(v) for v in popt]
+    continuous_opt = delay + dec
+
+    # Never extrapolate beyond the actual measured scan.
+    if not (lo <= continuous_opt <= hi):
+        return fallback(
+            "fit_optimum_outside_measured_range",
+            delay=delay,
+            slope=slope,
+            decay=dec,
+        )
+
+    # Propagate covariance for tau_opt = delay + dec.
+    try:
+        var_opt = (
+            float(pcov[0, 0])
+            + float(pcov[2, 2])
+            + 2.0 * float(pcov[0, 2])
+        )
+        x_unc = np.sqrt(max(var_opt, 0.0))
+    except Exception:
+        x_unc = np.nan
+
+    if (
+        np.isfinite(x_unc)
+        and span > 0
+        and x_unc > DURATION_MAX_OPTIMUM_UNCERTAINTY_FRACTION * span
+    ):
+        return fallback(
+            "fit_optimum_poorly_constrained",
+            x_unc=x_unc,
+            delay=delay,
+            slope=slope,
+            decay=dec,
+        )
+
+    reported_opt = quantize(continuous_opt, quantum)
+    reported_opt = float(np.clip(reported_opt, lo, hi))
+    y_opt = float(duration_fit_fn(reported_opt, *popt))
+
+    fit_x = np.linspace(lo, hi, 500)
+    fit_y = duration_fit_fn(fit_x, *popt)
+
+    boundary_tol = 1e-12 * max(1.0, abs(lo), abs(hi))
+    at_boundary = (
+        abs(raw_x - lo) <= boundary_tol
+        or abs(raw_x - hi) <= boundary_tol
+    )
+    status = "ok_boundary_raw_max" if at_boundary else "ok"
+
+    return PeakEstimate(
+        x_opt=reported_opt,
+        y_opt=y_opt,
+        x_unc=float(x_unc) if np.isfinite(x_unc) else np.nan,
+        method="duration_rise_decay",
+        status=status,
+        raw_x_max=raw_x,
+        raw_y_max=raw_y,
+        fit_x=fit_x,
+        fit_y=fit_y,
+        delay=delay,
+        slope=slope,
+        decay=dec,
+        continuous_x_opt=float(continuous_opt),
+    )
+
 def analyze_scan(
     data,
     parameter_name,
     requested_range,
     quantum=None,
+    fit_mode="amplitude",
 ):
     """Common engine for amplitude and duration optimization."""
     nv_list = data["nv_list"]
@@ -445,22 +676,42 @@ def analyze_scan(
     )
     ensemble_ste = safe_sigma(ensemble_ste)
 
-    ensemble_peak = estimate_peak(
-        x,
-        ensemble_snr,
-        ensemble_ste,
-        valid_range,
-    )
+    if fit_mode == "duration":
+        ensemble_peak = estimate_duration_peak(
+            x,
+            ensemble_snr,
+            ensemble_ste,
+            valid_range,
+            quantum=quantum,
+        )
+    elif fit_mode == "amplitude":
+        ensemble_peak = estimate_amplitude_peak(
+            x,
+            ensemble_snr,
+            ensemble_ste,
+            valid_range,
+        )
+    else:
+        raise ValueError("fit_mode must be 'amplitude' or 'duration'.")
 
     estimates = []
 
     for nv_ind in range(len(nv_list)):
-        est = estimate_peak(
-            x,
-            avg_snr[nv_ind],
-            avg_snr_ste[nv_ind],
-            valid_range,
-        )
+        if fit_mode == "duration":
+            est = estimate_duration_peak(
+                x,
+                avg_snr[nv_ind],
+                avg_snr_ste[nv_ind],
+                valid_range,
+                quantum=quantum,
+            )
+        else:
+            est = estimate_amplitude_peak(
+                x,
+                avg_snr[nv_ind],
+                avg_snr_ste[nv_ind],
+                valid_range,
+            )
 
         # Only truly unusable curves fall back to ensemble.
         if not np.isfinite(est.x_opt):
@@ -474,10 +725,10 @@ def analyze_scan(
                 np.nan,
             )
 
+        # Duration is already quantized in estimate_duration_peak(), but keeping
+        # this here makes the common pipeline explicit and safe.
         est.x_opt = quantize(est.x_opt, quantum)
-        est.x_opt = float(
-            np.clip(est.x_opt, *valid_range)
-        )
+        est.x_opt = float(np.clip(est.x_opt, *valid_range))
 
         estimates.append(est)
 
@@ -496,24 +747,31 @@ def analyze_scan(
         dtype=float,
     )
 
-    median_individual = float(
-        np.nanmedian(opt_values)
-    )
-    median_individual = quantize(
-        median_individual,
-        quantum,
-    )
+    median_individual = float(np.nanmedian(opt_values))
+    median_individual = quantize(median_individual, quantum)
     median_individual = float(
         np.clip(median_individual, *valid_range)
     )
 
     results = {
         "parameter_name": parameter_name,
+        "fit_mode": fit_mode,
         "requested_valid_range": list(requested_range),
         "actual_valid_range": list(valid_range),
         "measured_scan_values": x.tolist(),
         "ensemble_optimum": float(ensemble_peak.x_opt),
+        "ensemble_continuous_optimum": (
+            float(ensemble_peak.continuous_x_opt)
+            if np.isfinite(ensemble_peak.continuous_x_opt)
+            else None
+        ),
+        "ensemble_optimum_uncertainty": (
+            float(ensemble_peak.x_unc)
+            if np.isfinite(ensemble_peak.x_unc)
+            else None
+        ),
         "ensemble_status": ensemble_peak.status,
+        "ensemble_method": ensemble_peak.method,
         "median_individual_optimum": median_individual,
         "optimal_values": {
             int(i): float(opt_values[i])
@@ -545,6 +803,51 @@ def analyze_scan(
         },
     }
 
+    if fit_mode == "duration":
+        results["ensemble_duration_fit_parameters"] = {
+            "delay": (
+                float(ensemble_peak.delay)
+                if np.isfinite(ensemble_peak.delay)
+                else None
+            ),
+            "slope": (
+                float(ensemble_peak.slope)
+                if np.isfinite(ensemble_peak.slope)
+                else None
+            ),
+            "decay": (
+                float(ensemble_peak.decay)
+                if np.isfinite(ensemble_peak.decay)
+                else None
+            ),
+        }
+
+        results["duration_fit_parameters"] = {
+            int(i): {
+                "delay": (
+                    float(estimates[i].delay)
+                    if np.isfinite(estimates[i].delay)
+                    else None
+                ),
+                "slope": (
+                    float(estimates[i].slope)
+                    if np.isfinite(estimates[i].slope)
+                    else None
+                ),
+                "decay": (
+                    float(estimates[i].decay)
+                    if np.isfinite(estimates[i].decay)
+                    else None
+                ),
+                "continuous_optimum": (
+                    float(estimates[i].continuous_x_opt)
+                    if np.isfinite(estimates[i].continuous_x_opt)
+                    else None
+                ),
+            }
+            for i in range(len(nv_list))
+        }
+
     aux = {
         "x": x,
         "avg_snr": avg_snr,
@@ -554,6 +857,7 @@ def analyze_scan(
         "ensemble_peak": ensemble_peak,
         "estimates": estimates,
         "opt_values": opt_values,
+        "fit_mode": fit_mode,
     }
 
     return results, aux
@@ -567,6 +871,7 @@ def plot_summary(aux, parameter_label, unit=""):
     ensemble_ste = aux["ensemble_ste"]
     ensemble_peak = aux["ensemble_peak"]
     opt_values = aux["opt_values"]
+    fit_mode = aux.get("fit_mode", "amplitude")
 
     suffix = f" ({unit})" if unit else ""
     figures = []
@@ -586,7 +891,7 @@ def plot_summary(aux, parameter_label, unit=""):
         ax.plot(
             ensemble_peak.fit_x,
             ensemble_peak.fit_y,
-            label="Local weighted quadratic",
+            label=("Rise-decay fit" if fit_mode == "duration" else "Local weighted quadratic"),
         )
 
     ax.axvline(
@@ -665,6 +970,7 @@ def plot_individual_examples(
     avg_snr = aux["avg_snr"]
     avg_snr_ste = aux["avg_snr_ste"]
     estimates = aux["estimates"]
+    fit_mode = aux.get("fit_mode", "amplitude")
 
     suffix = f" ({unit})" if unit else ""
 
@@ -708,7 +1014,7 @@ def plot_individual_examples(
                             est.fit_x,
                             est.fit_y,
                             linewidth=1.2,
-                            label="Local fit",
+                            label=("Rise-decay fit" if fit_mode == "duration" else "Local quadratic fit"),
                         )
 
                     ax.axvline(
@@ -764,7 +1070,7 @@ def plot_individual_examples(
             )
 
             if est.fit_x is not None:
-                ax.plot(est.fit_x, est.fit_y, label="Local fit")
+                ax.plot(est.fit_x, est.fit_y, label=("Rise-decay fit" if fit_mode == "duration" else "Local quadratic fit"))
 
             ax.axvline(
                 est.x_opt,
@@ -799,6 +1105,7 @@ def process_and_plot_amplitudes(data):
         parameter_name="SCC amplitude",
         requested_range=AMPLITUDE_VALID_RANGE,
         quantum=None,
+        fit_mode="amplitude",
     )
 
     print("\n========== SCC amplitude optimization ==========")
@@ -878,6 +1185,7 @@ def process_and_plot_durations(data):
         parameter_name="SCC duration",
         requested_range=DURATION_VALID_RANGE_NS,
         quantum=DURATION_QUANTUM_NS,
+        fit_mode="duration",
     )
 
     print("\n========== SCC duration optimization ==========")
@@ -894,6 +1202,23 @@ def process_and_plot_durations(data):
     print(
         "Median individual optimum:",
         results["median_individual_optimum"],
+        "ns",
+    )
+
+    fit_pars = results.get("ensemble_duration_fit_parameters", {})
+    print("Ensemble fit method:", results.get("ensemble_method"))
+    print("Ensemble fit status:", results.get("ensemble_status"))
+    print("Fit delay:", fit_pars.get("delay"), "ns")
+    print("Fit decay:", fit_pars.get("decay"), "ns")
+    print("Fit slope:", fit_pars.get("slope"))
+    print(
+        "Continuous ensemble optimum:",
+        results.get("ensemble_continuous_optimum"),
+        "ns",
+    )
+    print(
+        "Ensemble optimum uncertainty:",
+        results.get("ensemble_optimum_uncertainty"),
         "ns",
     )
 

@@ -1232,6 +1232,16 @@ if __name__ == "__main__":
     file_stem = ["2026_10_12-18_36_08-johnson-nv0_2026_10_02"]
     
     file_stem = ["2026_10_12-20_34_10-johnson-nv0_2026_10_02"]
+    
+    file_stem = ["2026_10_13-10_00_51-johnson-nv0_2026_10_02",
+                 "2026_10_13-11_34_30-johnson-nv0_2026_10_02"]
+    
+    file_stem = ["2026_10_13-14_50_07-johnson-nv0_2026_10_02"]
+    
+    file_stem = ["2026_10_13-17_00_35-johnson-nv0_2026_10_02",
+                 "2026_10_13-18_37_45-johnson-nv0_2026_10_02"]
+    
+    file_stem = ["2026_10_13-20_20_26-johnson-nv0_2026_10_02"]
           
     data = dm.get_raw_data(
         file_stem=file_stem,
@@ -1297,7 +1307,7 @@ if __name__ == "__main__":
         # Histogram
         period_bin_width=4,
         period_round_to=4,
-        period_keep_range=(175, 215),
+        period_keep_range=(0, 400),
 
         # Save
         save_individual_pdf=True,

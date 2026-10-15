@@ -38,14 +38,14 @@ calibration_coords_pixel = [
     [221.412, 42.427], 
 ]
 calibration_coords_green = [
-    [121.17, 108.081],
-    [92.967, 79.884],
-    [85.202, 117.228],
+    [121.085, 108.089],
+    [92.874, 79.901],
+    [85.098, 117.244],
 ]
 calibration_coords_red = [
-    [86.219, 76.644],
-    [63.327, 53.051],
-    [56.737, 83.373],
+    [86.149, 76.649],
+    [63.25, 53.063],
+    [56.652, 83.384],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -66,10 +66,6 @@ calibration_coords_nv3 = {
     red_laser_aod: calibration_coords_red[2],
 }
 
-# pixel_to_sample_affine_transformation_matrix = [
-#     [0.06108861, -0.00533755, -12.74624750],
-#     [0.00748424, 0.06162394, -16.62683414],
-# ]
 
 pixel_to_sample_affine_transformation_matrix = [
     [0.02470551, -0.00346857, -4.83284846],
@@ -145,18 +141,8 @@ config |= {
     ###
     "SpatialCalibrations": {
         "active_nv_coords_path": (
-            # "slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz"
-            # "slmsuite/nv_blob_detection/nv_blob_814nvs_reordered_inside_dmd.npz"
-            # "slmsuite/nv_blob_detection/nv_blob_631nvs_reordered_inside_dmd.npz"
-            # "slmsuite/nv_blob_detection/nv_blob_415nvs_reordered_inside_dmd.npz"
-            # "slmsuite/nv_blob_detection/nv_blob_404nvs_reordered_inside_dmd.npz"
-            # "slmsuite/nv_blob_detection/nv_blob_402nvs_reordered_inside_dmd.npz"
-            # "slmsuite/nv_blob_detection/nv_blob_366nvs_reordered_inside_dmd.npz"
-            # "slmsuite/nv_blob_detection/nv_blob_351nvs_reordered_inside_dmd.npz"
-            # "calibrations/purcell/current/active_nv_coords.npz"
-            # "slmsuite/nv_blob_detection/nv_blob_418nvs_reordered.npz"
-            "slmsuite/nv_blob_detection/nv_blob_300nvs_reordered.npz"
-            # "slmsuite/nv_blob_detection/nv_blob_115nvs_reordered.npz"
+            # "slmsuite/nv_blob_detection/nv_blob_300nvs_reordered.npz"
+            "slmsuite/nv_blob_detection/nv_blob_119nvs_reordered.npz"
         ),
         "slm_fourier_calib_path": (
             "calibrations/purcell/current/slm_fourier.h5"
@@ -189,24 +175,20 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_0",
                 "uwave_power": 11.0,
-                # "frequency": 2.7815,
-                # "frequency": 2.79908,
-                "frequency": 2.76683,
-                "rabi_period": 192,
+                "frequency": 2.7920,
+                "rabi_period": 192, ## loop
                 "pi_pulse": 96, ## loop
-                # "rabi_period": 312,
+                "pi_on_2_pulse": 48, ## loop
+                # "rabi_period": 312,## resonator
                 # "pi_pulse": 156, ## resonator
-                "pi_on_2_pulse": 48,
             },
             1: {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
-                # "frequency": 2.8421,
-                "frequency": 0.202,
-                "rabi_period": 276,
-                "pi_pulse": 128, ## loop
-                # "pi_pulse": 256, ## resonator
-                "pi_on_2_pulse": 68,
+                "frequency": 2.8270,
+                "rabi_period": 192, ## loop
+                "pi_pulse": 96, ## loop
+                "pi_on_2_pulse": 48, ## loop
             },
             2: {
                 "physical_name": "sig_gen_STAN_sg394_3",
@@ -1054,8 +1036,8 @@ opx_config = {
         "red_aod_cw-ion": {"type": "constant", "sample": 0.15},
         "red_aod_cw-scc": {"type": "constant", "sample": 0.15},
         # Yellow AOM
-        "yellow_imaging": {"type": "constant", "sample": 0.40},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.3940}, ##300NVs
+        "yellow_imaging": {"type": "constant", "sample": 0.35},
+        "yellow_charge_readout": {"type": "constant", "sample": 0.30}, ##300NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.2940},
         "yellow_spin_pol": {"type": "constant", "sample": 0.40},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
@@ -1104,19 +1086,6 @@ def correct_pulse_params_by_phase(phase_deg):
 
 
 def generate_iq_pulses(pulse_names, phases):
-    """Adds iq pulses to opx_config for the passed phases to match the microwave pulses
-    already defined manually in the config. The pulses names that are intended for use
-    are of the form f"{pulse_name}_{phase}" with duration equal to that of the pulse
-    with pulse_name defined on the corresponding digital modulation element for a
-    given microwave channel
-
-    Parameters
-    ----------
-    pulse_names : list(str)
-        List of microwave pulse names
-    phases : list(int)
-        List of phases in degrees. Expects integers.
-    """
     # Define the waveforms
     amp = 0.5
 
@@ -1158,16 +1127,12 @@ def build_phase_sweep(min_deg=-360, max_deg=360, step_deg=9):
     phases_cmd = phases_unwrapped % 360  # wrap to [0,360)
     return phases_unwrapped.tolist(), phases_cmd.tolist()
 
-
-# ref_img_array = np.array([])
-# generate_iq_pulses(["pi_pulse", "pi_on_2_pulse"], [0, 90, 180, 270])
 # fmt: off
 # phases =[0, 45, 90, 135, 180, 225, 270, 315]
 phases = [0, 9, 18, 27, 36, 45, 54, 63, 72, 81, 90, 
           99, 108, 117, 126, 135, 144, 153, 162, 171, 180,
           189, 198, 207, 216, 225, 234, 243, 252, 261, 270,
           279, 288, 297, 306, 315, 324, 333, 342, 351, 360]
-# phases = [-360, -351, -342, -333, -324, -315, -306, -297, -288, -279, -270, -261, -252, -243, -234, -225, -216, -207, -198, -189, -180, -171, -162, -153, -144, -135, -126, -117, -108, -99, -90, -81, -72, -63, -54, -45, -36, -27, -18, -9, 0, 9, 18, 27, 36, 45, 54, 63, 72, 81, 90, 99, 108, 117, 126, 135, 144, 153, 162, 171, 180, 189, 198, 207, 216, 225, 234, 243, 252, 261, 270, 279, 288, 297, 306, 315, 324, 333, 342, 351, 360]
 # fmt:on
 generate_iq_pulses(["pi_pulse", "pi_on_2_pulse"], phases)
 
@@ -1176,7 +1141,6 @@ if __name__ == "__main__":
     mat = np.array(config["Positioning"][key])
     mat[:, 2] = [0, 0]
     print(mat)
-    # Exactly what you want:
     phases_unwrapped, phases_cmd = build_phase_sweep(-360, 360, 9)
     print(phases_unwrapped)
     # generate_iq_pulses(["pi_pulse", "pi_on_2_pulse"], [0, 90])

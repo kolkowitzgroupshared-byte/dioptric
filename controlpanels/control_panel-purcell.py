@@ -183,18 +183,16 @@ def do_optimize_readout_duration(nv_list):
 
 
 def do_optimize_readout_amp(nv_list):
-    # num_steps = 24
     num_steps = 18
-    # num_reps = 150
-    # num_runs = 5
     num_reps = 10
-    num_runs =300
+    num_runs =200
     min_amp = 0.8
     max_amp = 1.2
-    return optimize_charge_state_histograms.optimize_readout_amp(
-        nv_list, num_steps, num_reps, num_runs, min_amp, max_amp
-    )
-    
+    for _ in range(2):
+        optimize_charge_state_histograms.optimize_readout_amp(
+            nv_list, num_steps, num_reps, num_runs, min_amp, max_amp
+        )
+        
     
     
 def do_optimize_readout_amp_repeated_readout(nv_list):
@@ -701,6 +699,7 @@ def optimize_scc_amp_and_duration(nv_list):
     # reps and runs
     num_reps = 11
     num_runs = 200
+    uwave_ind_list = [0]
     return optimize_scc_amp_duration.optimize_scc_amp_and_duration(
         nv_list,
         num_amp_steps,
@@ -711,6 +710,7 @@ def optimize_scc_amp_and_duration(nv_list):
         max_amp,
         min_duration,
         max_duration,
+        uwave_ind_list
     )
 
 
@@ -720,9 +720,9 @@ def do_optimize_scc_duration(nv_list):
     num_steps = 18
     num_reps = 15
     num_runs = 200
-    # num_runs = 2
+    uwave_ind_list = [0]
     optimize_scc.optimize_scc_duration(
-        nv_list, num_steps, num_reps, num_runs, min_tau, max_tau
+        nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
     )
 
 
@@ -732,9 +732,9 @@ def do_optimize_scc_amp(nv_list):
     num_steps = 21
     num_reps = 15
     num_runs = 200
-    # num_runs = 2
+    uwave_ind_list = [0]
     optimize_scc.optimize_scc_amp(
-        nv_list, num_steps, num_reps, num_runs, min_tau, max_tau
+        nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
     )
 
 
@@ -770,7 +770,7 @@ def do_optimize_aod_access_time(nv_list):
 
 def do_scc_snr_check(nv_list):
     num_reps = 200
-    num_runs = 40
+    num_runs = 20
     scc_snr_check.main(nv_list, num_reps, num_runs, uwave_ind_list=[0])
 
 
@@ -1882,16 +1882,16 @@ if __name__ == "__main__":
     #     [221.412, 42.427],      
     # ]
     # green_coords_list = [
-    #     [100.407, 100.497],
-    #     [121.17, 108.081],
-    #     [92.967, 79.884],
-    #     [85.202, 117.228],
+    #     [100.306, 100.527],
+    #     [121.085, 108.089],
+    #     [92.874, 79.901],
+    #     [85.098, 117.244],
     # ]
     # red_coords_list = [
-    #     [69.282, 70.028],
-    #     [86.219, 76.644],
-    #     [63.327, 53.051],
-    #     [56.737, 83.373],
+    #     [69.199, 70.051],
+    #     [86.149, 76.649],
+    #     [63.25, 53.063],
+    #     [56.652, 83.384],
     # ]
     
     # -------------------------------------------
@@ -1916,34 +1916,7 @@ if __name__ == "__main__":
     #     dtype=float,
     # )
 
-    # # Compute median from valid values only
-    # median_threshold = float(np.nanmedian(threshold_arr))
-
-    # # Replace None/nan values with median
-    # threshold_arr_filled = threshold_arr.copy()
-    # bad = ~np.isfinite(threshold_arr_filled)
-    # threshold_arr_filled[bad] = median_threshold
-    # threshold_list = threshold_arr_filled
-
     threshold_list = [None] * num_nvs
-
-    # -------------------------------------------
-    # snrs and filtering
-    # -------------------------------------------
-    # snr_data = dm.get_raw_data(
-    #         file_stem="2026_09_15-23_15_59-scc_snr_check_analysis",
-    #         load_npz=True)
-    # print(snr_data.keys())
-    # snr_list = np.asarray(snr_data["snr"])
-    # # NV indices with SNR < 0.05
-    # selected_inds = [
-    #     ind for ind, val in enumerate(snr_list)
-    #     if val >= 0.05
-    # ]
-    # selected_inds = [0] + selected_inds 
-    # print(f"Number selected: {len(selected_inds)}")
-    # print(f"Selected indices: {selected_inds}")
-    
     # -------------------------------------------
     # amplitudes
     # -------------------------------------------
@@ -1986,30 +1959,18 @@ if __name__ == "__main__":
     # durations
     # -------------------------------------------
     scc_dur_data = dm.get_raw_data(
-        file_stem="2026_09_16-10_48_36-scc_parameter_sweep_analysis_with_nv_amps",
+        file_stem="2026_10_14-16_36_53-optimal_scc_parameters_robust",
         load_npz=True,
     )
-    scc_dur_dict = scc_dur_data["optimal_value_by_nv"]
-
+    scc_dur_dict = scc_dur_data["optimal_values"]
     # Full list for all NVs
     scc_duration_list =[
         round(scc_dur_dict.get(i, scc_dur_dict.get(str(i))), 4)
         for i in range(len(scc_dur_dict))
     ]
-
-    # Put optimized durations back at the original NV indices
-    # for local_ind, nv_ind in enumerate(selected_inds):
-    #     val = scc_dur_dict.get(local_ind, scc_dur_dict.get(str(local_ind)))
-    #     if val is not None:
-    #         scc_dur_list[nv_ind] = int(round(val))
-
-    # print("Number optimized:", sum(v is not None for v in scc_duration_list))
-    # print("SCC durations:", scc_duration_list)
     
     pol_duration_list = [1000] * num_nvs
-    ion_duration_list = [1000] * num_nvs
-    scc_duration_list = [88] * num_nvs
-
+    # scc_duration_list = [88] * num_nvs
 
     # sys.exit()
     # nv_list[i] will have the ith coordinates from the above lists
@@ -2030,7 +1991,6 @@ if __name__ == "__main__":
             threshold=threshold_list[ind],
             pulse_durations={
                 VirtualLaserKey.CHARGE_POL: pol_duration_list[ind],
-                VirtualLaserKey.ION: ion_duration_list[ind],
                 VirtualLaserKey.SCC: scc_duration_list[ind], 
             },
             pulse_amps={
@@ -2040,16 +2000,15 @@ if __name__ == "__main__":
             },
         )
         nv_list.append(nv_sig)
-    # print(nv_sig)
     # Additional properties for the representative NV
     nv_list[0].representative = True
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    nv_sig.expected_counts = 800.0
+    nv_sig.expected_counts = 830.0
     # nv_list = nv_list[::-1]  # flipping the order of NVs
-    # nv_list = nv_list[:300]
+    # nv_list = nv_list[:100]
     print(f"length of NVs list:{len(nv_list)}")
     # sys.exit()
     # endregion
@@ -2091,7 +2050,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)     
+        do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list: 
@@ -2172,7 +2131,7 @@ if __name__ == "__main__":
 
         # do_optimize_pol_amp(nv_list)
         # do_optimize_pol_duration(nv_list)
-        # do_optimize_readout_amp(nv_list)
+        do_optimize_readout_amp(nv_list)
         # do_optimize_readout_amp_repeated_readout(nv_list)
         # do_optimize_pol_duration(nv_list)
     
@@ -2183,9 +2142,9 @@ if __name__ == "__main__":
         # do_optimize_aod_access_time(nv_list)
 
         # do_scc_snr_check(nv_list)
+        # optimize_scc_amp_and_duration(nv_list)
         # do_optimize_scc_duration(nv_list)
         # do_optimize_scc_amp(nv_list)
-        # optimize_scc_amp_and_duration(nv_list)
         # do_optimize_scc_readout_amp(nv_list)
         # do_crosstalk_check(nv_sig)
         # do_spin_pol_check(nv_sig)
@@ -2207,7 +2166,7 @@ if __name__ == "__main__":
         # do_calibrate_iq_delay(nv_list)
         # do_rabi(nv_list)
         # do_power_rabi(nv_list)
-        do_resonance(nv_list)
+        # do_resonance(nv_list)
         # do_optimize_scc_amp(nv_list)
         # do_rabi(nv_list)
         # do_resonance_zoom(nv_list)
