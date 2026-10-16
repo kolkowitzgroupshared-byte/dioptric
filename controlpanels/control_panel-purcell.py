@@ -23,6 +23,7 @@ import numpy as np
 from majorroutines import targeting
 from majorroutines.widefield import (
     ac_stark,
+    arbitrary_gate_tomography,
     bootstrapped_pulse_error_tomography,
     calibrate_iq_delay,
     charge_monitor,
@@ -1002,6 +1003,13 @@ def do_resonance_dualgen(nv_list, uwave_ind_list=[0, 1]):
         num_reps_ref=avg_reps_ref,   # optional if you expose it in main()
     )
 
+def do_arbitrary_gate_tomography(nv_list):
+    arbitrary_gate_tomography.main(
+        nv_list=nv_list,
+        num_reps=8,
+        num_runs=5,
+        uwave_ind_list=[0],
+    )
 
 def do_rabi(nv_list):
     min_tau = 16
@@ -1367,7 +1375,6 @@ def do_xy_revival_scan(nv_list, xy_seq="xy8-1"):
             taus=taus,
             xy_seq=xy_seq,
         )
-
 
 def do_correlation_test(nv_list):
     min_tau = 16
