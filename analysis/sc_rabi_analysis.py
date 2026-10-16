@@ -1110,6 +1110,7 @@ def remove_outliers(data):
     return (data >= lower_bound) & (data <= upper_bound)
 
 
+
 if __name__ == "__main__":
     kpl.init_kplotlib()
     ### combine
@@ -1242,7 +1243,15 @@ if __name__ == "__main__":
                  "2026_10_13-18_37_45-johnson-nv0_2026_10_02"]
     
     file_stem = ["2026_10_13-20_20_26-johnson-nv0_2026_10_02"]
-          
+    
+    file_stem = ["2026_10_15-16_03_55-johnson-nv0_2026_10_02"]
+    
+    file_stem = ["2026_10_15-17_41_11-johnson-nv0_2026_10_02"]
+    
+    file_stem = ["2026_10_15-19_37_44-johnson-nv0_2026_10_02"]
+    
+    file_stem = ["2026_10_15-21_23_07-johnson-nv0_2026_10_02"]
+    
     data = dm.get_raw_data(
         file_stem=file_stem,
         load_npz=True,
@@ -1305,7 +1314,7 @@ if __name__ == "__main__":
         median_popt,
 
         # Histogram
-        period_bin_width=4,
+        period_bin_width=8,
         period_round_to=4,
         period_keep_range=(0, 400),
 

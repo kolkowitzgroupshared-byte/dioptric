@@ -187,10 +187,10 @@ def macro(
         # Reference experiment
         else:
             # "Dual-rail" referencing: measure ms=0 for even reps, and ms=+/-1
-            # for odd by applying an extra pi pulse just before SCC
+            # for odd reps by applying the calibrated phase-0 IQ pi pulse.
+            # unsafe_cast_bool(int) uses the least-significant bit -> parity.
             with qua.if_(qua.Cast.unsafe_cast_bool(rep_ind)):
-                # seq_utils.macro_pi_pulse(uwave_ind_list, phase=0)
-                seq_utils.macro_pi_pulse(uwave_ind_list)
+                seq_utils.macro_pi_pulse(uwave_ind_list, phase=0)
             # macro_scc_sub()
             #  SBC randomize the order of the scc by alterntively reversing the order
             with qua.if_(random_order == 1):

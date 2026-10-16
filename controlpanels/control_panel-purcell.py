@@ -1006,7 +1006,7 @@ def do_resonance_dualgen(nv_list, uwave_ind_list=[0, 1]):
 def do_arbitrary_gate_tomography(nv_list):
     arbitrary_gate_tomography.main(
         nv_list=nv_list,
-        num_reps=8,
+        num_reps=20,
         num_runs=5,
         uwave_ind_list=[0],
     )
@@ -1016,9 +1016,9 @@ def do_rabi(nv_list):
     max_tau = 480 + min_tau
     num_steps = 31
     num_reps = 10
-    num_runs = 300
+    num_runs = 100
     uwave_ind_list = [0]
-    for _ in range(2):
+    for _ in range(3):
         rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
 
 
@@ -1055,7 +1055,8 @@ def do_spin_echo(nv_list):
     # revival_period = int(29.90e3 / 2) ### 62.14G
     # revival_period = int(31.2e3 / 2) ### 59.69G
     # revival_period = int(35.66e3 / 2)  # ~52.39 G
-    revival_period = int(55.77e3 / 2)  # ~33.39 G
+    # revival_period = int(55.77e3 / 2)  # ~33.39 G
+    revival_period = int(59.38e3 / 2)  # ~31.46 G
     min_tau = 200
     taus = []
     revival_width = 6e3
@@ -2002,7 +2003,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    nv_sig.expected_counts = 810.0
+    nv_sig.expected_counts = 800.0
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:100]
     print(f"length of NVs list:{len(nv_list)}")
@@ -2041,12 +2042,12 @@ if __name__ == "__main__":
         do_compensate_for_drift(nv_sig)
         
         # do_red_calibration_image(
-        #     nv_sig,
+        #     nv_sig, 
         #     green_coords_list,
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_widefield_image_sample(nv_sig, 50)     
+        # do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list: 
@@ -2159,6 +2160,7 @@ if __name__ == "__main__":
         # do_widefield_coherence_test(nv_list, 800, "xy8")
 
         # do_bootstrapped_pulse_error_tomography(nv_list)
+        # do_arbitrary_gate_tomography(nv_list)
         # do_calibrate_iq_delay(nv_list)
         # do_rabi(nv_list)
         # do_power_rabi(nv_list)
@@ -2166,7 +2168,7 @@ if __name__ == "__main__":
         # do_optimize_scc_amp(nv_list)
         # do_rabi(nv_list)
         # do_resonance_zoom(nv_list)
-        # do_spin_echo(nv_list)
+        do_spin_echo(nv_list)
         # do_ramsey(nv_list)
         
         # do_deer_hahn(nv_list)
