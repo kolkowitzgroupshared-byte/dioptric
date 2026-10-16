@@ -4,7 +4,8 @@ import numpy as np
 from analysis import sc_rabi_analysis as ra
 from utils import data_manager as dm
 from utils import widefield
-
+from utils import kplotlib as kpl
+kpl.init_kplotlib()
 file_stem = "2026_10_15-16_03_55-johnson-nv0_2026_10_02"
 # file_stem = "2026_10_15-21_23_07-johnson-nv0_2026_10_02"
 
@@ -216,4 +217,4 @@ print(
     f"pi={median_pi:.2f} ns"
 )
 
-plt.show()
+plt.show(block=True)
