@@ -1625,7 +1625,8 @@ def analyze(file_ids):
     avg_snr = np.asarray(avg_snr, dtype=float)
 
     num_nvs = len(nv_list)
-    freqs_dense = np.linspace(np.nanmin(freqs), np.nanmax(freqs), 45)
+    NUM_DENSE_POINTS = 4*len(freqs)
+    freqs_dense = np.linspace(np.nanmin(freqs), np.nanmax(freqs), NUM_DENSE_POINTS)
 
     cache_file = _cache_path(combined_id, num_nvs, freqs)
 
