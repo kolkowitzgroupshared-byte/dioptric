@@ -1879,10 +1879,10 @@ if __name__ == "__main__":
     #     [255.325, 177.995],      
     # ]
     # green_coords_list = [
-    #     [100.302, 100.503],
-    #     [112.23, 119.374],
-    #     [100.598, 79.769],
-    #     [83.026, 92.275],
+    #     [100.29, 100.507],
+    #     [112.229, 119.362],
+    #     [100.581, 79.78],
+    #     [82.99, 92.284],
     # ]
     # red_coords_list = [
     #     [69.232, 69.885], 
@@ -2003,7 +2003,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    nv_sig.expected_counts = 800.0
+    nv_sig.expected_counts = 810.0
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:100]
     print(f"length of NVs list:{len(nv_list)}")
@@ -2138,7 +2138,7 @@ if __name__ == "__main__":
         # do_check_readout_fidelity(nv_list)
         # do_optimize_aod_access_time(nv_list)
 
-        do_scc_snr_check(nv_list)
+        # do_scc_snr_check(nv_list)
         # optimize_scc_amp_and_duration(nv_list)
         # do_optimize_scc_duration(nv_list)
         # do_optimize_scc_amp(nv_list)
@@ -2168,7 +2168,7 @@ if __name__ == "__main__":
         # do_optimize_scc_amp(nv_list)
         # do_rabi(nv_list)
         # do_resonance_zoom(nv_list)
-        # do_spin_echo(nv_list)
+        do_spin_echo(nv_list)
         # do_ramsey(nv_list)
         
         # do_deer_hahn(nv_list)

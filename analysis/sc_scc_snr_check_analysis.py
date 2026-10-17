@@ -59,10 +59,13 @@ from utils import widefield
 # FILE_STEM = "2026_10_14-21_49_55-johnson-nv0_2026_10_02"
 # FILE_STEM = "2026_10_14-22_13_55-johnson-nv0_2026_10_02"
 # FILE_STEM = "2026_10_14-22_30_20-johnson-nv0_2026_10_02"
-FILE_STEM = "2026_10_14-22_46_40-johnson-nv0_2026_10_02"
-FILE_STEM = "2026_10_14-22_46_40-johnson-nv0_2026_10_02"
-FILE_STEM = "2026_10_14-23_02_59-johnson-nv0_2026_10_02"
-FILE_STEM = "2026_10_15-14_31_10-johnson-nv0_2026_10_02"
+# FILE_STEM = "2026_10_14-22_46_40-johnson-nv0_2026_10_02"
+# FILE_STEM = "2026_10_14-22_46_40-johnson-nv0_2026_10_02"
+# FILE_STEM = "2026_10_14-23_02_59-johnson-nv0_2026_10_02"
+# FILE_STEM = "2026_10_15-14_31_10-johnson-nv0_2026_10_02"
+# FILE_STEM = "2026_10_16-16_13_28-johnson-nv0_2026_10_02"
+FILE_STEM = "2026_10_16-17_13_21-johnson-nv0_2026_10_02"
+
 
 
 X_AXIS = "scc_duration"       # "scc_amp" or "scc_duration" or "nv_index"  
