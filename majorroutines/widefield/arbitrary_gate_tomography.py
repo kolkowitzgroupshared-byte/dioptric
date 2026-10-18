@@ -27,9 +27,6 @@ from utils.single_qubit_gate_compiler import (
 from analysis import arbitrary_gate_tomography as arb_analysis
 
 
-SEQ_FILE = "arbitrary_gate_tomography.py"
-
-
 def _paths():
     root = Path(__file__).resolve().parents[2]
     folder = root / "calibrations" / "purcell" / "arbitrary_gate_tomography"
@@ -98,7 +95,9 @@ def main(
     Final counts shape:
         [gate, experiment=4, NV, run, step=1, repetition]
     """
-
+    
+    SEQ_FILE = "arbitrary_gate_tomography.py"
+    
     if not nv_list:
         raise ValueError("Empty NV list")
 
@@ -107,7 +106,7 @@ def main(
 
     if num_reps < 4 or num_reps % 2:
         raise ValueError("Use even num_reps >= 4 for alternating dual-rail ref")
-
+    
     chain = int(uwave_ind_list[0])
 
     manifest, manifest_path = prepare(chain)

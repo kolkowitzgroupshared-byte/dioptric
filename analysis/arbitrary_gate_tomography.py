@@ -1,238 +1,311 @@
-"""Postprocess Cornell Experiment 0 arbitrary-gate tomography.
+"""Cornell Experiment 0: dual-rail SCC state-tomography analysis.
 
-Supported count layouts
------------------------
-Preferred/batched:
-    [gate, experiment=4, NV, run, step=1, repetition]
-    experiment order for each gate: Z, X, Y, dual-rail reference
+Raw count layout: [gate, experiment=(Z, X, Y, ref), NV, run, step=1, rep].
+The reference alternates ms=0 on even repetitions and ms=1 on odd ones.
 
-Legacy:
-    [experiment=3*n_gates+1, NV, run, step=1, repetition]
-    order: gate1 Z,X,Y; ...; gateN Z,X,Y; one shared reference
+This analysis uses the SAME physical normalization as the Rabi routine:
+    p1 = (signal - reference_ms0) / (reference_ms1 - reference_ms0)
+    <sigma_axis> = 1 - 2*p1.
+
+In contrast to the original run-wise normalization, reference levels are
+POOLED over all the runs and repetitions, optionally also across all ten
+gates (most similar to how Rabi pools over its sweep steps).
+
+Default is all_gates because these short experiments have noisy references.
+This assumes reference levels remain stable across the ten sequential gates.
+Always inspect per-gate reference drift and compare the 'per_gate' result.
+No physical clipping of Bloch vectors is performed.
 """
 
 from __future__ import annotations
 
 import argparse
-import numpy as np
+import json
+from pathlib import Path
+import warnings
+
 import matplotlib.pyplot as plt
+import numpy as np
+
+# Change the TWO values below to analyze a new run in your Purcell session.
+FILE_STEM = "2026_10_17-18_46_55-johnson-nv0_2026_10_02"
+# Set to None for the usual data_manager/NAS lookup. Alternatively provide the
+# full experiment folder, e.g. r"G:\nvdata\pc_Purcell\branch_master\arbitrary_gate_tomography\2026_10".
+DATA_DIR = None
+
+REFERENCE_SCOPE = "all_gates"   # "all_gates" (Rabi-style) or "per_gate"
+MIN_REFERENCE_CONTRAST = 0.0     # photons; require R1 - R0 > threshold
+MIN_REFERENCE_SNR = 0.0          # require contrast / SEM(contrast) >= threshold
+SAVE_FIGURES = True
+SHOW_FIGURES = True
 
 
-def _analyze_batched_counts(counts, n_gates, min_ref_contrast):
-    if (
-        counts.ndim != 6
-        or counts.shape[0] != n_gates
-        or counts.shape[1] != 4
-        or counts.shape[4] != 1
-    ):
-        raise ValueError(
-            "Batched counts must have shape "
-            "(n_gates, 4, nv, run, 1, rep)."
-        )
-    if counts.shape[-1] < 2:
-        raise ValueError("Reference requires both even and odd repetitions.")
-
-    # [gate, exp, nv, run, rep]
-    data = counts[:, :, :, :, 0, :]
-
-    # First three experiments are Z, X, Y signal readouts.
-    sig = np.nanmean(data[:, :3], axis=-1)  # [gate,basis,nv,run]
-
-    # Fourth experiment is the alternating dual-rail reference.
-    ref = data[:, 3]  # [gate,nv,run,rep]
-    ref0 = np.nanmean(ref[:, :, :, 0::2], axis=-1)
-    ref1 = np.nanmean(ref[:, :, :, 1::2], axis=-1)
-
-    contrast = ref0 - ref1
-    valid = np.isfinite(contrast) & (np.abs(contrast) >= min_ref_contrast)
-    denominator = np.where(valid, contrast, np.nan)
-
-    sz = (
-        2 * sig
-        - ref0[:, None, :, :]
-        - ref1[:, None, :, :]
-    ) / denominator[:, None, :, :]
-
-    # [gate,basis,nv,run] -> [gate,nv,run,basis]
-    per_run = sz.transpose(0, 2, 3, 1)
-
-    # Acquisition basis order is Z,X,Y. Store XYZ.
-    per_run = per_run[:, :, :, [1, 2, 0]]
-
-    return per_run, ref0, ref1, contrast, valid
+def _to_batched(counts: np.ndarray, n_gates: int) -> np.ndarray:
+    """Normalize both saved layouts to [gate, 4, nv, run, step, rep]."""
+    a = np.asarray(counts, dtype=np.float64)  # float16 counts overflow on reduction!
+    if a.ndim == 6:
+        if a.shape[0] != n_gates or a.shape[1] != 4 or a.shape[4] != 1:
+            raise ValueError(f"Wrong batched count shape {a.shape}")
+        return a
+    if a.ndim == 5:
+        if a.shape[0] != 3*n_gates + 1 or a.shape[3] != 1:
+            raise ValueError(f"Wrong legacy count shape {a.shape}")
+        sig = a[:-1].reshape((n_gates, 3) + a.shape[1:])
+        ref = np.broadcast_to(a[-1][None, None, ...],
+                              (n_gates, 1) + a.shape[1:])
+        return np.concatenate([sig, ref], axis=1)
+    raise ValueError(f"Expected five- or six-dimensional counts, got {a.shape}")
 
 
-def _analyze_legacy_counts(counts, n_gates, min_ref_contrast):
-    if (
-        counts.ndim != 5
-        or counts.shape[0] != 3 * n_gates + 1
-        or counts.shape[3] != 1
-    ):
-        raise ValueError(
-            "Legacy counts must have shape "
-            "(3*n_gates+1, nv, run, 1, rep)."
-        )
-    if counts.shape[-1] < 2:
-        raise ValueError("Reference requires both even and odd repetitions.")
-
-    data = counts[:, :, :, 0, :]
-    ref = data[-1]
-
-    ref0 = np.nanmean(ref[:, :, 0::2], axis=-1)
-    ref1 = np.nanmean(ref[:, :, 1::2], axis=-1)
-
-    contrast = ref0 - ref1
-    valid = np.isfinite(contrast) & (np.abs(contrast) >= min_ref_contrast)
-    denominator = np.where(valid, contrast, np.nan)
-
-    sig = np.nanmean(data[:-1], axis=-1)
-    sz = (
-        2 * sig
-        - ref0[None, :, :]
-        - ref1[None, :, :]
-    ) / denominator[None, :, :]
-
-    # [gate*basis,nv,run] -> [gate,nv,run,basis]
-    per_run = (
-        sz.reshape(n_gates, 3, counts.shape[1], counts.shape[2])
-        .transpose(0, 2, 3, 1)
-    )
-    per_run = per_run[:, :, :, [1, 2, 0]]
-
-    return per_run, ref0, ref1, contrast, valid
+def _mean_sem(a: np.ndarray, axes):
+    """NaN-aware mean, SEM, and sample count along the specified axes."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        count = np.sum(np.isfinite(a), axis=axes)
+        mean = np.nanmean(a, axis=axes)
+        std = np.nanstd(a, axis=axes, ddof=1)
+    sem = np.divide(std, np.sqrt(count),
+                    out=np.full_like(mean, np.nan), where=count > 1)
+    return mean, sem, count
 
 
-def analyze(raw_data, min_ref_contrast=0.5):
-    counts = np.asarray(raw_data["counts"], dtype=float)
+def analyze(raw_data, min_ref_contrast=MIN_REFERENCE_CONTRAST,
+            min_ref_snr=MIN_REFERENCE_SNR, reference_scope=REFERENCE_SCOPE):
+    """Reconstruct XYZ Bloch vectors using a stable pooled dual-rail reference.
+
+    Returns per-gate/per-NV observed XYZ, SEM including reference uncertainty,
+    compiled and ideal targets, and reference diagnostics. Does not clip values.
+    A run with insufficient reference significance is marked NaN, not zero.
+    """
     gates = raw_data["cornell_manifest"]["gates"]
-    n_gates = len(gates)
+    G = len(gates)
+    a = _to_batched(raw_data["counts"], G)
+    _, _, N, R, _, P = a.shape
+    if P < 2 or P % 2:
+        raise ValueError("Expected an even number of reps >= 2 for the dual-rail reference")
+    if reference_scope not in ("all_gates", "per_gate"):
+        raise ValueError("reference_scope must be 'all_gates' or 'per_gate'")
 
-    if counts.ndim == 6:
-        per_run, ref0, ref1, contrast, valid = _analyze_batched_counts(
-            counts, n_gates, min_ref_contrast
-        )
-    elif counts.ndim == 5:
-        per_run, ref0, ref1, contrast, valid = _analyze_legacy_counts(
-            counts, n_gates, min_ref_contrast
-        )
+    sig = a[:, :3, :, :, 0, :]    # [G,3,N,R,P], acquisition order Z,X,Y
+    ref = a[:, 3, :, :, 0, :]     # [G,N,R,P]
+    even = ref[..., 0::2]        # ms=0
+    odd = ref[..., 1::2]         # ms=1
+    sig_mean, sig_sem, _ = _mean_sem(sig, (3,4))   # [G,3,N]
+    sig_by_run = np.nanmean(sig, axis=-1)          # [G,3,N,R]
+
+    if reference_scope == "per_gate":
+        r0, se0, n0 = _mean_sem(even, (2,3))  # [G,N]
+        r1, se1, n1 = _mean_sem(odd, (2,3))
     else:
-        raise ValueError(
-            f"Unexpected counts ndim={counts.ndim}; expected 6 (batched) "
-            "or 5 (legacy)."
-        )
+        r0n, se0n, n0n = _mean_sem(even, (0,2,3))  # [N]
+        r1n, se1n, n1n = _mean_sem(odd, (0,2,3))
+        r0 = np.broadcast_to(r0n[None, :], (G,N)).copy()
+        r1 = np.broadcast_to(r1n[None, :], (G,N)).copy()
+        se0 = np.broadcast_to(se0n[None, :], (G,N)).copy()
+        se1 = np.broadcast_to(se1n[None, :], (G,N)).copy()
+        n0 = np.broadcast_to(n0n[None, :], (G,N)).copy()
+        n1 = np.broadcast_to(n1n[None, :], (G,N)).copy()
 
-    with np.errstate(invalid="ignore"):
-        measured = np.nanmean(per_run, axis=2)
+    D = r1-r0                        # [G,N]; MUST be positive on Purcell
+    seD = np.hypot(se0,se1)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        snr = D/seD
+    valid = (np.isfinite(D) & (D >= min_ref_contrast) &
+             np.isfinite(snr) & (snr >= min_ref_snr))
+    den = np.where(valid, D, np.nan)
 
-    if per_run.shape[2] >= 2:
-        with np.errstate(invalid="ignore", divide="ignore"):
-            n_valid = np.sum(np.isfinite(per_run), axis=2)
-            ste = np.nanstd(per_run, axis=2, ddof=1) / np.sqrt(n_valid)
-    else:
-        ste = np.full_like(measured, np.nan)
+    # Rabi P1=(S-R0)/(R1-R0); Pauli Z=1-2*P1.
+    zxy = 1-2*(sig_mean-r0[:,None,:])/den[:,None,:]
+    per_run_zxy = 1-2*(sig_by_run-r0[:,None,:,None])/den[:,None,:,None]
 
-    expected = np.array([g["expected_bloch_xyz"] for g in gates], dtype=float)
-    compiled_expected = np.array(
-        [g["predicted_actual_bloch"] for g in gates], dtype=float
-    )
+    # Error propagation in pooled raw-count means, neglecting covariance.
+    # dM/dS=-2/D, dM/dR0=2*(R1-S)/D^2, dM/dR1=2*(S-R0)/D^2.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        var = ((2*sig_sem/den[:,None,:])**2
+               + (2*(r1[:,None,:]-sig_mean)*se0[:,None,:]/den[:,None,:]**2)**2
+               + (2*(sig_mean-r0[:,None,:])*se1[:,None,:]/den[:,None,:]**2)**2)
+    zxy_sem = np.sqrt(var)
 
-    residual = measured - expected[:, None, :]
-    residual_compiled = measured - compiled_expected[:, None, :]
-    norm = np.linalg.norm(residual, axis=-1)
+    # Convert acquisition basis Z,X,Y -> reported XYZ.
+    xyz = zxy.transpose(0,2,1)[:,:,[1,2,0]]
+    ste_xyz = zxy_sem.transpose(0,2,1)[:,:,[1,2,0]]
+    per_run_xyz = per_run_zxy.transpose(0,2,3,1)[:,:,:,[1,2,0]]
+
+    ideal = np.array([g["expected_bloch_xyz"] for g in gates],dtype=float)
+    compiled = np.array([g["predicted_actual_bloch"] for g in gates],dtype=float)
+    error = np.linalg.norm(xyz-ideal[:,None,:],axis=-1)
+    error_compiled = np.linalg.norm(xyz-compiled[:,None,:],axis=-1)
+
+    # Keep the actual gate-by-gate reference drift visible, even with all-gate pooling.
+    raw_gate_r0, raw_gate_se0, _ = _mean_sem(even, (2,3))
+    raw_gate_r1, raw_gate_se1, _ = _mean_sem(odd, (2,3))
 
     return {
-        "measured_xyz": measured,
-        "ste_xyz": ste,
-        "expected_xyz": expected,
-        "compiled_xyz": compiled_expected,
-        "residual_xyz": residual,
-        "residual_compiled_xyz": residual_compiled,
-        "bloch_error_norm": norm,
-        "reference_0": ref0,
-        "reference_1": ref1,
-        "reference_contrast": contrast,
-        "valid_ref": valid,
-        "reference_valid_fraction": float(np.mean(valid)),
-        "per_run_xyz": per_run,
+        "measured_xyz":xyz, "ste_xyz":ste_xyz, "per_run_xyz":per_run_xyz,
+        "expected_xyz":ideal, "compiled_xyz":compiled,
+        "residual_xyz":xyz-ideal[:,None,:],
+        "residual_compiled_xyz":xyz-compiled[:,None,:],
+        "bloch_error_norm":error, "compiled_error_norm":error_compiled,
+        "reference_0":r0, "reference_1":r1,
+        "reference_contrast":D, "reference_contrast_ste":seD,
+        "reference_snr":snr, "valid_ref":valid,
+        "reference_valid_fraction":float(np.mean(valid)),
+        "reference_scope":reference_scope,
+        "raw_gate_reference_0":raw_gate_r0,
+        "raw_gate_reference_1":raw_gate_r1,
+        "raw_gate_reference_contrast_ste":np.hypot(raw_gate_se0,raw_gate_se1),
+        "num_reference_shots_per_rail":(n0,n1),
+        "num_nvs":N, "num_runs":R, "num_reps":P,
     }
 
 
-def plot_results(raw_data, analysis, nv_ind=0):
-    exp = analysis["expected_xyz"]
-    obs = analysis["measured_xyz"]
-    err = analysis["ste_xyz"]
+def plot_results(raw_data, result, nv_ind=None):
+    """Representative XYZ trace and full gate-by-NV error heatmap."""
+    pred=result["expected_xyz"]
+    obs=result["measured_xyz"]
+    valid=result["valid_ref"]
+    n=obs.shape[1]
+    if nv_ind is None:
+        # Select strongest usable NV instead of blindly plotting index zero.
+        ok=np.sum(valid,axis=0)
+        nv_ind=int(np.argmax(ok*1e6+np.nanmean(np.where(valid,result["reference_snr"],0),axis=0)))
+    if nv_ind < 0 or nv_ind >= n:
+        raise ValueError(f"nv_ind must be between 0 and {n-1}")
+    x=np.arange(1,len(pred)+1)
+    fig,ax=plt.subplots(3,1,figsize=(9,8),sharex=True,layout="constrained")
+    for j,name in enumerate("XYZ"):
+        ax[j].plot(x,pred[:,j],"k--o",lw=1,label="Cornell ideal")
+        ax[j].plot(x,result["compiled_xyz"][:,j],".",ms=6,label="OPX compiled")
+        ax[j].errorbar(x,obs[:,nv_ind,j],yerr=result["ste_xyz"][:,nv_ind,j],
+                       fmt="o",capsize=2,label="Measured")
+        ax[j].set_ylabel(f"<sigma_{name.lower()}>")
+        ax[j].axhline(0,lw=.5,color="grey")
+        ax[j].set_ylim(-1.8,1.8)
+        ax[j].grid(alpha=.2)
+    ax[0].legend(fontsize=8)
+    ax[-1].set_xlabel("Cornell gate (1-based)")
+    fig.suptitle(f"Cornell Experiment 0 | NV {nv_ind} | {result['reference_scope']} normalization")
 
-    if nv_ind >= obs.shape[1]:
-        raise ValueError("nv_ind out of range")
-
-    n = len(exp)
-    x = np.arange(1, n + 1)
-
-    fig, axs = plt.subplots(3, 1, figsize=(9, 9), sharex=True)
-    for j, (name, ax) in enumerate(zip(("X", "Y", "Z"), axs)):
-        ax.plot(x, exp[:, j], "k--", marker="o", label="Cornell predicted")
-        ax.plot(
-            x,
-            analysis["compiled_xyz"][:, j],
-            ".",
-            label="OPX quantized expected",
-        )
-        yerr = err[:, nv_ind, j]
-        if not np.any(np.isfinite(yerr)):
-            yerr = None
-        ax.errorbar(
-            x,
-            obs[:, nv_ind, j],
-            yerr=yerr,
-            fmt="o",
-            label="Measured",
-        )
-        ax.set_ylabel(f"<sigma_{name.lower()}>")
-        ax.set_ylim(-1.2, 1.2)
-        ax.grid(alpha=0.2)
-
-    axs[0].legend(fontsize=8)
-    axs[-1].set_xlabel("Cornell gate index")
-    fig.suptitle(f"Cornell Experiment 0, NV index {nv_ind}")
-
-    fig2, ax2 = plt.subplots(figsize=(9, 4))
-    im = ax2.imshow(
-        analysis["bloch_error_norm"].T,
-        aspect="auto",
-        origin="lower",
-        vmin=0,
-    )
-    ax2.set_xlabel("Gate index (0 based)")
-    ax2.set_ylabel("NV index")
-    ax2.set_title("Full Bloch-vector distance to Cornell prediction")
-    fig2.colorbar(im, ax=ax2, label="|r_measured - r_target|")
-
-    return fig, fig2
+    fig2,ax2=plt.subplots(figsize=(10,5),layout="constrained")
+    im=ax2.imshow(result["bloch_error_norm"].T,aspect="auto",origin="lower",
+                  interpolation="nearest",vmin=0,vmax=2)
+    ax2.set(xlabel="Cornell gate (1-based)",ylabel="NV index",
+            title="Bloch-vector distance (masked where references are unreliable)")
+    ax2.set_xticks(np.arange(len(pred)),labels=[str(i) for i in x])
+    fig2.colorbar(im,ax=ax2,label="|measured - target|")
+    return fig,fig2
 
 
-def analyze_file(file_stem, nv_ind=0):
+def plot_reference_diagnostics(result):
+    """Monitor reference contrast, gate-to-gate drift, and reconstruction quality."""
+    G=result["measured_xyz"].shape[0]
+    idx=np.arange(1,G+1)
+    fig,axes=plt.subplots(2,2,figsize=(11,7),layout="constrained")
+    gate_D=(result["raw_gate_reference_1"]-result["raw_gate_reference_0"])
+    axes[0,0].errorbar(idx,np.nanmedian(gate_D,axis=1),fmt="o-",label="per-gate median")
+    axes[0,0].set(xlabel="Gate",ylabel="R1-R0 (photons)",title="Raw reference contrast by gate")
+    axes[0,0].axhline(0,color="grey",lw=.6)
+    axes[0,1].hist(result["reference_snr"][0],bins=25)
+    axes[0,1].axvline(MIN_REFERENCE_SNR,ls="--",color="black")
+    axes[0,1].set(xlabel="Pooled reference SNR",ylabel="Number of NVs",title="Reference significance")
+    axes[1,0].plot(idx,result["valid_ref"].sum(axis=1),"o-")
+    axes[1,0].set(xlabel="Gate",ylabel="Accepted NVs",title="Accepted reference count")
+    axes[1,1].plot(idx,np.array([np.nanmedian(x) for x in result["bloch_error_norm"]]),"o-")
+    axes[1,1].set(xlabel="Gate",ylabel="Median |Bloch error|",title="Filtered state discrepancy")
+    for ax in axes.flat: ax.grid(alpha=.2)
+    return fig
+
+
+def print_summary(result, file_stem=""):
+    """Print and return a reusable human-readable numerical summary."""
+    lines=[f"File: {file_stem}",f"Normalization: {result['reference_scope']}",
+           f"NVs: {result['num_nvs']}; runs/gate: {result['num_runs']}; reps: {result['num_reps']}",
+           f"Valid references: {100*result['reference_valid_fraction']:.1f}% of gate/NV pairs",
+           "Gate  accepted_NV  median_Bloch_error  median_compiled_error  median_Bloch_norm"]
+    for i in range(len(result["expected_xyz"])):
+        valid=result["valid_ref"][i]
+        if valid.any():
+            e=float(np.nanmedian(result["bloch_error_norm"][i,valid]))
+            ce=float(np.nanmedian(result["compiled_error_norm"][i,valid]))
+            mag=float(np.nanmedian(np.linalg.norm(result["measured_xyz"][i,valid],axis=-1)))
+            lines.append(f"{i+1:4d} {int(valid.sum()):11d} {e:19.3f} {ce:22.3f} {mag:18.3f}")
+        else:
+            lines.append(f"{i+1:4d} {0:11d} {'n/a':>19} {'n/a':>22} {'n/a':>18}")
+    vals=result["bloch_error_norm"][np.isfinite(result["bloch_error_norm"])]
+    lines.append(f"Overall median error (accepted pairs): {np.median(vals):.4f}" if len(vals)
+                 else "No accepted pairs at these reference-quality thresholds")
+    text="\n".join(lines)
+    print(text)
+    return text
+
+
+def load_run(file_stem, data_dir=None):
+    """Load from an explicit directory/path, or use existing data_manager lookup."""
+    stem=Path(str(file_stem))
+    if stem.suffix in (".txt",".npz"):
+        stem=stem.with_suffix("")
+    if data_dir is not None:
+        stem=Path(data_dir)/stem.name
+    if data_dir is not None or stem.is_absolute() or stem.with_suffix(".txt").exists():
+        txt=stem.with_suffix(".txt")
+        npz=stem.with_suffix(".npz")
+        with txt.open("r",encoding="utf-8") as f:
+            d=json.load(f)
+        with np.load(npz,allow_pickle=False) as compressed:
+            d["counts"]=np.array(compressed["counts"],dtype=np.float64)
+        return d,stem
     from utils import data_manager as dm
-
-    raw = dm.get_raw_data(
-        file_stem=file_stem,
-        load_npz=True,
-        use_cache=False,
-    )
-    results = analyze(raw)
-    fig, fig2 = plot_results(raw, results, nv_ind=nv_ind)
-
-    print("Reference valid fraction:", results["reference_valid_fraction"])
-    print(
-        "Mean |Bloch error| for each gate:",
-        np.nanmean(results["bloch_error_norm"], axis=1),
-    )
-    plt.show(block=True)
-    return results
+    d=dm.get_raw_data(file_stem=str(stem.name),load_npz=True,use_cache=False)
+    return d,None
 
 
-if __name__ == "__main__":
-    p = argparse.ArgumentParser()
-    p.add_argument("--file-stem", required=True)
-    p.add_argument("--nv-ind", type=int, default=0)
-    args = p.parse_args()
-    analyze_file(args.file_stem, args.nv_ind)
+def analyze_file(file_stem, nv_ind=None, data_dir=None,
+                 reference_scope=REFERENCE_SCOPE, save_figures=True, show_figures=True,
+                 min_ref_contrast=MIN_REFERENCE_CONTRAST,min_ref_snr=MIN_REFERENCE_SNR):
+    """Convenience runner suitable for both your IPython console and this file's main."""
+    d,stem=load_run(file_stem,data_dir=data_dir)
+    result=analyze(d,min_ref_contrast=min_ref_contrast,min_ref_snr=min_ref_snr,
+                   reference_scope=reference_scope)
+    report=print_summary(result,file_stem)
+    fig1,fig2=plot_results(d,result,nv_ind=nv_ind)
+    fig3=plot_reference_diagnostics(result)
+    if save_figures:
+        if stem is not None:
+            out=stem.parent
+            base=stem.name
+        else:
+            out=Path.cwd()/"tomography_reanalysis"
+            out.mkdir(parents=True,exist_ok=True)
+            base=Path(file_stem).stem
+        suffix=f"-reanalysis-{reference_scope}"
+        for fig,name in [(fig1,"xyz"),(fig2,"error_heatmap"),(fig3,"references")]:
+            p=out/(base+suffix+f"-{name}.png")
+            fig.savefig(p,dpi=180)
+            print(f"Saved {p}")
+        p=out/(base+suffix+"-summary.txt")
+        p.write_text(report+"\n",encoding="utf-8")
+        print(f"Saved {p}")
+    if show_figures:
+        plt.show(block=True)
+    else:
+        plt.close('all')
+    return result
+
+
+if __name__=="__main__":
+    parser=argparse.ArgumentParser(description="Cornell arbitrary gate tomography: pooled Rabi-style SCC analysis")
+    parser.add_argument("--file-stem",default=FILE_STEM,help="Timestamp and NV name, without .txt")
+    parser.add_argument("--data-dir",default=DATA_DIR,help="Folder holding .txt and .npz; None uses data_manager")
+    parser.add_argument("--reference-scope",default=REFERENCE_SCOPE,
+                        choices=["all_gates","per_gate"])
+    parser.add_argument("--min-contrast",type=float,default=MIN_REFERENCE_CONTRAST)
+    parser.add_argument("--min-snr",type=float,default=MIN_REFERENCE_SNR)
+    parser.add_argument("--nv-ind",type=int,default=None)
+    parser.add_argument("--no-show",action="store_true",help="Save files without blocking plot window")
+    parser.add_argument("--no-save",action="store_true",help="Plot only")
+    args=parser.parse_args()
+    analyze_file(args.file_stem,nv_ind=args.nv_ind,data_dir=args.data_dir,
+                 reference_scope=args.reference_scope,
+                 min_ref_contrast=args.min_contrast,min_ref_snr=args.min_snr,
+                 show_figures=not args.no_show and SHOW_FIGURES,
+                 save_figures=not args.no_save and SAVE_FIGURES)

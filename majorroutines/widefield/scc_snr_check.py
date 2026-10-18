@@ -141,7 +141,7 @@ def main(nv_list, num_reps, num_runs, uwave_ind_list):
         save_images=False,
         charge_prep_fn=None,
         num_exps=2,
-        # load_iq=True,
+        load_iq=True,
     )
 
     ### Report results and cleanup
