@@ -13,6 +13,7 @@ from pathlib import Path
 import traceback
 
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 from majorroutines.widefield import base_routine
 from utils import common, widefield
@@ -27,28 +28,106 @@ from utils.single_qubit_gate_compiler import (
 from analysis import arbitrary_gate_tomography as arb_analysis
 
 
-SEQ_FILE = "arbitrary_gate_tomography.py"
-
-
 def _paths():
     root = Path(__file__).resolve().parents[2]
     folder = root / "calibrations" / "purcell" / "arbitrary_gate_tomography"
     return folder / "arbSQR.csv", folder
 
 
-def prepare(uwave_ind=0):
-    """Precompute manifest using the current chain's pi calibration."""
+def _make_calibration_manifest(uwave_ind, pi_ns):
+    """Six known pure states using the same IQ chain and SCC readout as Cornell.
+
+    Each row is ONE preparation gate. The existing QUA sequence subsequently
+    performs Z, X and Y tomography plus its parity-alternating reference.
+    """
+    clock_ns = 4
+    pi_ns = float(pi_ns)
+    if pi_ns < 32 or pi_ns % clock_ns:
+        raise ValueError("Calibration requires a pi pulse >=32 ns, divisible by 4 ns")
+    half_ns = int(round((pi_ns / 2) / clock_ns)) * clock_ns
+    if half_ns < 16:
+        raise ValueError("The quantized pi/2 duration is below 16 ns")
+
+    # (state label, preparation IQ phase, pulse duration, target Bloch XYZ)
+    specs = [
+        ("|0>", None, 0, [0.0, 0.0, 1.0]),
+        ("|1>", 0, int(pi_ns), [0.0, 0.0, -1.0]),
+        ("+X", 90, half_ns, [1.0, 0.0, 0.0]),
+        ("-X", 270, half_ns, [-1.0, 0.0, 0.0]),
+        ("+Y", 180, half_ns, [0.0, 1.0, 0.0]),
+        ("-Y", 0, half_ns, [0.0, -1.0, 0.0]),
+    ]
+    axes = {
+        0: ("X", np.array([1., 0., 0.]), +1),
+        90: ("Y", np.array([0., 1., 0.]), +1),
+        180: ("X", np.array([1., 0., 0.]), -1),
+        270: ("Y", np.array([0., 1., 0.]), -1),
+    }
+    gates = []
+    for index, (label, phase, duration_ns, expected) in enumerate(specs, start=1):
+        if phase is None:
+            pulses = []
+            predicted = [0.0, 0.0, 1.0]
+            rot_error = 0.0
+        else:
+            axis, direction, sign = axes[phase]
+            actual_angle = sign * duration_ns * np.pi / pi_ns
+            pulses = [{
+                "axis": axis,
+                "phase_deg": phase,
+                "duration_ns": duration_ns,
+                "duration_cc": duration_ns // clock_ns,
+                "actual_angle_rad": float(actual_angle),
+            }]
+            predicted = Rotation.from_rotvec(
+                direction * actual_angle
+            ).apply([0., 0., 1.]).tolist()
+            target_angle = sign * (np.pi if label == "|1>" else np.pi / 2)
+            rot_error = float(abs(actual_angle - target_angle))
+        gates.append({
+            "gate": index,
+            "label": label,
+            "decomposition": "known-state",
+            "pulses": pulses,
+            "rotation_error_rad": rot_error,
+            "duration_total_ns": duration_ns,
+            "expected_bloch_xyz": expected,
+            "predicted_actual_bloch": predicted,
+        })
+    worst_error = max(g["rotation_error_rad"] for g in gates)
+    return {
+        "format": "cornell-arb-sqr-v1",  # existing verify_manifest hardware contract
+        "experiment_mode": "calibration",
+        "mw_chain": int(uwave_ind),
+        "pi_pulse_ns": pi_ns,
+        "pi_on_2_pulse_ns": pi_ns / 2,
+        "clock_ns": clock_ns,
+        "phase_available_deg": [0, 90, 180, 270],
+        "basis_order": ["Z", "X", "Y"],
+        "gates": gates,
+        "max_rotation_error_rad": worst_error,
+        "hardware_warning": worst_error > 0.15,
+    }
+
+
+def prepare(uwave_ind=0, mode="cornell"):
+    """Precompute the target manifest using the current chain's pi calibration."""
+    if mode not in ("cornell", "calibration"):
+        raise ValueError("mode must be 'cornell' or 'calibration'")
     csv_path, folder = _paths()
-
-    if not csv_path.exists():
-        raise FileNotFoundError(f"Place Cornell CSV at {csv_path}")
-
     pi_ns = tb.get_virtual_sig_gen_dict(uwave_ind)["pi_pulse"]
-    manifest = compile_gates(csv_path, pi_ns, uwave_ind)
 
-    out_path = folder / f"purcell_uwave{uwave_ind}.json"
+    if mode == "cornell":
+        if not csv_path.exists():
+            raise FileNotFoundError(f"Place Cornell CSV at {csv_path}")
+        manifest = compile_gates(csv_path, pi_ns, uwave_ind)
+        manifest["experiment_mode"] = "cornell"
+        out_path = folder / f"purcell_uwave{uwave_ind}.json"
+    else:
+        manifest = _make_calibration_manifest(uwave_ind, pi_ns)
+        out_path = folder / f"purcell_uwave{uwave_ind}_calibration.json"
+
     save_manifest(manifest, out_path)
-
     return manifest, out_path
 
 
@@ -87,18 +166,27 @@ def main(
     num_runs=5,
     uwave_ind_list=(0,),
     allow_large_error=False,
-    show_plots=True,
+    show_plots=False,
+    mode="cornell",
+    save_plots=True,
 ):
-    """Run Cornell Experiment 0 on many NVs.
+    """Run Cornell or six known-state calibration gates on many NVs.
 
-    Each of the 10 arbitrary gates is compiled and acquired separately.
+    mode='cornell' measures the 10 arbitrary rotations; mode='calibration'
+    measures |0>, |1>, +X, -X, +Y, -Y through the SAME QUA SCC sequence.
+
+    Figures are saved by default without opening blocking plot windows.
+    show_plots=True optionally displays them NONBLOCKING.
+    Each target gate is compiled and acquired separately.
     Per gate, the OPX program contains only:
         Z readout, X readout, Y readout, dual-rail reference.
 
     Final counts shape:
         [gate, experiment=4, NV, run, step=1, repetition]
     """
-
+    
+    SEQ_FILE = "arbitrary_gate_tomography.py"
+    
     if not nv_list:
         raise ValueError("Empty NV list")
 
@@ -107,10 +195,10 @@ def main(
 
     if num_reps < 4 or num_reps % 2:
         raise ValueError("Use even num_reps >= 4 for alternating dual-rail ref")
-
+    
     chain = int(uwave_ind_list[0])
 
-    manifest, manifest_path = prepare(chain)
+    manifest, manifest_path = prepare(chain, mode=mode)
 
     cfg = common.get_config_module()
     pi_ns = tb.get_virtual_sig_gen_dict(chain)["pi_pulse"]
@@ -124,7 +212,7 @@ def main(
     )
 
     print()
-    print("Cornell arbitrary-gate manifest")
+    print(f"{mode.upper()} arbitrary-gate/tomography manifest")
     print("--------------------------------")
     for gate in manifest["gates"]:
         print(
@@ -142,8 +230,8 @@ def main(
             print()
             print("=" * 70)
             print(
-                f"Cornell gate {gate_ind + 1}/{len(manifest['gates'])}: "
-                f"{gate['decomposition']}"
+                f"{mode} gate {gate_ind + 1}/{len(manifest['gates'])}: "
+                f"{gate.get('label', gate['decomposition'])}"
             )
             print("=" * 70)
 
@@ -210,6 +298,7 @@ def main(
         raw = {
             "nv_list": nv_list,
             "num_gates": len(manifest["gates"]),
+            "tomography_mode": mode,
             "num_exps_per_gate": 4,
             "num_steps": 1,
             "num_reps": num_reps,
@@ -231,7 +320,9 @@ def main(
             "cornell_manifest": manifest,
             "cornell_manifest_path": str(manifest_path),
             "experiment": (
-                "Cornell-Berkeley Experiment 0, arbitrary SU2 tomography"
+                "Known-state tomography calibration"
+                if mode == "calibration"
+                else "Cornell-Berkeley Experiment 0, arbitrary SU2 tomography"
             ),
             "experiment_order": (
                 "Per gate: Z, X, Y, dual-rail reference"
@@ -268,30 +359,27 @@ def main(
 
         print("Saved raw data:", file_path)
 
-        if show_plots:
+        if save_plots or show_plots:
+            from matplotlib import pyplot as plt
+
             fig, fig2 = arb_analysis.plot_results(
-                raw,
-                result,
-                nv_ind=0,
+                raw, result, nv_ind=None,
             )
+            if save_plots:
+                dm.save_figure(fig, file_path)
+                fig_path2 = dm.get_file_path(
+                    __file__, raw["timestamp"], repr_nv.name + "-heatmap",
+                )
+                dm.save_figure(fig2, fig_path2)
 
-            dm.save_figure(
-                fig,
-                file_path,
-            )
-
-            fig_path2 = dm.get_file_path(
-                __file__,
-                raw["timestamp"],
-                repr_nv.name + "-heatmap",
-            )
-
-            dm.save_figure(
-                fig2,
-                fig_path2,
-            )
-
-            kpl.show(block=True)
+            # Never block a calling loop. In unattended/batched mode keep only
+            # the saved files, and close the figures to avoid accumulating GUI
+            # windows/memory across repeated experiments.
+            if show_plots:
+                plt.show(block=False)
+            else:
+                plt.close(fig)
+                plt.close(fig2)
 
         return raw
 

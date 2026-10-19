@@ -1,0 +1,16 @@
+File: 2026_10_17-21_25_08-johnson-nv0_2026_10_02
+Normalization: all_gates
+NVs: 119; runs/gate: 10; reps: 200
+Valid references: 100.0% of gate/NV pairs
+Gate  accepted_NV  median_Bloch_error  median_compiled_error  median_Bloch_norm
+   1         119               0.687                  0.664              0.975
+   2         119               0.808                  0.802              0.714
+   3         119               0.858                  0.859              0.831
+   4         119               1.421                  1.418              0.633
+   5         119               1.005                  0.991              0.715
+   6         119               1.328                  1.326              0.555
+   7         119               0.999                  0.974              0.574
+   8         119               1.107                  1.108              0.719
+   9         119               1.155                  1.145              0.448
+  10         119               1.232                  1.212              0.620
+Overall median error (accepted pairs): 1.0846

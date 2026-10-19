@@ -6,9 +6,10 @@ from utils import data_manager as dm
 from utils import widefield
 from utils import kplotlib as kpl
 kpl.init_kplotlib()
-file_stem = "2026_10_15-16_03_55-johnson-nv0_2026_10_02"
+# file_stem = "2026_10_15-16_03_55-johnson-nv0_2026_10_02"
 # file_stem = "2026_10_15-21_23_07-johnson-nv0_2026_10_02"
-
+# file_stem = "2026_10_17-16_42_02-johnson-nv0_2026_10_02" # iq
+file_stem = "2026_10_19-13_02_37-johnson-nv0_2026_10_02" # no iq
 o2_inds = [
     1, 2, 3, 7, 8, 9, 10, 11, 13, 14, 15,
     20, 21, 23, 26, 27, 28, 29, 30, 31, 32, 33, 34,
@@ -18,7 +19,6 @@ o2_inds = [
     90, 92, 95, 96, 98, 101, 102, 105, 106, 107,
     108, 111, 112, 113, 114, 115, 117
 ]
-
 
 data = dm.get_raw_data(
     file_stem=file_stem,

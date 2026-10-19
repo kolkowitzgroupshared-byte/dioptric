@@ -175,20 +175,23 @@ config |= {
             0: {
                 "physical_name": "sig_gen_STAN_sg394_0",
                 "uwave_power": 11.0,
-                "frequency": 2.7924,
+                "frequency": 2.8270,
                 "rabi_period": 180, ## loop
                 "pi_pulse": 88, ## loop
                 "pi_on_2_pulse": 44, ## loop
-                # "rabi_period": 312,## resonator
-                # "pi_pulse": 156, ## resonator
             },
             1: {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
-                "frequency": 2.8270,
-                "rabi_period": 192, ## loop
-                "pi_pulse": 96, ## loop
-                "pi_on_2_pulse": 48, ## loop
+                "frequency": 2.7924,
+                "rabi_period": 184, ## loop iq
+                "pi_pulse": 96, ## loop iq
+                "pi_on_2_pulse": 48, ## loop iq
+                # "rabi_period": 180, ## loop
+                # "pi_pulse": 88, ## loop
+                # "pi_on_2_pulse": 44, ## loop
+                # "rabi_period": 312,## resonator
+                # "pi_pulse": 156, ## resonator
             },
             2: {
                 "physical_name": "sig_gen_STAN_sg394_3",
