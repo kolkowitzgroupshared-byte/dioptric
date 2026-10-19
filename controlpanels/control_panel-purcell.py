@@ -45,6 +45,7 @@ from majorroutines.widefield import (
     optimize_spin_pol,
     optimize_aod_access_time,
     power_rabi,
+    rabi_iq_phase,
     rabi,
     ramsey,
     relaxation_interleave,
@@ -1003,15 +1004,34 @@ def do_resonance_dualgen(nv_list, uwave_ind_list=[0, 1]):
         num_reps_ref=avg_reps_ref,   # optional if you expose it in main()
     )
 
-def do_arbitrary_gate_tomography(nv_list):
-    for _ in range(5):
-        do_widefield_image_sample(nv_sig, 50)     
+
+def do_arbitrary_gate_calibration(nv_list):
+    for _ in range(2):
+        do_widefield_image_sample(nv_sig, 50)
+
         arbitrary_gate_tomography.main(
             nv_list=nv_list,
             num_reps=200,
-            num_runs=20,
+            num_runs=50,
             uwave_ind_list=(1,),
+            mode="calibration",
+            show_plots=False,
         )
+
+
+def do_arbitrary_gate_tomography(nv_list):
+    for _ in range(2):
+        do_widefield_image_sample(nv_sig, 50)
+
+        arbitrary_gate_tomography.main(
+            nv_list=nv_list,
+            num_reps=200,
+            num_runs=50,
+            uwave_ind_list=(1,),
+            mode="cornell",
+            show_plots=False,
+        )
+
 
 def do_rabi(nv_list):
     min_tau = 16
@@ -1023,7 +1043,21 @@ def do_rabi(nv_list):
     for _ in range(3):
         rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
 
-
+def do_iq_phase_rabi(nv_list):
+    phases = [0, 90, 180, 270]
+    for phase_deg in phases:
+        do_widefield_image_sample(nv_sig, 50)
+        rabi_iq_phase.main(
+            nv_list=nv_list,
+            num_steps=25,
+            num_reps=10,
+            num_runs=100,
+            min_tau=16,
+            max_tau=400,
+            uwave_ind_list=(1,),
+            phase_deg=phase_deg,
+        )
+        
 def do_widefield_coherence_test(nv_list, evol_time, seq_type):
     num_reps = 15
     num_runs = 150
@@ -2049,7 +2083,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)     
+        do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list: 
@@ -2162,13 +2196,15 @@ if __name__ == "__main__":
         # do_widefield_coherence_test(nv_list, 800, "xy8")
 
         # do_bootstrapped_pulse_error_tomography(nv_list)
-        do_arbitrary_gate_tomography(nv_list)
+        # do_arbitrary_gate_calibration(nv_list)
+        # do_arbitrary_gate_tomography(nv_list)
         # do_calibrate_iq_delay(nv_list)
         # do_rabi(nv_list)
         # do_power_rabi(nv_list)
         # do_resonance(nv_list)
         # do_optimize_scc_amp(nv_list)
         # do_rabi(nv_list)
+        do_iq_phase_rabi(nv_list)
         # do_resonance_zoom(nv_list)
         # do_spin_echo(nv_list)
         # do_ramsey(nv_list)

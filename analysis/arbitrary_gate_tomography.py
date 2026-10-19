@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Change the TWO values below to analyze a new run in your Purcell session.
-FILE_STEM = "2026_10_17-18_46_55-johnson-nv0_2026_10_02"
+FILE_STEM = "2026_10_17-21_25_08-johnson-nv0_2026_10_02"
 # Set to None for the usual data_manager/NAS lookup. Alternatively provide the
 # full experiment folder, e.g. r"G:\nvdata\pc_Purcell\branch_master\arbitrary_gate_tomography\2026_10".
 DATA_DIR = None
@@ -77,7 +77,10 @@ def analyze(raw_data, min_ref_contrast=MIN_REFERENCE_CONTRAST,
     compiled and ideal targets, and reference diagnostics. Does not clip values.
     A run with insufficient reference significance is marked NaN, not zero.
     """
-    gates = raw_data["cornell_manifest"]["gates"]
+    manifest = raw_data["cornell_manifest"]
+    gates = manifest["gates"]
+    mode = raw_data.get("tomography_mode", manifest.get("experiment_mode", "cornell"))
+    labels = [g.get("label", str(g["gate"])) for g in gates]
     G = len(gates)
     a = _to_batched(raw_data["counts"], G)
     _, _, N, R, _, P = a.shape
@@ -156,6 +159,7 @@ def analyze(raw_data, min_ref_contrast=MIN_REFERENCE_CONTRAST,
         "raw_gate_reference_contrast_ste":np.hypot(raw_gate_se0,raw_gate_se1),
         "num_reference_shots_per_rail":(n0,n1),
         "num_nvs":N, "num_runs":R, "num_reps":P,
+        "tomography_mode":mode, "gate_labels":labels,
     }
 
 
@@ -174,7 +178,7 @@ def plot_results(raw_data, result, nv_ind=None):
     x=np.arange(1,len(pred)+1)
     fig,ax=plt.subplots(3,1,figsize=(9,8),sharex=True,layout="constrained")
     for j,name in enumerate("XYZ"):
-        ax[j].plot(x,pred[:,j],"k--o",lw=1,label="Cornell ideal")
+        ax[j].plot(x,pred[:,j],"k--o",lw=1,label="Ideal target")
         ax[j].plot(x,result["compiled_xyz"][:,j],".",ms=6,label="OPX compiled")
         ax[j].errorbar(x,obs[:,nv_ind,j],yerr=result["ste_xyz"][:,nv_ind,j],
                        fmt="o",capsize=2,label="Measured")
@@ -183,15 +187,19 @@ def plot_results(raw_data, result, nv_ind=None):
         ax[j].set_ylim(-1.8,1.8)
         ax[j].grid(alpha=.2)
     ax[0].legend(fontsize=8)
-    ax[-1].set_xlabel("Cornell gate (1-based)")
-    fig.suptitle(f"Cornell Experiment 0 | NV {nv_ind} | {result['reference_scope']} normalization")
+    ax[-1].set_xlabel("Calibration state" if result["tomography_mode"] == "calibration"
+                       else "Cornell gate (1-based)")
+    title = ("Known-state calibration" if result["tomography_mode"] == "calibration"
+             else "Cornell Experiment 0")
+    ax[-1].set_xticks(x, labels=result["gate_labels"])
+    fig.suptitle(f"{title} | NV {nv_ind} | {result['reference_scope']} normalization")
 
     fig2,ax2=plt.subplots(figsize=(10,5),layout="constrained")
     im=ax2.imshow(result["bloch_error_norm"].T,aspect="auto",origin="lower",
                   interpolation="nearest",vmin=0,vmax=2)
-    ax2.set(xlabel="Cornell gate (1-based)",ylabel="NV index",
+    ax2.set(xlabel="State / gate",ylabel="NV index",
             title="Bloch-vector distance (masked where references are unreliable)")
-    ax2.set_xticks(np.arange(len(pred)),labels=[str(i) for i in x])
+    ax2.set_xticks(np.arange(len(pred)), labels=result["gate_labels"])
     fig2.colorbar(im,ax=ax2,label="|measured - target|")
     return fig,fig2
 
@@ -205,6 +213,8 @@ def plot_reference_diagnostics(result):
     axes[0,0].errorbar(idx,np.nanmedian(gate_D,axis=1),fmt="o-",label="per-gate median")
     axes[0,0].set(xlabel="Gate",ylabel="R1-R0 (photons)",title="Raw reference contrast by gate")
     axes[0,0].axhline(0,color="grey",lw=.6)
+    for ax in axes.flat:
+        ax.set_xticks(idx, labels=result["gate_labels"])
     axes[0,1].hist(result["reference_snr"][0],bins=25)
     axes[0,1].axvline(MIN_REFERENCE_SNR,ls="--",color="black")
     axes[0,1].set(xlabel="Pooled reference SNR",ylabel="Number of NVs",title="Reference significance")
@@ -218,19 +228,20 @@ def plot_reference_diagnostics(result):
 
 def print_summary(result, file_stem=""):
     """Print and return a reusable human-readable numerical summary."""
-    lines=[f"File: {file_stem}",f"Normalization: {result['reference_scope']}",
+    lines=[f"File: {file_stem}",f"Mode: {result['tomography_mode']}",
+           f"Normalization: {result['reference_scope']}",
            f"NVs: {result['num_nvs']}; runs/gate: {result['num_runs']}; reps: {result['num_reps']}",
            f"Valid references: {100*result['reference_valid_fraction']:.1f}% of gate/NV pairs",
-           "Gate  accepted_NV  median_Bloch_error  median_compiled_error  median_Bloch_norm"]
+           "Gate / State  accepted_NV  median_Bloch_error  median_compiled_error  median_Bloch_norm"]
     for i in range(len(result["expected_xyz"])):
         valid=result["valid_ref"][i]
         if valid.any():
             e=float(np.nanmedian(result["bloch_error_norm"][i,valid]))
             ce=float(np.nanmedian(result["compiled_error_norm"][i,valid]))
             mag=float(np.nanmedian(np.linalg.norm(result["measured_xyz"][i,valid],axis=-1)))
-            lines.append(f"{i+1:4d} {int(valid.sum()):11d} {e:19.3f} {ce:22.3f} {mag:18.3f}")
+            lines.append(f"{str(result['gate_labels'][i]):>12} {int(valid.sum()):11d} {e:19.3f} {ce:22.3f} {mag:18.3f}")
         else:
-            lines.append(f"{i+1:4d} {0:11d} {'n/a':>19} {'n/a':>22} {'n/a':>18}")
+            lines.append(f"{str(result['gate_labels'][i]):>12} {0:11d} {'n/a':>19} {'n/a':>22} {'n/a':>18}")
     vals=result["bloch_error_norm"][np.isfinite(result["bloch_error_norm"])]
     lines.append(f"Overall median error (accepted pairs): {np.median(vals):.4f}" if len(vals)
                  else "No accepted pairs at these reference-quality thresholds")

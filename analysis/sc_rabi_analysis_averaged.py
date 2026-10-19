@@ -8,8 +8,8 @@ from utils import kplotlib as kpl
 kpl.init_kplotlib()
 # file_stem = "2026_10_15-16_03_55-johnson-nv0_2026_10_02"
 # file_stem = "2026_10_15-21_23_07-johnson-nv0_2026_10_02"
-file_stem = "2026_10_17-16_42_02-johnson-nv0_2026_10_02"
-
+# file_stem = "2026_10_17-16_42_02-johnson-nv0_2026_10_02" # iq
+file_stem = "2026_10_19-13_02_37-johnson-nv0_2026_10_02" # no iq
 o2_inds = [
     1, 2, 3, 7, 8, 9, 10, 11, 13, 14, 15,
     20, 21, 23, 26, 27, 28, 29, 30, 31, 32, 33, 34,

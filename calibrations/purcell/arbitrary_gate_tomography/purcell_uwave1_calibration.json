@@ -1,0 +1,171 @@
+{
+  "format": "cornell-arb-sqr-v1",
+  "experiment_mode": "calibration",
+  "mw_chain": 1,
+  "pi_pulse_ns": 96.0,
+  "pi_on_2_pulse_ns": 48.0,
+  "clock_ns": 4,
+  "phase_available_deg": [
+    0,
+    90,
+    180,
+    270
+  ],
+  "basis_order": [
+    "Z",
+    "X",
+    "Y"
+  ],
+  "gates": [
+    {
+      "gate": 1,
+      "label": "|0>",
+      "decomposition": "known-state",
+      "pulses": [],
+      "rotation_error_rad": 0.0,
+      "duration_total_ns": 0,
+      "expected_bloch_xyz": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "predicted_actual_bloch": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "gate": 2,
+      "label": "|1>",
+      "decomposition": "known-state",
+      "pulses": [
+        {
+          "axis": "X",
+          "phase_deg": 0,
+          "duration_ns": 96,
+          "duration_cc": 24,
+          "actual_angle_rad": 3.141592653589793
+        }
+      ],
+      "rotation_error_rad": 0.0,
+      "duration_total_ns": 96,
+      "expected_bloch_xyz": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "predicted_actual_bloch": [
+        0.0,
+        -1.2246467991473532e-16,
+        -1.0
+      ]
+    },
+    {
+      "gate": 3,
+      "label": "+X",
+      "decomposition": "known-state",
+      "pulses": [
+        {
+          "axis": "Y",
+          "phase_deg": 90,
+          "duration_ns": 48,
+          "duration_cc": 12,
+          "actual_angle_rad": 1.5707963267948966
+        }
+      ],
+      "rotation_error_rad": 0.0,
+      "duration_total_ns": 48,
+      "expected_bloch_xyz": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "predicted_actual_bloch": [
+        1.0000000000000002,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "gate": 4,
+      "label": "-X",
+      "decomposition": "known-state",
+      "pulses": [
+        {
+          "axis": "Y",
+          "phase_deg": 270,
+          "duration_ns": 48,
+          "duration_cc": 12,
+          "actual_angle_rad": -1.5707963267948966
+        }
+      ],
+      "rotation_error_rad": 0.0,
+      "duration_total_ns": 48,
+      "expected_bloch_xyz": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "predicted_actual_bloch": [
+        -1.0000000000000002,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "gate": 5,
+      "label": "+Y",
+      "decomposition": "known-state",
+      "pulses": [
+        {
+          "axis": "X",
+          "phase_deg": 180,
+          "duration_ns": 48,
+          "duration_cc": 12,
+          "actual_angle_rad": -1.5707963267948966
+        }
+      ],
+      "rotation_error_rad": 0.0,
+      "duration_total_ns": 48,
+      "expected_bloch_xyz": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "predicted_actual_bloch": [
+        0.0,
+        1.0000000000000002,
+        0.0
+      ]
+    },
+    {
+      "gate": 6,
+      "label": "-Y",
+      "decomposition": "known-state",
+      "pulses": [
+        {
+          "axis": "X",
+          "phase_deg": 0,
+          "duration_ns": 48,
+          "duration_cc": 12,
+          "actual_angle_rad": 1.5707963267948966
+        }
+      ],
+      "rotation_error_rad": 0.0,
+      "duration_total_ns": 48,
+      "expected_bloch_xyz": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "predicted_actual_bloch": [
+        0.0,
+        -1.0000000000000002,
+        0.0
+      ]
+    }
+  ],
+  "max_rotation_error_rad": 0.0,
+  "hardware_warning": false
+}

@@ -499,5 +499,6 @@
     }
   ],
   "max_rotation_error_rad": 0.06794791317829377,
-  "hardware_warning": false
+  "hardware_warning": false,
+  "experiment_mode": "cornell"
 }
