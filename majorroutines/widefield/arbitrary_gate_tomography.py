@@ -24,6 +24,7 @@ from utils.single_qubit_gate_compiler import (
     compile_gates,
     save_manifest,
     verify_manifest,
+    source_rotation,
 )
 from analysis import arbitrary_gate_tomography as arb_analysis
 
@@ -110,19 +111,66 @@ def _make_calibration_manifest(uwave_ind, pi_ns):
     }
 
 
+def _attach_projection_targets(manifest):
+    """Derive expected final SCC Z signals for three INITIAL spin states.
+
+    The fixed final Rx(+pi/2) maps pre-projection Y onto the measured Z.
+    Therefore each gate yields the Y-row of its SO(3) rotation matrix,
+    ordered by initial +Z, +X, +Y; NOT the Cornell XYZ output-state vector.
+    """
+    inputs = [
+        ("+Z", np.array([0., 0., 1.])),
+        ("+X", np.array([1., 0., 0.])),
+        ("+Y", np.array([0., 1., 0.])),
+    ]
+    projection = Rotation.from_rotvec([np.pi / 2, 0., 0.])
+    axes = {
+        "X": np.array([1., 0., 0.]),
+        "Y": np.array([0., 1., 0.]),
+    }
+    manifest["experiment_mode"] = "projection"
+    manifest["readout_protocol"] = "fixed_projection"
+    manifest["input_state_order"] = [label for label, _ in inputs]
+    manifest["projection_axis"] = "+X"
+    manifest["projection_phase_deg"] = 0
+    manifest["projected_observable"] = "SCC Z after Rx(+pi/2); pre-projection Y"
+    for gate in manifest["gates"]:
+        ideal = source_rotation(gate)
+        compiled = Rotation.identity()
+        for pulse in gate["pulses"]:
+            compiled = Rotation.from_rotvec(
+                axes[pulse["axis"]] * pulse["actual_angle_rad"]
+            ) * compiled
+        gate["readout_protocol"] = "fixed_projection"
+        gate["projection_phase_deg"] = 0
+        gate["expected_projected_z"] = [
+            float(projection.apply(ideal.apply(state))[2])
+            for _, state in inputs
+        ]
+        gate["predicted_projected_z"] = [
+            float(projection.apply(compiled.apply(state))[2])
+            for _, state in inputs
+        ]
+    return manifest
+
+
 def prepare(uwave_ind=0, mode="cornell"):
-    """Precompute the target manifest using the current chain's pi calibration."""
-    if mode not in ("cornell", "calibration"):
-        raise ValueError("mode must be 'cornell' or 'calibration'")
+    """Precompute a Cornell, calibration, or fixed-projection target manifest."""
+    if mode not in ("cornell", "calibration", "projection"):
+        raise ValueError("mode must be 'cornell', 'calibration', or 'projection'")
     csv_path, folder = _paths()
     pi_ns = tb.get_virtual_sig_gen_dict(uwave_ind)["pi_pulse"]
 
-    if mode == "cornell":
+    if mode in ("cornell", "projection"):
         if not csv_path.exists():
             raise FileNotFoundError(f"Place Cornell CSV at {csv_path}")
         manifest = compile_gates(csv_path, pi_ns, uwave_ind)
-        manifest["experiment_mode"] = "cornell"
-        out_path = folder / f"purcell_uwave{uwave_ind}.json"
+        if mode == "projection":
+            manifest = _attach_projection_targets(manifest)
+            out_path = folder / f"purcell_uwave{uwave_ind}_projection.json"
+        else:
+            manifest["experiment_mode"] = "cornell"
+            out_path = folder / f"purcell_uwave{uwave_ind}.json"
     else:
         manifest = _make_calibration_manifest(uwave_ind, pi_ns)
         out_path = folder / f"purcell_uwave{uwave_ind}_calibration.json"
@@ -172,14 +220,19 @@ def main(
 ):
     """Run Cornell or six known-state calibration gates on many NVs.
 
-    mode='cornell' measures the 10 arbitrary rotations; mode='calibration'
-    measures |0>, |1>, +X, -X, +Y, -Y through the SAME QUA SCC sequence.
+    mode='cornell' measures 10 arbitrary rotations with XYZ tomography;
+    mode='calibration' measures |0>, |1>, +X, -X, +Y, -Y;
+    mode='projection' prepares initial +Z/+X/+Y then applies each Cornell
+    gate and the same final Rx(+pi/2), reading out only final SCC Z.
+    The existing QUA SCC sequence is used for all three modes.
 
     Figures are saved by default without opening blocking plot windows.
     show_plots=True optionally displays them NONBLOCKING.
     Each target gate is compiled and acquired separately.
-    Per gate, the OPX program contains only:
-        Z readout, X readout, Y readout, dual-rail reference.
+    Per gate, the OPX program contains 3 signal measurements and one
+    parity-alternating dual-rail reference. Legacy signals use Z/X/Y
+    tomography; projection signals use initial +Z/+X/+Y, all with
+    the same final +X pi/2 projection.
 
     Final counts shape:
         [gate, experiment=4, NV, run, step=1, repetition]
@@ -245,7 +298,7 @@ def main(
                     [gate],
                 ]
 
-                # One gate -> Z,X,Y + automatically appended reference.
+                # One gate -> three signal preparations/bases plus reference.
                 pulse_gen.stream_load(
                     SEQ_FILE,
                     tb.encode_seq_args(seq_args),
@@ -277,7 +330,7 @@ def main(
             )
 
         # -------------------------------------------------------------
-        # Combine all 10 independently acquired gate blocks.
+        # Combine all independently acquired gate blocks.
         # -------------------------------------------------------------
         counts = np.stack(
             [
@@ -322,21 +375,33 @@ def main(
             "experiment": (
                 "Known-state tomography calibration"
                 if mode == "calibration"
+                else "Cornell Experiment 0: fixed +X pi/2 projection"
+                if mode == "projection"
                 else "Cornell-Berkeley Experiment 0, arbitrary SU2 tomography"
             ),
             "experiment_order": (
-                "Per gate: Z, X, Y, dual-rail reference"
+                "Per gate: input +Z, +X, +Y; fixed final +X pi/2; dual-rail reference"
+                if mode == "projection"
+                else "Per gate: Z, X, Y, dual-rail reference"
             ),
             "ref_even_rep": "ms0",
             "ref_odd_rep": "ms1",
             "acquisition_layout": (
-                "counts[gate, exp(ZXYref), nv, run, step, rep]"
+                "counts[gate, exp(inputZ,inputX,inputY,ref), nv, run, step, rep]"
+                if mode == "projection"
+                else "counts[gate, exp(ZXYref), nv, run, step, rep]"
             ),
         }
 
         # Analyze before saving. save_raw_data replaces raw['counts']
         # with an NPZ path in the dictionary passed to it.
-        result = arb_analysis.analyze(raw)
+        result = arb_analysis.analyze(
+            raw,
+            min_ref_contrast=2.5 if mode == "projection"
+                             else arb_analysis.MIN_REFERENCE_CONTRAST,
+            min_ref_snr=3.0 if mode == "projection"
+                        else arb_analysis.MIN_REFERENCE_SNR,
+        )
 
         print()
         print(

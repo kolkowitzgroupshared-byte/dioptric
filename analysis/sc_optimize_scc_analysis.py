@@ -39,7 +39,8 @@ from utils import widefield
 
 # FILE_STEM = "2026_09_15-04_51_20-qnami-nv0_2026_02_20"
 # FILE_STEM = "2026_09_17-03_23_08-qnami-nv0_2026_02_20"
-FILE_STEM = "2026_10_14-16_05_00-johnson-nv0_2026_10_02"
+# FILE_STEM = "2026_10_14-16_05_00-johnson-nv0_2026_10_02"
+FILE_STEM = "2026_10_20-22_45_11-johnson-nv0_2026_10_02"
 
 # "amplitude" or "duration"
 MODE = "duration"

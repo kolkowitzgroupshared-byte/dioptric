@@ -715,14 +715,13 @@ def optimize_scc_amp_and_duration(nv_list):
         uwave_ind_list
     )
 
-
 def do_optimize_scc_duration(nv_list):
     min_tau = 16
     max_tau = 220
     num_steps = 18
     num_reps = 15
     num_runs = 200
-    uwave_ind_list = [0]
+    uwave_ind_list = [1]
     optimize_scc.optimize_scc_duration(
         nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
     )
@@ -734,7 +733,7 @@ def do_optimize_scc_amp(nv_list):
     num_steps = 21
     num_reps = 15
     num_runs = 200
-    uwave_ind_list = [0]
+    uwave_ind_list = [1]
     optimize_scc.optimize_scc_amp(
         nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
     )
@@ -1029,6 +1028,19 @@ def do_arbitrary_gate_tomography(nv_list):
             num_runs=50,
             uwave_ind_list=(1,),
             mode="cornell",
+            show_plots=False,
+        )
+
+
+def do_arbitrary_gate_projection(nv_list):
+    for _ in range(2):
+        do_widefield_image_sample(nv_sig, 50)
+        arbitrary_gate_tomography.main(
+            nv_list=nv_list,
+            num_reps=200,
+            num_runs=10,
+            uwave_ind_list=(1,),
+            mode="projection",
             show_plots=False,
         )
 
@@ -1915,16 +1927,16 @@ if __name__ == "__main__":
     #     [255.325, 177.995],      
     # ]
     # green_coords_list = [
-    #     [100.29, 100.507],
-    #     [112.229, 119.362],
-    #     [100.581, 79.78],
-    #     [82.99, 92.284],
+    #     [100.278, 100.569],
+    #     [112.202, 119.425],
+    #     [100.575, 79.828],
+    #     [82.964, 92.299],
     # ]
     # red_coords_list = [
-    #     [69.232, 69.885], 
-    #     [78.764, 85.537], 
-    #     [69.585, 53.036], 
-    #     [55.08, 62.872],
+    #     [69.176, 70.079],
+    #     [78.817, 85.708],
+    #     [69.522, 53.17],
+    #     [55.049, 62.991],
     # ]
     
     # -------------------------------------------
@@ -1992,7 +2004,7 @@ if __name__ == "__main__":
     # durations
     # -------------------------------------------
     scc_dur_data = dm.get_raw_data(
-        file_stem="2026_10_14-16_36_53-optimal_scc_parameters_robust",
+        file_stem="2026_10_20-22_48_15-optimal_scc_parameters_robust",
         load_npz=True,
     )
     scc_dur_dict = scc_dur_data["optimal_values"]
@@ -2039,7 +2051,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    nv_sig.expected_counts = 810.0
+    nv_sig.expected_counts = 800.0
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:100]
     print(f"length of NVs list:{len(nv_list)}")
@@ -2083,7 +2095,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_widefield_image_sample(nv_sig, 50)     
+        # do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list: 
@@ -2098,7 +2110,7 @@ if __name__ == "__main__":
         # piezo_voltage_to_pixel_calibration()
         # do_image_nv_list(nv_list)
         # do_image_single_nv(nv_sig)
-        # z_range = np.linspace(-2.5, 0.5, 31)
+        # z_range = np.linspace(0.0, 1.0, 21)
         # for z in z_range:
         #     nv_sig.coords[CoordsKey.Z] = z
         #     do_scanning_image_sample(nv_sig)
@@ -2174,7 +2186,7 @@ if __name__ == "__main__":
         # do_check_readout_fidelity(nv_list)
         # do_optimize_aod_access_time(nv_list)
 
-        # do_scc_snr_check(nv_list)
+        do_scc_snr_check(nv_list)
         # optimize_scc_amp_and_duration(nv_list)
         # do_optimize_scc_duration(nv_list)
         # do_optimize_scc_amp(nv_list)
@@ -2204,7 +2216,7 @@ if __name__ == "__main__":
         # do_resonance(nv_list)
         # do_optimize_scc_amp(nv_list)
         # do_rabi(nv_list)
-        do_iq_phase_rabi(nv_list)
+        # do_iq_phase_rabi(nv_list)
         # do_resonance_zoom(nv_list)
         # do_spin_echo(nv_list)
         # do_ramsey(nv_list)

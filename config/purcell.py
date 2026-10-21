@@ -38,14 +38,14 @@ calibration_coords_pixel = [
     [255.325, 177.995],    
 ]
 calibration_coords_green = [
-    [112.23, 119.374],
-    [100.598, 79.769],
-    [83.026, 92.275],
+    [112.209, 119.411],
+    [100.54, 79.839],
+    [82.945, 92.314],
 ]
 calibration_coords_red = [
-    [78.764, 85.537], 
-    [69.585, 53.036], 
-    [55.08, 62.872],
+    [78.817, 85.708],
+    [69.522, 53.17],
+    [55.049, 62.991],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -184,12 +184,12 @@ config |= {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
                 "frequency": 2.7924,
-                "rabi_period": 184, ## loop iq
-                "pi_pulse": 96, ## loop iq
-                "pi_on_2_pulse": 48, ## loop iq
-                # "rabi_period": 180, ## loop
-                # "pi_pulse": 88, ## loop
-                # "pi_on_2_pulse": 44, ## loop
+                # "rabi_period": 184, ## loop iq
+                # "pi_pulse": 96, ## loop iq
+                # "pi_on_2_pulse": 48, ## loop iq
+                "rabi_period": 180, ## loop
+                "pi_pulse": 88, ## loop
+                "pi_on_2_pulse": 44, ## loop
                 # "rabi_period": 312,## resonator
                 # "pi_pulse": 156, ## resonator
             },
@@ -1035,9 +1035,9 @@ opx_config = {
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.13},
         # Red AOD
-        "red_aod_cw-opti": {"type": "constant", "sample": 0.13},
-        "red_aod_cw-ion": {"type": "constant", "sample": 0.13},
-        "red_aod_cw-scc": {"type": "constant", "sample": 0.13},
+        "red_aod_cw-opti": {"type": "constant", "sample": 0.15},
+        "red_aod_cw-ion": {"type": "constant", "sample": 0.15},
+        "red_aod_cw-scc": {"type": "constant", "sample": 0.15},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.35},
         "yellow_charge_readout": {"type": "constant", "sample": 0.2832}, ##300NVs

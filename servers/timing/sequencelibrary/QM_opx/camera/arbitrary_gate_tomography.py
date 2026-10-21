@@ -9,8 +9,11 @@ standard widefield SCC pipeline:
         SCC -> charge readout + camera trigger
     )
 
-Per gate the production experiment measures Z, X, Y and an alternating
-ms=0/ms=1 dual-rail SCC reference. The standalone simulation uses the SAME
+Per gate the legacy protocol measures Z, X, Y and an alternating
+ms=0/ms=1 dual-rail SCC reference. The fixed_projection protocol instead
+prepares +Z/+X/+Y, applies the compiled Cornell gate, then appends a fixed
++X pi/2 before SCC, with the same alternating fourth reference.
+The standalone simulation uses the SAME
 get_seq() and base_scc_sequence.macro(), with shortened spin-polarization and
 charge-readout durations so the full first shot is easy to inspect.
 
@@ -81,11 +84,54 @@ def get_seq(
 
         return uwave_macro
 
-    uwave_macros = [
-        make_macro(gate["pulses"], basis)
-        for gate in compiled_gates
-        for basis in ("Z", "X", "Y")
-    ]
+    # Projection protocol: three INITIAL states rather than three final
+    # measurement bases. All shots receive the same +X pi/2 readout rotation.
+    # The fourth SCC reference remains unchanged (no preparation or projection).
+    protocol = compiled_gates[0].get("readout_protocol", "legacy_tomography")
+    if any(g.get("readout_protocol", "legacy_tomography") != protocol
+           for g in compiled_gates):
+        raise ValueError("Do not mix projection and legacy gates in one QUA program")
+
+    def make_projection_macro(pulses, input_state, projection_phase):
+        if input_state not in ("+Z", "+X", "+Y"):
+            raise ValueError(f"Unknown input state: {input_state}")
+        if projection_phase != 0:
+            raise ValueError("Fixed projection mode currently uses +X pi/2, phase 0")
+
+        def uwave_macro(uwave_ind_list, step_val):
+            qua.align()
+            if input_state == "+X":
+                seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=90)
+            elif input_state == "+Y":
+                seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=180)
+            # +Z is the spin-polarized state and needs no preparation pulse.
+            for p in pulses:
+                seq_utils.macro_pi_pulse(
+                    uwave_ind_list,
+                    duration_cc=int(p["duration_cc"]),
+                    phase=int(p["phase_deg"]),
+                )
+            # Common projection followed by the normal SCC Z population readout.
+            seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=0)
+            qua.align()
+
+        return uwave_macro
+
+    if protocol == "fixed_projection":
+        uwave_macros = [
+            make_projection_macro(gate["pulses"], prep,
+                                  gate.get("projection_phase_deg", 0))
+            for gate in compiled_gates
+            for prep in ("+Z", "+X", "+Y")
+        ]
+    elif protocol == "legacy_tomography":
+        uwave_macros = [
+            make_macro(gate["pulses"], basis)
+            for gate in compiled_gates
+            for basis in ("Z", "X", "Y")
+        ]
+    else:
+        raise ValueError(f"Unknown readout protocol: {protocol}")
 
     with qua.program() as seq:
         seq_utils.init()
