@@ -71,6 +71,7 @@ FILE_STEM = "2026_10_17-17_39_46-johnson-nv0_2026_10_02"
 FILE_STEM = "2026_10_20-16_48_46-johnson-nv0_2026_10_02"
 FILE_STEM = "2026_10_20-17_34_49-johnson-nv0_2026_10_02"
 FILE_STEM = "2026_10_20-19_51_07-johnson-nv0_2026_10_02"
+FILE_STEM = "2026_10_20-23_03_10-johnson-nv0_2026_10_02"
 
 X_AXIS = "scc_duration"       # "scc_amp" or "scc_duration" or "nv_index"  
 STEP_IND = 0

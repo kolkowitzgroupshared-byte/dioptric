@@ -1021,7 +1021,6 @@ def do_arbitrary_gate_calibration(nv_list):
 def do_arbitrary_gate_tomography(nv_list):
     for _ in range(2):
         do_widefield_image_sample(nv_sig, 50)
-
         arbitrary_gate_tomography.main(
             nv_list=nv_list,
             num_reps=200,
@@ -1038,7 +1037,7 @@ def do_arbitrary_gate_projection(nv_list):
         arbitrary_gate_tomography.main(
             nv_list=nv_list,
             num_reps=200,
-            num_runs=10,
+            num_runs=50,
             uwave_ind_list=(1,),
             mode="projection",
             show_plots=False,
@@ -2186,10 +2185,10 @@ if __name__ == "__main__":
         # do_check_readout_fidelity(nv_list)
         # do_optimize_aod_access_time(nv_list)
 
-        do_scc_snr_check(nv_list)
+        # do_scc_snr_check(nv_list)
         # optimize_scc_amp_and_duration(nv_list)
         # do_optimize_scc_duration(nv_list)
-        # do_optimize_scc_amp(nv_list)
+        do_optimize_scc_amp(nv_list)
         # do_optimize_scc_readout_amp(nv_list)
         # do_crosstalk_check(nv_sig)
         # do_spin_pol_check(nv_sig)
@@ -2210,12 +2209,12 @@ if __name__ == "__main__":
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_arbitrary_gate_calibration(nv_list)
         # do_arbitrary_gate_tomography(nv_list)
+        do_arbitrary_gate_projection(nv_list)
         # do_calibrate_iq_delay(nv_list)
-        # do_rabi(nv_list)
         # do_power_rabi(nv_list)
         # do_resonance(nv_list)
         # do_optimize_scc_amp(nv_list)
-        # do_rabi(nv_list)
+        do_rabi(nv_list)
         # do_iq_phase_rabi(nv_list)
         # do_resonance_zoom(nv_list)
         # do_spin_echo(nv_list)

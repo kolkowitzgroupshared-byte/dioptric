@@ -2,8 +2,8 @@
   "format": "cornell-arb-sqr-v1",
   "csv_sha256": "2629213ede0e2498bcef5be5c235690dd5528ae2e0acc79f0de6919050a15863",
   "mw_chain": 1,
-  "pi_pulse_ns": 88.0,
-  "pi_on_2_pulse_ns": 44.0,
+  "pi_pulse_ns": 96.0,
+  "pi_on_2_pulse_ns": 48.0,
   "clock_ns": 4,
   "phase_available_deg": [
     0,
@@ -18,42 +18,42 @@
   ],
   "gates": [
     {
-      "decomposition": "XYX",
+      "decomposition": "YXY",
       "pulses": [
         {
+          "axis": "Y",
+          "phase_deg": 270,
+          "duration_cc": 10,
+          "duration_ns": 40,
+          "requested_angle_rad": -1.322903397185853,
+          "actual_angle_rad": -1.3089969389957472,
+          "full_turn_fallback": false
+        },
+        {
           "axis": "X",
-          "phase_deg": 180,
-          "duration_cc": 17,
-          "duration_ns": 68,
-          "requested_angle_rad": -2.4556837554850546,
-          "actual_angle_rad": -2.4275943232284765,
+          "phase_deg": 0,
+          "duration_cc": 16,
+          "duration_ns": 64,
+          "requested_angle_rad": 2.0924005977550366,
+          "actual_angle_rad": 2.0943951023931953,
           "full_turn_fallback": false
         },
         {
           "axis": "Y",
-          "phase_deg": 90,
-          "duration_cc": 7,
-          "duration_ns": 28,
-          "requested_angle_rad": 1.0517213265159777,
-          "actual_angle_rad": 0.9995976625058433,
-          "full_turn_fallback": false
-        },
-        {
-          "axis": "X",
-          "phase_deg": 180,
-          "duration_cc": 9,
-          "duration_ns": 36,
-          "requested_angle_rad": -1.3172445279899767,
-          "actual_angle_rad": -1.2851969946503699,
+          "phase_deg": 270,
+          "duration_cc": 5,
+          "duration_ns": 20,
+          "requested_angle_rad": -0.6870965653588337,
+          "actual_angle_rad": -0.6544984694978736,
           "full_turn_fallback": false
         }
       ],
-      "rotation_error_rad": 0.07393341303242769,
-      "duration_total_ns": 132,
+      "rotation_error_rad": 0.028415652776991672,
+      "duration_total_ns": 124,
       "predicted_actual_bloch": [
-        -0.6357769993611811,
-        -0.20754275057618435,
-        -0.7434471156488298
+        -0.6875409548843623,
+        -0.22414386804201344,
+        -0.6906858633096988
       ],
       "gate": 1,
       "Omega": 1.29895357613236,
@@ -72,9 +72,9 @@
         -0.49827171494873856
       ],
       "predicted_projected_z": [
-        -0.2075427505761844,
-        -0.8071768537798913,
-        -0.5526224148596112
+        -0.2241438680420135,
+        -0.8365163037378083,
+        -0.4999999999999999
       ]
     },
     {
@@ -83,19 +83,19 @@
         {
           "axis": "X",
           "phase_deg": 180,
-          "duration_cc": 18,
-          "duration_ns": 72,
+          "duration_cc": 20,
+          "duration_ns": 80,
           "requested_angle_rad": -2.566137072353702,
-          "actual_angle_rad": -2.5703939893007397,
+          "actual_angle_rad": -2.6179938779914944,
           "full_turn_fallback": false
         },
         {
           "axis": "Y",
           "phase_deg": 90,
-          "duration_cc": 16,
-          "duration_ns": 64,
+          "duration_cc": 17,
+          "duration_ns": 68,
           "requested_angle_rad": 2.25525579733161,
-          "actual_angle_rad": 2.284794657156213,
+          "actual_angle_rad": 2.2252947962927703,
           "full_turn_fallback": false
         },
         {
@@ -104,16 +104,16 @@
           "duration_cc": 5,
           "duration_ns": 20,
           "requested_angle_rad": 0.6758236726705207,
-          "actual_angle_rad": 0.7139983303613167,
+          "actual_angle_rad": 0.6544984694978736,
           "full_turn_fallback": false
         }
       ],
-      "rotation_error_rad": 0.05056734404211184,
-      "duration_total_ns": 156,
+      "rotation_error_rad": 0.05165912437796381,
+      "duration_total_ns": 168,
       "predicted_actual_bloch": [
-        -0.6357769993611813,
-        0.04782373149086523,
-        0.7703898349469458
+        -0.68706414686945,
+        0.07573590227440485,
+        0.7226388663732645
       ],
       "gate": 2,
       "Omega": 4.9662203589131675,
@@ -132,9 +132,9 @@
         -0.8697758293393613
       ],
       "predicted_projected_z": [
-        0.047823731490865246,
-        0.4949107209404666,
-        -0.8676268028389152
+        0.07573590227440487,
+        0.48296291314453427,
+        -0.8723593855938202
       ]
     },
     {
@@ -143,37 +143,37 @@
         {
           "axis": "X",
           "phase_deg": 180,
-          "duration_cc": 42,
-          "duration_ns": 168,
+          "duration_cc": 46,
+          "duration_ns": 184,
           "requested_angle_rad": 0.26160245810785066,
-          "actual_angle_rad": -5.99758597503506,
+          "actual_angle_rad": -6.021385919380436,
           "full_turn_fallback": true
         },
         {
           "axis": "Y",
           "phase_deg": 90,
-          "duration_cc": 19,
-          "duration_ns": 76,
+          "duration_cc": 21,
+          "duration_ns": 84,
           "requested_angle_rad": 2.7360938580175103,
-          "actual_angle_rad": 2.713193655373003,
+          "actual_angle_rad": 2.748893571891069,
           "full_turn_fallback": false
         },
         {
           "axis": "X",
           "phase_deg": 0,
-          "duration_cc": 14,
-          "duration_ns": 56,
+          "duration_cc": 15,
+          "duration_ns": 60,
           "requested_angle_rad": 1.9482714428594825,
-          "actual_angle_rad": 1.9991953250116865,
+          "actual_angle_rad": 1.9634954084936205,
           "full_turn_fallback": false
         }
       ],
-      "rotation_error_rad": 0.03819238298611454,
-      "duration_total_ns": 300,
+      "rotation_error_rad": 0.019751265944098043,
+      "duration_total_ns": 328,
       "predicted_actual_bloch": [
-        0.39858778610928536,
-        0.910949557028853,
-        0.10629525536652878
+        0.3696438106143863,
+        0.9235150246319318,
+        0.10238873255177387
       ],
       "gate": 3,
       "Omega": 1.6613705927261568,
@@ -192,9 +192,9 @@
         -0.13511029048960532
       ],
       "predicted_projected_z": [
-        0.9109495570288533,
-        0.3778747871771295,
-        -0.16547371321383994
+        0.923515024631932,
+        0.3535533905932741,
+        -0.14872793711701493
       ]
     },
     {
@@ -203,37 +203,37 @@
         {
           "axis": "Y",
           "phase_deg": 270,
-          "duration_cc": 19,
-          "duration_ns": 76,
+          "duration_cc": 21,
+          "duration_ns": 84,
           "requested_angle_rad": -2.741483495600004,
-          "actual_angle_rad": -2.713193655373003,
+          "actual_angle_rad": -2.748893571891069,
           "full_turn_fallback": false
         },
         {
           "axis": "X",
           "phase_deg": 0,
-          "duration_cc": 19,
-          "duration_ns": 76,
+          "duration_cc": 21,
+          "duration_ns": 84,
           "requested_angle_rad": 2.700452269725209,
-          "actual_angle_rad": 2.713193655373003,
+          "actual_angle_rad": 2.748893571891069,
           "full_turn_fallback": false
         },
         {
           "axis": "Y",
           "phase_deg": 90,
-          "duration_cc": 17,
-          "duration_ns": 68,
+          "duration_cc": 19,
+          "duration_ns": 76,
           "requested_angle_rad": 2.4727761340695573,
-          "actual_angle_rad": 2.4275943232284765,
+          "actual_angle_rad": 2.4870941840919194,
           "full_turn_fallback": false
         }
       ],
-      "rotation_error_rad": 0.07295582698268707,
-      "duration_total_ns": 220,
+      "rotation_error_rad": 0.05291939783084259,
+      "duration_total_ns": 244,
       "predicted_actual_bloch": [
-        0.855801376660866,
-        0.3778747871771294,
-        -0.3532911673410565
+        0.8232135611337591,
+        0.3535533905932739,
+        -0.4442065203995488
       ],
       "gate": 4,
       "Omega": 1.3522463079172005,
@@ -252,9 +252,9 @@
         -0.9042653405284355
       ],
       "predicted_projected_z": [
-        0.3778747871771295,
-        -0.17256963302735773,
-        -0.909631995354519
+        0.35355339059327395,
+        -0.14644660940672635,
+        -0.9238795325112871
       ]
     },
     {
@@ -263,10 +263,10 @@
         {
           "axis": "X",
           "phase_deg": 180,
-          "duration_cc": 10,
-          "duration_ns": 40,
+          "duration_cc": 11,
+          "duration_ns": 44,
           "requested_angle_rad": -1.4516384630273103,
-          "actual_angle_rad": -1.4279966607226333,
+          "actual_angle_rad": -1.4398966328953218,
           "full_turn_fallback": false
         },
         {
@@ -275,25 +275,25 @@
           "duration_cc": 7,
           "duration_ns": 28,
           "requested_angle_rad": 0.9624639463434808,
-          "actual_angle_rad": 0.9995976625058433,
+          "actual_angle_rad": 0.916297857297023,
           "full_turn_fallback": false
         },
         {
           "axis": "X",
           "phase_deg": 0,
-          "duration_cc": 12,
-          "duration_ns": 48,
+          "duration_cc": 13,
+          "duration_ns": 52,
           "requested_angle_rad": 1.6934083720895008,
-          "actual_angle_rad": 1.7135959928671598,
+          "actual_angle_rad": 1.7016960206944713,
           "full_turn_fallback": false
         }
       ],
-      "rotation_error_rad": 0.05363001815915503,
-      "duration_total_ns": 116,
+      "rotation_error_rad": 0.049524951802373485,
+      "duration_total_ns": 124,
       "predicted_actual_bloch": [
-        0.11972286047169936,
-        -0.217024338338018,
-        0.9687966108783719
+        0.10355339059327373,
+        -0.20818904842690203,
+        0.9725913918042552
       ],
       "gate": 5,
       "Omega": 5.788159584367247,
@@ -312,48 +312,48 @@
         0.5486481281241248
       ],
       "predicted_projected_z": [
-        -0.21702433833801807,
-        0.8326907848543886,
-        0.5094374283339697
+        -0.20818904842690208,
+        0.7865660924854935,
+        0.581352820812976
       ]
     },
     {
-      "decomposition": "XYX",
+      "decomposition": "YXY",
       "pulses": [
+        {
+          "axis": "Y",
+          "phase_deg": 270,
+          "duration_cc": 17,
+          "duration_ns": 68,
+          "requested_angle_rad": -2.2590196750945397,
+          "actual_angle_rad": -2.2252947962927703,
+          "full_turn_fallback": false
+        },
         {
           "axis": "X",
           "phase_deg": 0,
           "duration_cc": 6,
           "duration_ns": 24,
-          "requested_angle_rad": 0.8386818810427981,
-          "actual_angle_rad": 0.8567979964335799,
+          "requested_angle_rad": 0.7475492035841529,
+          "actual_angle_rad": 0.7853981633974483,
           "full_turn_fallback": false
         },
         {
           "axis": "Y",
-          "phase_deg": 270,
-          "duration_cc": 40,
-          "duration_ns": 160,
-          "requested_angle_rad": 0.561860493328571,
-          "actual_angle_rad": -5.711986642890533,
-          "full_turn_fallback": true
-        },
-        {
-          "axis": "X",
-          "phase_deg": 180,
-          "duration_cc": 10,
-          "duration_ns": 40,
-          "requested_angle_rad": -1.4009393794220486,
-          "actual_angle_rad": -1.4279966607226333,
+          "phase_deg": 90,
+          "duration_cc": 19,
+          "duration_ns": 76,
+          "requested_angle_rad": 2.5193584627549654,
+          "actual_angle_rad": 2.4870941840919194,
           "full_turn_fallback": false
         }
       ],
-      "rotation_error_rad": 0.01789665139437645,
-      "duration_total_ns": 224,
+      "rotation_error_rad": 0.04519769257013054,
+      "duration_total_ns": 168,
       "predicted_actual_bloch": [
-        0.35404444251975153,
-        0.4377421200698901,
-        0.8264589336667589
+        0.367362482904096,
+        0.4304593345768794,
+        0.8244692640906439
       ],
       "gate": 6,
       "Omega": 2.7468089956948374,
@@ -372,48 +372,48 @@
         0.7333572276234136
       ],
       "predicted_projected_z": [
-        0.4377421200698902,
-        -0.5351378734735859,
-        0.7225021056653652
+        0.4304593345768795,
+        -0.560985526796931,
+        0.7071067811865477
       ]
     },
     {
-      "decomposition": "YXY",
+      "decomposition": "XYX",
       "pulses": [
+        {
+          "axis": "X",
+          "phase_deg": 0,
+          "duration_cc": 12,
+          "duration_ns": 48,
+          "requested_angle_rad": 1.6291494807637081,
+          "actual_angle_rad": 1.5707963267948966,
+          "full_turn_fallback": false
+        },
         {
           "axis": "Y",
           "phase_deg": 270,
-          "duration_cc": 15,
-          "duration_ns": 60,
-          "requested_angle_rad": -2.101126300991454,
-          "actual_angle_rad": -2.1419949910839495,
-          "full_turn_fallback": false
+          "duration_cc": 45,
+          "duration_ns": 180,
+          "requested_angle_rad": 0.38678560742647344,
+          "actual_angle_rad": -5.8904862254808625,
+          "full_turn_fallback": true
         },
         {
           "axis": "X",
           "phase_deg": 180,
-          "duration_cc": 41,
-          "duration_ns": 164,
-          "requested_angle_rad": 0.4351583521750985,
-          "actual_angle_rad": -5.854786308962796,
-          "full_turn_fallback": true
-        },
-        {
-          "axis": "Y",
-          "phase_deg": 90,
           "duration_cc": 14,
           "duration_ns": 56,
-          "requested_angle_rad": 2.0369728415707113,
-          "actual_angle_rad": 1.9991953250116865,
+          "requested_angle_rad": -1.8397796824343065,
+          "actual_angle_rad": -1.832595714594046,
           "full_turn_fallback": false
         }
       ],
-      "rotation_error_rad": 0.07711991100683113,
-      "duration_total_ns": 280,
+      "rotation_error_rad": 0.05211637639798114,
+      "duration_total_ns": 284,
       "predicted_actual_bloch": [
-        -0.09787328270872639,
-        0.22459031221266793,
-        0.9695256635035683
+        6.938893903907228e-18,
+        0.25881904510252074,
+        0.9659258262890683
       ],
       "gate": 7,
       "Omega": 2.921698757963669,
@@ -432,9 +432,9 @@
         0.9068032996758805
       ],
       "predicted_projected_z": [
-        0.22459031221266798,
-        -0.3494693472789489,
-        0.9096319953545183
+        0.2588190451025208,
+        -0.36964381061438617,
+        0.892399100832523
       ]
     },
     {
@@ -443,37 +443,37 @@
         {
           "axis": "Y",
           "phase_deg": 90,
-          "duration_cc": 18,
-          "duration_ns": 72,
+          "duration_cc": 19,
+          "duration_ns": 76,
           "requested_angle_rad": 2.5156741376959846,
-          "actual_angle_rad": 2.5703939893007397,
+          "actual_angle_rad": 2.4870941840919194,
           "full_turn_fallback": false
         },
         {
           "axis": "X",
           "phase_deg": 0,
-          "duration_cc": 8,
-          "duration_ns": 32,
+          "duration_cc": 9,
+          "duration_ns": 36,
           "requested_angle_rad": 1.169552300902054,
-          "actual_angle_rad": 1.1423973285781066,
+          "actual_angle_rad": 1.1780972450961724,
           "full_turn_fallback": false
         },
         {
           "axis": "Y",
-          "phase_deg": 90,
-          "duration_cc": 40,
-          "duration_ns": 160,
+          "phase_deg": 270,
+          "duration_cc": 4,
+          "duration_ns": 16,
           "requested_angle_rad": -0.558634994754493,
-          "actual_angle_rad": 5.711986642890533,
-          "full_turn_fallback": true
+          "actual_angle_rad": -0.5235987755982988,
+          "full_turn_fallback": false
         }
       ],
-      "rotation_error_rad": 0.057750407807749926,
-      "duration_total_ns": 264,
+      "rotation_error_rad": 0.03664689766553192,
+      "duration_total_ns": 128,
       "predicted_actual_bloch": [
-        0.6437533912658241,
-        0.7652311296682653,
-        -0.0016998295155650212
+        0.6790044520361489,
+        0.7329629131445341,
+        0.04145264852536712
       ],
       "gate": 8,
       "Omega": 1.0866082067944545,
@@ -492,48 +492,48 @@
         0.3905638644065746
       ],
       "predicted_projected_z": [
-        0.7652311296682656,
-        0.4917841855522335,
-        0.41541501300188655
+        0.7329629131445342,
+        0.5624222244434801,
+        0.38268343236509006
       ]
     },
     {
-      "decomposition": "YXY",
+      "decomposition": "XYX",
       "pulses": [
-        {
-          "axis": "Y",
-          "phase_deg": 270,
-          "duration_cc": 17,
-          "duration_ns": 68,
-          "requested_angle_rad": -2.389693773417848,
-          "actual_angle_rad": -2.4275943232284765,
-          "full_turn_fallback": false
-        },
         {
           "axis": "X",
           "phase_deg": 0,
-          "duration_cc": 5,
-          "duration_ns": 20,
-          "requested_angle_rad": 0.731358794060571,
-          "actual_angle_rad": 0.7139983303613167,
+          "duration_cc": 17,
+          "duration_ns": 68,
+          "requested_angle_rad": 2.26982568139936,
+          "actual_angle_rad": 2.2252947962927703,
           "full_turn_fallback": false
         },
         {
           "axis": "Y",
           "phase_deg": 90,
-          "duration_cc": 11,
-          "duration_ns": 44,
-          "requested_angle_rad": 1.5446925864818355,
-          "actual_angle_rad": 1.5707963267948963,
+          "duration_cc": 8,
+          "duration_ns": 32,
+          "requested_angle_rad": 1.059718336846896,
+          "actual_angle_rad": 1.0471975511965976,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "X",
+          "phase_deg": 180,
+          "duration_cc": 20,
+          "duration_ns": 80,
+          "requested_angle_rad": -2.591210670986661,
+          "actual_angle_rad": -2.6179938779914944,
           "full_turn_fallback": false
         }
       ],
-      "rotation_error_rad": 0.030578474233973342,
-      "duration_total_ns": 132,
+      "rotation_error_rad": 0.06353516248128131,
+      "duration_total_ns": 180,
       "predicted_actual_bloch": [
-        -0.5711574191366426,
-        0.4949107209404664,
-        0.654860733945285
+        -0.5272028623656693,
+        0.5348737896172701,
+        0.6602781013284524
       ],
       "gate": 9,
       "Omega": 3.693050622477844,
@@ -552,9 +552,9 @@
         0.74426757620891
       ],
       "predicted_projected_z": [
-        0.4949107209404665,
-        -0.4288425808633576,
-        0.7557495743542584
+        0.5348737896172702,
+        -0.4330127018922196,
+        0.7255411974384783
       ]
     },
     {
@@ -563,37 +563,37 @@
         {
           "axis": "Y",
           "phase_deg": 90,
-          "duration_cc": 13,
-          "duration_ns": 52,
+          "duration_cc": 14,
+          "duration_ns": 56,
           "requested_angle_rad": 1.8826302236763004,
-          "actual_angle_rad": 1.8563956589394233,
+          "actual_angle_rad": 1.832595714594046,
           "full_turn_fallback": false
         },
         {
           "axis": "X",
           "phase_deg": 0,
-          "duration_cc": 9,
-          "duration_ns": 36,
+          "duration_cc": 10,
+          "duration_ns": 40,
           "requested_angle_rad": 1.3557927571830335,
-          "actual_angle_rad": 1.2851969946503699,
+          "actual_angle_rad": 1.3089969389957472,
           "full_turn_fallback": false
         },
         {
           "axis": "Y",
           "phase_deg": 270,
-          "duration_cc": 12,
-          "duration_ns": 48,
+          "duration_cc": 13,
+          "duration_ns": 52,
           "requested_angle_rad": -1.705530544794185,
-          "actual_angle_rad": -1.7135959928671598,
+          "actual_angle_rad": -1.7016960206944713,
           "full_turn_fallback": false
         }
       ],
-      "rotation_error_rad": 0.07643031242260324,
-      "duration_total_ns": 136,
+      "rotation_error_rad": 0.06794791317829377,
+      "duration_total_ns": 148,
       "predicted_actual_bloch": [
-        -0.05798475885102834,
-        0.2703204087277988,
-        0.9610227075185186
+        -0.059664407586244333,
+        0.24999999999999997,
+        0.9664057938916666
       ],
       "gate": 10,
       "Omega": 2.4588449564352537,
@@ -612,13 +612,13 @@
         0.21335091572594983
       ],
       "predicted_projected_z": [
-        0.27032040872779883,
-        0.9206267664155909,
-        0.2817325568414299
+        0.25,
+        0.9330127018922194,
+        0.25881904510252074
       ]
     }
   ],
-  "max_rotation_error_rad": 0.07711991100683113,
+  "max_rotation_error_rad": 0.06794791317829377,
   "hardware_warning": false,
   "experiment_mode": "projection",
   "readout_protocol": "fixed_projection",
