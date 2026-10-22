@@ -21,15 +21,15 @@ from scipy.optimize import curve_fit
 #     ]
 
 green_coords_list =[
-    [121.203, 108.074],
-    [92.976, 79.881],
-    [85.248, 117.243],
+    [112.226, 119.47],
+    [100.558, 79.848],
+    [82.945, 92.343],
     ]
 pixel_coords_list = green_coords_list
 red_coords_list = [
-    [86.246, 76.639],
-    [63.334, 53.049],
-    [56.775, 83.386],
+    [78.784, 85.634],
+    [69.613, 53.085],
+    [55.07, 62.918],
     ]
 # Given pixel coordinates and corresponding red coordinates
 # pixel_coords_list = np.array(

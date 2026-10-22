@@ -2,8 +2,8 @@
   "format": "cornell-arb-sqr-v1",
   "experiment_mode": "calibration",
   "mw_chain": 1,
-  "pi_pulse_ns": 88.0,
-  "pi_on_2_pulse_ns": 44.0,
+  "pi_pulse_ns": 96.0,
+  "pi_on_2_pulse_ns": 48.0,
   "clock_ns": 4,
   "phase_available_deg": [
     0,
@@ -43,13 +43,13 @@
         {
           "axis": "X",
           "phase_deg": 0,
-          "duration_ns": 88,
-          "duration_cc": 22,
-          "actual_angle_rad": 3.1415926535897927
+          "duration_ns": 96,
+          "duration_cc": 24,
+          "actual_angle_rad": 3.141592653589793
         }
       ],
-      "rotation_error_rad": 4.440892098500626e-16,
-      "duration_total_ns": 88,
+      "rotation_error_rad": 0.0,
+      "duration_total_ns": 96,
       "expected_bloch_xyz": [
         0.0,
         0.0,
@@ -57,7 +57,7 @@
       ],
       "predicted_actual_bloch": [
         0.0,
-        -5.66553889764798e-16,
+        -1.2246467991473532e-16,
         -1.0
       ]
     },
@@ -69,13 +69,13 @@
         {
           "axis": "Y",
           "phase_deg": 90,
-          "duration_ns": 44,
-          "duration_cc": 11,
-          "actual_angle_rad": 1.5707963267948963
+          "duration_ns": 48,
+          "duration_cc": 12,
+          "actual_angle_rad": 1.5707963267948966
         }
       ],
-      "rotation_error_rad": 2.220446049250313e-16,
-      "duration_total_ns": 44,
+      "rotation_error_rad": 0.0,
+      "duration_total_ns": 48,
       "expected_bloch_xyz": [
         1.0,
         0.0,
@@ -84,7 +84,7 @@
       "predicted_actual_bloch": [
         1.0000000000000002,
         0.0,
-        3.3306690738754696e-16
+        0.0
       ]
     },
     {
@@ -95,13 +95,13 @@
         {
           "axis": "Y",
           "phase_deg": 270,
-          "duration_ns": 44,
-          "duration_cc": 11,
-          "actual_angle_rad": -1.5707963267948963
+          "duration_ns": 48,
+          "duration_cc": 12,
+          "actual_angle_rad": -1.5707963267948966
         }
       ],
-      "rotation_error_rad": 2.220446049250313e-16,
-      "duration_total_ns": 44,
+      "rotation_error_rad": 0.0,
+      "duration_total_ns": 48,
       "expected_bloch_xyz": [
         -1.0,
         0.0,
@@ -110,7 +110,7 @@
       "predicted_actual_bloch": [
         -1.0000000000000002,
         0.0,
-        3.3306690738754696e-16
+        0.0
       ]
     },
     {
@@ -121,13 +121,13 @@
         {
           "axis": "X",
           "phase_deg": 180,
-          "duration_ns": 44,
-          "duration_cc": 11,
-          "actual_angle_rad": -1.5707963267948963
+          "duration_ns": 48,
+          "duration_cc": 12,
+          "actual_angle_rad": -1.5707963267948966
         }
       ],
-      "rotation_error_rad": 2.220446049250313e-16,
-      "duration_total_ns": 44,
+      "rotation_error_rad": 0.0,
+      "duration_total_ns": 48,
       "expected_bloch_xyz": [
         0.0,
         1.0,
@@ -136,7 +136,7 @@
       "predicted_actual_bloch": [
         0.0,
         1.0000000000000002,
-        3.3306690738754696e-16
+        0.0
       ]
     },
     {
@@ -147,13 +147,13 @@
         {
           "axis": "X",
           "phase_deg": 0,
-          "duration_ns": 44,
-          "duration_cc": 11,
-          "actual_angle_rad": 1.5707963267948963
+          "duration_ns": 48,
+          "duration_cc": 12,
+          "actual_angle_rad": 1.5707963267948966
         }
       ],
-      "rotation_error_rad": 2.220446049250313e-16,
-      "duration_total_ns": 44,
+      "rotation_error_rad": 0.0,
+      "duration_total_ns": 48,
       "expected_bloch_xyz": [
         0.0,
         -1.0,
@@ -162,10 +162,10 @@
       "predicted_actual_bloch": [
         0.0,
         -1.0000000000000002,
-        3.3306690738754696e-16
+        0.0
       ]
     }
   ],
-  "max_rotation_error_rad": 4.440892098500626e-16,
+  "max_rotation_error_rad": 0.0,
   "hardware_warning": false
 }

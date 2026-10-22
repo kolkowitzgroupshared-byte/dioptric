@@ -1,122 +1,154 @@
 # -*- coding: utf-8 -*-
 """
-Lighweight check of the SCC SNR
+Lightweight check of the SCC SNR.
 
-Created on December 6th, 2023
+Acquires one-point SCC SNR data and immediately runs the same analysis used by
+analysis/sc_scc_snr_check_analysis.py.
+
+Important:
+dm.save_raw_data() currently replaces data["counts"] in-place with an NPZ-link
+string. Therefore analysis MUST be done before saving the raw data.
+
+Created December 6th, 2023
+Updated October 2026
 
 @author: mccambria
 @author: schand
 """
 
-import sys
-import time
 import traceback
 
+import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib import pyplot as plt
 
+from analysis import sc_scc_snr_check_analysis as scc_analysis
 from majorroutines.widefield import base_routine
 from utils import common
 from utils import data_manager as dm
 from utils import kplotlib as kpl
-from utils import positioning as pos
 from utils import tool_belt as tb
-from utils import widefield as widefield
-from utils.constants import NVSig
+from utils import widefield
+
+
+SAVE_MAIN_FIGURE = True
+SAVE_JOINT_FIGURE = True
+SAVE_ANALYSIS_SUMMARY = True
+SHOW_FIGURES = True
 
 
 def process_and_plot(data):
-    threshold = True
-    nv_list = data["nv_list"]
-    num_nvs = len(nv_list)
-    counts = np.array(data["counts"])
-    sig_counts = counts[0]
-    ref_counts = counts[1]
+    """
+    Run the same SCC-SNR analysis/plots used by
+    analysis/sc_scc_snr_check_analysis.py.
 
-    if threshold:
-        sig_counts, ref_counts = widefield.threshold_counts(
-            nv_list, sig_counts, ref_counts, dynamic_thresh=True
+    Returns
+    -------
+    figures : dict
+        {"snr": fig, "amp_duration_snr": joint_fig}
+    df : pandas.DataFrame
+        Per-NV numerical results.
+    metadata : dict
+        Summary metadata.
+    """
+
+    counts_obj = data.get("counts", None)
+
+    if counts_obj is None:
+        raise ValueError("data['counts'] is None.")
+
+    if isinstance(counts_obj, (str, bytes)):
+        raise ValueError(
+            "data['counts'] is already an NPZ-link string. "
+            "Run process_and_plot(data) BEFORE dm.save_raw_data(data, ...)."
         )
 
-    ### Report the results
+    counts = np.asarray(counts_obj)
+    if counts.ndim < 2:
+        raise ValueError(
+            f"Expected counts array with signal/reference axis; got shape {counts.shape}. "
+            "This usually means dm.save_raw_data() was called first."
+        )
 
-    avg_sig_counts, avg_sig_counts_ste, _ = widefield.average_counts(sig_counts)
-    avg_ref_counts, avg_ref_counts_ste, _ = widefield.average_counts(ref_counts)
+    # The offline analysis expects opx_config in the data dictionary.
+    # During live acquisition it has not yet been inserted by save_raw_data(),
+    # so provide the current config explicitly.
+    if data.get("opx_config") is None:
+        data["opx_config"] = common.get_opx_config_dict()
 
-    avg_snr, avg_snr_ste = widefield.calc_snr(sig_counts, ref_counts)
-    avg_contrast, avg_contrast_ste = widefield.calc_contrast(sig_counts, ref_counts)
+    # Keep live analysis matched to the standalone analysis file.
+    scc_analysis.X_AXIS = "scc_duration"
+    scc_analysis.STEP_IND = 0
+    scc_analysis.APPLY_THRESHOLD = True
 
-    # There's only one point, so only consider that
-    step_ind = 0
-    avg_sig_counts = avg_sig_counts[:, step_ind]
-    avg_sig_counts_ste = avg_sig_counts_ste[:, step_ind]
-    avg_ref_counts = avg_ref_counts[:, step_ind]
-    avg_ref_counts_ste = avg_ref_counts_ste[:, step_ind]
-    avg_snr = avg_snr[:, step_ind]
-    avg_snr_ste = avg_snr_ste[:, step_ind]
-    avg_contrast = avg_contrast[:, step_ind]
-    avg_contrast_ste = avg_contrast_ste[:, step_ind]
+    df, metadata = scc_analysis.process_data(data)
 
-    # Print
-    avg_snr = avg_snr.tolist()
-    print(f"avg_snr = {[f'{snr:.3f}' for snr in avg_snr]}")
-    print(f"Median SNR: {np.median(avg_snr):.3f}")
-    return avg_snr
+    print()
+    print(
+        df[
+            [
+                "NV Index",
+                "SCC AOD Multiplier",
+                "SCC Duration (ns)",
+                "SNR",
+                "SNR STE",
+            ]
+        ]
+    )
 
-    ### Plot
+    fig = scc_analysis.plot_snr(df, metadata)
+    joint_fig = scc_analysis.plot_amp_duration_snr(df, metadata)
 
-    # Normalized counts bar plots
-    # fig, ax = plt.subplots()
-    # for ind in range(num_nvs):
-    #     nv_sig = nv_list[ind]
-    #     nv_num = widefield.get_nv_num(nv_sig)
-    #     kpl.plot_bars(ax, nv_num, norm_counts[ind], yerr=norm_counts_ste[ind])
-    # ax.set_xlabel("NV index")
-    # ax.set_ylabel("Contrast")
+    figures = {
+        "snr": fig,
+        "amp_duration_snr": joint_fig,
+    }
 
-    # SNR bar plots
-    # figsize = kpl.figsize
-    # figsize[1] *= 1.5
-    # counts_fig, axes_pack = plt.subplots(2, 1, sharex=True, figsize=figsize)
-    # snr_fig, ax = plt.subplots()
-    # for ind in range(len(nv_list)):
-    #     nv_sig = nv_list[ind]
-    #     nv_num = widefield.get_nv_num(nv_sig)
-    #     kpl.plot_bars(
-    #         axes_pack[0], nv_num, avg_ref_counts[ind], yerr=avg_ref_counts_ste[ind]
-    #     )
-    #     kpl.plot_bars(
-    #         axes_pack[1], nv_num, avg_sig_counts[ind], yerr=avg_sig_counts_ste[ind]
-    #     )
-    #     kpl.plot_bars(ax, nv_num, avg_snr[ind], yerr=avg_snr_ste[ind])
-    # axes_pack[0].set_xlabel("NV index")
-    # ax.set_xlabel("NV index")
-    # axes_pack[0].set_ylabel("NV- | prep in ms=0")
-    # axes_pack[1].set_ylabel("NV- | prep in ms=1")
-    # ax.set_ylabel("SNR")
-    # return counts_fig, snr_fig
+    return figures, df, metadata
 
-    # SNR histogram
-    fig, ax = plt.subplots()
-    kpl.histogram(ax, avg_snr, kpl.HistType.STEP, nbins=10)
-    ax.set_xlabel("SNR")
-    ax.set_ylabel("Number of occurrences")
 
-    # SNR vs red frequency
-    coords_key = "laser_COBO_638_aod"
-    distances = []
-    for nv in nv_list:
-        coords = pos.get_nv_coords(nv, coords_key, drift_adjust=False)
-        dist = np.sqrt((90 - coords[0]) ** 2 + (90 - coords[1]) ** 2)
-        distances.append(dist)
-    fig, ax = plt.subplots()
-    kpl.plot_points(ax, distances, avg_snr)
-    ax.set_xlabel("Distance from center frequencies (MHz)")
-    ax.set_ylabel("SNR")
+def _save_analysis_summary(
+    df,
+    metadata,
+    timestamp,
+    repr_nv_name,
+    raw_file_path,
+    num_reps,
+    num_runs,
+    uwave_ind_list,
+):
+    results = {
+        "timestamp": timestamp,
+        "source_file_stem": raw_file_path.stem,
+        "num_nvs": int(metadata["num_nvs"]),
+        "num_reps": int(num_reps),
+        "num_runs": int(num_runs),
+        "uwave_ind_list": list(uwave_ind_list),
+        "nv_index": df["NV Index"].tolist(),
+        "scc_aod_multiplier": df["SCC AOD Multiplier"].tolist(),
+        "scc_duration_ns": df["SCC Duration (ns)"].tolist(),
+        "snr": df["SNR"].tolist(),
+        "snr_ste": df["SNR STE"].tolist(),
+        "contrast": df["Contrast"].tolist(),
+        "contrast_ste": df["Contrast STE"].tolist(),
+        "signal_counts": df["Signal Counts"].tolist(),
+        "reference_counts": df["Reference Counts"].tolist(),
+        "readout_power_uw": float(metadata["readout_power_uw"]),
+        "spin_pol_power_uw": float(metadata["spin_pol_power_uw"]),
+        "median_snr": float(np.nanmedian(df["SNR"])),
+        "mean_snr": float(np.nanmean(df["SNR"])),
+    }
+
+    analysis_path = dm.get_file_path(
+        __file__,
+        timestamp,
+        repr_nv_name + "-analysis",
+    )
+
+    dm.save_raw_data(results, analysis_path)
+    print(f"Saved analysis summary: {analysis_path}")
 
 
 def main(nv_list, num_reps, num_runs, uwave_ind_list):
-    ### Some initial setup
     num_steps = 1
 
     seq_file = "scc_snr_check.py"
@@ -124,13 +156,21 @@ def main(nv_list, num_reps, num_runs, uwave_ind_list):
 
     def run_fn(step_inds):
         seq_args = [
-            widefield.get_base_scc_seq_args(nv_list, uwave_ind_list),
+            widefield.get_base_scc_seq_args(
+                nv_list,
+                uwave_ind_list,
+            ),
         ]
-        # print(seq_args)
         seq_args_string = tb.encode_seq_args(seq_args)
-        pulse_gen.stream_load(seq_file, seq_args_string, num_reps)
+        pulse_gen.stream_load(
+            seq_file,
+            seq_args_string,
+            num_reps,
+        )
 
-    ### Collect the data
+    # ------------------------------------------------------------------
+    # Acquire
+    # ------------------------------------------------------------------
     data = base_routine.main(
         nv_list,
         num_steps,
@@ -144,60 +184,90 @@ def main(nv_list, num_reps, num_runs, uwave_ind_list):
         load_iq=True,
     )
 
-    ### Report results and cleanup
     timestamp = dm.get_time_stamp()
     repr_nv_name = widefield.get_repr_nv_sig(nv_list).name
-    file_path = dm.get_file_path(__file__, timestamp, repr_nv_name)
-    dm.save_raw_data(data, file_path)
+    raw_file_path = dm.get_file_path(
+        __file__,
+        timestamp,
+        repr_nv_name,
+    )
+
+    # ------------------------------------------------------------------
+    # Analyze FIRST.
+    #
+    # save_raw_data() mutates data["counts"] into an NPZ-link string,
+    # so doing this after save_raw_data() causes the 0-D IndexError.
+    # ------------------------------------------------------------------
+    figures = {}
+    df = None
+    metadata = None
 
     try:
-        figs = process_and_plot(data)
+        figures, df, metadata = process_and_plot(data)
     except Exception:
+        print()
+        print("SCC SNR live analysis failed:")
         print(traceback.format_exc())
-        figs = None
-    if figs is not None:
-        num_figs = len(figs)
-        for ind in range(num_figs):
-            file_path = dm.get_file_path(__file__, timestamp, repr_nv_name + f"-{ind}")
-            dm.save_figure(figs[ind], file_path)
 
-    ### Clean up and return
+    # ------------------------------------------------------------------
+    # Save raw data AFTER the analysis has consumed the real counts array.
+    # ------------------------------------------------------------------
+    dm.save_raw_data(data, raw_file_path)
+    print(f"Saved raw data: {raw_file_path}")
+
+    # ------------------------------------------------------------------
+    # Save figures beside the raw dataset.
+    # ------------------------------------------------------------------
+    if figures:
+        if SAVE_MAIN_FIGURE and "snr" in figures:
+            fig_path = dm.get_file_path(
+                __file__,
+                timestamp,
+                repr_nv_name + "-snr",
+            )
+            dm.save_figure(figures["snr"], fig_path)
+            print(f"Saved SNR figure: {fig_path}")
+
+        if SAVE_JOINT_FIGURE and "amp_duration_snr" in figures:
+            joint_path = dm.get_file_path(
+                __file__,
+                timestamp,
+                repr_nv_name + "-amp-duration-snr",
+            )
+            dm.save_figure(
+                figures["amp_duration_snr"],
+                joint_path,
+            )
+            print(f"Saved joint figure: {joint_path}")
+
+    # ------------------------------------------------------------------
+    # Save compact processed values too.
+    # ------------------------------------------------------------------
+    if (
+        SAVE_ANALYSIS_SUMMARY
+        and df is not None
+        and metadata is not None
+    ):
+        _save_analysis_summary(
+            df,
+            metadata,
+            timestamp,
+            repr_nv_name,
+            raw_file_path,
+            num_reps,
+            num_runs,
+            uwave_ind_list,
+        )
+
     tb.reset_cfm()
-    kpl.show()
+
+    if SHOW_FIGURES and figures:
+        kpl.show(block=True)
+    else:
+        plt.close("all")
+
+    return data
 
 
 if __name__ == "__main__":
     kpl.init_kplotlib()
-
-    data = dm.get_raw_data(file_id=1732924888109)
-    avg_snr = process_and_plot(data)
-    print(f"Minimum SNR: {np.min(avg_snr)}")
-    sys.exit()
-
-    data = dm.get_raw_data(file_id=1731300731766)  # -8
-    avg_snr_a = process_and_plot(data)
-    data = dm.get_raw_data(file_id=1731322739905)  # +0
-    avg_snr_b = process_and_plot(data)
-    # fmt: off
-    test = [0.207, 0.206, 0.211, 0.183, 0.08, 0.224, 0.095, 0.078, 0.136, 0.165, 0.13, 0.18, 0.153, 0.074, 0.08, 0.142, 0.188, 0.077, 0.121, 0.137, 0.085, 0.157, 0.135, 0.075, 0.168, 0.158, 0.12, 0.074, 0.167, 0.073, 0.149, 0.135, 0.119, 0.193, 0.104, 0.091, 0.127, 0.125, 0.105, 0.139, 0.151, 0.119, 0.134, 0.11, 0.105, 0.133, 0.149, 0.102, 0.083, 0.097, 0.175, 0.096, 0.161, 0.158, 0.1, 0.093, 0.132, 0.131, 0.083, 0.114, 0.144, 0.142, 0.116, 0.143, 0.121, 0.116, 0.102, 0.113, 0.087, 0.119, 0.119, 0.131, 0.144, 0.122, 0.087, 0.087, 0.089, 0.089, 0.131, 0.075, 0.09, 0.085, 0.099, 0.123, 0.133, 0.097, 0.083, 0.097, 0.148, 0.118, 0.078, 0.081, 0.112, 0.119, 0.137, 0.133, 0.074, 0.106, 0.165, 0.16, 0.132, 0.088, 0.081]
-    # fmt: on
-    test2 = np.array(test) - np.array(avg_snr_b)
-    fig, ax = plt.subplots()
-    kpl.plot_points(ax, range(len(test2)), test2)
-    ax.set_xlabel("NV order index")
-    ax.set_ylabel("SNR difference from predicted value")
-    kpl.show(block=True)
-
-    data = dm.get_raw_data(file_id=1731342940279)  # +8
-    data = dm.get_raw_data(file_id=1731408940779)
-    data = dm.get_raw_data(file_id=1732884193552)
-    avg_snr_c = process_and_plot(data)
-    nv_list = data["nv_list"]
-
-    fig, ax = plt.subplots()
-    nv_nums = [widefield.get_nv_num(nv) for nv in nv_list]
-    kpl.plot_points(ax, nv_nums, avg_snr_a, label="Cross")
-    kpl.plot_points(ax, nv_nums, avg_snr_b, label="Full")
-    kpl.plot_points(ax, nv_nums, avg_snr_c, label="High power")
-    ax.legend()
-    kpl.show(block=True)

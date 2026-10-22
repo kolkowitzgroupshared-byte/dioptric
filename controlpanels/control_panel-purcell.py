@@ -1030,16 +1030,27 @@ def do_arbitrary_gate_tomography(nv_list):
             show_plots=False,
         )
 
-
 def do_arbitrary_gate_projection(nv_list):
-    for _ in range(2):
+    for _ in range(1):
         do_widefield_image_sample(nv_sig, 50)
         arbitrary_gate_tomography.main(
             nv_list=nv_list,
             num_reps=200,
-            num_runs=50,
+            num_runs=10,
             uwave_ind_list=(1,),
             mode="projection",
+            show_plots=False,
+        )
+
+def do_arbitrary_gate_virtual_z(nv_list):
+    for _ in range(1):
+        do_widefield_image_sample(nv_sig, 50)
+        arbitrary_gate_tomography.main(
+            nv_list=nv_list,
+            num_reps=200,
+            num_runs=10,
+            uwave_ind_list=(1,),
+            mode="virtual_z",
             show_plots=False,
         )
 
@@ -1926,16 +1937,16 @@ if __name__ == "__main__":
     #     [255.325, 177.995],      
     # ]
     # green_coords_list = [
-    #     [100.278, 100.569],
-    #     [112.202, 119.425],
-    #     [100.575, 79.828],
-    #     [82.964, 92.299],
+    #     [100.278, 100.579],
+    #     [112.226, 119.47],
+    #     [100.558, 79.848],
+    #     [82.945, 92.343],
     # ]
     # red_coords_list = [
-    #     [69.176, 70.079],
-    #     [78.817, 85.708],
-    #     [69.522, 53.17],
-    #     [55.049, 62.991],
+    #     [69.188, 69.921],
+    #     [78.784, 85.634],
+    #     [69.613, 53.085],
+    #     [55.07, 62.918],
     # ]
     
     # -------------------------------------------
@@ -2050,7 +2061,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    nv_sig.expected_counts = 800.0
+    nv_sig.expected_counts = 810.0
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:100]
     print(f"length of NVs list:{len(nv_list)}")
@@ -2188,7 +2199,7 @@ if __name__ == "__main__":
         # do_scc_snr_check(nv_list)
         # optimize_scc_amp_and_duration(nv_list)
         # do_optimize_scc_duration(nv_list)
-        do_optimize_scc_amp(nv_list)
+        # do_optimize_scc_amp(nv_list)
         # do_optimize_scc_readout_amp(nv_list)
         # do_crosstalk_check(nv_sig)
         # do_spin_pol_check(nv_sig)
@@ -2209,12 +2220,13 @@ if __name__ == "__main__":
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_arbitrary_gate_calibration(nv_list)
         # do_arbitrary_gate_tomography(nv_list)
+        do_arbitrary_gate_virtual_z(nv_list)
         do_arbitrary_gate_projection(nv_list)
         # do_calibrate_iq_delay(nv_list)
         # do_power_rabi(nv_list)
         # do_resonance(nv_list)
         # do_optimize_scc_amp(nv_list)
-        do_rabi(nv_list)
+        # do_rabi(nv_list)
         # do_iq_phase_rabi(nv_list)
         # do_resonance_zoom(nv_list)
         # do_spin_echo(nv_list)
