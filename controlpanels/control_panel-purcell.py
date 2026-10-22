@@ -66,6 +66,7 @@ from majorroutines.widefield import (
     dmd_turnoff_crosstalk_extinction_matrix,
     adaptive_charge_initialization,
     deer_hahn_p1_pulse_position_scan,
+    rqs_c13,
 )
 
 # from slmsuite import optimize_slm_calibration
@@ -715,14 +716,13 @@ def optimize_scc_amp_and_duration(nv_list):
         uwave_ind_list
     )
 
-
 def do_optimize_scc_duration(nv_list):
     min_tau = 16
     max_tau = 220
     num_steps = 18
     num_reps = 15
     num_runs = 200
-    uwave_ind_list = [0]
+    uwave_ind_list = [1]
     optimize_scc.optimize_scc_duration(
         nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
     )
@@ -734,7 +734,7 @@ def do_optimize_scc_amp(nv_list):
     num_steps = 21
     num_reps = 15
     num_runs = 200
-    uwave_ind_list = [0]
+    uwave_ind_list = [1]
     optimize_scc.optimize_scc_amp(
         nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list
     )
@@ -1022,7 +1022,6 @@ def do_arbitrary_gate_calibration(nv_list):
 def do_arbitrary_gate_tomography(nv_list):
     for _ in range(2):
         do_widefield_image_sample(nv_sig, 50)
-
         arbitrary_gate_tomography.main(
             nv_list=nv_list,
             num_reps=200,
@@ -1032,6 +1031,41 @@ def do_arbitrary_gate_tomography(nv_list):
             show_plots=False,
         )
 
+def do_arbitrary_gate_projection(nv_list):
+    for _ in range(1):
+        do_widefield_image_sample(nv_sig, 50)
+        arbitrary_gate_tomography.main(
+            nv_list=nv_list,
+            num_reps=200,
+            num_runs=10,
+            uwave_ind_list=(1,),
+            mode="projection",
+            show_plots=False,
+        )
+
+def do_arbitrary_gate_virtual_z(nv_list):
+    for _ in range(1):
+        do_widefield_image_sample(nv_sig, 50)
+        arbitrary_gate_tomography.main(
+            nv_list=nv_list,
+            num_reps=200,
+            num_runs=10,
+            uwave_ind_list=(1,),
+            mode="virtual_z",
+            show_plots=False,
+        )
+
+def do_rqs_c13(nv_list):
+    for _ in range(2):
+        rqs_c13.main(
+            nv_list=nv_list,
+            field_g=31.1,
+            band="low",
+            uwave_ind_list=(1,),
+            masks_per_duration=2,
+            num_reps=100,
+            num_runs=20,
+        )
 
 def do_rabi(nv_list):
     min_tau = 16
@@ -1915,16 +1949,16 @@ if __name__ == "__main__":
     #     [255.325, 177.995],      
     # ]
     # green_coords_list = [
-    #     [100.29, 100.507],
-    #     [112.229, 119.362],
-    #     [100.581, 79.78],
-    #     [82.99, 92.284],
+    #     [100.278, 100.579],
+    #     [112.226, 119.47],
+    #     [100.558, 79.848],
+    #     [82.945, 92.343],
     # ]
     # red_coords_list = [
-    #     [69.232, 69.885], 
-    #     [78.764, 85.537], 
-    #     [69.585, 53.036], 
-    #     [55.08, 62.872],
+    #     [69.188, 69.921],
+    #     [78.784, 85.634],
+    #     [69.613, 53.085],
+    #     [55.07, 62.918],
     # ]
     
     # -------------------------------------------
@@ -1992,7 +2026,7 @@ if __name__ == "__main__":
     # durations
     # -------------------------------------------
     scc_dur_data = dm.get_raw_data(
-        file_stem="2026_10_14-16_36_53-optimal_scc_parameters_robust",
+        file_stem="2026_10_20-22_48_15-optimal_scc_parameters_robust",
         load_npz=True,
     )
     scc_dur_dict = scc_dur_data["optimal_values"]
@@ -2098,7 +2132,7 @@ if __name__ == "__main__":
         # piezo_voltage_to_pixel_calibration()
         # do_image_nv_list(nv_list)
         # do_image_single_nv(nv_sig)
-        # z_range = np.linspace(-2.5, 0.5, 31)
+        # z_range = np.linspace(0.0, 1.0, 21)
         # for z in z_range:
         #     nv_sig.coords[CoordsKey.Z] = z
         #     do_scanning_image_sample(nv_sig)
@@ -2181,6 +2215,7 @@ if __name__ == "__main__":
         # do_optimize_scc_readout_amp(nv_list)
         # do_crosstalk_check(nv_sig)
         # do_spin_pol_check(nv_sig)
+        
 
         # do_calibrate_green_red_delay()
         # do_spin_echo_phase_scan_test(nv_list)  # for iq mod test
@@ -2198,13 +2233,15 @@ if __name__ == "__main__":
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_arbitrary_gate_calibration(nv_list)
         # do_arbitrary_gate_tomography(nv_list)
+        # do_arbitrary_gate_virtual_z(nv_list)
+        # do_arbitrary_gate_projection(nv_list)
+        do_rqs_c13(nv_list)
         # do_calibrate_iq_delay(nv_list)
-        # do_rabi(nv_list)
         # do_power_rabi(nv_list)
         # do_resonance(nv_list)
         # do_optimize_scc_amp(nv_list)
         # do_rabi(nv_list)
-        do_iq_phase_rabi(nv_list)
+        # do_iq_phase_rabi(nv_list)
         # do_resonance_zoom(nv_list)
         # do_spin_echo(nv_list)
         # do_ramsey(nv_list)

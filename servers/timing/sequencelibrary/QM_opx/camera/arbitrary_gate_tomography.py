@@ -9,8 +9,14 @@ standard widefield SCC pipeline:
         SCC -> charge readout + camera trigger
     )
 
-Per gate the production experiment measures Z, X, Y and an alternating
-ms=0/ms=1 dual-rail SCC reference. The standalone simulation uses the SAME
+Per gate the legacy protocol measures Z, X, Y and an alternating
+ms=0/ms=1 dual-rail SCC reference. The fixed_projection protocol instead
+prepares +Z/+X/+Y, applies the compiled Cornell gate, then appends a fixed
++X pi/2 before SCC, with the same alternating fourth reference.
+The virtual_z_projection protocol applies phase-adjusted INITIAL pulses and
+at most ONE physical transverse microwave gate pulse, while retaining the same
+fixed final +X pi/2 and untouched dual-rail reference.
+The standalone simulation uses the SAME
 get_seq() and base_scc_sequence.macro(), with shortened spin-polarization and
 charge-readout durations so the full first shot is easy to inspect.
 
@@ -54,10 +60,24 @@ def get_seq(
     if not compiled_gates:
         raise ValueError("No compiled gates supplied")
 
+    # Purcell config defines IQ pulse waveforms on a 9-degree phase grid.
+    # Legacy pulses use 0/90/180/270; virtual-Z can use any supported phase.
+    phase_grid = set(range(0, 360, 9))
     for gate in compiled_gates:
         for p in gate["pulses"]:
-            if p["phase_deg"] not in (0, 90, 180, 270) or int(p["duration_cc"]) < 4:
+            if (int(p["phase_deg"]) not in phase_grid
+                    or int(p["duration_cc"]) < 4):
                 raise ValueError(f"Invalid compiled pulse: {p}")
+        if gate.get("readout_protocol") == "virtual_z_projection":
+            phases = gate.get("preparation_phases_deg", {})
+            if set(phases) != {"+Z", "+X", "+Y"}:
+                raise ValueError("Missing virtual-Z preparation phase table")
+            if phases["+Z"] is not None:
+                raise ValueError("+Z should not receive a preparation pulse")
+            if any(phases[k] not in phase_grid for k in ("+X", "+Y")):
+                raise ValueError("Virtual-Z preparation phase off IQ grid")
+            if len(gate["pulses"]) > 1:
+                raise ValueError("Virtual-Z gate must contain at most one MW pulse")
 
     def make_macro(pulses, basis):
         def uwave_macro(uwave_ind_list, step_val):
@@ -81,11 +101,65 @@ def get_seq(
 
         return uwave_macro
 
-    uwave_macros = [
-        make_macro(gate["pulses"], basis)
-        for gate in compiled_gates
-        for basis in ("Z", "X", "Y")
-    ]
+    # Projection protocol: three INITIAL states rather than three final
+    # measurement bases. All shots receive the same +X pi/2 readout rotation.
+    # The fourth SCC reference remains unchanged (no preparation or projection).
+    protocol = compiled_gates[0].get("readout_protocol", "legacy_tomography")
+    if any(g.get("readout_protocol", "legacy_tomography") != protocol
+           for g in compiled_gates):
+        raise ValueError("Do not mix projection and legacy gates in one QUA program")
+
+    def make_projection_macro(pulses, input_state, projection_phase,
+                              preparation_phases=None):
+        if input_state not in ("+Z", "+X", "+Y"):
+            raise ValueError(f"Unknown input state: {input_state}")
+        if projection_phase != 0:
+            raise ValueError("Fixed projection mode currently uses +X pi/2, phase 0")
+
+        prep_phases = (
+            {"+Z": None, "+X": 90, "+Y": 180}
+            if preparation_phases is None else preparation_phases
+        )
+
+        def uwave_macro(uwave_ind_list, step_val):
+            qua.align()
+            prep_phase = prep_phases[input_state]
+            if prep_phase is not None:
+                seq_utils.macro_pi_on_2_pulse(
+                    uwave_ind_list, phase=int(prep_phase)
+                )
+            # +Z is the spin-polarized state and needs no preparation pulse.
+            for p in pulses:
+                seq_utils.macro_pi_pulse(
+                    uwave_ind_list,
+                    duration_cc=int(p["duration_cc"]),
+                    phase=int(p["phase_deg"]),
+                )
+            # Common projection followed by the normal SCC Z population readout.
+            seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=0)
+            qua.align()
+
+        return uwave_macro
+
+    if protocol in ("fixed_projection", "virtual_z_projection"):
+        uwave_macros = [
+            make_projection_macro(
+                gate["pulses"], prep,
+                gate.get("projection_phase_deg", 0),
+                gate["preparation_phases_deg"]
+                if protocol == "virtual_z_projection" else None,
+            )
+            for gate in compiled_gates
+            for prep in ("+Z", "+X", "+Y")
+        ]
+    elif protocol == "legacy_tomography":
+        uwave_macros = [
+            make_macro(gate["pulses"], basis)
+            for gate in compiled_gates
+            for basis in ("Z", "X", "Y")
+        ]
+    else:
+        raise ValueError(f"Unknown readout protocol: {protocol}")
 
     with qua.program() as seq:
         seq_utils.init()

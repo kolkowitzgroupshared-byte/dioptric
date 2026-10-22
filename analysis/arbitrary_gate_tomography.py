@@ -1,6 +1,11 @@
 """Cornell Experiment 0: dual-rail SCC state-tomography analysis.
 
-Raw count layout: [gate, experiment=(Z, X, Y, ref), NV, run, step=1, rep].
+Raw count layout: [gate, experiment=(signal0, signal1, signal2, ref),
+                   NV, run, step=1, rep].
+In 'cornell'/'calibration' mode the signals are Z/X/Y output tomography.
+In 'projection' or 'virtual_z' mode the signals are initial +Z/+X/+Y,
+then Cornell U (three-pulse or phase-tracked one-pulse implementation),
+then the SAME final +X pi/2 pulse, all measured by SCC in Z.
 The reference alternates ms=0 on even repetitions and ms=1 on odd ones.
 
 This analysis uses the SAME physical normalization as the Rabi routine:
@@ -74,9 +79,10 @@ def analyze(raw_data, min_ref_contrast=MIN_REFERENCE_CONTRAST,
             min_ref_snr=MIN_REFERENCE_SNR, reference_scope=REFERENCE_SCOPE):
     """Reconstruct XYZ Bloch vectors using a stable pooled dual-rail reference.
 
-    Returns per-gate/per-NV observed XYZ, SEM including reference uncertainty,
-    compiled and ideal targets, and reference diagnostics. Does not clip values.
-    A run with insufficient reference significance is marked NaN, not zero.
+    Returns per-gate/per-NV three observables and their SEM, compiled/ideal
+    targets, and reference diagnostics. In projection mode these three values
+    are projected Z responses for INITIAL +Z/+X/+Y, not a single Bloch vector.
+    Invalid references are masked; measured values are not physically clipped.
     """
     manifest = raw_data["cornell_manifest"]
     gates = manifest["gates"]
@@ -90,7 +96,7 @@ def analyze(raw_data, min_ref_contrast=MIN_REFERENCE_CONTRAST,
     if reference_scope not in ("all_gates", "per_gate"):
         raise ValueError("reference_scope must be 'all_gates' or 'per_gate'")
 
-    sig = a[:, :3, :, :, 0, :]    # [G,3,N,R,P], acquisition order Z,X,Y
+    sig = a[:, :3, :, :, 0, :]    # [G,3,N,R,P]; interpretation is mode-specific
     ref = a[:, 3, :, :, 0, :]     # [G,N,R,P]
     even = ref[..., 0::2]        # ms=0
     odd = ref[..., 1::2]         # ms=1
@@ -130,15 +136,29 @@ def analyze(raw_data, min_ref_contrast=MIN_REFERENCE_CONTRAST,
                + (2*(sig_mean-r0[:,None,:])*se1[:,None,:]/den[:,None,:]**2)**2)
     zxy_sem = np.sqrt(var)
 
-    # Convert acquisition basis Z,X,Y -> reported XYZ.
-    xyz = zxy.transpose(0,2,1)[:,:,[1,2,0]]
-    ste_xyz = zxy_sem.transpose(0,2,1)[:,:,[1,2,0]]
-    per_run_xyz = per_run_zxy.transpose(0,2,3,1)[:,:,:,[1,2,0]]
-
-    ideal = np.array([g["expected_bloch_xyz"] for g in gates],dtype=float)
-    compiled = np.array([g["predicted_actual_bloch"] for g in gates],dtype=float)
-    error = np.linalg.norm(xyz-ideal[:,None,:],axis=-1)
-    error_compiled = np.linalg.norm(xyz-compiled[:,None,:],axis=-1)
+    if mode in ("projection", "virtual_z"):
+        # Three separate initial states measured along one identical axis.
+        # Each recorded value is <sigma_z> after the final +X pi/2 pulse;
+        # it is the pre-projection Y response of U acting on +Z, +X or +Y.
+        # These are a row of the gate's rotation matrix, NOT single-state XYZ.
+        xyz = zxy.transpose(0, 2, 1)
+        ste_xyz = zxy_sem.transpose(0, 2, 1)
+        per_run_xyz = per_run_zxy.transpose(0, 2, 3, 1)
+        ideal = np.array([g["expected_projected_z"] for g in gates], dtype=float)
+        compiled = np.array([g["predicted_projected_z"] for g in gates], dtype=float)
+        components = manifest.get("input_state_order", ["+Z", "+X", "+Y"])
+        vector_kind = "projected_z_responses"
+    else:
+        # Legacy acquisition basis order Z,X,Y -> reported Bloch XYZ.
+        xyz = zxy.transpose(0, 2, 1)[:, :, [1, 2, 0]]
+        ste_xyz = zxy_sem.transpose(0, 2, 1)[:, :, [1, 2, 0]]
+        per_run_xyz = per_run_zxy.transpose(0, 2, 3, 1)[:, :, :, [1, 2, 0]]
+        ideal = np.array([g["expected_bloch_xyz"] for g in gates], dtype=float)
+        compiled = np.array([g["predicted_actual_bloch"] for g in gates], dtype=float)
+        components = ["X", "Y", "Z"]
+        vector_kind = "bloch_xyz"
+    error = np.linalg.norm(xyz-ideal[:, None, :], axis=-1)
+    error_compiled = np.linalg.norm(xyz-compiled[:, None, :], axis=-1)
 
     # Keep the actual gate-by-gate reference drift visible, even with all-gate pooling.
     raw_gate_r0, raw_gate_se0, _ = _mean_sem(even, (2,3))
@@ -161,6 +181,13 @@ def analyze(raw_data, min_ref_contrast=MIN_REFERENCE_CONTRAST,
         "num_reference_shots_per_rail":(n0,n1),
         "num_nvs":N, "num_runs":R, "num_reps":P,
         "tomography_mode":mode, "gate_labels":labels,
+        "measurement_components":components, "measurement_kind":vector_kind,
+        # Backwards-compatible *_xyz keys above store the 3 projected Z
+        # responses in projection mode, not a reconstructed Bloch vector.
+        "measured_projected_z":xyz if mode in ("projection", "virtual_z") else None,
+        "expected_projected_z":ideal if mode in ("projection", "virtual_z") else None,
+        "compiled_projected_z":compiled if mode in ("projection", "virtual_z") else None,
+        "projected_z_response_error":error if mode in ("projection", "virtual_z") else None,
     }
 
 
@@ -178,19 +205,28 @@ def plot_results(raw_data, result, nv_ind=None):
         raise ValueError(f"nv_ind must be between 0 and {n-1}")
     x=np.arange(1,len(pred)+1)
     fig,ax=plt.subplots(3,1,figsize=(9,8),sharex=True,layout="constrained")
-    for j,name in enumerate("XYZ"):
+    for j,name in enumerate(result["measurement_components"]):
         ax[j].plot(x,pred[:,j],"k--o",lw=1,label="Ideal target")
         ax[j].plot(x,result["compiled_xyz"][:,j],".",ms=6,label="OPX compiled")
         ax[j].errorbar(x,obs[:,nv_ind,j],yerr=result["ste_xyz"][:,nv_ind,j],
                        fmt="o",capsize=2,label="Measured")
-        ax[j].set_ylabel(f"<sigma_{name.lower()}>")
+        ax[j].set_ylabel(
+            f"<sigma_z> (input {name})"
+            if result["tomography_mode"] in ("projection", "virtual_z")
+            else f"<sigma_{name.lower()}>"
+        )
         ax[j].axhline(0,lw=.5,color="grey")
         ax[j].set_ylim(-1.8,1.8)
         ax[j].grid(alpha=.2)
     ax[0].legend(fontsize=8)
     ax[-1].set_xlabel("Calibration state" if result["tomography_mode"] == "calibration"
                        else "Cornell gate (1-based)")
-    title = ("Known-state calibration" if result["tomography_mode"] == "calibration"
+    title = ("Virtual-Z: one gate MW pulse and fixed +X pi/2 projection"
+             if result["tomography_mode"] == "virtual_z"
+             else "Fixed +X pi/2 projection of three input states"
+             if result["tomography_mode"] == "projection"
+             else "Known-state calibration"
+             if result["tomography_mode"] == "calibration"
              else "Cornell Experiment 0")
     ax[-1].set_xticks(x, labels=result["gate_labels"])
     fig.suptitle(f"{title} | NV {nv_ind} | {result['reference_scope']} normalization")
@@ -198,10 +234,14 @@ def plot_results(raw_data, result, nv_ind=None):
     fig2,ax2=plt.subplots(figsize=(10,5),layout="constrained")
     im=ax2.imshow(result["bloch_error_norm"].T,aspect="auto",origin="lower",
                   interpolation="nearest",vmin=0,vmax=2)
+    error_kind = ("Projection-response distance" if result["tomography_mode"] in ("projection", "virtual_z")
+                  else "Bloch-vector distance")
     ax2.set(xlabel="State / gate",ylabel="NV index",
-            title="Bloch-vector distance (masked where references are unreliable)")
+            title=error_kind + " (masked where references are unreliable)")
     ax2.set_xticks(np.arange(len(pred)), labels=result["gate_labels"])
-    fig2.colorbar(im,ax=ax2,label="|measured - target|")
+    fig2.colorbar(im,ax=ax2,label="3-component response error"
+                  if result["tomography_mode"] in ("projection", "virtual_z")
+                  else "|measured - Bloch target|")
     return fig,fig2
 
 
@@ -214,7 +254,7 @@ def plot_reference_diagnostics(result):
     axes[0,0].errorbar(idx,np.nanmedian(gate_D,axis=1),fmt="o-",label="per-gate median")
     axes[0,0].set(xlabel="Gate",ylabel="R1-R0 (photons)",title="Raw reference contrast by gate")
     axes[0,0].axhline(0,color="grey",lw=.6)
-    for ax in axes.flat:
+    for ax in (axes[0,0], axes[1,0], axes[1,1]):
         ax.set_xticks(idx, labels=result["gate_labels"])
     axes[0,1].hist(result["reference_snr"][0],bins=25)
     axes[0,1].axvline(MIN_REFERENCE_SNR,ls="--",color="black")
@@ -222,17 +262,24 @@ def plot_reference_diagnostics(result):
     axes[1,0].plot(idx,result["valid_ref"].sum(axis=1),"o-")
     axes[1,0].set(xlabel="Gate",ylabel="Accepted NVs",title="Accepted reference count")
     axes[1,1].plot(idx,np.array([np.nanmedian(x) for x in result["bloch_error_norm"]]),"o-")
-    axes[1,1].set(xlabel="Gate",ylabel="Median |Bloch error|",title="Filtered state discrepancy")
+    axes[1,1].set(xlabel="Gate",
+                  ylabel="Median projected-Z error" if result["tomography_mode"] in ("projection", "virtual_z")
+                  else "Median |Bloch error|",
+                  title="Filtered measurement discrepancy")
     for ax in axes.flat: ax.grid(alpha=.2)
     return fig
 
 
 def print_summary(result, file_stem=""):
     """Print and return a reusable human-readable numerical summary."""
+    projection = result["tomography_mode"] in ("projection", "virtual_z")
     lines=[f"File: {file_stem}",f"Mode: {result['tomography_mode']}",
+           f"Measurement: {result['measurement_kind']} ({', '.join(result['measurement_components'])})",
            f"Normalization: {result['reference_scope']}",
            f"NVs: {result['num_nvs']}; runs/gate: {result['num_runs']}; reps: {result['num_reps']}",
            f"Valid references: {100*result['reference_valid_fraction']:.1f}% of gate/NV pairs",
+           "Gate / State  accepted_NV  median_response_error  median_compiled_error  median_response_row_norm"
+           if projection else
            "Gate / State  accepted_NV  median_Bloch_error  median_compiled_error  median_Bloch_norm"]
     for i in range(len(result["expected_xyz"])):
         valid=result["valid_ref"][i]
@@ -244,8 +291,11 @@ def print_summary(result, file_stem=""):
         else:
             lines.append(f"{str(result['gate_labels'][i]):>12} {0:11d} {'n/a':>19} {'n/a':>22} {'n/a':>18}")
     vals=result["bloch_error_norm"][np.isfinite(result["bloch_error_norm"])]
-    lines.append(f"Overall median error (accepted pairs): {np.median(vals):.4f}" if len(vals)
-                 else "No accepted pairs at these reference-quality thresholds")
+    lines.append(
+        (("Overall median projected-Z response error" if projection
+          else "Overall median Bloch error") + f" (accepted pairs): {np.median(vals):.4f}")
+        if len(vals) else "No accepted pairs at these reference-quality thresholds"
+    )
     text="\n".join(lines)
     print(text)
     return text
