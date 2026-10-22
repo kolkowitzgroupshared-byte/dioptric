@@ -28,7 +28,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Change the TWO values below to analyze a new run in your Purcell session.
-FILE_STEM = "2026_10_17-21_25_08-johnson-nv0_2026_10_02"
+# FILE_STEM = "2026_10_17-21_25_08-johnson-nv0_2026_10_02"
+FILE_STEM = "2026_10_18-21_00_48-johnson-nv0_2026_10_02"
 # Set to None for the usual data_manager/NAS lookup. Alternatively provide the
 # full experiment folder, e.g. r"G:\nvdata\pc_Purcell\branch_master\arbitrary_gate_tomography\2026_10".
 DATA_DIR = None
