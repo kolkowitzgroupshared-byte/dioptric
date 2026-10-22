@@ -21,8 +21,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from majorroutines.widefield.rqs_c13 import build_protocol
-from analysis.rqs_c13_analysis import band_overlaps
+from majorroutines.widefield.rqs_c13 import build_protocold
+from analysis.sc_rqs_c13_analysis import band_overlaps
 
 
 _ID = np.eye(2, dtype=complex)
