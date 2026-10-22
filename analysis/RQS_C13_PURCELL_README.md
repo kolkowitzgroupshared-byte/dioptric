@@ -109,13 +109,31 @@ and complete/incomplete run status. An incomplete run is flagged and NOT
 analyzed as complete. The underlying base_routine may return partial arrays
 after an exception; do not treat uncompleted steps as valid measurements.
 
-## Analyze after acquisition
+## Analyze after acquisition (saves directly to G: via data_manager)
+
+Run from your normal Purcell terminal with the NAS mapped as G:.
 
 ```powershell
-python analysis/rqs_c13_analysis.py --file-id YOUR_SAVED_FILE_ID
-# high band requires an explicitly selected hyperfine candidate:
-python analysis/rqs_c13_analysis.py --file-id ID --target-khz 340
+python analysis/rqs_c13_analysis.py --latest
+# Or specify the exact acquisition file stem, WITHOUT the .txt/.npz extension:
+python analysis/rqs_c13_analysis.py --file-stem 2026_10_22-12_00_00-johnson-nv0_2026_10_02
+# High band requires a chosen hyperfine candidate:
+python analysis/rqs_c13_analysis.py --file-stem YOUR_FULL_STEM --target-khz 340
 ```
+
+By default, the four outputs are saved using `dm.get_file_path`,
+`dm.save_figure`, `dm.save_text`, and `dm.save_npz` to:
+
+`G:\nvdata\pc_Purcell\branch_master\rqs_c13_analysis\YYYY_MM\<acquisition_stem>\`
+
+- `<analysis_timestamp>-rqs_c13_analysis.png` (diagnostic plot)
+- `<analysis_timestamp>-rqs_c13_analysis.csv` (per-NV fit table)
+- `<analysis_timestamp>-rqs_c13_analysis.json` (source/method/QC metadata)
+- `<analysis_timestamp>-rqs_c13_analysis.npz` (coherence, reference, filters)
+
+There is no automatic local fallback if the G: NAS is missing. To opt into
+local output for debugging ONLY, provide `--outdir analysis/rqs_c13_results`.
+The `--latest` option searches the latest month folder on the NAS.
 The per-NV regression removes a separate duration-specific intercept
 before testing if **dephasing** follows calculated near-13C filter overlap.
 It is a qualitative diagnostic; it does not prove chemical identity,

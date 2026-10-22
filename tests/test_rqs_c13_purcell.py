@@ -74,7 +74,24 @@ def test_synthetic_analysis():
         assert (Path(tmp)/"rqs_c13_diagnostic.png").exists()
         assert (Path(tmp)/"rqs_c13_per_nv.csv").exists()
         assert np.isfinite(fit[0][0]) and fit[0][0] > 0
-    print("PASS synthetic SCC end-to-end analysis (NOT empirical data)")
+    # Exercise the *real* dm.save_* methods, but point dm.get_file_path at
+    # a disposable local folder so a test NEVER writes to G:/nvdata.
+    import json
+    from unittest.mock import patch
+    from utils import data_manager as dm
+    with TemporaryDirectory() as tmp:
+        fake_base = Path(tmp) / "2026_10_22-12_00_00-rqs_c13_analysis.txt"
+        with patch.object(dm, "get_file_path", return_value=fake_base) as path_mock:
+            analyze(raw, source_stem="synthetic-raw-dataset")
+        assert path_mock.call_args.kwargs["subfolder"] == "synthetic-raw-dataset"
+        for suffix in (".png", ".csv", ".json", ".npz"):
+            assert fake_base.with_suffix(suffix).is_file(), suffix
+        summary = json.loads(fake_base.with_suffix(".json").read_text())
+        assert summary["source_experiment_stem"] == "synthetic-raw-dataset"
+        assert summary["number_of_nvs"] == 2
+        with np.load(fake_base.with_suffix(".npz")) as saved:
+            assert saved["normalized_coherence"].shape == (2, nsteps)
+    print("PASS synthetic SCC analysis and dm-backed save (NO G-drive writes)")
 
 
 if __name__ == "__main__":

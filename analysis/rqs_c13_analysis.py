@@ -3,13 +3,16 @@
 
 This script is DIAGNOSTIC: a classical Gaussian-noise filter overlap is not
 a full quantum 13C hyperfine spectrum. It does not claim Kannan's optimal RQS.
-Run from dioptric root: python analysis/rqs_c13_analysis.py --file-id ID
+Run from dioptric root: python analysis/rqs_c13_analysis.py --latest
+Or: python analysis/rqs_c13_analysis.py --file-stem TIMESTAMP-NVNAME
 """
 from __future__ import annotations
 
 import argparse
 import csv
+import json
 import sys
+from io import StringIO
 from pathlib import Path
 
 # Allow direct execution from the repository root, not only python -m.
@@ -110,7 +113,12 @@ def regression_by_duration(contrast, protocol, overlaps):
     return float(slope), float(se), int(good.sum())
 
 
-def analyze(raw_data, outdir, target_hz=None):
+def analyze(raw_data, outdir=None, target_hz=None, source_stem=None):
+    """Analyze counts and save through dm to G:\\nvdata by default.
+
+    outdir is an explicit local-test override only. In ordinary lab analysis,
+    outdir=None uses dm.get_file_path/save_figure/save_text/save_npz.
+    """
     if not raw_data.get("rqs_complete", False):
         raise RuntimeError("Acquisition incomplete; will not analyze partial counts.")
     proto = raw_data["rqs_c13_protocol"]
@@ -121,8 +129,9 @@ def analyze(raw_data, outdir, target_hz=None):
             raise ValueError("High band needs a hyperfine candidate --target-khz.")
         target_hz = f_l
     c, refdiff = normalize_scc(raw_data)
-    outdir = Path(outdir)
-    outdir.mkdir(parents=True, exist_ok=True)
+    if outdir is not None:
+        outdir = Path(outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
     overlaps = band_overlaps(proto, target_hz)
     slopes = [regression_by_duration(c[i], proto, overlaps)
               for i in range(c.shape[0])]
@@ -163,16 +172,73 @@ def analyze(raw_data, outdir, target_hz=None):
     axs[2].set_xlabel("13C candidate band filter overlap (1e-9 s²)")
     axs[2].set_ylabel("Median SCC-normalized coherence")
     axs[2].set_title("Random-mask response: correlation, not automatic identification")
-    fig.savefig(outdir / "rqs_c13_diagnostic.png", dpi=175)
+    # Build per-NV result table independently of the output backend.
+    output_csv = StringIO(newline="")
+    wr = csv.writer(output_csv)
+    wr.writerow(["nv_index", "regression_slope_arbitrary", "slope_se",
+                 "random_steps_used", "mean_dualrail_ref_diff_photons"])
+    for i, (slope, se, n) in enumerate(slopes):
+        wr.writerow([i, slope, se, n, float(np.nanmean(refdiff[i]))])
+
+    source_stem = Path(source_stem or raw_data.get("timestamp", "unknown_run")).name
+    valid_slopes = [float(s) for s, _, _ in slopes if np.isfinite(s)]
+    summary = {
+        "source_experiment_stem": source_stem,
+        "method": "RQS-inspired randomized timing vs periodic XY8-8",
+        "warning": "Diagnostic correlation; not proof of 13C or a calibrated PSD",
+        "target_frequency_khz": float(target_hz / 1e3),
+        "expected_bare_13c_larmor_khz": float(f_l / 1e3),
+        "field_g_from_acquisition": float(proto["field_g_expected"]),
+        "band": proto["band"],
+        "protocol_sha256": proto.get("protocol_sha256"),
+        "number_of_nvs": int(c.shape[0]),
+        "number_of_steps": int(c.shape[1]),
+        "number_of_random_steps": len(random_inds),
+        "number_of_xy8_steps": len(xy_inds),
+        "nvs_with_finite_regression_slope": len(valid_slopes),
+        "median_regression_slope_arbitrary": (
+            float(np.median(valid_slopes)) if valid_slopes else None
+        ),
+    }
+
+    if outdir is None:
+        # The same NAS-backed dm workflow as other Purcell analysis scripts.
+        # No silent fallback to C: when the mapped NAS is unavailable.
+        from utils import data_manager as dm
+
+        stamp = dm.get_time_stamp()
+        base = dm.get_file_path(
+            __file__, stamp, "rqs_c13_analysis", subfolder=source_stem
+        )
+        dm.save_figure(fig, base)
+        dm.save_text(output_csv.getvalue(), base, suffix=".csv")
+        dm.save_text(json.dumps(summary, indent=2), base, suffix=".json")
+        dm.save_npz(
+            base,
+            compressed=True,
+            normalized_coherence=c,
+            dual_rail_reference_separation_photons=refdiff,
+            filter_overlap_s2=overlaps,
+            sensing_time_ns=np.asarray([s["T_ns"] for s in steps], dtype=float),
+            target_frequency_hz=np.asarray([target_hz]),
+            xy8_nominal_frequency_hz=np.asarray(
+                [steps[j]["target_f_hz"] for j in xy_inds]
+            ),
+        )
+        print("Saved RQS C13 analysis through data_manager:")
+        for ext in (".png", ".csv", ".json", ".npz"):
+            print(" ", base.with_suffix(ext))
+    else:
+        # Explicit local override, mainly for synthetic tests and debugging.
+        fig.savefig(outdir / "rqs_c13_diagnostic.png", dpi=175)
+        (outdir / "rqs_c13_per_nv.csv").write_text(
+            output_csv.getvalue(), encoding="utf-8"
+        )
+        (outdir / "rqs_c13_summary.json").write_text(
+            json.dumps(summary, indent=2), encoding="utf-8"
+        )
+        print("Saved local test analysis to:", outdir)
     plt.close(fig)
-    with (outdir / "rqs_c13_per_nv.csv").open("w", newline="") as f:
-        wr=csv.writer(f)
-        wr.writerow(["nv_index","regression_slope_arbitrary","slope_se",
-                     "random_steps_used","mean_dualrail_ref_diff_photons"])
-        for i, (slope, se, n) in enumerate(slopes):
-            wr.writerow([i, slope, se, n, float(np.nanmean(refdiff[i]))])
-    print("Saved:", outdir / "rqs_c13_diagnostic.png")
-    print("Saved:", outdir / "rqs_c13_per_nv.csv")
     print("Caution: regression needs 13C-free/magnetic-field controls to identify peak.")
     return slopes
 
@@ -193,17 +259,45 @@ def self_test():
 if __name__ == "__main__":
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--self-test", action="store_true")
-    p.add_argument("--file-id", default=None)
-    p.add_argument("--outdir", default="analysis/rqs_c13_results")
+    p.add_argument("--file-stem", "--file-id", dest="file_stem", default=None,
+                   help="Exact saved filename WITHOUT .txt/.npz extension")
+    p.add_argument("--latest", action="store_true",
+                   help="Analyze newest RQS-C13 saved experiment from the NAS")
+    p.add_argument("--outdir", default=None,
+                   help="Optional LOCAL output directory for debugging; "
+                        "default saves into G: through data_manager")
     p.add_argument("--target-khz", type=float, default=None)
     args=p.parse_args()
     if args.self_test:
         self_test()
-    elif args.file_id:
+    elif args.latest or args.file_stem:
         from utils import data_manager as dm
-        fid = int(args.file_id) if args.file_id.isdigit() else args.file_id
-        raw = dm.get_raw_data(file_id=fid)
-        analyze(raw, args.outdir,
+        if args.latest and args.file_stem:
+            p.error("Use either --latest or --file-stem, not both.")
+        if args.latest:
+            src = Path(__file__).resolve().parents[1] / "majorroutines" / "widefield" / "rqs_c13.py"
+            folder = dm.get_output_folder(src)
+            if not folder.is_dir():
+                p.error("NAS experiment folder unavailable: " + str(folder)
+                        + ". Run from your normal Purcell session with G: mounted, "
+                        + "or supply --file-stem if the NAS index is accessible.")
+            candidates = list(folder.glob("*.txt"))
+            candidates = [c for c in candidates if c.name.startswith("2026_")]
+            if not candidates:
+                p.error("No RQS-C13 raw .txt files in " + str(folder))
+            most_recent = max(candidates, key=lambda c: c.name)
+            stem = most_recent.stem
+            print("Newest RQS-C13 file:", most_recent)
+        else:
+            stem = Path(args.file_stem).stem
+            if not stem or stem.isdigit():
+                p.error("Supply the complete timestamp-NV filename stem, not a numeric ID.")
+        print("Loading counts and metadata for:", stem)
+        raw = dm.get_raw_data(file_stem=stem, load_npz=True)
+        if not isinstance(raw.get("counts"), np.ndarray):
+            raise RuntimeError("Counts not loaded as an array. Verify .npz availability.")
+        outdir = Path(args.outdir) / stem if args.outdir else None
+        analyze(raw, outdir=outdir, source_stem=stem,
                 target_hz=None if args.target_khz is None else args.target_khz*1e3)
     else:
-        p.error("Provide --self-test or --file-id ID.")
+        p.error("Provide --latest, --file-stem STEM, or --self-test.")
