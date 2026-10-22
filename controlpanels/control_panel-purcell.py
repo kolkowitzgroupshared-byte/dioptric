@@ -66,6 +66,7 @@ from majorroutines.widefield import (
     dmd_turnoff_crosstalk_extinction_matrix,
     adaptive_charge_initialization,
     deer_hahn_p1_pulse_position_scan,
+    rqs_c13,
 )
 
 # from slmsuite import optimize_slm_calibration
@@ -1054,6 +1055,17 @@ def do_arbitrary_gate_virtual_z(nv_list):
             show_plots=False,
         )
 
+def do_rqs_c13(nv_list):
+    for _ in range(2):
+        rqs_c13.main(
+            nv_list=nv_list,
+            field_g=31.1,
+            band="low",
+            uwave_ind_list=(1,),
+            masks_per_duration=2,
+            num_reps=100,
+            num_runs=20,
+        )
 
 def do_rabi(nv_list):
     min_tau = 16
@@ -2105,7 +2117,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)     
+        do_widefield_image_sample(nv_sig, 50)     
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list: 
@@ -2203,6 +2215,7 @@ if __name__ == "__main__":
         # do_optimize_scc_readout_amp(nv_list)
         # do_crosstalk_check(nv_sig)
         # do_spin_pol_check(nv_sig)
+        
 
         # do_calibrate_green_red_delay()
         # do_spin_echo_phase_scan_test(nv_list)  # for iq mod test
@@ -2220,8 +2233,9 @@ if __name__ == "__main__":
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_arbitrary_gate_calibration(nv_list)
         # do_arbitrary_gate_tomography(nv_list)
-        do_arbitrary_gate_virtual_z(nv_list)
-        do_arbitrary_gate_projection(nv_list)
+        # do_arbitrary_gate_virtual_z(nv_list)
+        # do_arbitrary_gate_projection(nv_list)
+        do_rqs_c13(nv_list)
         # do_calibrate_iq_delay(nv_list)
         # do_power_rabi(nv_list)
         # do_resonance(nv_list)
