@@ -40,7 +40,7 @@ from analysis import arbitrary_gate_tomography as arb
 # Files may be interleaved; their saved tomography_mode determines grouping.
 # ---------------------------------------------------------------------------
 FILE_STEMS = [
-    "2026_10_21-20_36_54-johnson-nv0_2026_10_02",  # virtual_z
+    # "2026_10_21-20_36_54-johnson-nv0_2026_10_02",  # virtual_z
     "2026_10_21-22_42_30-johnson-nv0_2026_10_02",  # projection
     # "2026_10_22-...-johnson-nv0_2026_10_02",
 ]
