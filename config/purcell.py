@@ -143,6 +143,7 @@ config |= {
         "active_nv_coords_path": (
             # "slmsuite/nv_blob_detection/nv_blob_300nvs_reordered.npz"
             "slmsuite/nv_blob_detection/nv_blob_119nvs_reordered.npz"
+            # "slmsuite/nv_blob_detection/nv_blob_564nvs_reordered.npz"
         ),
         "slm_fourier_calib_path": (
             "calibrations/purcell/current/slm_fourier.h5"
@@ -1030,6 +1031,7 @@ opx_config = {
         # Green AOD
         # "green_aod_cw-opti": {"type": "constant", "sample": 0.04},
         "green_aod_cw-opti": {"type": "constant", "sample": 0.08},
+        # "green_aod_cw-opti": {"type": "constant", "sample": 0.11},
         "green_aod_cw-charge_pol": {"type": "constant", "sample": 0.13},
         "green_aod_cw-spin_pol": {"type": "constant", "sample": 0.05},
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
@@ -1041,7 +1043,7 @@ opx_config = {
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.35},
         "yellow_charge_readout": {"type": "constant", "sample": 0.2832}, ##119NVs
-        # "yellow_charge_readout": {"type": "constant", "sample": 0.2940},
+        # "yellow_charge_readout": {"type": "constant", "sample": 0.4}, ##693NVs
         "yellow_spin_pol": {"type": "constant", "sample": 0.38},
         "yellow_shelving": {"type": "constant", "sample": 0.20},
         # Other

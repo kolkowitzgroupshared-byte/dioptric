@@ -339,14 +339,6 @@ def nuvu2thorcam_slm(
     M = np.asarray(data["M_nuvu_to_thorcam_slm"], dtype=np.float32)
     return apply_affine(M, coords)
 
-# file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs_reordered.npz",   
-# file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz",   
-# file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz",   
-# file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz",   
-# file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered.npz",   
-# file_path="slmsuite/nv_blob_detection/nv_blob_1271nvs_reordered.npz",   
-# file_path="slmsuite/nv_blob_detection/nv_blob_1267nvs_reordered.npz",   
-# file_path="slmsuite/nv_blob_detection/nv_blob_1176nvs_reordered_inside_dmd.npz",  
 
 def load_nv_coords():
     config = common.get_config_dict()
@@ -372,48 +364,12 @@ print("spot weight min/max:", np.nanmin(spot_weights), np.nanmax(spot_weights))
 
 # sys.exit()
 
-# # Match lengths safely
-# num = min(len(nuvu_pixel_coords), len(spot_weights))
-# nuvu_pixel_coords =nuvu_pixel_coords[:num]
-# spot_weights = spot_weights[:num]
-
-# print("Using NVs:", num)
-
-# # ----------------------------
-# # Plot spot weights on ThorCam
-# # ----------------------------
-# fig, ax = plt.subplots(figsize=(7, 6))
-
-# sc = ax.scatter(
-#     nuvu_pixel_coords[:, 0],
-#     nuvu_pixel_coords[:, 1],
-#     c=spot_weights,
-#     s=20,
-#     cmap="viridis",
-# )
-
-# ax.set_xlabel("ThorCam x pixel")
-# ax.set_ylabel("ThorCam y pixel")
-# ax.set_title("Optimized SLM Spot Weights")
-# ax.set_aspect("equal")
-
-# # Camera/image coordinates usually have y increasing downward.
-# # Uncomment if you want the plot to match image display orientation.
-# ax.invert_yaxis()
-
-# cbar = fig.colorbar(sc, ax=ax)
-# cbar.set_label("Spot weight")
-
-# fig.tight_layout()
-# plt.show()
-# sys.exit()
-
 def compute_and_write_nvs_phase():
     hologram = SpotHologram(
         shape=(4096, 2048),
         spot_vectors=thorcam_coords_xy,
         basis="ij",
-        spot_amp=spot_weights,
+        # spot_amp=spot_weights,
         cameraslm=fs,
     )
     # Precondition computationally

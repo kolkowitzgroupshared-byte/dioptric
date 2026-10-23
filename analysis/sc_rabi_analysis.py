@@ -1256,6 +1256,8 @@ if __name__ == "__main__":
     
     file_stem = ["2026_10_19-13_02_37-johnson-nv0_2026_10_02"]
     
+    file_stem = ["2026_10_22-17_43_47-johnson-nv0_2026_10_02"]
+    
     data = dm.get_raw_data(
         file_stem=file_stem,
         load_npz=True,

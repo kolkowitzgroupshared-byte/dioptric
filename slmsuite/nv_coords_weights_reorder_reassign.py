@@ -762,42 +762,18 @@ if __name__ == "__main__":
     reorder_coords_flag = True  # Set this flag to enable/disable reordering of NVs
     data = dm.get_raw_data(
         # file_stem="2026_03_10-16_56_54-combined_image_array", load_npz=True
-        file_stem="2026_10_14-19_56_25-johnson-nv0_2026_10_02", load_npz=True
+        file_stem="2026_10_22-15_13_35-johnson-nv0_2026_10_02", load_npz=True
     )
     # img_array = data["img_array"]
     img_array = np.array(data["ref_img_array"])
 
-    # file_path="slmsuite/nv_blob_detection/nv_blob_6837nvs.npz"
-    # file_path="slmsuite/nv_blob_detection/nv_blob_6904nvs.npz"
-    # file_path="slmsuite/nv_blob_detection/nv_blob_3986nvs_reordered.npz"
-    # file_path="slmsuite/nv_blob_detection/nv_blob_3554nvs_reordered.npz"
-    # file_path="slmsuite/nv_blob_detection/nv_blob_3366nvs_reordered.npz"
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1460nvs.npz"
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1487nvs_reordered.npz"
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1348nvs_reordered.npz"
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1306nvs_reordered.npz"
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1277nvs_reordered.npz"
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1275nvs_reordered.npz",
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1274nvs_reordered.npz"
-    # file_path="slmsuite/nv_blob_detection/nv_blob_1267nvs_reordered.npz"
-    config = common.get_config_dict()
-    file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
-    # file_path="slmsuite/nv_blob_detection/nv_blob_948nvs.npz"
-    # file_path="slmsuite/nv_blob_detection/nv_blob_419nvs.npz"
-    print(file_path)
+    # file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
+    file_path="slmsuite/nv_blob_detection/nv_blob_564nvs.npz"
     nv_coordinates, spot_weights = load_nv_coords(file_path=file_path)
     
-    data_spot_weight = dm.get_raw_data(
-    # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
-    # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
-    # file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
-    # file_stem= "2026_07_11-14_54_21-repeated_readout_survival_with_slm_weights_2026_07_11-04_37_50-qnami-nv0_2026_02_20"
-    # file_stem="2026_07_18-23_11_48-reoptimized_slm_score_survival_focused_2026_07_18-11_10_09-qnami-nv0_2026_02_20"
-    # file_stem="2026_07_22-15_53_45-reoptimized_slm_score_survival_focused_2026_07_22-04_39_34-qnami-nv0_2026_02_20"
-    # file_stem="2026_08_05-14_57_39-reoptimized_slm_score_survival_focused_2026_08_05-04_43_20-qnami-nv0_2026_02_20"
-    # file_stem="2026_08_05-14_57_39-reoptimized_slm_score_survival_focused_2026_08_05-04_43_20-qnami-nv0_2026_02_20"
-    file_stem = "2026_09_10-18_37_14-repeated_readout_slm_processed_2026_09_10-04_40_32-qnami-nv0_2026_02_20"
-    )
+    # data_spot_weight = dm.get_raw_data(
+    #    file_stem = "2026_09_10-18_37_14-repeated_readout_slm_processed_2026_09_10-04_40_32-qnami-nv0_2026_02_20"
+    # )
     # spot_weights = data_spot_weight["optimal_weights"]
     # spot_weights  = data_spot_weight["slm_amplitude_weight"]
     # spot_weights = data_spot_weight["slm_mean_norm_weight_clipped"]
@@ -869,9 +845,6 @@ if __name__ == "__main__":
     #     )
     # )
     
-    
-    filtered_reordered_coords = np.round(nv_coordinates, 3)
-    filtered_reordered_spot_weights = np.round(spot_weights,3)
     # print(filtered_reordered_coords)
     # sys.exit()
     # dx = 214.573 - 216.4199
@@ -882,7 +855,8 @@ if __name__ == "__main__":
     # nv_coordinates[:, 1] += dy
 
     
-    reference_nv = [151.893, 147.049]
+    # reference_nv = [151.893, 147.049]
+    reference_nv = [134.109, 143.097]
     filtered_reordered_coords, filtered_reordered_spot_weights, include_indices = (
         filter_and_reorder_nv_coords(
             nv_coordinates, spot_weights, reference_nv, min_distance=3.0
@@ -1038,55 +1012,36 @@ if __name__ == "__main__":
     #     and not (math.isnan(v1) or math.isnan(v2))
     #     and v1 >= 0.6 and v2 >= 0.4
     # ]
-        ## qnami
+    ## qnami
     # spot_weights =[1.2266119417359693, 0.7544120991715823, 0.5597670795701869, 0.6217217256579556, 1.8188148536479478, 0.8252566404860973, 0.8991725867033584, 0.6865851910294521, 0.5597670795701869, 0.7544120991715823, 1.6073952812862813, 0.8252566404860973, 0.5597670795701869, 0.6217217256579556, 0.6865851910294521, 1.6073952812862813, 1.4101295022755422, 0.7544120991715823, 1.6073952812862813, 1.0564317681700715, 1.8188148536479478, 0.7544120991715823, 0.7544120991715823, 1.0564317681700715, 1.3166777450187614, 0.8252566404860973, 0.8991725867033584, 1.0564317681700715, 0.6217217256579556, 1.7113106924227182, 1.3166777450187614, 1.6073952812862813, 0.7544120991715823, 0.5597670795701869, 0.7544120991715823, 0.8991725867033584, 0.7544120991715823, 0.6865851910294521, 0.6217217256579556, 1.6073952812862813, 1.4101295022755422, 0.7544120991715823, 1.3166777450187614, 1.7113106924227182, 0.6865851910294521, 1.4101295022755422, 0.7544120991715823, 1.6073952812862813, 1.5070183962289345, 0.8252566404860973, 0.8252566404860973, 1.7113106924227182, 0.8991725867033584, 0.8252566404860973, 0.7544120991715823, 1.1398805720598935, 0.7544120991715823, 1.3166777450187614, 0.6865851910294521, 0.8252566404860973, 0.5597670795701869, 1.6073952812862813, 0.6865851910294521, 1.1398805720598935, 0.7544120991715823, 0.7544120991715823, 0.6865851910294521, 0.8252566404860973, 1.0564317681700715, 1.1398805720598935, 0.6217217256579556, 1.6073952812862813, 0.5597670795701869, 0.6865851910294521, 0.6217217256579556, 0.7544120991715823, 1.4101295022755422, 0.9762133044690186, 1.6073952812862813, 1.3166777450187614, 1.2266119417359693, 0.7544120991715823, 1.7113106924227182, 1.4101295022755422, 1.2266119417359693, 1.6073952812862813, 0.8991725867033584, 1.0564317681700715, 0.8252566404860973, 1.6073952812862813, 0.7544120991715823, 0.6865851910294521, 0.8991725867033584, 0.6865851910294521, 0.7544120991715823, 1.6073952812862813, 0.6865851910294521, 0.6865851910294521, 0.5597670795701869, 0.6865851910294521, 0.6865851910294521, 0.5597670795701869, 1.7113106924227182, 1.8188148536479478, 0.8991725867033584, 1.1398805720598935, 0.8991725867033584, 0.8252566404860973, 0.8991725867033584, 0.6217217256579556, 1.1398805720598935, 0.9762133044690186, 1.6073952812862813, 0.8252566404860973, 0.6865851910294521, 0.8252566404860973, 0.7544120991715823, 0.7544120991715823, 0.7544120991715823, 0.8252566404860973, 1.6073952812862813, 1.7113106924227182, 0.9762133044690186, 0.6865851910294521, 0.8252566404860973, 0.8252566404860973, 0.7544120991715823, 0.5597670795701869, 0.5597670795701869, 1.0564317681700715, 1.3166777450187614, 0.7544120991715823, 1.6073952812862813, 1.5070183962289345, 1.1398805720598935, 1.3166777450187614, 0.6865851910294521, 1.5070183962289345, 1.1398805720598935, 1.8188148536479478, 0.9762133044690186, 1.3166777450187614, 0.7544120991715823, 0.5597670795701869, 1.2266119417359693, 1.6073952812862813, 0.8252566404860973, 0.6865851910294521, 0.7544120991715823, 0.5597670795701869, 0.7544120991715823, 0.9762133044690186, 1.0564317681700715, 0.5597670795701869, 1.7113106924227182, 0.6865851910294521, 0.5597670795701869, 0.7544120991715823, 0.8252566404860973, 1.1398805720598935, 0.8991725867033584, 0.7544120991715823, 0.5597670795701869, 0.8991725867033584, 0.6865851910294521, 0.7544120991715823, 0.6217217256579556, 0.8252566404860973, 0.8991725867033584, 1.0564317681700715, 1.1398805720598935, 0.6217217256579556, 0.9762133044690186, 1.0564317681700715, 0.8252566404860973, 1.8188148536479478, 1.8188148536479478, 0.7544120991715823, 0.8252566404860973, 0.6865851910294521, 1.2266119417359693, 1.3166777450187614, 1.5070183962289345, 0.6865851910294521, 0.7544120991715823, 0.8991725867033584, 0.5597670795701869, 0.8991725867033584, 0.6865851910294521, 1.4101295022755422, 1.3166777450187614, 1.3166777450187614, 1.0564317681700715, 0.8991725867033584, 1.4101295022755422, 0.8252566404860973, 1.4101295022755422, 0.6865851910294521, 1.6073952812862813, 1.2266119417359693, 0.5597670795701869, 1.7113106924227182, 0.5597670795701869, 0.7544120991715823, 0.6865851910294521, 0.6865851910294521, 0.5597670795701869, 0.5597670795701869, 0.8991725867033584, 1.5070183962289345, 0.8991725867033584, 1.2266119417359693, 0.9762133044690186, 0.6217217256579556, 1.5070183962289345]
     # include_indices = [i for i, val in enumerate(prep_fidelity_list) if val >= 0.4 or val is None]
     # include_indices =  [i for i, val in enumerate(snr_float) if val >= 0.02]
     
-    data_spot_weight = dm.get_raw_data(
-    # file_stem="2026_06_12-11_54_41-recomputed_summary_w_1_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
-    # file_stem="2026_06_14-16_45_38-recomputed_summary_w_0_2_1_2026_06_12-11_05_20-optimization_processed_full_raw_data"
-    # file_stem="2026_06_18-14_02_43-recomputed_summary_w_0_2_1_2026_06_18-13_45_20-optimization_processed_full_raw_data"
-    # file_stem= "2026_07_11-14_54_21-repeated_readout_survival_with_slm_weights_2026_07_11-04_37_50-qnami-nv0_2026_02_20"
-    # file_stem="2026_07_18-23_11_48-reoptimized_slm_score_survival_focused_2026_07_18-11_10_09-qnami-nv0_2026_02_20"
-    # file_stem="2026_07_22-15_53_45-reoptimized_slm_score_survival_focused_2026_07_22-04_39_34-qnami-nv0_2026_02_20"
-    # file_stem="2026_08_05-14_57_39-reoptimized_slm_score_survival_focused_2026_08_05-04_43_20-qnami-nv0_2026_02_20"
-    # "2026_08_12-16_41_26-reoptimized_slm_score_survival_focused_2026_08_12-10_12_17-qnami-nv0_2026_02_20" ### 631NVs
-    # "2026_08_19-22_37_18-reoptimized_slm_score_survival_focused_2026_08_19-02_30_47-qnami-nv0_2026_02_20" ## 631NVs 50ms
-    # "2026_09_10-18_37_14-repeated_readout_slm_processed_2026_09_10-04_40_32-qnami-nv0_2026_02_20" ## 631NVs 50ms
-    # "2026_10_07-21_30_33-optimization_processed_full_2026_10_07-20_38_47-johnson-nv0_2026_10_02"
-    # "2026_10_09-14_30_46-recomputed_summary_w_1_2_2_2026_10_09-14_09_10-optimization_processed_full_2026_10_09-13_23_31-johnson-nv0_2026_10_02"
-    "2026_10_14-19_32_12-recomputed_summary_w_1_2_2_2026_10_14-19_25_31-optimization_processed_full_2026_10_14-19_19_54-johnson-nv0_2026_10_02"
-    )
-    spot_weights = data_spot_weight["optimal_weights"]
-    # spot_weights  = data_spot_weight["slm_amplitude_weight"]
+    # data_spot_weight = dm.get_raw_data(
+    #     "2026_10_14-19_32_12-recomputed_summary_w_1_2_2_2026_10_14-19_25_31-optimization_processed_full_2026_10_14-19_19_54-johnson-nv0_2026_10_02"
+    # )
+    # spot_weights = data_spot_weight["optimal_weights"]
+    # # spot_weights  = data_spot_weight["slm_amplitude_weight"]
 
-    spot_weights = curve_extreme_weights_simple(
-            spot_weights, scaling_factor=1.5
-        )
-    spot_weights = np.array(spot_weights)
-    print (min(spot_weights), max(spot_weights))
-    filtered_reordered_spot_weights = spot_weights
+    # spot_weights = curve_extreme_weights_simple(
+    #         spot_weights, scaling_factor=1.5
+    #     )
+    # spot_weights = np.array(spot_weights)
+    # print (min(spot_weights), max(spot_weights))
+    # filtered_reordered_spot_weights = spot_weights
     
     
     ###fildelity
-    data = dm.get_raw_data(
-        # file_stem="2026_03_25-16_28_08-charge_state_analysis_hist_data_raw_data", load_npz=True
-        # file_stem="2026_03_25-18_15_53-charge_state_analysis_hist_data_raw_data", load_npz=True
-        # file_stem= "2026_07_15-15_17_51-single_step_charge_hist_single_cpu_2026_07_15-13_03_24-qnami-nv0_2026_02_20",
-        # file_stem= "2026_08_04-13_47_40-single_step_charge_hist_single_cpu_2026_08_04-13_21_07-qnami-nv0_2026_02_20",
-        # file_stem= "2026_08_08-16_47_43-single_step_charge_hist_single_cpu_2026_08_08-16_44_44-qnami-nv0_2026_02_20",
-        # file_stem= "2026_08_08-18_51_29-single_step_charge_hist_single_cpu_2026_08_08-18_48_51-qnami-nv0_2026_02_20",
-        # file_stem= "2026_08_08-21_33_29-single_step_charge_hist_single_cpu_2026_08_08-20_30_31-qnami-nv0_2026_02_20",
-        file_stem = "2026_10_09-14_59_33-charge_state_analysis_hist_data_raw_data",
-        load_npz=True,
-    )
-    print (data.keys())
+    # data = dm.get_raw_data(
+    #       file_stem = "2026_10_09-14_59_33-charge_state_analysis_hist_data_raw_data",
+    #     load_npz=True,
+    # )
+    # print (data.keys())
     # fidelity_data = data["single_step_charge_histogram"]
     # readout_fidelity_list = fidelity_data["readout_fidelity"]
     # prep_fidelity_list = fidelity_data["prep_fidelity"]    
-    readout_fidelity_list = data["readout_fidelity_list"]
-    prep_fidelity_list = data["prep_fidelity_list"]   
+    # readout_fidelity_list = data["readout_fidelity_list"]
+    # prep_fidelity_list = data["prep_fidelity_list"]   
     #selected_indices_278459 
     # include_indices= [
     # 0, 3, 4, 5, 6, 8, 10, 14, 16, 19,
@@ -1238,7 +1193,7 @@ if __name__ == "__main__":
     save_results(
         filtered_reordered_coords,
         filtered_reordered_spot_weights,
-        filename="slmsuite/nv_blob_detection/nv_blob_119nvs_reordered.npz",
+        filename="slmsuite/nv_blob_detection/nv_blob_564nvs_reordered.npz",
     )
 
     # # Plot the original image with circles around each NV
