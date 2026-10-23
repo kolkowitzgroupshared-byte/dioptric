@@ -47,11 +47,16 @@ import numpy as np
 FILE_STEMS = [
     "2026_10_22-12_21_29-johnson-nv0_2026_10_02",
     "2026_10_22-10_21_40-johnson-nv0_2026_10_02",
+    
 ]
+FILE_STEMS = [
+    "2026_10_23-14_26_03-johnson-nv0_2026_10_02",
+]
+
 DATA_DIR = None                # Folder containing source .txt/.npz files, if needed
 OUTDIR = None                  # None -> dm / configured NAS (normally G:)
 NV_MODE = "intersection"      # "intersection" (default) or "union"
-TARGET_KHZ = None             # Low bank -> acquisition 13C Larmor frequency
+TARGET_KHZ = None             # Low: bare 13C; high: broadband exploratory (optional candidate)
 FIELD_TOLERANCE_G = 0.3       # Refuse merging physically different fields
 MIN_REF_CONTRAST = 0.2        # Minimum per-NV bright/dark separation (photons)
 SHOW_PLOTS = False
@@ -134,6 +139,31 @@ def _band_overlap(step, f_hz, fractional_width=0.2):
     freq = np.linspace(lo, hi, 101)
     integrate = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
     return float(integrate(_filter_power(step, freq), freq)/(hi-lo))
+
+
+def _high_band_overlap(step, lower_hz, upper_hz):
+    """Average ideal |Y(f)|^2 over the *entire* measured high-frequency band.
+
+    Deliberately not a resonance-selective 13C estimator. With no user-supplied
+    hyperfine frequency, this gives exploratory filter-coverage diagnostics
+    without inventing a nuclear candidate.
+    """
+    if not (0 < lower_hz < upper_hz):
+        raise ValueError("High-band limits must be positive and increasing")
+    freq=np.linspace(lower_hz, upper_hz, 601)
+    integrate=np.trapezoid if hasattr(np,"trapezoid") else np.trapz
+    return float(integrate(_filter_power(step,freq),freq)/(upper_hz-lower_hz))
+
+
+def _overlap_xlabel(result):
+    if result.get("overlap_mode")=="full_high_band":
+        lo,hi=result["high_band_bounds_hz"]
+        return f"Broadband filter overlap {lo/1e3:.0f}-{hi/1e3:.0f} kHz (1e-9 s^2)"
+    return "Candidate-band |Y|^2 overlap (1e-9 s^2)"
+
+
+def _has_candidate(result):
+    return np.isfinite(result["target_hz"])
 
 
 def _check_and_normalize(stem, raw, min_contrast=MIN_REF_CONTRAST):
@@ -284,17 +314,31 @@ def _analyze_records(records, target_khz, nv_mode):
     names += sorted(nameset.difference(names))
     if not names:
         raise ValueError("No common NV names across sources. Try --nv-mode union")
-    f_target = (float(target_khz)*1e3 if target_khz is not None else
-                float(records[0]["proto"]["bare_c13_larmor_hz_expected"]))
-    if f_target <= 0 or not np.isfinite(f_target):
-        raise ValueError("target frequency must be positive")
-    if records[0]["proto"].get("band") == "high" and target_khz is None:
-        raise ValueError("High band requires --target-khz for a hyperfine candidate")
-
+    high_auto=(records[0]["proto"].get("band")=="high" and target_khz is None)
+    high_bounds=None
+    if high_auto:
+        xy=[float(st["target_f_hz"]) for st in records[0]["proto"]["steps"]
+            if st["kind"]=="xy8" and st.get("target_f_hz") is not None]
+        if len(xy)<2:
+            raise ValueError("High bank lacks enough XY8 frequencies for full-band overlap")
+        high_bounds=(min(xy),max(xy))
+        f_target=float("nan")  # no candidate invented
+        print("AUTO HIGH-BAND exploratory overlap: %.1f to %.1f kHz; "
+              "no 13C hyperfine frequency selected."%
+              (high_bounds[0]/1e3, high_bounds[1]/1e3))
+    else:
+        f_target=(float(target_khz)*1e3 if target_khz is not None else
+                  float(records[0]["proto"]["bare_c13_larmor_hz_expected"]))
+        if f_target <= 0 or not np.isfinite(f_target):
+            raise ValueError("target frequency must be positive and finite")
     # Every observation retains its source and unique sensing filter.
     observations = []
     for file_index, rec in enumerate(records):
-        overlaps = [_band_overlap(s, f_target) for s in rec["proto"]["steps"]]
+        overlaps = (
+            [_high_band_overlap(st,*high_bounds) for st in rec["proto"]["steps"]]
+            if high_auto else
+            [_band_overlap(st,f_target) for st in rec["proto"]["steps"]]
+        )
         for step_index, (s, overlap) in enumerate(zip(rec["proto"]["steps"], overlaps)):
             observations.append({
                 "file_index": file_index, "step_index": step_index,
@@ -353,6 +397,8 @@ def _analyze_records(records, target_khz, nv_mode):
         "per_nv": rows, "frequency_hz": frequency_hz, "filter_overlap_s2": foverlap,
         "time_ns": t_ns, "random_mask": is_random, "shots": wt,
         "target_hz": f_target,
+        "overlap_mode": "full_high_band" if high_auto else "candidate_around_frequency",
+        "high_band_bounds_hz": high_bounds,
     }
 
 
@@ -472,7 +518,8 @@ def averaged_figures(result, xy8_pooled):
     xy=xy[np.argsort(result["frequency_hz"][xy])]
     axes[0].plot(result["frequency_hz"][xy]/1e3,median[xy],"o-",
                  label="Mean of matching acquisitions")
-    axes[0].axvline(result["target_hz"]/1e3,ls="--",c="black",label="13C")
+    if _has_candidate(result):
+        axes[0].axvline(result["target_hz"]/1e3,ls="--",c="black",label="target frequency")
     axes[0].set(xlabel="XY8 frequency (kHz)",ylabel="Median NV coherence",
                 title="Average of %d acquisitions"%result["averaged_files"])
     axes[0].legend();axes[0].grid(alpha=.2)
@@ -486,7 +533,7 @@ def averaged_figures(result, xy8_pooled):
     axes[1].legend();axes[1].grid(alpha=.2)
     im=axes[2].scatter(overlap[r],median[r],c=t[r],cmap="plasma")
     fig.colorbar(im,ax=axes[2],label="Sensing time (us)")
-    axes[2].set(xlabel="13C-band filter overlap (1e-9 s^2)",
+    axes[2].set(xlabel=_overlap_xlabel(result),
                 ylabel="Median NV coherence",
                 title="One point per distinct random pattern")
     axes[2].grid(alpha=.2)
@@ -536,8 +583,9 @@ def averaged_nv_figure(i,result,ref_snr_threshold=3):
     xy=np.flatnonzero(~rnd)
     xy=xy[np.argsort(f[xy])]
     axs[0].plot(f[xy],C[xy],"o-",label="Mean of matching files")
-    axs[0].axvline(result["target_hz"]/1e3,c="black",ls="--",
-                   label="13C candidate")
+    if _has_candidate(result):
+        axs[0].axvline(result["target_hz"]/1e3,c="black",ls="--",
+                       label="target frequency")
     axs[0].set(xlabel="XY8 frequency (kHz)",ylabel="NV coherence",
                title="Averaged XY8: ONE curve")
     axs[0].set_ylim(-1.3,1.3)
@@ -546,7 +594,7 @@ def averaged_nv_figure(i,result,ref_snr_threshold=3):
     r=np.flatnonzero(rnd)
     image=axs[1].scatter(overlap[r],C[r],c=t[r],cmap="plasma")
     fig.colorbar(image,ax=axs[1],label="T (us)")
-    axs[1].set(xlabel="13C-band overlap (1e-9 s^2)",
+    axs[1].set(xlabel=_overlap_xlabel(result),
                ylabel="NV coherence",
                title="Averaged random mask measurements")
     axs[1].set_ylim(-1.3,1.3);axs[1].grid(alpha=.2)
@@ -618,7 +666,8 @@ def _make_figures(records, result):
         ix=np.argsort(fr)
         axes[0].plot(fr[ix],med[ix],".-",label=rec["stem"][:19],alpha=.75,
                      color=colors[k%len(colors)])
-    axes[0].axvline(result["target_hz"]/1e3,color="black",ls="--",lw=1,label="target")
+    if _has_candidate(result):
+        axes[0].axvline(result["target_hz"]/1e3,color="black",ls="--",lw=1,label="target")
     axes[0].set(xlabel="XY8 nominal frequency (kHz)",ylabel="Median NV coherence",
                 title="Independently normalized XY8 per acquisition")
     axes[0].legend(fontsize=8);axes[0].grid(alpha=.2)
@@ -627,7 +676,8 @@ def _make_figures(records, result):
             warnings.simplefilter("ignore",RuntimeWarning)
             med=np.nanmedian(pooled,axis=0)
         axes[1].plot(f/1e3,med,"o-",label="Shot-weighted at matching frequencies")
-    axes[1].axvline(result["target_hz"]/1e3,color="black",ls="--",lw=1)
+    if _has_candidate(result):
+        axes[1].axvline(result["target_hz"]/1e3,color="black",ls="--",lw=1)
     axes[1].set(xlabel="XY8 frequency (kHz)",ylabel="Median NV coherence",
                 title="Combined XY8 (no interpolation across different grids)")
     axes[1].grid(alpha=.2);axes[1].legend(fontsize=8)
@@ -636,7 +686,7 @@ def _make_figures(records, result):
         med=np.nanmedian(c,axis=0)
     sc=axes[2].scatter(ov[is_rand],med[is_rand],c=T[is_rand],cmap="plasma",s=22)
     fig.colorbar(sc,ax=axes[2],label="Sensing time (us)")
-    axes[2].set(xlabel="13C-band |Y|^2 overlap (1e-9 s^2)",
+    axes[2].set(xlabel=_overlap_xlabel(result),
                 ylabel="Median NV coherence",
                 title="Random mask response; every source/step retained")
     axes[2].grid(alpha=.2)
@@ -704,8 +754,9 @@ def _one_nv_pdf_figure(i, records, result):
             axs[0].plot(fr[order], c[np.asarray(inds)[order]], "o-",
                         color=colors[k % len(colors)],
                         label=f"{rec['stem'][:19]}", ms=3, alpha=.78)
-    axs[0].axvline(result["target_hz"] / 1e3, ls="--", c="black", lw=1,
-                   label="bare 13C candidate")
+    if _has_candidate(result):
+        axs[0].axvline(result["target_hz"] / 1e3, ls="--", c="black", lw=1,
+                       label="target frequency")
     axs[0].axhline(0, color="grey", lw=.6)
     axs[0].set(xlabel="Nominal XY8 frequency (kHz)",
                ylabel="SCC-normalized coherence",
@@ -727,7 +778,7 @@ def _one_nv_pdf_figure(i, records, result):
                     axs[1].annotate(f"{t_us[j]:.0f}", (overlap[j], c[j]),
                                     fontsize=6, alpha=.7, xytext=(2,2),
                                     textcoords="offset points")
-    axs[1].set(xlabel="Candidate-band filter overlap (1e-9 s^2)",
+    axs[1].set(xlabel=_overlap_xlabel(result),
                ylabel="SCC-normalized coherence",
                title="Random-mask measurements (labels = T in microseconds)")
     axs[1].set_ylim(-1.25, 1.25)
@@ -949,7 +1000,10 @@ def analyze_many(file_stems=FILE_STEMS, *, data_dir=DATA_DIR, outdir=OUTDIR,
         "file_stems":stems,"num_files":len(stems),
         "microwave_chains_per_file":[list(r["microwave_chains"]) for r in records],
         "field_g_expected_per_file":[float(r["proto"]["field_g_expected"]) for r in records],
-        "target_khz":float(result["target_hz"]/1e3),
+        "target_khz":float(result["target_hz"]/1e3) if _has_candidate(result) else None,
+        "overlap_mode":result["overlap_mode"],
+        "high_band_bounds_khz":([v/1e3 for v in result["high_band_bounds_hz"]]
+                               if result["high_band_bounds_hz"] is not None else None),
         "min_reference_contrast_threshold_used_photons":float(min_ref_contrast),
         "export_vector_pdf":bool(export_pdf),
         "export_per_nv_pdf":bool(per_nv_pdfs),
@@ -987,7 +1041,11 @@ def analyze_many(file_stems=FILE_STEMS, *, data_dir=DATA_DIR, outdir=OUTDIR,
             for fig in figures.values():
                 plt.close(fig)
     print("=== RQS C13 MULTI-FILE ===")
-    print(f"Files: {len(records)}, NVs: {len(result['names'])}, target: {result['target_hz']/1e3:.3f} kHz")
+    if _has_candidate(result):
+        print(f"Files: {len(records)}, NVs: {len(result['names'])}, candidate: {result['target_hz']/1e3:.3f} kHz")
+    else:
+        lo,hi=result["high_band_bounds_hz"]
+        print(f"Files: {len(records)}, NVs: {len(result['names'])}, exploratory HIGH-band {lo/1e3:.0f}-{hi/1e3:.0f} kHz (no target)")
     print(f"Valid per-NV filter-overlap slopes: {valid.sum()}/{len(valid)}")
     if not valid.any():
         print("NOTICE: no reliable regression slopes. More INDEPENDENT random "

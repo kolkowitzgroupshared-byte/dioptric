@@ -18,7 +18,7 @@ from scipy.spatial.transform import Rotation
 
 from utils.single_qubit_gate_compiler import source_rotation
 
-PHASE_GRID_DEG = 9
+PHASE_GRID_DEG = 1
 CLOCK_NS = 4
 MIN_PULSE_NS = 16
 MAX_ROT_ERROR_RAD = 0.15

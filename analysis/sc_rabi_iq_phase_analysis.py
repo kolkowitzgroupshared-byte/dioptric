@@ -59,6 +59,7 @@ FILE_STEMS = [
     "2026_10_22-20_13_55-johnson-nv0_2026_10_02",  # 0 deg
     "2026_10_22-21_28_28-johnson-nv0_2026_10_02",  # 90 deg
     "2026_10_22-22_43_41-johnson-nv0_2026_10_02",  # 180 deg
+    "2026_10_22-23_58_20-johnson-nv0_2026_10_02",  # 270 deg
 ]
 
 # If you want to combine repeated acquisitions at the same phase, simply add
