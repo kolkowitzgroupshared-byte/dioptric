@@ -1060,7 +1060,7 @@ def do_rqs_c13(nv_list):
         rqs_c13.main(
             nv_list=nv_list,
             field_g=31.1,
-            band="low",
+            band="high",
             uwave_ind_list=(1,),
             masks_per_duration=2,
             num_reps=100,
@@ -1894,13 +1894,14 @@ if __name__ == "__main__":
     magnet_angle = 90
     date_str = "2026_10_02"
     sample_coords = [0.1, 0.0]
-    z_coord = -0.1    
-    # z_coord = 0.4
+    z_coord = 0.0   
+    # z_coord =-0.1 #Clibrated layer
 
     
     config = common.get_config_dict()
     file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
     pixel_coords_list = load_nv_coords(file_path=file_path).tolist()
+   
     green_coords_list = [
         [
             round(coord, 3)
@@ -1941,7 +1942,18 @@ if __name__ == "__main__":
     # print("red fy range:", red_arr[:, 1].min(), red_arr[:, 1].max())
 
     # sys.exit()
+    # pixel_coords_list =[
+    #     [134.109, 143.097],
+    # ]
+    # green_coords_list = [
+    #     [103.343, 101.662],
+    # ]
+    # red_coords_list = [
+    #     [71.675, 71.007],
+    # ]
 
+
+    #ref parameters for -0.1 layer
     # pixel_coords_list =[
     #     [151.893, 147.049],
     #     [68.942, 52.819],
@@ -2117,13 +2129,13 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_widefield_image_sample(nv_sig, 50)     
+        # do_widefield_image_sample(nv_sig, 50)     #yellow
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list: 
         #     do_scanning_image_sample_zoom(nv)
 
-        # do_scanning_image_sample(nv_sig)
+        # do_scanning_image_sample(nv_sig)    #Green scan
         # do_scanning_image_sample_zoom(nv_sig)
         
         # do_scanning_image_full_roi(nv_sig)
@@ -2254,7 +2266,7 @@ if __name__ == "__main__":
         # do_two_block_hahn_spatial_correlation(nv_list)
         # do_T2_correlation_test(nv_list)
         # do_two_block_hahn_correlation(nv_list)
-        # do_reson1ance(nv_list)
+        # do_resonance(nv_list)
         # do_sq_relaxation(nv_list)
         # do_dq_relaxation(nv_list)
         # do_detect_cosmic_rays(nv_list)

@@ -673,19 +673,19 @@ if __name__ == "__main__":
     # ------------------------------------------------------------
     # 1. Create combined image from scan
     # ------------------------------------------------------------
-    process_scan_file(
-        file_stem="2026_10_06-18_05_46-johnson-nv0_2026_10_02"
-    )
+    # process_scan_file(
+    #     file_stem="2026_10_22-14_15_37-johnson-nv0_2026_10_02"
+    # )
 
     # ------------------------------------------------------------
     # 2. Detect NVs from combined image
     # ------------------------------------------------------------
-    # nv_coords, spot_weights, spot_sizes, img_array = detect_nvs_from_image(
-    #     file_stem="2026_10_06-19_51_06-johnson-nv0_2026_10_02",
-    #     sigma=2.0,
-    #     lower_threshold=0.03,
-    #     integration_radius=2,
-    #     save=True,
-    #     plot_title="24ms, Ref",
-    # )
+    nv_coords, spot_weights, spot_sizes, img_array = detect_nvs_from_image(
+        file_stem="2026_10_22-15_13_35-johnson-nv0_2026_10_02",
+        sigma=2.0,
+        lower_threshold=0.07,
+        integration_radius=2,
+        save=True,
+        plot_title="24ms, Ref",
+    )
     kpl.show(block=True)
