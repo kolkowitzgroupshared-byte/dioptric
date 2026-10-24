@@ -7,30 +7,34 @@
   "clock_ns": 4,
   "phase_available_deg": [
     0,
-    9,
-    45,
-    63,
-    72,
+    6,
+    12,
+    48,
+    60,
+    68,
     90,
-    117,
-    135,
-    144,
-    153,
-    162,
+    116,
+    138,
+    141,
+    145,
+    150,
+    158,
+    167,
     180,
     189,
     207,
-    225,
-    234,
-    243,
-    252,
-    261,
+    229,
+    235,
+    239,
+    256,
+    257,
+    262,
     270,
     279,
     288,
-    315,
-    333,
-    342
+    318,
+    329,
+    346
   ],
   "basis_order": [
     "Z",
@@ -123,18 +127,18 @@
       "pulses": [
         {
           "axis": "XY",
-          "phase_deg": 261,
+          "phase_deg": 262,
           "duration_ns": 20,
           "duration_cc": 5,
           "requested_angle_rad": 0.7162640136990709,
           "actual_angle_rad": 0.6544984694978736
         }
       ],
-      "rotation_error_rad": 0.097706608415149,
+      "rotation_error_rad": 0.061795652497006276,
       "duration_total_ns": 20,
       "predicted_actual_bloch": [
-        -0.6012665656359482,
-        0.09523126848410585,
+        -0.6028370046288244,
+        0.08472321582002465,
         0.7933533402912353
       ],
       "gate": 2,
@@ -180,22 +184,22 @@
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
-        "+X": 243,
-        "+Y": 333
+        "+X": 239,
+        "+Y": 329
       },
       "virtual_z_phase_ideal_deg": 148.89441666887308,
-      "virtual_z_phase_compiled_deg": 153,
+      "virtual_z_phase_compiled_deg": 149,
       "transverse_phase_ideal_deg": 261.8753940435845,
-      "projected_z_response_error_compiler": 0.06892296128413616,
+      "projected_z_response_error_compiler": 0.009074046963913276,
       "expected_projected_z": [
         0.09279085705550591,
         0.48464405860789345,
         -0.8697758293393613
       ],
       "predicted_projected_z": [
-        0.09523126848410587,
-        0.4232460194161476,
-        -0.9009960113958857
+        0.08472321582002466,
+        0.4885646715782809,
+        -0.8684045937158099
       ]
     },
     {
@@ -203,19 +207,19 @@
       "pulses": [
         {
           "axis": "XY",
-          "phase_deg": 153,
+          "phase_deg": 158,
           "duration_ns": 44,
           "duration_cc": 11,
           "requested_angle_rad": 1.4839459898919771,
           "actual_angle_rad": 1.4398966328953218
         }
       ],
-      "rotation_error_rad": 0.08983561823184899,
+      "rotation_error_rad": 0.04524525041890553,
       "duration_total_ns": 44,
       "predicted_actual_bloch": [
-        0.45010654807930206,
-        0.8833838398570972,
-        0.13052619222005185
+        0.37140178207895447,
+        0.9192516681590036,
+        0.13052619222005157
       ],
       "gate": 3,
       "Omega": 1.6613705927261568,
@@ -260,22 +264,22 @@
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
-        "+X": 252,
-        "+Y": 342
+        "+X": 256,
+        "+Y": 346
       },
       "virtual_z_phase_ideal_deg": 165.9034993705003,
-      "virtual_z_phase_compiled_deg": 162,
+      "virtual_z_phase_compiled_deg": 166,
       "transverse_phase_ideal_deg": 157.5115334864061,
-      "projected_z_response_error_compiler": 0.08936776710121244,
+      "projected_z_response_error_compiler": 0.038977528582226126,
       "expected_projected_z": [
         0.9204740434544558,
         0.3667052559350899,
         -0.13511029048960532
       ],
       "predicted_projected_z": [
-        0.8833838398570975,
-        0.4302078437248146,
-        -0.18588760764767662
+        0.9192516681590038,
+        0.3541179716684619,
+        -0.1719791636457844
       ]
     },
     {
@@ -283,18 +287,18 @@
       "pulses": [
         {
           "axis": "XY",
-          "phase_deg": 117,
+          "phase_deg": 116,
           "duration_ns": 60,
           "duration_cc": 15,
           "requested_angle_rad": 1.9953228520518873,
           "actual_angle_rad": 1.9634954084936205
         }
       ],
-      "rotation_error_rad": 0.08219653776439435,
+      "rotation_error_rad": 0.03288879852338252,
       "duration_total_ns": 60,
       "predicted_actual_bloch": [
-        0.8231826910316562,
-        0.419432530663938,
+        0.8303774233188026,
+        0.4050021301619299,
         -0.3826834323650894
       ],
       "gate": 4,
@@ -340,22 +344,22 @@
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
-        "+X": 315,
-        "+Y": 45
+        "+X": 318,
+        "+Y": 48
       },
       "virtual_z_phase_ideal_deg": 227.13489054581044,
-      "virtual_z_phase_compiled_deg": 225,
+      "virtual_z_phase_compiled_deg": 228,
       "transverse_phase_ideal_deg": 115.5663275109246,
-      "projected_z_response_error_compiler": 0.06208978634033185,
+      "projected_z_response_error_compiler": 0.020580518555105256,
       "expected_projected_z": [
         0.3932481374550939,
         -0.16631324753937207,
         -0.9042653405284355
       ],
       "predicted_projected_z": [
-        0.4194325306639381,
-        -0.1101046940257133,
-        -0.9010845179972574
+        0.40500213016193,
+        -0.1811522461865686,
+        -0.8961903471170961
       ]
     },
     {
@@ -370,11 +374,11 @@
           "actual_angle_rad": 6.021385919380436
         }
       ],
-      "rotation_error_rad": 0.05417772786991483,
+      "rotation_error_rad": 0.04834761632861071,
       "duration_total_ns": 184,
       "predicted_actual_bloch": [
-        0.11750138762820601,
-        -0.23060945777055017,
+        0.117501387628206,
+        -0.2306094577705501,
         0.9659258262890681
       ],
       "gate": 5,
@@ -420,22 +424,22 @@
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
-        "+X": 144,
-        "+Y": 234
+        "+X": 145,
+        "+Y": 235
       },
       "virtual_z_phase_ideal_deg": 55.49014536254692,
-      "virtual_z_phase_compiled_deg": 54,
+      "virtual_z_phase_compiled_deg": 55,
       "transverse_phase_ideal_deg": 27.31658945040433,
-      "projected_z_response_error_compiler": 0.047513950515198924,
+      "projected_z_response_error_compiler": 0.04286207938411329,
       "expected_projected_z": [
         -0.18886542475209198,
         0.8144415773025752,
         0.5486481281241248
       ],
       "predicted_projected_z": [
-        -0.23060945777055022,
-        0.7952337015742337,
-        0.5607340170413385
+        -0.23060945777055017,
+        0.8048987415982991,
+        0.5467698727620679
       ]
     },
     {
@@ -443,19 +447,19 @@
       "pulses": [
         {
           "axis": "XY",
-          "phase_deg": 144,
+          "phase_deg": 141,
           "duration_ns": 20,
           "duration_cc": 5,
           "requested_angle_rad": 0.5940464197138006,
           "actual_angle_rad": 0.6544984694978736
         }
       ],
-      "rotation_error_rad": 0.08356160166539663,
+      "rotation_error_rad": 0.06073939309574969,
       "duration_total_ns": 20,
       "predicted_actual_bloch": [
-        0.3578209901358175,
-        0.49249834158803324,
-        0.7933533402912353
+        0.3831059805598259,
+        0.47309648604490173,
+        0.7933533402912352
       ],
       "gate": 6,
       "Omega": 2.7468089956948374,
@@ -500,22 +504,22 @@
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
-        "+X": 63,
-        "+Y": 153
+        "+X": 60,
+        "+Y": 150
       },
       "virtual_z_phase_ideal_deg": 329.7463703175209,
-      "virtual_z_phase_compiled_deg": 333,
+      "virtual_z_phase_compiled_deg": 330,
       "transverse_phase_ideal_deg": 140.4872322568393,
-      "projected_z_response_error_compiler": 0.07588888343156386,
+      "projected_z_response_error_compiler": 0.048761203688697755,
       "expected_projected_z": [
         0.4318134339816125,
         -0.5250945961686417,
         0.7333572276234136
       ],
       "predicted_projected_z": [
-        0.49249834158803335,
-        -0.4801433167790104,
-        0.7258841359924382
+        0.47309648604490184,
+        -0.5251225330051875,
+        0.707407972970465
       ]
     },
     {
@@ -523,19 +527,19 @@
       "pulses": [
         {
           "axis": "XY",
-          "phase_deg": 9,
+          "phase_deg": 6,
           "duration_ns": 184,
           "duration_cc": 46,
           "requested_angle_rad": 0.2160380254899571,
           "actual_angle_rad": 6.021385919380436
         }
       ],
-      "rotation_error_rad": 0.08305711333509234,
+      "rotation_error_rad": 0.04576405757365569,
       "duration_total_ns": 184,
       "predicted_actual_bloch": [
-        -0.040488218862836343,
-        0.25563255317172756,
-        0.9659258262890681
+        -0.02705395704896807,
+        0.25740120729276633,
+        0.9659258262890682
       ],
       "gate": 7,
       "Omega": 2.921698757963669,
@@ -580,22 +584,22 @@
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
-        "+X": 72,
-        "+Y": 162
+        "+X": 68,
+        "+Y": 158
       },
       "virtual_z_phase_ideal_deg": 338.00889062514204,
-      "virtual_z_phase_compiled_deg": 342,
+      "virtual_z_phase_compiled_deg": 338,
       "transverse_phase_ideal_deg": 185.8904199856367,
-      "projected_z_response_error_compiler": 0.08300086132777494,
+      "projected_z_response_error_compiler": 0.04546065473485698,
       "expected_projected_z": [
         0.21322960912207808,
         -0.36364943213290113,
         0.9068032996758805
       ],
       "predicted_projected_z": [
-        0.2556325531717276,
-        -0.29373809660629785,
-        0.9210699910218624
+        0.2574012072927664,
+        -0.358697370281864,
+        0.8972629575754827
       ]
     },
     {
@@ -603,19 +607,19 @@
       "pulses": [
         {
           "axis": "XY",
-          "phase_deg": 135,
+          "phase_deg": 138,
           "duration_ns": 48,
           "duration_cc": 12,
           "requested_angle_rad": 1.5286754193022147,
           "actual_angle_rad": 1.5707963267948966
         }
       ],
-      "rotation_error_rad": 0.08415073942661234,
+      "rotation_error_rad": 0.042997605044975976,
       "duration_total_ns": 48,
       "predicted_actual_bloch": [
-        0.7071067811865477,
-        0.7071067811865477,
-        1.1102230246251565e-16
+        0.6691306063588585,
+        0.7431448254773942,
+        -1.942890293094024e-16
       ],
       "gate": 8,
       "Omega": 1.0866082067944545,
@@ -666,16 +670,16 @@
       "virtual_z_phase_ideal_deg": 99.68888084882,
       "virtual_z_phase_compiled_deg": 99,
       "transverse_phase_ideal_deg": 138.30707372685492,
-      "projected_z_response_error_compiler": 0.05672640203234997,
+      "projected_z_response_error_compiler": 0.03623909739242459,
       "expected_projected_z": [
         0.746057999047475,
         0.539311904075073,
         0.3905638644065746
       ],
       "predicted_projected_z": [
-        0.7071067811865478,
-        0.5720614028176846,
-        0.4156269377774536
+        0.7431448254773944,
+        0.5200121484190411,
+        0.42109753485717194
       ]
     },
     {
@@ -683,19 +687,19 @@
       "pulses": [
         {
           "axis": "XY",
-          "phase_deg": 225,
+          "phase_deg": 229,
           "duration_ns": 24,
           "duration_cc": 6,
           "requested_angle_rad": 0.8384642365560769,
           "actual_angle_rad": 0.7853981633974483
         }
       ],
-      "rotation_error_rad": 0.07741558875432829,
+      "rotation_error_rad": 0.0533976048815038,
       "duration_total_ns": 24,
       "predicted_actual_bloch": [
-        -0.5,
-        0.5000000000000002,
-        0.7071067811865475
+        -0.533660262001975,
+        0.4639037882578495,
+        0.7071067811865477
       ],
       "gate": 9,
       "Omega": 3.693050622477844,
@@ -740,22 +744,22 @@
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
-        "+X": 45,
-        "+Y": 135
+        "+X": 48,
+        "+Y": 138
       },
       "virtual_z_phase_ideal_deg": 317.6608684409445,
-      "virtual_z_phase_compiled_deg": 315,
+      "virtual_z_phase_compiled_deg": 318,
       "transverse_phase_ideal_deg": 229.00414635349426,
-      "projected_z_response_error_compiler": 0.05873217527276997,
+      "projected_z_response_error_compiler": 0.03178675354706627,
       "expected_projected_z": [
         0.4878161482114251,
         -0.456181083067112,
         0.74426757620891
       ],
       "predicted_projected_z": [
-        0.5000000000000003,
-        -0.5000000000000003,
-        0.7071067811865476
+        0.4639037882578496,
+        -0.477004631800089,
+        0.746498396837715
       ]
     },
     {
@@ -763,19 +767,19 @@
       "pulses": [
         {
           "axis": "XY",
-          "phase_deg": 9,
+          "phase_deg": 12,
           "duration_ns": 184,
           "duration_cc": 46,
           "requested_angle_rad": 0.31128978633705395,
           "actual_angle_rad": 6.021385919380436
         }
       ],
-      "rotation_error_rad": 0.09215194142895293,
+      "rotation_error_rad": 0.05025203041473898,
       "duration_total_ns": 184,
       "predicted_actual_bloch": [
-        -0.040488218862836364,
-        0.2556325531717276,
-        0.9659258262890682
+        -0.05381150528310298,
+        0.2531632279912453,
+        0.9659258262890684
       ],
       "gate": 10,
       "Omega": 2.4588449564352537,
@@ -820,26 +824,26 @@
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
-        "+X": 162,
-        "+Y": 252
+        "+X": 167,
+        "+Y": 257
       },
       "virtual_z_phase_ideal_deg": 76.49658692602243,
-      "virtual_z_phase_compiled_deg": 72,
+      "virtual_z_phase_compiled_deg": 77,
       "transverse_phase_ideal_deg": 191.86698336181377,
-      "projected_z_response_error_compiler": 0.09211329754939378,
+      "projected_z_response_error_compiler": 0.04878785367943433,
       "expected_projected_z": [
         0.29974062213190317,
         0.9298585624722067,
         0.21335091572594983
       ],
       "predicted_projected_z": [
-        0.25563255317172767,
-        0.9210699910218626,
-        0.2937380966062976
+        0.25316322799124535,
+        0.9441632148115887,
+        0.21086536887241425
       ]
     }
   ],
-  "max_rotation_error_rad": 0.097706608415149,
+  "max_rotation_error_rad": 0.061795652497006276,
   "hardware_warning": false,
   "experiment_mode": "virtual_z",
   "readout_protocol": "virtual_z_projection",
@@ -852,6 +856,6 @@
   "projection_phase_deg": 0,
   "projected_observable": "SCC Z after fixed Rx(+pi/2); pre-projection Y",
   "virtual_z_method": "preparation phase shifts plus one transverse microwave gate pulse",
-  "iq_phase_grid_deg": 9,
-  "max_projected_z_compiler_error": 0.09211329754939378
+  "iq_phase_grid_deg": 1,
+  "max_projected_z_compiler_error": 0.04878785367943433
 }

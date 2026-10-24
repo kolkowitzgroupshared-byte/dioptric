@@ -136,7 +136,7 @@ def analyze(raw_data, min_ref_contrast=MIN_REFERENCE_CONTRAST,
                + (2*(sig_mean-r0[:,None,:])*se1[:,None,:]/den[:,None,:]**2)**2)
     zxy_sem = np.sqrt(var)
 
-    if mode in ("projection", "virtual_z"):
+    if mode in ("projection", "virtual_z", "virtual_z_frame"):
         # Three separate initial states measured along one identical axis.
         # Each recorded value is <sigma_z> after the final +X pi/2 pulse;
         # it is the pre-projection Y response of U acting on +Z, +X or +Y.
@@ -184,10 +184,10 @@ def analyze(raw_data, min_ref_contrast=MIN_REFERENCE_CONTRAST,
         "measurement_components":components, "measurement_kind":vector_kind,
         # Backwards-compatible *_xyz keys above store the 3 projected Z
         # responses in projection mode, not a reconstructed Bloch vector.
-        "measured_projected_z":xyz if mode in ("projection", "virtual_z") else None,
-        "expected_projected_z":ideal if mode in ("projection", "virtual_z") else None,
-        "compiled_projected_z":compiled if mode in ("projection", "virtual_z") else None,
-        "projected_z_response_error":error if mode in ("projection", "virtual_z") else None,
+        "measured_projected_z":xyz if mode in ("projection", "virtual_z", "virtual_z_frame") else None,
+        "expected_projected_z":ideal if mode in ("projection", "virtual_z", "virtual_z_frame") else None,
+        "compiled_projected_z":compiled if mode in ("projection", "virtual_z", "virtual_z_frame") else None,
+        "projected_z_response_error":error if mode in ("projection", "virtual_z", "virtual_z_frame") else None,
     }
 
 
@@ -212,7 +212,7 @@ def plot_results(raw_data, result, nv_ind=None):
                        fmt="o",capsize=2,label="Measured")
         ax[j].set_ylabel(
             f"<sigma_z> (input {name})"
-            if result["tomography_mode"] in ("projection", "virtual_z")
+            if result["tomography_mode"] in ("projection", "virtual_z", "virtual_z_frame")
             else f"<sigma_{name.lower()}>"
         )
         ax[j].axhline(0,lw=.5,color="grey")
@@ -223,6 +223,8 @@ def plot_results(raw_data, result, nv_ind=None):
                        else "Cornell gate (1-based)")
     title = ("Virtual-Z: one gate MW pulse and fixed +X pi/2 projection"
              if result["tomography_mode"] == "virtual_z"
+             else "Virtual-Z frame: one gate pulse, corrected projection phase"
+             if result["tomography_mode"] == "virtual_z_frame"
              else "Fixed +X pi/2 projection of three input states"
              if result["tomography_mode"] == "projection"
              else "Known-state calibration"
@@ -234,13 +236,13 @@ def plot_results(raw_data, result, nv_ind=None):
     fig2,ax2=plt.subplots(figsize=(10,5),layout="constrained")
     im=ax2.imshow(result["bloch_error_norm"].T,aspect="auto",origin="lower",
                   interpolation="nearest",vmin=0,vmax=2)
-    error_kind = ("Projection-response distance" if result["tomography_mode"] in ("projection", "virtual_z")
+    error_kind = ("Projection-response distance" if result["tomography_mode"] in ("projection", "virtual_z", "virtual_z_frame")
                   else "Bloch-vector distance")
     ax2.set(xlabel="State / gate",ylabel="NV index",
             title=error_kind + " (masked where references are unreliable)")
     ax2.set_xticks(np.arange(len(pred)), labels=result["gate_labels"])
     fig2.colorbar(im,ax=ax2,label="3-component response error"
-                  if result["tomography_mode"] in ("projection", "virtual_z")
+                  if result["tomography_mode"] in ("projection", "virtual_z", "virtual_z_frame")
                   else "|measured - Bloch target|")
     return fig,fig2
 
@@ -263,7 +265,7 @@ def plot_reference_diagnostics(result):
     axes[1,0].set(xlabel="Gate",ylabel="Accepted NVs",title="Accepted reference count")
     axes[1,1].plot(idx,np.array([np.nanmedian(x) for x in result["bloch_error_norm"]]),"o-")
     axes[1,1].set(xlabel="Gate",
-                  ylabel="Median projected-Z error" if result["tomography_mode"] in ("projection", "virtual_z")
+                  ylabel="Median projected-Z error" if result["tomography_mode"] in ("projection", "virtual_z", "virtual_z_frame")
                   else "Median |Bloch error|",
                   title="Filtered measurement discrepancy")
     for ax in axes.flat: ax.grid(alpha=.2)
@@ -272,7 +274,7 @@ def plot_reference_diagnostics(result):
 
 def print_summary(result, file_stem=""):
     """Print and return a reusable human-readable numerical summary."""
-    projection = result["tomography_mode"] in ("projection", "virtual_z")
+    projection = result["tomography_mode"] in ("projection", "virtual_z", "virtual_z_frame")
     lines=[f"File: {file_stem}",f"Mode: {result['tomography_mode']}",
            f"Measurement: {result['measurement_kind']} ({', '.join(result['measurement_components'])})",
            f"Normalization: {result['reference_scope']}",

@@ -10,7 +10,7 @@ import numpy as np
 
 from analysis import arbitrary_gate_tomography as analysis
 from utils.single_qubit_gate_compiler import compile_gates
-from utils.virtual_z_gate_compiler import compile_virtual_z_manifest
+from utils.virtual_z_gate_compiler import compile_virtual_z_manifest, PHASE_GRID_DEG
 
 CSV = (Path(__file__).resolve().parents[1] / "calibrations" /
        "purcell" / "arbitrary_gate_tomography" / "arbSQR.csv")
@@ -34,11 +34,11 @@ class TestPurcellVirtualZ(unittest.TestCase):
                                      {"+Z", "+X", "+Y"})
                     self.assertEqual(gate["preparation_phases_deg"]["+Z"], None)
                     self.assertTrue(all(
-                        phase in range(0, 360, 9)
+                        phase in range(0, 360, PHASE_GRID_DEG)
                         for phase in gate["preparation_phases_deg"].values()
                         if phase is not None
                     ))
-                    self.assertTrue(all(p["phase_deg"] in range(0, 360, 9)
+                    self.assertTrue(all(p["phase_deg"] in range(0, 360, PHASE_GRID_DEG)
                                         for p in gate["pulses"]))
                     np.testing.assert_allclose(
                         gate["expected_projected_z"][0],
