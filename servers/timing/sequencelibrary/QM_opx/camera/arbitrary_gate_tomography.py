@@ -17,6 +17,9 @@ The virtual_z_mixed_projection protocol applies phase-adjusted INITIAL pulses,
 at most ONE physical transverse microwave gate pulse, and a final +X pi/2
 ONLY for +X/+Y inputs; +Z is read out directly in Z. Historic saved
 virtual_z_projection files used final +X pi/2 for all three inputs.
+The virtual_z_z_only protocol uses ONLY optical +Z preparation, one
+compiled transverse gate pulse, direct Z SCC readout, and an alternating
+dual-rail SCC reference (2 experiments per repetition).
 The alternating dual-rail SCC reference remains untouched.
 The standalone simulation uses the SAME
 get_seq() and base_scc_sequence.macro(), with shortened spin-polarization and
@@ -73,7 +76,7 @@ def get_seq(
                 raise ValueError(f"Invalid compiled pulse: {p}")
         if gate.get("readout_protocol") in (
             "virtual_z_projection", "virtual_z_mixed_projection",
-            "virtual_z_frame_projection",
+            "virtual_z_frame_projection", "virtual_z_z_only",
         ):
             phases = gate.get("preparation_phases_deg", {})
             if set(phases) != {"+Z", "+X", "+Y"}:
@@ -159,7 +162,8 @@ def get_seq(
             # Mixed virtual-Z readout: +Z -> direct Z, +X/+Y -> final
             # fixed Rx(+pi/2), measuring pre-projection Y.
             # Other protocols retain their existing final projection.
-            if not (protocol == "virtual_z_mixed_projection"
+            if not (protocol in ("virtual_z_mixed_projection",
+                                 "virtual_z_z_only")
                     and input_state == "+Z"):
                 seq_utils.macro_pi_on_2_pulse(
                     uwave_ind_list, phase=int(projection_phase)
@@ -169,7 +173,8 @@ def get_seq(
         return uwave_macro
 
     if protocol in ("fixed_projection", "virtual_z_projection",
-                    "virtual_z_mixed_projection", "virtual_z_frame_projection"):
+                    "virtual_z_mixed_projection", "virtual_z_frame_projection",
+                    "virtual_z_z_only"):
         if protocol != "virtual_z_frame_projection" and any(
             g.get("projection_phase_deg", 0) != 0 for g in compiled_gates
         ):
@@ -181,10 +186,12 @@ def get_seq(
                 gate["preparation_phases_deg"]
                 if protocol in ("virtual_z_projection",
                                 "virtual_z_mixed_projection",
-                                "virtual_z_frame_projection") else None,
+                                "virtual_z_frame_projection",
+                                "virtual_z_z_only") else None,
             )
             for gate in compiled_gates
-            for prep in ("+Z", "+X", "+Y")
+            for prep in (("+Z",) if protocol == "virtual_z_z_only"
+                         else ("+Z", "+X", "+Y"))
         ]
     elif protocol == "legacy_tomography":
         uwave_macros = [
