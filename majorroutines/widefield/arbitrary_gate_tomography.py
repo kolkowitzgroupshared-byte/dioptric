@@ -28,6 +28,7 @@ from utils.single_qubit_gate_compiler import (
 )
 from analysis import arbitrary_gate_tomography as arb_analysis
 from utils.virtual_z_gate_compiler import compile_virtual_z_manifest
+from utils.virtual_z_frame_gate_compiler import compile_virtual_z_frame_manifest
 
 
 def _paths():
@@ -157,28 +158,30 @@ def _attach_projection_targets(manifest):
 
 def prepare(uwave_ind=0, mode="cornell"):
     """Precompute Cornell, calibration, projection, or virtual-Z manifest."""
-    if mode not in ("cornell", "calibration", "projection", "virtual_z"):
+    if mode not in ("cornell", "calibration", "projection", "virtual_z", "virtual_z_frame"):
         raise ValueError(
-            "mode must be 'cornell', 'calibration', 'projection' or 'virtual_z'"
+            "mode must be cornell, calibration, projection, virtual_z or virtual_z_frame"
         )
     csv_path, folder = _paths()
     pi_ns = tb.get_virtual_sig_gen_dict(uwave_ind)["pi_pulse"]
 
-    if mode in ("cornell", "projection", "virtual_z"):
+    if mode in ("cornell", "projection", "virtual_z", "virtual_z_frame"):
         if not csv_path.exists():
             raise FileNotFoundError(f"Place Cornell CSV at {csv_path}")
         manifest = compile_gates(csv_path, pi_ns, uwave_ind)
         if mode == "projection":
             manifest = _attach_projection_targets(manifest)
             out_path = folder / f"purcell_uwave{uwave_ind}_projection.json"
-        elif mode == "virtual_z":
+        elif mode in ("virtual_z", "virtual_z_frame"):
             pi_on_2_ns = tb.get_virtual_sig_gen_dict(uwave_ind)["pi_on_2_pulse"]
             if abs(2.0 * pi_on_2_ns - pi_ns) > 1e-6:
                 raise ValueError(
                     "Virtual-Z mode requires calibrated pi_on_2_pulse == pi_pulse/2"
                 )
-            manifest = compile_virtual_z_manifest(manifest, pi_ns)
-            out_path = folder / f"purcell_uwave{uwave_ind}_virtual_z.json"
+            manifest = (compile_virtual_z_frame_manifest(manifest, pi_ns)
+                        if mode == "virtual_z_frame"
+                        else compile_virtual_z_manifest(manifest, pi_ns))
+            out_path = folder / f"purcell_uwave{uwave_ind}_{mode}.json"
         else:
             manifest["experiment_mode"] = "cornell"
             out_path = folder / f"purcell_uwave{uwave_ind}.json"
@@ -236,7 +239,11 @@ def main(
     mode='projection' prepares initial +Z/+X/+Y then applies each Cornell
     three-pulse gate and the same final Rx(+pi/2).
     mode='virtual_z' instead phase-shifts input preparation, applies ONE
-    transverse gate pulse, and retains the fixed final +X pi/2 projection.
+    transverse gate pulse, and uses direct Z for +Z or the final +X pi/2
+    projection for +X/+Y. Older saved virtual_z runs still use all-projection.
+    mode='virtual_z_frame' keeps the same preparation as projection, applies
+    ONE transverse gate pulse with logical Z frame tracking, and corrects the
+    physical final pi/2 projection phase for the accumulated frame.
     Both modes acquire only projected Z responses, not XYZ tomography.
 
     Figures are saved by default without opening blocking plot windows.
@@ -244,8 +251,8 @@ def main(
     Each target gate is compiled and acquired separately.
     Per gate, the OPX program contains 3 signal measurements and one
     parity-alternating dual-rail reference. Legacy signals use Z/X/Y
-    tomography; projection signals use initial +Z/+X/+Y, all with
-    the same final +X pi/2 projection.
+    tomography; the readout protocol in the saved manifest specifies
+    each +Z/+X/+Y signal's final projection.
 
     Final counts shape:
         [gate, experiment=4, NV, run, step=1, repetition]
@@ -286,10 +293,10 @@ def main(
             f"{[(p['phase_deg'], p['duration_ns']) for p in gate['pulses']]} ns "
             f"SO3 err={gate['rotation_error_rad']:.4f} rad"
         )
-        if mode == "virtual_z":
+        if mode in ("virtual_z", "virtual_z_frame"):
             print(
-                "  virtual Z prep phases:",
-                gate["preparation_phases_deg"],
+                "  prep phases:", gate["preparation_phases_deg"],
+                "final projection phase:", gate["projection_phase_deg"],
                 "projected-Z compiler error:",
                 f"{gate['projected_z_response_error_compiler']:.4f}",
             )
@@ -372,6 +379,11 @@ def main(
             "nv_list": nv_list,
             "num_gates": len(manifest["gates"]),
             "tomography_mode": mode,
+            "readout_protocol": manifest.get("readout_protocol", "legacy_tomography"),
+            "analysis_reference_scope": (
+                "per_gate" if mode == "virtual_z"
+                else arb_analysis.REFERENCE_SCOPE
+            ),
             "num_exps_per_gate": 4,
             "num_steps": 1,
             "num_reps": num_reps,
@@ -397,13 +409,17 @@ def main(
                 if mode == "calibration"
                 else "Cornell Experiment 0: virtual-Z phase-tracked projection"
                 if mode == "virtual_z"
+                else "Cornell Experiment 0: one physical gate pulse with software Z frame and corrected projection"
+                if mode == "virtual_z_frame"
                 else "Cornell Experiment 0: fixed +X pi/2 projection"
                 if mode == "projection"
                 else "Cornell-Berkeley Experiment 0, arbitrary SU2 tomography"
             ),
             "experiment_order": (
-                "Per gate: input +Z, +X, +Y; phase-shifted prep; one IQ gate pulse; fixed final +X pi/2; dual-rail reference"
+                "Per gate: +Z direct Z; +X/+Y phase-shifted prep, one IQ gate pulse, final +X pi/2; dual-rail reference"
                 if mode == "virtual_z"
+                else "Per gate: standard input +Z,+X,+Y; one IQ gate pulse; frame-corrected pi/2 projection; dual-rail reference"
+                if mode == "virtual_z_frame"
                 else "Per gate: input +Z, +X, +Y; fixed final +X pi/2; dual-rail reference"
                 if mode == "projection"
                 else "Per gate: Z, X, Y, dual-rail reference"
@@ -412,7 +428,7 @@ def main(
             "ref_odd_rep": "ms1",
             "acquisition_layout": (
                 "counts[gate, exp(inputZ,inputX,inputY,ref), nv, run, step, rep]"
-                if mode in ("projection", "virtual_z")
+                if mode in ("projection", "virtual_z", "virtual_z_frame")
                 else "counts[gate, exp(ZXYref), nv, run, step, rep]"
             ),
         }
@@ -421,10 +437,11 @@ def main(
         # with an NPZ path in the dictionary passed to it.
         result = arb_analysis.analyze(
             raw,
-            min_ref_contrast=2.5 if mode in ("projection", "virtual_z")
+            min_ref_contrast=2.5 if mode in ("projection", "virtual_z", "virtual_z_frame")
                              else arb_analysis.MIN_REFERENCE_CONTRAST,
-            min_ref_snr=3.0 if mode in ("projection", "virtual_z")
+            min_ref_snr=3.0 if mode in ("projection", "virtual_z", "virtual_z_frame")
                         else arb_analysis.MIN_REFERENCE_SNR,
+            reference_scope=raw["analysis_reference_scope"],
         )
 
         print()

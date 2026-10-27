@@ -14,6 +14,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 from pathlib import Path
 from matplotlib.backends.backend_pdf import PdfPages
+from networkx import johnson
 import numpy as np
 import math
 from joblib import Parallel, delayed
@@ -1257,6 +1258,13 @@ if __name__ == "__main__":
     file_stem = ["2026_10_19-13_02_37-johnson-nv0_2026_10_02"]
     
     file_stem = ["2026_10_22-17_43_47-johnson-nv0_2026_10_02"]
+    
+    
+    file_stem = ["2026_10_23-20_13_10-johnson-nv0_2026_10_02",
+                 "2026_10_23-21_48_32-johnson-nv0_2026_10_02"]
+        
+    file_stem = ["2026_10_23-20_13_10-johnson-nv0_2026_10_02",
+                 "2026_10_23-21_48_32-johnson-nv0_2026_10_02"]
     
     data = dm.get_raw_data(
         file_stem=file_stem,

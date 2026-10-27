@@ -67,6 +67,7 @@ from majorroutines.widefield import (
     adaptive_charge_initialization,
     deer_hahn_p1_pulse_position_scan,
     rqs_c13,
+    rqs_c13_random_x,
 )
 
 # from slmsuite import optimize_slm_calibration
@@ -1054,6 +1055,19 @@ def do_arbitrary_gate_virtual_z(nv_list):
             mode="virtual_z",
             show_plots=False,
         )
+        
+def do_arbitrary_gate_virtual_z_frame(nv_list):
+    for _ in range(1):
+        do_widefield_image_sample(nv_sig, 50)
+        arbitrary_gate_tomography.main(
+        nv_list=nv_list,
+        num_reps=200,
+        num_runs=10,
+        uwave_ind_list=(1,),
+        mode="virtual_z_frame",
+        show_plots=False,
+    )
+    
 
 def do_rqs_c13(nv_list):
     for _ in range(2):
@@ -1062,11 +1076,27 @@ def do_rqs_c13(nv_list):
             field_g=31.1,
             band="high",
             uwave_ind_list=(1,),
-            masks_per_duration=2,
-            num_reps=100,
-            num_runs=20,
+            seed=37,
+            masks_per_duration=16,
+            num_reps=50,
+            num_runs=40,
         )
-
+                
+def do_rqs_c13_random_x(nv_list):
+    for _ in range(2):
+        do_widefield_image_sample(nv_sig, 50)
+        rqs_c13_random_x.main(
+            nv_list=nv_list,
+            field_g=31.1,
+            band="high",
+            uwave_ind_list=(1,),
+            seed=37,
+            masks_per_duration=16,
+            num_reps=6,
+            num_runs=400,
+            readout="cos",
+        )
+    
 def do_rabi(nv_list):
     min_tau = 16
     max_tau = 480 + min_tau
@@ -2129,7 +2159,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)     #yellow
+        # do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list: 
@@ -2204,7 +2234,6 @@ if __name__ == "__main__":
         # )
         
         # do_dmd_turnoff_crosstalk_extinction_matrix(nv_list)
-        
         # do_charge_correlation(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
@@ -2241,13 +2270,14 @@ if __name__ == "__main__":
         #         do_widefield_coherence_test(nv_list, evol_time, seq_type)
 
         # do_widefield_coherence_test(nv_list, 800, "xy8")
-
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_arbitrary_gate_calibration(nv_list)
         # do_arbitrary_gate_tomography(nv_list)
-        # do_arbitrary_gate_virtual_z(nv_list)
+        do_arbitrary_gate_virtual_z(nv_list)
         # do_arbitrary_gate_projection(nv_list)
-        do_rqs_c13(nv_list)
+        # do_rqs_c13(nv_list)
+        # do_rqs_c13_random_x(nv_list)
+        
         # do_calibrate_iq_delay(nv_list)
         # do_power_rabi(nv_list)
         # do_resonance(nv_list)

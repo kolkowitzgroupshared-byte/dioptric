@@ -1,8 +1,9 @@
 """Offline virtual-Z compiler for Purcell Cornell Experiment 0.
 
 Virtual Z is encoded in the preparation pulse phases for known +Z/+X/+Y
-initial states. One transverse IQ microwave gate pulse follows, and the final
-projection is fixed to +X pi/2. This reproduces the requested gate's response
+initial states. One transverse IQ microwave gate pulse follows. By default
+only +X/+Y receive a final +X pi/2; +Z is read out directly in Z.
+The historic all-projected protocol remains available for frame-mode compilation. This reproduces the requested gate's response
 for these known inputs, up to OPX phase and timing quantization.
 
 It is NOT a general-purpose standalone physical SU(2) implementation on an
@@ -15,7 +16,6 @@ from __future__ import annotations
 import math
 import numpy as np
 from scipy.spatial.transform import Rotation
-
 from utils.single_qubit_gate_compiler import source_rotation
 
 PHASE_GRID_DEG = 1
@@ -45,13 +45,12 @@ def _duration_candidates(angle_rad, pi_ns):
     ]
 
 
-def compile_virtual_z_gate(gate, pi_ns):
+def compile_virtual_z_gate(gate, pi_ns, *, project_plus_z=False):
     """Compile one Cornell Rz(a)Ry(b)Rz(c) with quantized physical I/Q phases.
 
     SO(3) Euler convention uses matrices acting right-to-left. Our protocol
     is prep(+Z/+X/+Y) with a phase shift delta=a+c, followed by ONE physical
-    transverse rotation with phase a+90 degrees. The final Rx(+pi/2) remains
-    phase 0 for every gate and input state.
+    transverse rotation with phase a+90 degrees. The final Rx(+pi/2) is phase 0 for +X/+Y; +Z can use direct Z.
 
     The alternative longer 2pi-beta pulse around the opposite axis is only
     considered when the short beta pulse is too short for the OPX.
@@ -98,12 +97,16 @@ def compile_virtual_z_gate(gate, pi_ns):
                 logical = drive * rz
                 error_rad = float((target.inv() * logical).magnitude())
                 predicted_z = [
-                    float(PROJECTION.apply(logical.apply(state))[2])
-                    for _, state, _ in INPUTS
+                    float((PROJECTION.apply(logical.apply(state))
+                           if project_plus_z or label != "+Z"
+                           else logical.apply(state))[2])
+                    for label, state, _ in INPUTS
                 ]
                 ideal_z = [
-                    float(PROJECTION.apply(target.apply(state))[2])
-                    for _, state, _ in INPUTS
+                    float((PROJECTION.apply(target.apply(state))
+                           if project_plus_z or label != "+Z"
+                           else target.apply(state))[2])
+                    for label, state, _ in INPUTS
                 ]
                 response_error = float(np.linalg.norm(
                     np.asarray(predicted_z) - np.asarray(ideal_z)
@@ -126,7 +129,13 @@ def compile_virtual_z_gate(gate, pi_ns):
     result["baseline_three_pulse"] = gate["pulses"]
     result["baseline_rotation_error_rad"] = gate["rotation_error_rad"]
     result["decomposition"] = "virtual_Z_phase_tracked"
-    result["readout_protocol"] = "virtual_z_projection"
+    result["readout_protocol"] = (
+        "virtual_z_projection" if project_plus_z
+        else "virtual_z_mixed_projection"
+    )
+    result["final_projection_by_input"] = {
+        "+Z": bool(project_plus_z), "+X": True, "+Y": True
+    }
     result["projection_phase_deg"] = 0
     result["preparation_phases_deg"] = prep_phases
     result["virtual_z_phase_ideal_deg"] = float(delta_deg % 360)
@@ -149,11 +158,11 @@ def compile_virtual_z_gate(gate, pi_ns):
     return result
 
 
-def compile_virtual_z_manifest(baseline, pi_ns):
+def compile_virtual_z_manifest(baseline, pi_ns, *, project_plus_z=False):
     """Return a new manifest, without mutating the original three-pulse one."""
     manifest = dict(baseline)
     manifest["gates"] = [
-        compile_virtual_z_gate(g, pi_ns) for g in baseline["gates"]
+        compile_virtual_z_gate(g, pi_ns, project_plus_z=project_plus_z) for g in baseline["gates"]
     ]
     all_phases = {0, 90, 180, 270}
     for g in manifest["gates"]:
@@ -165,12 +174,20 @@ def compile_virtual_z_manifest(baseline, pi_ns):
         )
     manifest["phase_available_deg"] = sorted(all_phases)
     manifest["experiment_mode"] = "virtual_z"
-    manifest["readout_protocol"] = "virtual_z_projection"
+    manifest["readout_protocol"] = (
+        "virtual_z_projection" if project_plus_z
+        else "virtual_z_mixed_projection"
+    )
+    manifest["final_projection_by_input"] = {
+        "+Z": bool(project_plus_z), "+X": True, "+Y": True
+    }
     manifest["input_state_order"] = ["+Z", "+X", "+Y"]
     manifest["projection_axis"] = "+X"
     manifest["projection_phase_deg"] = 0
     manifest["projected_observable"] = (
-        "SCC Z after fixed Rx(+pi/2); pre-projection Y"
+        "SCC Z after fixed Rx(+pi/2); pre-projection Y for +Z/+X/+Y"
+        if project_plus_z else
+        "SCC direct Z for +Z; pre-projection Y for +X/+Y after fixed Rx(+pi/2)"
     )
     manifest["virtual_z_method"] = (
         "preparation phase shifts plus one transverse microwave gate pulse"

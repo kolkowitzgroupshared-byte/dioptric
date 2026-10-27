@@ -13,9 +13,11 @@ Per gate the legacy protocol measures Z, X, Y and an alternating
 ms=0/ms=1 dual-rail SCC reference. The fixed_projection protocol instead
 prepares +Z/+X/+Y, applies the compiled Cornell gate, then appends a fixed
 +X pi/2 before SCC, with the same alternating fourth reference.
-The virtual_z_projection protocol applies phase-adjusted INITIAL pulses and
-at most ONE physical transverse microwave gate pulse, while retaining the same
-fixed final +X pi/2 and untouched dual-rail reference.
+The virtual_z_mixed_projection protocol applies phase-adjusted INITIAL pulses,
+at most ONE physical transverse microwave gate pulse, and a final +X pi/2
+ONLY for +X/+Y inputs; +Z is read out directly in Z. Historic saved
+virtual_z_projection files used final +X pi/2 for all three inputs.
+The alternating dual-rail SCC reference remains untouched.
 The standalone simulation uses the SAME
 get_seq() and base_scc_sequence.macro(), with shortened spin-polarization and
 charge-readout durations so the full first shot is easy to inspect.
@@ -35,6 +37,7 @@ from qm import qua
 
 from servers.timing.sequencelibrary.QM_opx import seq_utils
 from servers.timing.sequencelibrary.QM_opx.camera import base_scc_sequence
+from utils.virtual_z_gate_compiler import PHASE_GRID_DEG
 
 
 def get_seq(
@@ -60,20 +63,38 @@ def get_seq(
     if not compiled_gates:
         raise ValueError("No compiled gates supplied")
 
-    # Purcell config defines IQ pulse waveforms on a 9-degree phase grid.
+    # Use the shared compiler phase grid; verify_manifest checks real OPX waveforms.
     # Legacy pulses use 0/90/180/270; virtual-Z can use any supported phase.
-    phase_grid = set(range(360))
+    phase_grid = set(range(0, 360, PHASE_GRID_DEG))
     for gate in compiled_gates:
         for p in gate["pulses"]:
             if (int(p["phase_deg"]) not in phase_grid
                     or int(p["duration_cc"]) < 4):
                 raise ValueError(f"Invalid compiled pulse: {p}")
-        if gate.get("readout_protocol") == "virtual_z_projection":
+        if gate.get("readout_protocol") in (
+            "virtual_z_projection", "virtual_z_mixed_projection",
+            "virtual_z_frame_projection",
+        ):
             phases = gate.get("preparation_phases_deg", {})
             if set(phases) != {"+Z", "+X", "+Y"}:
                 raise ValueError("Missing virtual-Z preparation phase table")
             if phases["+Z"] is not None:
                 raise ValueError("+Z should not receive a preparation pulse")
+            if gate["readout_protocol"] == "virtual_z_frame_projection":
+                if phases != {"+Z": None, "+X": 90, "+Y": 180}:
+                    raise ValueError("Frame-tracked mode must use standard preparations")
+                proj_phase = gate.get("projection_phase_deg")
+                delta = gate.get("frame_final_deg")
+                if proj_phase not in phase_grid or delta is None:
+                    raise ValueError("Invalid frame-corrected final projection")
+                if (int(proj_phase) + int(delta)) % 360 != 0:
+                    raise ValueError("Projection phase does not cancel logical frame")
+                gamma = gate.get("frame_before_gate_deg")
+                alpha = gate.get("frame_after_gate_update_deg")
+                if gamma is None or alpha is None or (int(gamma) + int(alpha)) % 360 != int(delta):
+                    raise ValueError("Incomplete logical Z-frame bookkeeping")
+                if gate["pulses"] and int(gate["pulses"][0]["phase_deg"]) != (90 - int(gamma)) % 360:
+                    raise ValueError("Physical IQ pulse does not match logical frame")
             if any(phases[k] not in phase_grid for k in ("+X", "+Y")):
                 raise ValueError("Virtual-Z preparation phase off IQ grid")
             if len(gate["pulses"]) > 1:
@@ -113,8 +134,8 @@ def get_seq(
                               preparation_phases=None):
         if input_state not in ("+Z", "+X", "+Y"):
             raise ValueError(f"Unknown input state: {input_state}")
-        if projection_phase != 0:
-            raise ValueError("Fixed projection mode currently uses +X pi/2, phase 0")
+        if projection_phase not in phase_grid:
+            raise ValueError("Projection phase missing from configured IQ grid")
 
         prep_phases = (
             {"+Z": None, "+X": 90, "+Y": 180}
@@ -135,19 +156,32 @@ def get_seq(
                     duration_cc=int(p["duration_cc"]),
                     phase=int(p["phase_deg"]),
                 )
-            # Common projection followed by the normal SCC Z population readout.
-            seq_utils.macro_pi_on_2_pulse(uwave_ind_list, phase=0)
+            # Mixed virtual-Z readout: +Z -> direct Z, +X/+Y -> final
+            # fixed Rx(+pi/2), measuring pre-projection Y.
+            # Other protocols retain their existing final projection.
+            if not (protocol == "virtual_z_mixed_projection"
+                    and input_state == "+Z"):
+                seq_utils.macro_pi_on_2_pulse(
+                    uwave_ind_list, phase=int(projection_phase)
+                )
             qua.align()
 
         return uwave_macro
 
-    if protocol in ("fixed_projection", "virtual_z_projection"):
+    if protocol in ("fixed_projection", "virtual_z_projection",
+                    "virtual_z_mixed_projection", "virtual_z_frame_projection"):
+        if protocol != "virtual_z_frame_projection" and any(
+            g.get("projection_phase_deg", 0) != 0 for g in compiled_gates
+        ):
+            raise ValueError("Legacy projection modes require physical phase 0")
         uwave_macros = [
             make_projection_macro(
                 gate["pulses"], prep,
                 gate.get("projection_phase_deg", 0),
                 gate["preparation_phases_deg"]
-                if protocol == "virtual_z_projection" else None,
+                if protocol in ("virtual_z_projection",
+                                "virtual_z_mixed_projection",
+                                "virtual_z_frame_projection") else None,
             )
             for gate in compiled_gates
             for prep in ("+Z", "+X", "+Y")

@@ -7,7 +7,7 @@ Edit FILE_STEMS, then run from the dioptric repo root:
 Or supply the source files on the command line:
     python -m analysis.arbitrary_gate_multifile_analysis --files STEM1 STEM2 ...
 
-The script auto-groups 'virtual_z' and 'projection' runs, normalizes each
+The script auto-groups 'virtual_z', 'virtual_z_frame' and 'projection' runs, normalizes each
 independently using its OWN dual-rail reference, then matches NVs by name.
 It intentionally does not concatenate raw counts across different files.
 All standard outputs use data_manager to save into the configured G: nvdata.
@@ -41,22 +41,27 @@ from analysis import arbitrary_gate_tomography as arb
 # ---------------------------------------------------------------------------
 FILE_STEMS = [
     # "2026_10_21-20_36_54-johnson-nv0_2026_10_02",  # virtual_z
-    "2026_10_21-22_42_30-johnson-nv0_2026_10_02",  # projection
+    # "2026_10_25-18_24_10-johnson-nv0_2026_10_02", # virtual_z
+    "2026_10_25-20_36_57-johnson-nv0_2026_10_02", # virtual_z
+    # "2026_10_21-22_42_30-johnson-nv0_2026_10_02",  # projection
     # "2026_10_22-...-johnson-nv0_2026_10_02",
+    # "2026_10_23-17_39_32-johnson-nv0_2026_10_02" # virtual_z_frame
 ]
+
 DATA_DIR = None              # None -> normal dm/NAS lookup
 OUTDIR = None                # None -> dm saves to G: (recommended)
 # Same Purcell NAS share for sessions where Windows G: is not mapped.
 NAS_UNC_ROOT = r"\\192.168.0.197\G"
-REFERENCE_SCOPE = "all_gates"  # "per_gate" also supported
+REFERENCE_SCOPE = "per_gate"  # drift-robust default; "all_gates" also supported
 MIN_REFERENCE_CONTRAST = 2.5  # photons
 MIN_REFERENCE_SNR = 3.0
 SHOW_PLOTS = False
 BOOTSTRAP_SAMPLES = 4000
 SEED = 20261021
 
-MODES = ("virtual_z", "projection")
-MODE_LABEL = {"virtual_z": "Virtual-Z (one gate pulse)",
+MODES = ("virtual_z", "virtual_z_frame", "projection")
+MODE_LABEL = {"virtual_z": "Virtual-Z (shifted preparation)",
+              "virtual_z_frame": "Virtual-Z (frame-corrected projection)",
               "projection": "Three-pulse projection"}
 INPUT_LABELS = ("+Z", "+X", "+Y")
 
@@ -98,8 +103,12 @@ def _load_one(stem, data_dir, min_contrast, min_snr, reference_scope):
             "not standard XYZ tomography or known-state calibration."
         )
     protocol = raw["cornell_manifest"].get("readout_protocol")
-    expected = "virtual_z_projection" if mode == "virtual_z" else "fixed_projection"
-    if protocol != expected:
+    allowed = {
+        "virtual_z": ("virtual_z_projection", "virtual_z_mixed_projection"),
+        "virtual_z_frame": ("virtual_z_frame_projection",),
+        "projection": ("fixed_projection",),
+    }[mode]
+    if protocol not in allowed:
         raise ValueError(f"{stem}: mode/protocol mismatch ({mode}/{protocol})")
     names = [_name(nv) for nv in raw["nv_list"]]
     if len(names) != len(set(names)):
@@ -217,13 +226,24 @@ def analyze_many(file_stems=FILE_STEMS, *, data_dir=DATA_DIR,
     # Guard against mixing different physical gates / experimental protocols.
     target = loaded[0]["result"]["expected_xyz"]
     gates = [g["gate"] for g in loaded[0]["raw"]["cornell_manifest"]["gates"]]
+    # Cannot aggregate Y/Y/Y responses and Z/Y/Y responses, even though
+    # both historical and current acquisitions have mode='virtual_z'.
+    protocols = {r["raw"]["cornell_manifest"]["readout_protocol"] for r in loaded}
+    if "virtual_z_mixed_projection" in protocols and len(protocols) > 1:
+        raise ValueError(
+            "Mixed +Z-direct-Z and all-projection datasets measure different "
+            "observables; analyze them in separate batches."
+        )
     for record in loaded[1:]:
         m = record["raw"]["cornell_manifest"]
         if ([g["gate"] for g in m["gates"]] != gates or
                 record["result"]["expected_xyz"].shape != target.shape or
                 not np.allclose(record["result"]["expected_xyz"], target, atol=1e-7)):
             raise ValueError(f"{record['stem']}: Cornell target gates differ")
-        if m.get("projection_phase_deg") != 0:
+        if record["mode"] == "virtual_z_frame":
+            if not all(g.get("projection_phase_deg") is not None for g in m["gates"]):
+                raise ValueError(f"{record['stem']}: missing frame-corrected projection")
+        elif m.get("projection_phase_deg") != 0:
             raise ValueError(f"{record['stem']}: expected fixed +X projection")
     common = set(loaded[0]["names"])
     for record in loaded[1:]:
@@ -238,8 +258,11 @@ def analyze_many(file_stems=FILE_STEMS, *, data_dir=DATA_DIR,
               for mode in MODES if any(r["mode"] == mode for r in loaded)}
     paired = None
     paired_all = None
-    if len(groups) == 2:
-        zv, pv = groups["virtual_z"], groups["projection"]
+    # Prefer the new true-frame comparison if both virtual-Z methods exist.
+    compared_vz_mode = ("virtual_z_frame" if "virtual_z_frame" in groups
+                        else "virtual_z" if "virtual_z" in groups else None)
+    if compared_vz_mode and "projection" in groups:
+        zv, pv = groups[compared_vz_mode], groups["projection"]
         paired = zv["valid"] & pv["valid"]
         paired_all = paired.all(axis=0)
         # Balanced comparison uses only NVs accepted for ALL ten gates.
@@ -259,10 +282,11 @@ def analyze_many(file_stems=FILE_STEMS, *, data_dir=DATA_DIR,
         }
     comparison = None
     if paired_all is not None and paired_all.any():
-        ev = groups["virtual_z"]["error"][:, paired_all]
+        ev = groups[compared_vz_mode]["error"][:, paired_all]
         ep = groups["projection"]["error"][:, paired_all]
         dif = ev - ep
         comparison = {
+            "compared_virtual_z_mode": compared_vz_mode,
             "matched_nvs_valid_all_gates": int(paired_all.sum()),
             "median_virtual_z_error": float(np.median(ev)),
             "median_projection_error": float(np.median(ep)),
@@ -304,8 +328,8 @@ def analyze_many(file_stems=FILE_STEMS, *, data_dir=DATA_DIR,
               f"median response error={item['median_error']}")
     if comparison:
         print("Common fully accepted NVs:", comparison["matched_nvs_valid_all_gates"])
-        print("Paired medians: virtual_z={:.4f}, projection={:.4f}".format(
-            comparison["median_virtual_z_error"], comparison["median_projection_error"]))
+        print("Paired medians: {}={:.4f}, projection={:.4f}".format(
+            comparison["compared_virtual_z_mode"], comparison["median_virtual_z_error"], comparison["median_projection_error"]))
         print("Paired mean VZ minus projection={:.4f}; gate+NV bootstrap CI={}".format(
             comparison["mean_difference_vz_minus_projection"],
             comparison["two_way_bootstrap_95ci"]))
@@ -446,7 +470,7 @@ def _make_figures(groups, records, paired_all, comparison):
     axes[0].legend(fontsize=9)
     axes[-1].set(xlabel="Cornell gate")
     axes[-1].set_xticks(x)
-    fig.suptitle("Projected-Z responses after fixed +X pi/2")
+    fig.suptitle("Projected-Z responses in the same logical measurement basis")
     figs["projected_z_three_inputs"] = fig
     # C: gate vs spatially matched NV error heatmaps.
     fig, axes = plt.subplots(1, len(groups), figsize=(6.3*len(groups), 6),
@@ -474,14 +498,15 @@ def _make_figures(groups, records, paired_all, comparison):
     figs["reference_contrast_sources"] = fig
     # E: distribution of per-NV gate-mean matched error difference.
     if paired_all is not None and np.any(paired_all):
-        dif = (groups["virtual_z"]["error"][:, paired_all] -
+        vzmode = comparison["compared_virtual_z_mode"]
+        dif = (groups[vzmode]["error"][:, paired_all] -
                groups["projection"]["error"][:, paired_all])
         fig, ax = plt.subplots(figsize=(9, 5), layout="constrained")
         xval = dif.mean(axis=0)
         ax.hist(xval, bins=25)
         ax.axvline(0, color="black", linestyle="--", linewidth=1.0)
         ax.axvline(np.mean(xval), linestyle=":", linewidth=2, label="Mean difference")
-        ax.set(xlabel="Mean over gates: virtual-Z error minus projection error",
+        ax.set(xlabel=f"Mean over gates: {vzmode} error minus projection error",
                ylabel="NV count", title="Matched-NV comparison (negative favors virtual-Z)")
         ax.legend()
         figs["paired_nv_difference"] = fig

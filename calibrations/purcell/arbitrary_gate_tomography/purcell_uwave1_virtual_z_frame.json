@@ -1,0 +1,905 @@
+{
+  "format": "cornell-arb-sqr-v1",
+  "csv_sha256": "2629213ede0e2498bcef5be5c235690dd5528ae2e0acc79f0de6919050a15863",
+  "mw_chain": 1,
+  "pi_pulse_ns": 96.0,
+  "pi_on_2_pulse_ns": 48.0,
+  "clock_ns": 4,
+  "phase_available_deg": [
+    0,
+    18,
+    22,
+    28,
+    30,
+    39,
+    42,
+    90,
+    113,
+    132,
+    152,
+    171,
+    180,
+    194,
+    211,
+    248,
+    261,
+    270,
+    271,
+    283,
+    295,
+    305,
+    352
+  ],
+  "basis_order": [
+    "Z",
+    "X",
+    "Y"
+  ],
+  "gates": [
+    {
+      "decomposition": "virtual_Z_frame_tracked",
+      "pulses": [
+        {
+          "axis": "XY",
+          "phase_deg": 18,
+          "duration_ns": 72,
+          "duration_cc": 18,
+          "requested_angle_rad": 2.35947338021939,
+          "actual_angle_rad": 2.356194490192345
+        }
+      ],
+      "rotation_error_rad": 0.008205678253814927,
+      "duration_total_ns": 72,
+      "predicted_actual_bloch": [
+        -0.6724985119639575,
+        -0.21850801222441038,
+        -0.7071067811865475
+      ],
+      "gate": 1,
+      "Omega": 1.29895357613236,
+      "theta": 4.427702886197472,
+      "phi": 5.18738634538702,
+      "expected_bloch_xyz": [
+        -0.67191178002367,
+        -0.21273385564946387,
+        -0.7094215013135253
+      ],
+      "baseline_three_pulse": [
+        {
+          "axis": "Y",
+          "phase_deg": 270,
+          "duration_cc": 10,
+          "duration_ns": 40,
+          "requested_angle_rad": -1.322903397185853,
+          "actual_angle_rad": -1.3089969389957472,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "X",
+          "phase_deg": 0,
+          "duration_cc": 16,
+          "duration_ns": 64,
+          "requested_angle_rad": 2.0924005977550366,
+          "actual_angle_rad": 2.0943951023931953,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "Y",
+          "phase_deg": 270,
+          "duration_cc": 5,
+          "duration_ns": 20,
+          "requested_angle_rad": -0.6870965653588337,
+          "actual_angle_rad": -0.6544984694978736,
+          "full_turn_fallback": false
+        }
+      ],
+      "baseline_rotation_error_rad": 0.028415652776991672,
+      "readout_protocol": "virtual_z_frame_projection",
+      "projection_phase_deg": 90,
+      "preparation_phases_deg": {
+        "+Z": null,
+        "+X": 90,
+        "+Y": 180
+      },
+      "virtual_z_phase_ideal_deg": 269.5672837184721,
+      "virtual_z_phase_compiled_deg": 270,
+      "transverse_phase_ideal_deg": 287.5682975647674,
+      "projected_z_response_error_compiler": 0.007590022009848821,
+      "expected_projected_z": [
+        -0.21273385564946398,
+        -0.8405174624851982,
+        -0.49827171494873856
+      ],
+      "predicted_projected_z": [
+        -0.21850801222441066,
+        -0.8369858080030423,
+        -0.5017060950349634
+      ],
+      "logical_projection_phase_deg": 0,
+      "frame_before_gate_deg": 72,
+      "frame_after_gate_update_deg": 198,
+      "frame_final_deg": 270,
+      "frame_initial_deg": 0
+    },
+    {
+      "decomposition": "virtual_Z_frame_tracked",
+      "pulses": [
+        {
+          "axis": "XY",
+          "phase_deg": 113,
+          "duration_ns": 20,
+          "duration_cc": 5,
+          "requested_angle_rad": 0.7162640136990709,
+          "actual_angle_rad": 0.6544984694978736
+        }
+      ],
+      "rotation_error_rad": 0.06179565249700638,
+      "duration_total_ns": 20,
+      "predicted_actual_bloch": [
+        -0.6028370046288243,
+        0.08472321582002444,
+        0.7933533402912353
+      ],
+      "gate": 2,
+      "Omega": 4.9662203589131675,
+      "theta": 3.5121434693912224,
+      "phi": 4.582742682310468,
+      "expected_bloch_xyz": [
+        -0.6499813709101634,
+        0.0927908570555059,
+        0.7542639288184536
+      ],
+      "baseline_three_pulse": [
+        {
+          "axis": "X",
+          "phase_deg": 180,
+          "duration_cc": 20,
+          "duration_ns": 80,
+          "requested_angle_rad": -2.566137072353702,
+          "actual_angle_rad": -2.6179938779914944,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "Y",
+          "phase_deg": 90,
+          "duration_cc": 17,
+          "duration_ns": 68,
+          "requested_angle_rad": 2.25525579733161,
+          "actual_angle_rad": 2.2252947962927703,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "X",
+          "phase_deg": 0,
+          "duration_cc": 5,
+          "duration_ns": 20,
+          "requested_angle_rad": 0.6758236726705207,
+          "actual_angle_rad": 0.6544984694978736,
+          "full_turn_fallback": false
+        }
+      ],
+      "baseline_rotation_error_rad": 0.05165912437796381,
+      "readout_protocol": "virtual_z_frame_projection",
+      "projection_phase_deg": 211,
+      "preparation_phases_deg": {
+        "+Z": null,
+        "+X": 90,
+        "+Y": 180
+      },
+      "virtual_z_phase_ideal_deg": 148.89441666887308,
+      "virtual_z_phase_compiled_deg": 149,
+      "transverse_phase_ideal_deg": 261.8753940435845,
+      "projected_z_response_error_compiler": 0.009074046963913522,
+      "expected_projected_z": [
+        0.09279085705550591,
+        0.48464405860789345,
+        -0.8697758293393613
+      ],
+      "predicted_projected_z": [
+        0.08472321582002432,
+        0.48856467157828065,
+        -0.8684045937158097
+      ],
+      "logical_projection_phase_deg": 0,
+      "frame_before_gate_deg": 337,
+      "frame_after_gate_update_deg": 172,
+      "frame_final_deg": 149,
+      "frame_initial_deg": 0
+    },
+    {
+      "decomposition": "virtual_Z_frame_tracked",
+      "pulses": [
+        {
+          "axis": "XY",
+          "phase_deg": 352,
+          "duration_ns": 44,
+          "duration_cc": 11,
+          "requested_angle_rad": 1.4839459898919771,
+          "actual_angle_rad": 1.4398966328953218
+        }
+      ],
+      "rotation_error_rad": 0.04524525041890569,
+      "duration_total_ns": 44,
+      "predicted_actual_bloch": [
+        0.3714017820789548,
+        0.9192516681590036,
+        0.1305261922200519
+      ],
+      "gate": 3,
+      "Omega": 1.6613705927261568,
+      "theta": 2.3958399830503634,
+      "phi": 3.4110752634793853,
+      "expected_bloch_xyz": [
+        0.3810557711981409,
+        0.9204740434544553,
+        0.08674119300076288
+      ],
+      "baseline_three_pulse": [
+        {
+          "axis": "X",
+          "phase_deg": 180,
+          "duration_cc": 46,
+          "duration_ns": 184,
+          "requested_angle_rad": 0.26160245810785066,
+          "actual_angle_rad": -6.021385919380436,
+          "full_turn_fallback": true
+        },
+        {
+          "axis": "Y",
+          "phase_deg": 90,
+          "duration_cc": 21,
+          "duration_ns": 84,
+          "requested_angle_rad": 2.7360938580175103,
+          "actual_angle_rad": 2.748893571891069,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "X",
+          "phase_deg": 0,
+          "duration_cc": 15,
+          "duration_ns": 60,
+          "requested_angle_rad": 1.9482714428594825,
+          "actual_angle_rad": 1.9634954084936205,
+          "full_turn_fallback": false
+        }
+      ],
+      "baseline_rotation_error_rad": 0.019751265944098043,
+      "readout_protocol": "virtual_z_frame_projection",
+      "projection_phase_deg": 194,
+      "preparation_phases_deg": {
+        "+Z": null,
+        "+X": 90,
+        "+Y": 180
+      },
+      "virtual_z_phase_ideal_deg": 165.9034993705003,
+      "virtual_z_phase_compiled_deg": 166,
+      "transverse_phase_ideal_deg": 157.5115334864061,
+      "projected_z_response_error_compiler": 0.03897752858222626,
+      "expected_projected_z": [
+        0.9204740434544558,
+        0.3667052559350899,
+        -0.13511029048960532
+      ],
+      "predicted_projected_z": [
+        0.9192516681590037,
+        0.3541179716684619,
+        -0.17197916364578453
+      ],
+      "logical_projection_phase_deg": 0,
+      "frame_before_gate_deg": 98,
+      "frame_after_gate_update_deg": 68,
+      "frame_final_deg": 166,
+      "frame_initial_deg": 0
+    },
+    {
+      "decomposition": "virtual_Z_frame_tracked",
+      "pulses": [
+        {
+          "axis": "XY",
+          "phase_deg": 248,
+          "duration_ns": 60,
+          "duration_cc": 15,
+          "requested_angle_rad": 1.9953228520518873,
+          "actual_angle_rad": 1.9634954084936205
+        }
+      ],
+      "rotation_error_rad": 0.03288879852338233,
+      "duration_total_ns": 60,
+      "predicted_actual_bloch": [
+        0.8303774233188025,
+        0.40500213016192954,
+        -0.3826834323650895
+      ],
+      "gate": 4,
+      "Omega": 1.3522463079172005,
+      "theta": 4.178192911544553,
+      "phi": 1.5359092503818255,
+      "expected_bloch_xyz": [
+        0.8220115811959526,
+        0.3932481374550941,
+        -0.4118893817128927
+      ],
+      "baseline_three_pulse": [
+        {
+          "axis": "Y",
+          "phase_deg": 270,
+          "duration_cc": 21,
+          "duration_ns": 84,
+          "requested_angle_rad": -2.741483495600004,
+          "actual_angle_rad": -2.748893571891069,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "X",
+          "phase_deg": 0,
+          "duration_cc": 21,
+          "duration_ns": 84,
+          "requested_angle_rad": 2.700452269725209,
+          "actual_angle_rad": 2.748893571891069,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "Y",
+          "phase_deg": 90,
+          "duration_cc": 19,
+          "duration_ns": 76,
+          "requested_angle_rad": 2.4727761340695573,
+          "actual_angle_rad": 2.4870941840919194,
+          "full_turn_fallback": false
+        }
+      ],
+      "baseline_rotation_error_rad": 0.05291939783084259,
+      "readout_protocol": "virtual_z_frame_projection",
+      "projection_phase_deg": 132,
+      "preparation_phases_deg": {
+        "+Z": null,
+        "+X": 90,
+        "+Y": 180
+      },
+      "virtual_z_phase_ideal_deg": 227.13489054581044,
+      "virtual_z_phase_compiled_deg": 228,
+      "transverse_phase_ideal_deg": 115.5663275109246,
+      "projected_z_response_error_compiler": 0.020580518555105454,
+      "expected_projected_z": [
+        0.3932481374550939,
+        -0.16631324753937207,
+        -0.9042653405284355
+      ],
+      "predicted_projected_z": [
+        0.40500213016192954,
+        -0.18115224618656905,
+        -0.8961903471170958
+      ],
+      "logical_projection_phase_deg": 0,
+      "frame_before_gate_deg": 202,
+      "frame_after_gate_update_deg": 26,
+      "frame_final_deg": 228,
+      "frame_initial_deg": 0
+    },
+    {
+      "decomposition": "virtual_Z_frame_tracked",
+      "pulses": [
+        {
+          "axis": "XY",
+          "phase_deg": 152,
+          "duration_ns": 184,
+          "duration_cc": 46,
+          "requested_angle_rad": 0.214204661033257,
+          "actual_angle_rad": 6.021385919380436
+        }
+      ],
+      "rotation_error_rad": 0.048347616328610774,
+      "duration_total_ns": 184,
+      "predicted_actual_bloch": [
+        0.1175013876282061,
+        -0.23060945777055014,
+        0.9659258262890681
+      ],
+      "gate": 5,
+      "Omega": 5.788159584367247,
+      "theta": 2.9146269906365085,
+      "phi": 4.719867423552939,
+      "expected_bloch_xyz": [
+        0.09754997704394353,
+        -0.1888654247520919,
+        0.9771457687120884
+      ],
+      "baseline_three_pulse": [
+        {
+          "axis": "X",
+          "phase_deg": 180,
+          "duration_cc": 11,
+          "duration_ns": 44,
+          "requested_angle_rad": -1.4516384630273103,
+          "actual_angle_rad": -1.4398966328953218,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "Y",
+          "phase_deg": 90,
+          "duration_cc": 7,
+          "duration_ns": 28,
+          "requested_angle_rad": 0.9624639463434808,
+          "actual_angle_rad": 0.916297857297023,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "X",
+          "phase_deg": 0,
+          "duration_cc": 13,
+          "duration_ns": 52,
+          "requested_angle_rad": 1.6934083720895008,
+          "actual_angle_rad": 1.7016960206944713,
+          "full_turn_fallback": false
+        }
+      ],
+      "baseline_rotation_error_rad": 0.049524951802373485,
+      "readout_protocol": "virtual_z_frame_projection",
+      "projection_phase_deg": 305,
+      "preparation_phases_deg": {
+        "+Z": null,
+        "+X": 90,
+        "+Y": 180
+      },
+      "virtual_z_phase_ideal_deg": 55.49014536254692,
+      "virtual_z_phase_compiled_deg": 55,
+      "transverse_phase_ideal_deg": 27.31658945040433,
+      "projected_z_response_error_compiler": 0.04286207938411309,
+      "expected_projected_z": [
+        -0.18886542475209198,
+        0.8144415773025752,
+        0.5486481281241248
+      ],
+      "predicted_projected_z": [
+        -0.23060945777054997,
+        0.8048987415982991,
+        0.546769872762068
+      ],
+      "logical_projection_phase_deg": 0,
+      "frame_before_gate_deg": 298,
+      "frame_after_gate_update_deg": 117,
+      "frame_final_deg": 55,
+      "frame_initial_deg": 0
+    },
+    {
+      "decomposition": "virtual_Z_frame_tracked",
+      "pulses": [
+        {
+          "axis": "XY",
+          "phase_deg": 171,
+          "duration_ns": 20,
+          "duration_cc": 5,
+          "requested_angle_rad": 0.5940464197138006,
+          "actual_angle_rad": 0.6544984694978736
+        }
+      ],
+      "rotation_error_rad": 0.0607393930957496,
+      "duration_total_ns": 20,
+      "predicted_actual_bloch": [
+        0.3831059805598262,
+        0.4730964860449014,
+        0.7933533402912352
+      ],
+      "gate": 6,
+      "Omega": 2.7468089956948374,
+      "theta": 0.8648050509831031,
+      "phi": 1.9964114961696868,
+      "expected_bloch_xyz": [
+        0.3561211679328325,
+        0.43181343398161254,
+        0.8286826123330707
+      ],
+      "baseline_three_pulse": [
+        {
+          "axis": "Y",
+          "phase_deg": 270,
+          "duration_cc": 17,
+          "duration_ns": 68,
+          "requested_angle_rad": -2.2590196750945397,
+          "actual_angle_rad": -2.2252947962927703,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "X",
+          "phase_deg": 0,
+          "duration_cc": 6,
+          "duration_ns": 24,
+          "requested_angle_rad": 0.7475492035841529,
+          "actual_angle_rad": 0.7853981633974483,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "Y",
+          "phase_deg": 90,
+          "duration_cc": 19,
+          "duration_ns": 76,
+          "requested_angle_rad": 2.5193584627549654,
+          "actual_angle_rad": 2.4870941840919194,
+          "full_turn_fallback": false
+        }
+      ],
+      "baseline_rotation_error_rad": 0.04519769257013054,
+      "readout_protocol": "virtual_z_frame_projection",
+      "projection_phase_deg": 30,
+      "preparation_phases_deg": {
+        "+Z": null,
+        "+X": 90,
+        "+Y": 180
+      },
+      "virtual_z_phase_ideal_deg": 329.7463703175209,
+      "virtual_z_phase_compiled_deg": 330,
+      "transverse_phase_ideal_deg": 140.4872322568393,
+      "projected_z_response_error_compiler": 0.048761203688697685,
+      "expected_projected_z": [
+        0.4318134339816125,
+        -0.5250945961686417,
+        0.7333572276234136
+      ],
+      "predicted_projected_z": [
+        0.4730964860449019,
+        -0.5251225330051871,
+        0.7074079729704652
+      ],
+      "logical_projection_phase_deg": 0,
+      "frame_before_gate_deg": 279,
+      "frame_after_gate_update_deg": 51,
+      "frame_final_deg": 330,
+      "frame_initial_deg": 0
+    },
+    {
+      "decomposition": "virtual_Z_frame_tracked",
+      "pulses": [
+        {
+          "axis": "XY",
+          "phase_deg": 28,
+          "duration_ns": 184,
+          "duration_cc": 46,
+          "requested_angle_rad": 0.2160380254899571,
+          "actual_angle_rad": 6.021385919380436
+        }
+      ],
+      "rotation_error_rad": 0.0457640575736549,
+      "duration_total_ns": 184,
+      "predicted_actual_bloch": [
+        -0.027053957048967903,
+        0.25740120729276555,
+        0.9659258262890683
+      ],
+      "gate": 7,
+      "Omega": 2.921698757963669,
+      "theta": 0.5169732467603979,
+      "phi": 1.2760804713415275,
+      "expected_bloch_xyz": [
+        -0.021999103885101217,
+        0.213229609122078,
+        0.9767544078333601
+      ],
+      "baseline_three_pulse": [
+        {
+          "axis": "X",
+          "phase_deg": 0,
+          "duration_cc": 12,
+          "duration_ns": 48,
+          "requested_angle_rad": 1.6291494807637081,
+          "actual_angle_rad": 1.5707963267948966,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "Y",
+          "phase_deg": 270,
+          "duration_cc": 45,
+          "duration_ns": 180,
+          "requested_angle_rad": 0.38678560742647344,
+          "actual_angle_rad": -5.8904862254808625,
+          "full_turn_fallback": true
+        },
+        {
+          "axis": "X",
+          "phase_deg": 180,
+          "duration_cc": 14,
+          "duration_ns": 56,
+          "requested_angle_rad": -1.8397796824343065,
+          "actual_angle_rad": -1.832595714594046,
+          "full_turn_fallback": false
+        }
+      ],
+      "baseline_rotation_error_rad": 0.05211637639798114,
+      "readout_protocol": "virtual_z_frame_projection",
+      "projection_phase_deg": 22,
+      "preparation_phases_deg": {
+        "+Z": null,
+        "+X": 90,
+        "+Y": 180
+      },
+      "virtual_z_phase_ideal_deg": 338.00889062514204,
+      "virtual_z_phase_compiled_deg": 338,
+      "transverse_phase_ideal_deg": 185.8904199856367,
+      "projected_z_response_error_compiler": 0.04546065473485627,
+      "expected_projected_z": [
+        0.21322960912207808,
+        -0.36364943213290113,
+        0.9068032996758805
+      ],
+      "predicted_projected_z": [
+        0.2574012072927656,
+        -0.35869737028186377,
+        0.8972629575754826
+      ],
+      "logical_projection_phase_deg": 0,
+      "frame_before_gate_deg": 62,
+      "frame_after_gate_update_deg": 276,
+      "frame_final_deg": 338,
+      "frame_initial_deg": 0
+    },
+    {
+      "decomposition": "virtual_Z_frame_tracked",
+      "pulses": [
+        {
+          "axis": "XY",
+          "phase_deg": 39,
+          "duration_ns": 48,
+          "duration_cc": 12,
+          "requested_angle_rad": 1.5286754193022147,
+          "actual_angle_rad": 1.5707963267948966
+        }
+      ],
+      "rotation_error_rad": 0.042997605044975976,
+      "duration_total_ns": 48,
+      "predicted_actual_bloch": [
+        0.6691306063588583,
+        0.7431448254773944,
+        -1.942890293094024e-16
+      ],
+      "gate": 8,
+      "Omega": 1.0866082067944545,
+      "theta": 0.8977730780488976,
+      "phi": 0.026832110682847972,
+      "expected_bloch_xyz": [
+        0.6645482226208269,
+        0.7460579990474749,
+        0.04210845364980137
+      ],
+      "baseline_three_pulse": [
+        {
+          "axis": "Y",
+          "phase_deg": 90,
+          "duration_cc": 19,
+          "duration_ns": 76,
+          "requested_angle_rad": 2.5156741376959846,
+          "actual_angle_rad": 2.4870941840919194,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "X",
+          "phase_deg": 0,
+          "duration_cc": 9,
+          "duration_ns": 36,
+          "requested_angle_rad": 1.169552300902054,
+          "actual_angle_rad": 1.1780972450961724,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "Y",
+          "phase_deg": 270,
+          "duration_cc": 4,
+          "duration_ns": 16,
+          "requested_angle_rad": -0.558634994754493,
+          "actual_angle_rad": -0.5235987755982988,
+          "full_turn_fallback": false
+        }
+      ],
+      "baseline_rotation_error_rad": 0.03664689766553192,
+      "readout_protocol": "virtual_z_frame_projection",
+      "projection_phase_deg": 261,
+      "preparation_phases_deg": {
+        "+Z": null,
+        "+X": 90,
+        "+Y": 180
+      },
+      "virtual_z_phase_ideal_deg": 99.68888084882,
+      "virtual_z_phase_compiled_deg": 99,
+      "transverse_phase_ideal_deg": 138.30707372685492,
+      "projected_z_response_error_compiler": 0.03623909739242446,
+      "expected_projected_z": [
+        0.746057999047475,
+        0.539311904075073,
+        0.3905638644065746
+      ],
+      "predicted_projected_z": [
+        0.7431448254773946,
+        0.5200121484190409,
+        0.42109753485717166
+      ],
+      "logical_projection_phase_deg": 0,
+      "frame_before_gate_deg": 51,
+      "frame_after_gate_update_deg": 48,
+      "frame_final_deg": 99,
+      "frame_initial_deg": 0
+    },
+    {
+      "decomposition": "virtual_Z_frame_tracked",
+      "pulses": [
+        {
+          "axis": "XY",
+          "phase_deg": 271,
+          "duration_ns": 24,
+          "duration_cc": 6,
+          "requested_angle_rad": 0.8384642365560769,
+          "actual_angle_rad": 0.7853981633974483
+        }
+      ],
+      "rotation_error_rad": 0.05339760488150384,
+      "duration_total_ns": 24,
+      "predicted_actual_bloch": [
+        -0.5336602620019748,
+        0.4639037882578497,
+        0.7071067811865477
+      ],
+      "gate": 9,
+      "Omega": 3.693050622477844,
+      "theta": 2.251810118096025,
+      "phi": 3.4876266553167627,
+      "expected_bloch_xyz": [
+        -0.5612503111805762,
+        0.48781614821142444,
+        0.6686056339456582
+      ],
+      "baseline_three_pulse": [
+        {
+          "axis": "X",
+          "phase_deg": 0,
+          "duration_cc": 17,
+          "duration_ns": 68,
+          "requested_angle_rad": 2.26982568139936,
+          "actual_angle_rad": 2.2252947962927703,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "Y",
+          "phase_deg": 90,
+          "duration_cc": 8,
+          "duration_ns": 32,
+          "requested_angle_rad": 1.059718336846896,
+          "actual_angle_rad": 1.0471975511965976,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "X",
+          "phase_deg": 180,
+          "duration_cc": 20,
+          "duration_ns": 80,
+          "requested_angle_rad": -2.591210670986661,
+          "actual_angle_rad": -2.6179938779914944,
+          "full_turn_fallback": false
+        }
+      ],
+      "baseline_rotation_error_rad": 0.06353516248128131,
+      "readout_protocol": "virtual_z_frame_projection",
+      "projection_phase_deg": 42,
+      "preparation_phases_deg": {
+        "+Z": null,
+        "+X": 90,
+        "+Y": 180
+      },
+      "virtual_z_phase_ideal_deg": 317.6608684409445,
+      "virtual_z_phase_compiled_deg": 318,
+      "transverse_phase_ideal_deg": 229.00414635349426,
+      "projected_z_response_error_compiler": 0.031786753547066025,
+      "expected_projected_z": [
+        0.4878161482114251,
+        -0.456181083067112,
+        0.74426757620891
+      ],
+      "predicted_projected_z": [
+        0.4639037882578497,
+        -0.4770046318000888,
+        0.7464983968377148
+      ],
+      "logical_projection_phase_deg": 0,
+      "frame_before_gate_deg": 179,
+      "frame_after_gate_update_deg": 139,
+      "frame_final_deg": 318,
+      "frame_initial_deg": 0
+    },
+    {
+      "decomposition": "virtual_Z_frame_tracked",
+      "pulses": [
+        {
+          "axis": "XY",
+          "phase_deg": 295,
+          "duration_ns": 184,
+          "duration_cc": 46,
+          "requested_angle_rad": 0.31128978633705395,
+          "actual_angle_rad": 6.021385919380436
+        }
+      ],
+      "rotation_error_rad": 0.050252030414738136,
+      "duration_total_ns": 184,
+      "predicted_actual_bloch": [
+        -0.053811505283103245,
+        0.2531632279912461,
+        0.9659258262890684
+      ],
+      "gate": 10,
+      "Omega": 2.4588449564352537,
+      "theta": 2.893353473422796,
+      "phi": 2.0312370490504303,
+      "expected_bloch_xyz": [
+        -0.0629848824621897,
+        0.299740622131903,
+        0.9519393174069468
+      ],
+      "baseline_three_pulse": [
+        {
+          "axis": "Y",
+          "phase_deg": 90,
+          "duration_cc": 14,
+          "duration_ns": 56,
+          "requested_angle_rad": 1.8826302236763004,
+          "actual_angle_rad": 1.832595714594046,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "X",
+          "phase_deg": 0,
+          "duration_cc": 10,
+          "duration_ns": 40,
+          "requested_angle_rad": 1.3557927571830335,
+          "actual_angle_rad": 1.3089969389957472,
+          "full_turn_fallback": false
+        },
+        {
+          "axis": "Y",
+          "phase_deg": 270,
+          "duration_cc": 13,
+          "duration_ns": 52,
+          "requested_angle_rad": -1.705530544794185,
+          "actual_angle_rad": -1.7016960206944713,
+          "full_turn_fallback": false
+        }
+      ],
+      "baseline_rotation_error_rad": 0.06794791317829377,
+      "readout_protocol": "virtual_z_frame_projection",
+      "projection_phase_deg": 283,
+      "preparation_phases_deg": {
+        "+Z": null,
+        "+X": 90,
+        "+Y": 180
+      },
+      "virtual_z_phase_ideal_deg": 76.49658692602243,
+      "virtual_z_phase_compiled_deg": 77,
+      "transverse_phase_ideal_deg": 191.86698336181377,
+      "projected_z_response_error_compiler": 0.048787853679433404,
+      "expected_projected_z": [
+        0.29974062213190317,
+        0.9298585624722067,
+        0.21335091572594983
+      ],
+      "predicted_projected_z": [
+        0.2531632279912462,
+        0.9441632148115883,
+        0.21086536887241422
+      ],
+      "logical_projection_phase_deg": 0,
+      "frame_before_gate_deg": 155,
+      "frame_after_gate_update_deg": 282,
+      "frame_final_deg": 77,
+      "frame_initial_deg": 0
+    }
+  ],
+  "max_rotation_error_rad": 0.06179565249700638,
+  "hardware_warning": false,
+  "experiment_mode": "virtual_z_frame",
+  "readout_protocol": "virtual_z_frame_projection",
+  "input_state_order": [
+    "+Z",
+    "+X",
+    "+Y"
+  ],
+  "projection_axis": "+X (logical); physical phase frame-corrected",
+  "projection_phase_deg": null,
+  "projected_observable": "logical SCC Z after Rx(+pi/2) with frame-corrected physical phase",
+  "virtual_z_method": "same physical preparations as projection, one physical transverse gate pulse, logical Z frame shifts and phase-adjusted projection",
+  "iq_phase_grid_deg": 1,
+  "max_projected_z_compiler_error": 0.048787853679433404
+}
