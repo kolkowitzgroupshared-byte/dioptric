@@ -681,11 +681,11 @@ if __name__ == "__main__":
     # 2. Detect NVs from combined image
     # ------------------------------------------------------------
     nv_coords, spot_weights, spot_sizes, img_array = detect_nvs_from_image(
-        file_stem="2026_10_22-15_13_35-johnson-nv0_2026_10_02",
+        file_stem="2026_10_22-14_18_12-combined_image_array",
         sigma=2.0,
-        lower_threshold=0.07,
+        lower_threshold=0.03,
         integration_radius=2,
-        save=True,
+        save=False,
         plot_title="24ms, Ref",
     )
     kpl.show(block=True)

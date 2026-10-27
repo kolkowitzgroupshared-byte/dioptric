@@ -63,7 +63,7 @@ def get_seq(
     # Purcell config defines IQ pulse waveforms on a 9-degree phase grid.
     # Legacy pulses use 0/90/180/270; virtual-Z can use any supported phase.
     phase_grid = set(range(360))
-    for gate in compiled_gates:s
+    for gate in compiled_gates:
         for p in gate["pulses"]:
             if (int(p["phase_deg"]) not in phase_grid
                     or int(p["duration_cc"]) < 4):

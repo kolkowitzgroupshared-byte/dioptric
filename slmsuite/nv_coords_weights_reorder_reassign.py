@@ -1190,11 +1190,11 @@ if __name__ == "__main__":
         np.asarray(filtered_reordered_coords, dtype=float),
         3,
     )
-    save_results(
-        filtered_reordered_coords,
-        filtered_reordered_spot_weights,
-        filename="slmsuite/nv_blob_detection/nv_blob_564nvs_reordered.npz",
-    )
+    # save_results(
+    #     filtered_reordered_coords,
+    #     filtered_reordered_spot_weights,
+    #     filename="slmsuite/nv_blob_detection/nv_blob_564nvs_reordered.npz",
+    # )
 
     # # Plot the original image with circles around each NV
     fig, ax = plt.subplots()
