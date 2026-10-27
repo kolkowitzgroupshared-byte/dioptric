@@ -239,7 +239,8 @@ def main(
     mode='projection' prepares initial +Z/+X/+Y then applies each Cornell
     three-pulse gate and the same final Rx(+pi/2).
     mode='virtual_z' instead phase-shifts input preparation, applies ONE
-    transverse gate pulse, and retains the fixed final +X pi/2 projection.
+    transverse gate pulse, and uses direct Z for +Z or the final +X pi/2
+    projection for +X/+Y. Older saved virtual_z runs still use all-projection.
     mode='virtual_z_frame' keeps the same preparation as projection, applies
     ONE transverse gate pulse with logical Z frame tracking, and corrects the
     physical final pi/2 projection phase for the accumulated frame.
@@ -250,8 +251,8 @@ def main(
     Each target gate is compiled and acquired separately.
     Per gate, the OPX program contains 3 signal measurements and one
     parity-alternating dual-rail reference. Legacy signals use Z/X/Y
-    tomography; projection signals use initial +Z/+X/+Y, all with
-    the same final +X pi/2 projection.
+    tomography; the readout protocol in the saved manifest specifies
+    each +Z/+X/+Y signal's final projection.
 
     Final counts shape:
         [gate, experiment=4, NV, run, step=1, repetition]
@@ -378,6 +379,11 @@ def main(
             "nv_list": nv_list,
             "num_gates": len(manifest["gates"]),
             "tomography_mode": mode,
+            "readout_protocol": manifest.get("readout_protocol", "legacy_tomography"),
+            "analysis_reference_scope": (
+                "per_gate" if mode == "virtual_z"
+                else arb_analysis.REFERENCE_SCOPE
+            ),
             "num_exps_per_gate": 4,
             "num_steps": 1,
             "num_reps": num_reps,
@@ -410,7 +416,7 @@ def main(
                 else "Cornell-Berkeley Experiment 0, arbitrary SU2 tomography"
             ),
             "experiment_order": (
-                "Per gate: input +Z, +X, +Y; phase-shifted prep; one IQ gate pulse; fixed final +X pi/2; dual-rail reference"
+                "Per gate: +Z direct Z; +X/+Y phase-shifted prep, one IQ gate pulse, final +X pi/2; dual-rail reference"
                 if mode == "virtual_z"
                 else "Per gate: standard input +Z,+X,+Y; one IQ gate pulse; frame-corrected pi/2 projection; dual-rail reference"
                 if mode == "virtual_z_frame"
@@ -435,6 +441,7 @@ def main(
                              else arb_analysis.MIN_REFERENCE_CONTRAST,
             min_ref_snr=3.0 if mode in ("projection", "virtual_z", "virtual_z_frame")
                         else arb_analysis.MIN_REFERENCE_SNR,
+            reference_scope=raw["analysis_reference_scope"],
         )
 
         print()

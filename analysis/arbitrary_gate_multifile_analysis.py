@@ -41,16 +41,18 @@ from analysis import arbitrary_gate_tomography as arb
 # ---------------------------------------------------------------------------
 FILE_STEMS = [
     # "2026_10_21-20_36_54-johnson-nv0_2026_10_02",  # virtual_z
+    # "2026_10_25-18_24_10-johnson-nv0_2026_10_02", # virtual_z
+    "2026_10_25-20_36_57-johnson-nv0_2026_10_02", # virtual_z
     # "2026_10_21-22_42_30-johnson-nv0_2026_10_02",  # projection
     # "2026_10_22-...-johnson-nv0_2026_10_02",
-    "2026_10_23-17_39_32-johnson-nv0_2026_10_02" # virtual_z_frame
+    # "2026_10_23-17_39_32-johnson-nv0_2026_10_02" # virtual_z_frame
 ]
 
 DATA_DIR = None              # None -> normal dm/NAS lookup
 OUTDIR = None                # None -> dm saves to G: (recommended)
 # Same Purcell NAS share for sessions where Windows G: is not mapped.
 NAS_UNC_ROOT = r"\\192.168.0.197\G"
-REFERENCE_SCOPE = "all_gates"  # "per_gate" also supported
+REFERENCE_SCOPE = "per_gate"  # drift-robust default; "all_gates" also supported
 MIN_REFERENCE_CONTRAST = 2.5  # photons
 MIN_REFERENCE_SNR = 3.0
 SHOW_PLOTS = False
@@ -101,10 +103,12 @@ def _load_one(stem, data_dir, min_contrast, min_snr, reference_scope):
             "not standard XYZ tomography or known-state calibration."
         )
     protocol = raw["cornell_manifest"].get("readout_protocol")
-    expected = {"virtual_z": "virtual_z_projection",
-                "virtual_z_frame": "virtual_z_frame_projection",
-                "projection": "fixed_projection"}[mode]
-    if protocol != expected:
+    allowed = {
+        "virtual_z": ("virtual_z_projection", "virtual_z_mixed_projection"),
+        "virtual_z_frame": ("virtual_z_frame_projection",),
+        "projection": ("fixed_projection",),
+    }[mode]
+    if protocol not in allowed:
         raise ValueError(f"{stem}: mode/protocol mismatch ({mode}/{protocol})")
     names = [_name(nv) for nv in raw["nv_list"]]
     if len(names) != len(set(names)):
@@ -222,6 +226,14 @@ def analyze_many(file_stems=FILE_STEMS, *, data_dir=DATA_DIR,
     # Guard against mixing different physical gates / experimental protocols.
     target = loaded[0]["result"]["expected_xyz"]
     gates = [g["gate"] for g in loaded[0]["raw"]["cornell_manifest"]["gates"]]
+    # Cannot aggregate Y/Y/Y responses and Z/Y/Y responses, even though
+    # both historical and current acquisitions have mode='virtual_z'.
+    protocols = {r["raw"]["cornell_manifest"]["readout_protocol"] for r in loaded}
+    if "virtual_z_mixed_projection" in protocols and len(protocols) > 1:
+        raise ValueError(
+            "Mixed +Z-direct-Z and all-projection datasets measure different "
+            "observables; analyze them in separate batches."
+        )
     for record in loaded[1:]:
         m = record["raw"]["cornell_manifest"]
         if ([g["gate"] for g in m["gates"]] != gates or

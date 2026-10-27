@@ -40,10 +40,64 @@ class TestPurcellVirtualZ(unittest.TestCase):
                     ))
                     self.assertTrue(all(p["phase_deg"] in range(0, 360, PHASE_GRID_DEG)
                                         for p in gate["pulses"]))
+                    self.assertEqual(gate["readout_protocol"],
+                                     "virtual_z_mixed_projection")
+                    self.assertEqual(gate["final_projection_by_input"],
+                                     {"+Z": False, "+X": True, "+Y": True})
                     np.testing.assert_allclose(
                         gate["expected_projected_z"][0],
-                        gate["expected_bloch_xyz"][1], atol=1e-11
+                        gate["expected_bloch_xyz"][2], atol=1e-11
                     )
+
+    def test_previous_protocol_unchanged_and_gate_pulses_identical(self):
+        baseline = compile_gates(CSV, 96, 1)
+        mixed = compile_virtual_z_manifest(baseline, 96)
+        old = compile_virtual_z_manifest(
+            baseline, 96, project_plus_z=True
+        )
+        self.assertEqual(old["readout_protocol"], "virtual_z_projection")
+        self.assertEqual(mixed["readout_protocol"], "virtual_z_mixed_projection")
+        for a, b in zip(mixed["gates"], old["gates"]):
+            self.assertEqual(a["pulses"], b["pulses"])
+            self.assertEqual(a["preparation_phases_deg"], b["preparation_phases_deg"])
+            self.assertEqual(a["predicted_projected_z"][1:],
+                             b["predicted_projected_z"][1:])
+            self.assertAlmostEqual(
+                b["expected_projected_z"][0], b["expected_bloch_xyz"][1]
+            )
+
+    def test_qua_skips_projection_for_plus_z_only(self):
+        from unittest.mock import patch
+        from servers.timing.sequencelibrary.QM_opx.camera import (
+            arbitrary_gate_tomography as qua_sequence
+        )
+        base = compile_gates(CSV, 96, 1)
+        manifest = compile_virtual_z_manifest(base, 96)
+        args = [
+            [[107.715,107.724],[107.438,105.983]],
+            [132,132],[1.,1.],
+            [[72.439,73.236],[72.175,71.822]],
+            [40,88],[1.,1.],[False,False],[1],
+        ]
+        for gate in manifest["gates"]:
+            phases = []
+            real = qua_sequence.seq_utils.macro_pi_on_2_pulse
+            def recorder(chains, *args, **kwargs):
+                phases.append(kwargs.get("phase"))
+                return real(chains, *args, **kwargs)
+            with self.subTest(gate=gate["gate"]):
+                with patch.object(
+                    qua_sequence.seq_utils, "macro_pi_on_2_pulse",
+                    side_effect=recorder
+                ):
+                    program, _ = qua_sequence.get_seq(
+                        args, [gate], num_reps=2
+                    )
+                self.assertIsNotNone(program)
+                self.assertEqual(phases, [
+                    gate["preparation_phases_deg"]["+X"], 0,
+                    gate["preparation_phases_deg"]["+Y"], 0
+                ])
 
     def test_reconstruct_all_three_projected_z_responses(self):
         baseline = compile_gates(CSV, 96, 1)

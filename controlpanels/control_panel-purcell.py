@@ -2234,7 +2234,6 @@ if __name__ == "__main__":
         # )
         
         # do_dmd_turnoff_crosstalk_extinction_matrix(nv_list)
-        
         # do_charge_correlation(nv_list)
         # do_charge_state_histograms_images(nv_list, vary_pol_laser=True)
 
@@ -2274,11 +2273,10 @@ if __name__ == "__main__":
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_arbitrary_gate_calibration(nv_list)
         # do_arbitrary_gate_tomography(nv_list)
-        # do_arbitrary_gate_virtual_z(nv_list)
-        # do_arbitrary_gate_virtual_z_frame(nv_list)
+        do_arbitrary_gate_virtual_z(nv_list)
         # do_arbitrary_gate_projection(nv_list)
         # do_rqs_c13(nv_list)
-        do_rqs_c13_random_x(nv_list)
+        # do_rqs_c13_random_x(nv_list)
         
         # do_calibrate_iq_delay(nv_list)
         # do_power_rabi(nv_list)

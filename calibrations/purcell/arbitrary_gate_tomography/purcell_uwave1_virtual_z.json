@@ -100,7 +100,12 @@
         }
       ],
       "baseline_rotation_error_rad": 0.028415652776991672,
-      "readout_protocol": "virtual_z_projection",
+      "readout_protocol": "virtual_z_mixed_projection",
+      "final_projection_by_input": {
+        "+Z": false,
+        "+X": true,
+        "+Y": true
+      },
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
@@ -110,14 +115,14 @@
       "virtual_z_phase_ideal_deg": 269.5672837184721,
       "virtual_z_phase_compiled_deg": 270,
       "transverse_phase_ideal_deg": 287.5682975647674,
-      "projected_z_response_error_compiler": 0.007590022009848549,
+      "projected_z_response_error_compiler": 0.005442929287086547,
       "expected_projected_z": [
-        -0.21273385564946398,
+        -0.7094215013135253,
         -0.8405174624851982,
         -0.49827171494873856
       ],
       "predicted_projected_z": [
-        -0.21850801222441044,
+        -0.7071067811865475,
         -0.8369858080030425,
         -0.5017060950349633
       ]
@@ -180,7 +185,12 @@
         }
       ],
       "baseline_rotation_error_rad": 0.05165912437796381,
-      "readout_protocol": "virtual_z_projection",
+      "readout_protocol": "virtual_z_mixed_projection",
+      "final_projection_by_input": {
+        "+Z": false,
+        "+X": true,
+        "+Y": true
+      },
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
@@ -190,14 +200,14 @@
       "virtual_z_phase_ideal_deg": 148.89441666887308,
       "virtual_z_phase_compiled_deg": 149,
       "transverse_phase_ideal_deg": 261.8753940435845,
-      "projected_z_response_error_compiler": 0.009074046963913276,
+      "projected_z_response_error_compiler": 0.0393094591986116,
       "expected_projected_z": [
-        0.09279085705550591,
+        0.7542639288184535,
         0.48464405860789345,
         -0.8697758293393613
       ],
       "predicted_projected_z": [
-        0.08472321582002466,
+        0.7933533402912353,
         0.4885646715782809,
         -0.8684045937158099
       ]
@@ -260,7 +270,12 @@
         }
       ],
       "baseline_rotation_error_rad": 0.019751265944098043,
-      "readout_protocol": "virtual_z_projection",
+      "readout_protocol": "virtual_z_mixed_projection",
+      "final_projection_by_input": {
+        "+Z": false,
+        "+X": true,
+        "+Y": true
+      },
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
@@ -270,14 +285,14 @@
       "virtual_z_phase_ideal_deg": 165.9034993705003,
       "virtual_z_phase_compiled_deg": 166,
       "transverse_phase_ideal_deg": 157.5115334864061,
-      "projected_z_response_error_compiler": 0.038977528582226126,
+      "projected_z_response_error_compiler": 0.05860784665595923,
       "expected_projected_z": [
-        0.9204740434544558,
+        0.08674119300076291,
         0.3667052559350899,
         -0.13511029048960532
       ],
       "predicted_projected_z": [
-        0.9192516681590038,
+        0.13052619222005157,
         0.3541179716684619,
         -0.1719791636457844
       ]
@@ -340,7 +355,12 @@
         }
       ],
       "baseline_rotation_error_rad": 0.05291939783084259,
-      "readout_protocol": "virtual_z_projection",
+      "readout_protocol": "virtual_z_mixed_projection",
+      "final_projection_by_input": {
+        "+Z": false,
+        "+X": true,
+        "+Y": true
+      },
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
@@ -350,14 +370,14 @@
       "virtual_z_phase_ideal_deg": 227.13489054581044,
       "virtual_z_phase_compiled_deg": 228,
       "transverse_phase_ideal_deg": 115.5663275109246,
-      "projected_z_response_error_compiler": 0.020580518555105256,
+      "projected_z_response_error_compiler": 0.03374001892043232,
       "expected_projected_z": [
-        0.3932481374550939,
+        -0.41188938171289274,
         -0.16631324753937207,
         -0.9042653405284355
       ],
       "predicted_projected_z": [
-        0.40500213016193,
+        -0.3826834323650894,
         -0.1811522461865686,
         -0.8961903471170961
       ]
@@ -420,7 +440,12 @@
         }
       ],
       "baseline_rotation_error_rad": 0.049524951802373485,
-      "readout_protocol": "virtual_z_projection",
+      "readout_protocol": "virtual_z_mixed_projection",
+      "final_projection_by_input": {
+        "+Z": false,
+        "+X": true,
+        "+Y": true
+      },
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
@@ -430,14 +455,14 @@
       "virtual_z_phase_ideal_deg": 55.49014536254692,
       "virtual_z_phase_compiled_deg": 55,
       "transverse_phase_ideal_deg": 27.31658945040433,
-      "projected_z_response_error_compiler": 0.04286207938411329,
+      "projected_z_response_error_compiler": 0.014848591329139313,
       "expected_projected_z": [
-        -0.18886542475209198,
+        0.9771457687120884,
         0.8144415773025752,
         0.5486481281241248
       ],
       "predicted_projected_z": [
-        -0.23060945777055017,
+        0.9659258262890681,
         0.8048987415982991,
         0.5467698727620679
       ]
@@ -500,7 +525,12 @@
         }
       ],
       "baseline_rotation_error_rad": 0.04519769257013054,
-      "readout_protocol": "virtual_z_projection",
+      "readout_protocol": "virtual_z_mixed_projection",
+      "final_projection_by_input": {
+        "+Z": false,
+        "+X": true,
+        "+Y": true
+      },
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
@@ -510,14 +540,14 @@
       "virtual_z_phase_ideal_deg": 329.7463703175209,
       "virtual_z_phase_compiled_deg": 330,
       "transverse_phase_ideal_deg": 140.4872322568393,
-      "projected_z_response_error_compiler": 0.048761203688697755,
+      "projected_z_response_error_compiler": 0.043835169219662906,
       "expected_projected_z": [
-        0.4318134339816125,
+        0.8286826123330714,
         -0.5250945961686417,
         0.7333572276234136
       ],
       "predicted_projected_z": [
-        0.47309648604490184,
+        0.7933533402912352,
         -0.5251225330051875,
         0.707407972970465
       ]
@@ -580,7 +610,12 @@
         }
       ],
       "baseline_rotation_error_rad": 0.05211637639798114,
-      "readout_protocol": "virtual_z_projection",
+      "readout_protocol": "virtual_z_mixed_projection",
+      "final_projection_by_input": {
+        "+Z": false,
+        "+X": true,
+        "+Y": true
+      },
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
@@ -590,14 +625,14 @@
       "virtual_z_phase_ideal_deg": 338.00889062514204,
       "virtual_z_phase_compiled_deg": 338,
       "transverse_phase_ideal_deg": 185.8904199856367,
-      "projected_z_response_error_compiler": 0.04546065473485698,
+      "projected_z_response_error_compiler": 0.01525775941055898,
       "expected_projected_z": [
-        0.21322960912207808,
+        0.9767544078333602,
         -0.36364943213290113,
         0.9068032996758805
       ],
       "predicted_projected_z": [
-        0.2574012072927664,
+        0.9659258262890682,
         -0.358697370281864,
         0.8972629575754827
       ]
@@ -660,7 +695,12 @@
         }
       ],
       "baseline_rotation_error_rad": 0.03664689766553192,
-      "readout_protocol": "virtual_z_projection",
+      "readout_protocol": "virtual_z_mixed_projection",
+      "final_projection_by_input": {
+        "+Z": false,
+        "+X": true,
+        "+Y": true
+      },
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
@@ -670,14 +710,14 @@
       "virtual_z_phase_ideal_deg": 99.68888084882,
       "virtual_z_phase_compiled_deg": 99,
       "transverse_phase_ideal_deg": 138.30707372685492,
-      "projected_z_response_error_compiler": 0.03623909739242459,
+      "projected_z_response_error_compiler": 0.055478892097316664,
       "expected_projected_z": [
-        0.746057999047475,
+        0.04210845364980137,
         0.539311904075073,
         0.3905638644065746
       ],
       "predicted_projected_z": [
-        0.7431448254773944,
+        -1.942890293094024e-16,
         0.5200121484190411,
         0.42109753485717194
       ]
@@ -740,7 +780,12 @@
         }
       ],
       "baseline_rotation_error_rad": 0.06353516248128131,
-      "readout_protocol": "virtual_z_projection",
+      "readout_protocol": "virtual_z_mixed_projection",
+      "final_projection_by_input": {
+        "+Z": false,
+        "+X": true,
+        "+Y": true
+      },
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
@@ -750,14 +795,14 @@
       "virtual_z_phase_ideal_deg": 317.6608684409445,
       "virtual_z_phase_compiled_deg": 318,
       "transverse_phase_ideal_deg": 229.00414635349426,
-      "projected_z_response_error_compiler": 0.03178675354706627,
+      "projected_z_response_error_compiler": 0.04382847340915784,
       "expected_projected_z": [
-        0.4878161482114251,
+        0.6686056339456578,
         -0.456181083067112,
         0.74426757620891
       ],
       "predicted_projected_z": [
-        0.4639037882578496,
+        0.7071067811865477,
         -0.477004631800089,
         0.746498396837715
       ]
@@ -820,7 +865,12 @@
         }
       ],
       "baseline_rotation_error_rad": 0.06794791317829377,
-      "readout_protocol": "virtual_z_projection",
+      "readout_protocol": "virtual_z_mixed_projection",
+      "final_projection_by_input": {
+        "+Z": false,
+        "+X": true,
+        "+Y": true
+      },
       "projection_phase_deg": 0,
       "preparation_phases_deg": {
         "+Z": null,
@@ -830,14 +880,14 @@
       "virtual_z_phase_ideal_deg": 76.49658692602243,
       "virtual_z_phase_compiled_deg": 77,
       "transverse_phase_ideal_deg": 191.86698336181377,
-      "projected_z_response_error_compiler": 0.04878785367943433,
+      "projected_z_response_error_compiler": 0.020159946736570896,
       "expected_projected_z": [
-        0.29974062213190317,
+        0.9519393174069468,
         0.9298585624722067,
         0.21335091572594983
       ],
       "predicted_projected_z": [
-        0.25316322799124535,
+        0.9659258262890684,
         0.9441632148115887,
         0.21086536887241425
       ]
@@ -846,7 +896,12 @@
   "max_rotation_error_rad": 0.061795652497006276,
   "hardware_warning": false,
   "experiment_mode": "virtual_z",
-  "readout_protocol": "virtual_z_projection",
+  "readout_protocol": "virtual_z_mixed_projection",
+  "final_projection_by_input": {
+    "+Z": false,
+    "+X": true,
+    "+Y": true
+  },
   "input_state_order": [
     "+Z",
     "+X",
@@ -854,8 +909,8 @@
   ],
   "projection_axis": "+X",
   "projection_phase_deg": 0,
-  "projected_observable": "SCC Z after fixed Rx(+pi/2); pre-projection Y",
+  "projected_observable": "SCC direct Z for +Z; pre-projection Y for +X/+Y after fixed Rx(+pi/2)",
   "virtual_z_method": "preparation phase shifts plus one transverse microwave gate pulse",
   "iq_phase_grid_deg": 1,
-  "max_projected_z_compiler_error": 0.04878785367943433
+  "max_projected_z_compiler_error": 0.05860784665595923
 }

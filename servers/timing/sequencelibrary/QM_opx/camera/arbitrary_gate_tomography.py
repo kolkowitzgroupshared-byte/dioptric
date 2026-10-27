@@ -13,9 +13,11 @@ Per gate the legacy protocol measures Z, X, Y and an alternating
 ms=0/ms=1 dual-rail SCC reference. The fixed_projection protocol instead
 prepares +Z/+X/+Y, applies the compiled Cornell gate, then appends a fixed
 +X pi/2 before SCC, with the same alternating fourth reference.
-The virtual_z_projection protocol applies phase-adjusted INITIAL pulses and
-at most ONE physical transverse microwave gate pulse, while retaining the same
-fixed final +X pi/2 and untouched dual-rail reference.
+The virtual_z_mixed_projection protocol applies phase-adjusted INITIAL pulses,
+at most ONE physical transverse microwave gate pulse, and a final +X pi/2
+ONLY for +X/+Y inputs; +Z is read out directly in Z. Historic saved
+virtual_z_projection files used final +X pi/2 for all three inputs.
+The alternating dual-rail SCC reference remains untouched.
 The standalone simulation uses the SAME
 get_seq() and base_scc_sequence.macro(), with shortened spin-polarization and
 charge-readout durations so the full first shot is easy to inspect.
@@ -69,7 +71,10 @@ def get_seq(
             if (int(p["phase_deg"]) not in phase_grid
                     or int(p["duration_cc"]) < 4):
                 raise ValueError(f"Invalid compiled pulse: {p}")
-        if gate.get("readout_protocol") in ("virtual_z_projection", "virtual_z_frame_projection"):
+        if gate.get("readout_protocol") in (
+            "virtual_z_projection", "virtual_z_mixed_projection",
+            "virtual_z_frame_projection",
+        ):
             phases = gate.get("preparation_phases_deg", {})
             if set(phases) != {"+Z", "+X", "+Y"}:
                 raise ValueError("Missing virtual-Z preparation phase table")
@@ -151,17 +156,20 @@ def get_seq(
                     duration_cc=int(p["duration_cc"]),
                     phase=int(p["phase_deg"]),
                 )
-            # The logical +X pi/2 projection may use a frame-corrected
-            # physical phase, unlike the fixed-projection baseline.
-            seq_utils.macro_pi_on_2_pulse(
-                uwave_ind_list, phase=int(projection_phase)
-            )
+            # Mixed virtual-Z readout: +Z -> direct Z, +X/+Y -> final
+            # fixed Rx(+pi/2), measuring pre-projection Y.
+            # Other protocols retain their existing final projection.
+            if not (protocol == "virtual_z_mixed_projection"
+                    and input_state == "+Z"):
+                seq_utils.macro_pi_on_2_pulse(
+                    uwave_ind_list, phase=int(projection_phase)
+                )
             qua.align()
 
         return uwave_macro
 
     if protocol in ("fixed_projection", "virtual_z_projection",
-                    "virtual_z_frame_projection"):
+                    "virtual_z_mixed_projection", "virtual_z_frame_projection"):
         if protocol != "virtual_z_frame_projection" and any(
             g.get("projection_phase_deg", 0) != 0 for g in compiled_gates
         ):
@@ -172,6 +180,7 @@ def get_seq(
                 gate.get("projection_phase_deg", 0),
                 gate["preparation_phases_deg"]
                 if protocol in ("virtual_z_projection",
+                                "virtual_z_mixed_projection",
                                 "virtual_z_frame_projection") else None,
             )
             for gate in compiled_gates

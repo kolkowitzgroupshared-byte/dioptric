@@ -62,7 +62,8 @@ def compile_virtual_z_frame_manifest(baseline, pi_ns):
     This maintains the historical virtual-Z compilation quality and timing.
     It also explicitly represents both (quantized) logical frame changes.
     """
-    old = compile_virtual_z_manifest(baseline, pi_ns)
+    # Keep original all-projected behavior for the separate frame-tracked mode.
+    old = compile_virtual_z_manifest(baseline, pi_ns, project_plus_z=True)
     manifest = dict(old)
     compiled = []
     phases = {0, 90, 180, 270}

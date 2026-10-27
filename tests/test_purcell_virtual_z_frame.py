@@ -36,7 +36,7 @@ class TestCornellVirtualZFrame(unittest.TestCase):
                 base = compile_gates(CSV, pi_ns, 1)
                 baseline_pulses = [[dict(p) for p in g["pulses"]]
                                    for g in base["gates"]]
-                old = compile_virtual_z_manifest(base, pi_ns)
+                old = compile_virtual_z_manifest(base, pi_ns, project_plus_z=True)
                 frame = compile_virtual_z_frame_manifest(base, pi_ns)
                 self.assertEqual(frame["experiment_mode"], "virtual_z_frame")
                 self.assertEqual(len(frame["gates"]), 10)
