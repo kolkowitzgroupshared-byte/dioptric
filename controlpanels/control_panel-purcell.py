@@ -2263,7 +2263,7 @@ if __name__ == "__main__":
         # do_widefield_coherence_test(nv_list, 800, "xy8")
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_arbitrary_gate_virtual_z(nv_list)
-        do_arbitrary_gate_virtual_z_z_only(nv_list)
+        # do_arbitrary_gate_virtual_z_z_only(nv_list)
         # do_arbitrary_gate_projection(nv_list)
         # do_rqs_c13(nv_list)
         # do_rqs_c13_random_x(nv_list)

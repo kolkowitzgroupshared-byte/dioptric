@@ -425,6 +425,8 @@ def main(
             "num_reps": num_reps,
             "num_runs": num_runs,
             "uwave_ind": list(uwave_ind_list),
+            "uwave_freq": gate_raw_list[0].get("uwave_freq"),
+            "uwave_power_dbm": tb.get_virtual_sig_gen_dict(chain).get("uwave_power"),
             "load_iq": True,
             "counts-units": "photons",
             "counts": counts,

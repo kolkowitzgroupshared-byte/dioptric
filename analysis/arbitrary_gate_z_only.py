@@ -210,7 +210,9 @@ def save_individual_pdf(result, pdf_path):
             ax.set_ylim(-min(5,ymax),min(5,ymax))
             ax.set_xticks(x)
             ax.set(xlabel="Cornell gate",ylabel=r"Direct $\langle\sigma_z\rangle$",
-                   title=f"Z-only Cornell experiment | NV {i+1}/{len(result['nv_names'])}: {name}")
+                   title=(f"Z-only Cornell experiment | NV {i+1}/{len(result['nv_names'])}: {name}"
+                          + (f" | averaged {result['num_files']} batches"
+                             if result.get("num_files", 1) > 1 else "")))
             ax.grid(alpha=.18)
             ax.legend(loc="best",fontsize=9)
             errors=result["error"][:,i][keep]

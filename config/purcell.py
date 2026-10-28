@@ -1132,14 +1132,7 @@ def build_phase_sweep(min_deg=-360, max_deg=360, step_deg=9):
     phases_cmd = phases_unwrapped % 360  # wrap to [0,360)
     return phases_unwrapped.tolist(), phases_cmd.tolist()
 
-# fmt: off
-# phases =[0, 45, 90, 135, 180, 225, 270, 315]
-# phases = [0, 9, 18, 27, 36, 45, 54, 63, 72, 81, 90, 
-#           99, 108, 117, 126, 135, 144, 153, 162, 171, 180,
-#           189, 198, 207, 216, 225, 234, 243, 252, 261, 270,
-#           279, 288, 297, 306, 315, 324, 333, 342, 351, 360]
 phases = list(range(360))
-# fmt:on
 generate_iq_pulses(["pi_pulse", "pi_on_2_pulse"], phases)
 
 if __name__ == "__main__":
