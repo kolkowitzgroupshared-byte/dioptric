@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Charge state readout after polarization/ionization, no spin manipulation
-
-Created on October 13th, 2023
-
-@author: mccambria
 """
 
 import matplotlib.pyplot as plt

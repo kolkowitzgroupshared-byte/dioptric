@@ -2,9 +2,6 @@
 Widefield Ramsey Phase Scan Test
 
 Created on March 25th, 2025
-
-@author: mccambria
-@author: sbchand
 """
 
 import time

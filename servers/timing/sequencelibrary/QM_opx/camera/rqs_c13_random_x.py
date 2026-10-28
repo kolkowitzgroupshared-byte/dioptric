@@ -6,30 +6,17 @@ vector (1=all-X, 0=periodic XY8), and one readout-basis vector (0 or 90 deg).
 All random interrogation pulses are strictly calibrated pi_X. QUA handles
 SCC polarization/readout and alternating dual-rail reference as before.
 """
-from qm import qua
+import numpy as np
+import matplotlib.pyplot as plt
+
+from qm import QuantumMachinesManager, qua
+from qm.simulate import SimulationConfig
+
+import utils.common as common
 from servers.timing.sequencelibrary.QM_opx import seq_utils
 from servers.timing.sequencelibrary.QM_opx.camera import base_scc_sequence
 
-AXES_XY8 = (0, 90, 0, 90, 90, 0, 90, 0)
-
-
 def get_seq(base_scc_seq_args, waits_cc, pulse_modes, readout_phases, num_reps=1):
-    if len(waits_cc) != 9:
-        raise ValueError("Expected nine gap arrays")
-    nsteps = len(pulse_modes)
-    if nsteps == 0 or len(readout_phases) != nsteps:
-        raise ValueError("Mismatched mode/readout arrays")
-    if any(len(v) != nsteps for v in waits_cc):
-        raise ValueError("All wait arrays must have nsteps entries")
-    if any(type(v) is not int or v < 4 for row in waits_cc for v in row):
-        raise ValueError("QUA gaps must be Python int >= 4 clock cycles")
-    if any(v not in (0, 1) for v in pulse_modes):
-        raise ValueError("Mode must be 0=XY8 or 1=pi_X")
-    if any(v not in (0, 90) for v in readout_phases):
-        raise ValueError("Readout phase must be 0 or 90 degrees")
-    if not isinstance(num_reps, int) or num_reps < 1:
-        raise ValueError("Invalid repetitions")
-
     buffer = seq_utils.get_widefield_operation_buffer()
     with qua.program() as seq:
         seq_utils.init()
@@ -70,3 +57,43 @@ def get_seq(base_scc_seq_args, waits_cc, pulse_modes, readout_phases, num_reps=1
                 reference=True,
             )
     return seq, []
+
+if __name__ == "__main__":
+    config_module = common.get_config_module()
+    config = config_module.config
+    opx_config = config_module.opx_config
+    opx_config["pulses"]["yellow_spin_pol"]["length"] = 2e3
+    
+    qm_opx_args = config["DeviceIDs"]["QM_opx_args"]
+    qmm = QuantumMachinesManager(**qm_opx_args)
+    opx = qmm.open_qm(opx_config)
+
+    try:
+        seq, seq_ret_vals = get_seq(
+            [
+                [[109.062, 107.003], [110.183, 105.383]],
+                [1000, 1000],
+                [1.0, 1.0],
+                [[73.477, 72.33], [74.328, 70.992]],
+                [168, 184],
+                [1.0, 1.0],
+                [False, False, False],
+                [0, 1],
+            ],
+            [
+                27200,
+                41832,
+            ],
+            10,
+        )
+
+        sim_config = SimulationConfig(duration=int(200e3 / 4))
+        sim = opx.simulate(seq, sim_config)
+        samples = sim.get_simulated_samples()
+        samples.con1.plot()
+        plt.show(block=True)
+
+    except Exception as exc:
+        raise exc
+    finally:
+        qmm.close_all_quantum_machines()

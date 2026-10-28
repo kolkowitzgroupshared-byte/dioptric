@@ -3,9 +3,6 @@
 """
 Constant sequence for the QM OPX
 
-Created on April 8th, 2026
-
-@author: saroj chand
 """
 
 import matplotlib.pyplot as plt

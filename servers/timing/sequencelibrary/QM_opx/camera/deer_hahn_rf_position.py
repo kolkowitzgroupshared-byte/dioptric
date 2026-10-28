@@ -25,8 +25,6 @@ Channel convention:
     uwave_ind_list[1] = P1 / RF source
 
 All programmed times are quantized to the OPX 4 ns clock.
-
-@author: schand
 """
 
 import matplotlib.pyplot as plt

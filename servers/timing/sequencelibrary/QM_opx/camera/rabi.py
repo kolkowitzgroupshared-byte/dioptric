@@ -1,10 +1,5 @@
 """
-Widefield ESR
-
-Created on October 13th, 2023
-
-@author: mccambria
-@author: sbchand
+Widefield rabi sequence
 """
 
 import time

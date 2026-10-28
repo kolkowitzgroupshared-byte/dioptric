@@ -2,9 +2,6 @@
 """
 Charge state readout after polarization/ionization varying both readout duration and amplitude, no spin manipulation
 
-Created on December 4th, 2024
-
-@author: Saroj Chand
 """
 
 import matplotlib.pyplot as plt

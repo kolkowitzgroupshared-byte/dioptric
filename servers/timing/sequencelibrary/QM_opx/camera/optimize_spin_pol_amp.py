@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Widefield ESR
+Widefield charge state readout after polarization/ionization, no spin manipulations
 
-Created on October 13th, 2023
-
-@author: mccambria
 """
 
 import matplotlib.pyplot as plt

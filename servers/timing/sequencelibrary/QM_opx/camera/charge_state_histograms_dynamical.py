@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Charge state readout after polarization/ionization, with support for dynamic laser power adjustments.
-
-Created on Fall 2023
-
-@author: mccambria
 """
 
 import matplotlib.pyplot as plt

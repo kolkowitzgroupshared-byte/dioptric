@@ -1,13 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Widefield ESR
-
-Created on October 13th, 2023
-
-@author: mccambria
-
-Modified on March 22th, 2025
-@author: saroj chand
+Widefield ramsey sequence
 """
 
 import matplotlib.pyplot as plt
