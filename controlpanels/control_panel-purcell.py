@@ -70,6 +70,7 @@ from majorroutines.widefield import (
     rqs_c13,
     rqs_c13_random_x,
     rqs_multisine,
+    rqs_c13_bath,
 )
 
 # from slmsuite import optimize_slm_calibration
@@ -1022,7 +1023,7 @@ def do_arbitrary_gate_virtual_z(nv_list):
 def do_arbitrary_gate_virtual_z_z_only(nv_list):      
     arbitrary_gate_tomography.main(
         nv_list=nv_list,
-        num_reps=200,
+        num_reps=400,
         num_runs=10,
         uwave_ind_list=(1,),
         mode="virtual_z_z_only",
@@ -1069,9 +1070,23 @@ def do_rqs_multisine(nv_list):
         seed=37,
         coupling_hz=2800.0,
         uwave_ind_list=(1,),
-        num_reps=50,
-        num_runs=40,
+        num_reps=5,
+        num_runs=600,
         phase_reference_confirmed=True,
+    )
+    
+
+def do_rqs_c13_bath(nv_list):
+    rqs_c13_bath.main(
+        nv_list=nv_list,
+        field_g=31.1,
+        duration_us=60.0,
+        uwave_ind_list=(1,),
+        seed=37,
+        n_masks=64,
+        bank_size=8192,
+        num_reps=5,
+        num_runs=600,
     )
     
 def do_rabi(nv_list):
@@ -1982,16 +1997,16 @@ if __name__ == "__main__":
     #     [255.325, 177.995],      
     # ]
     # green_coords_list = [
-    #     [100.278, 100.579],
-    #     [112.226, 119.47],
-    #     [100.558, 79.848],
-    #     [82.945, 92.343],
+    #     [100.292, 100.603],
+    #     [112.219, 119.456],
+    #     [100.56, 79.872],
+    #     [82.969, 92.342],
     # ]
     # red_coords_list = [
-    #     [69.188, 69.921],
-    #     [78.784, 85.634],
-    #     [69.613, 53.085],
-    #     [55.07, 62.918],
+    #     [69.194, 70.006],
+    #     [78.778, 85.622],
+    #     [69.614, 53.105],
+    #     [55.09, 62.918],
     # ]
     
     # -------------------------------------------
@@ -2263,15 +2278,16 @@ if __name__ == "__main__":
         # do_widefield_coherence_test(nv_list, 800, "xy8")
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_arbitrary_gate_virtual_z(nv_list)
-        # do_arbitrary_gate_virtual_z_z_only(nv_list)
+        do_arbitrary_gate_virtual_z_z_only(nv_list)
         # do_arbitrary_gate_projection(nv_list)
         # do_rqs_c13(nv_list)
         # do_rqs_c13_random_x(nv_list)
-        # do_rqs_multisine(nv_list)
+        do_rqs_c13_bath(nv_list)
+        do_rqs_multisine(nv_list)
         
         # do_calibrate_iq_delay(nv_list)
         # do_power_rabi(nv_list)
-        do_rabi_iq_amplitude(nv_list)
+        # do_rabi_iq_amplitude(nv_list)
         # do_resonance(nv_list)
         # do_optimize_scc_amp(nv_list)
         # do_rabi(nv_list)

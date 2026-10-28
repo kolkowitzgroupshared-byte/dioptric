@@ -50,7 +50,8 @@ FILE_STEMS = [
     
 ]
 FILE_STEMS = [
-    "2026_10_23-14_26_03-johnson-nv0_2026_10_02",
+    # "2026_10_23-14_26_03-johnson-nv0_2026_10_02",
+    "2026_10_27-22_11_45-johnson-nv0_2026_10_02"
 ]
 
 DATA_DIR = None                # Folder containing source .txt/.npz files, if needed
