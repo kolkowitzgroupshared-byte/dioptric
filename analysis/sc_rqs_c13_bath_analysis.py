@@ -487,7 +487,7 @@ def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--files",nargs="+",help="Bath raw file stems or .txt paths")
     ap.add_argument("--outdir",help="Override NAS dm output")
-    ap.add_argument("--reference-min",type=float,default=2.5)
+    ap.add_argument("--reference-min",type=float,default=0.0)
     ap.add_argument("--per-nv",type=int,default=12,
                     help="Detailed NV pages; use 0 for all NVs")
     ap.add_argument("--quantum-nv",type=int,
