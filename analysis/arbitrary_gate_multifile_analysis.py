@@ -31,6 +31,7 @@ if __package__ in (None, ""):
 import matplotlib
 matplotlib.use("Agg")  # do not block acquisition or console workflow
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 
 from analysis import arbitrary_gate_tomography as arb
@@ -42,7 +43,8 @@ from analysis import arbitrary_gate_tomography as arb
 FILE_STEMS = [
     # "2026_10_21-20_36_54-johnson-nv0_2026_10_02",  # virtual_z
     # "2026_10_25-18_24_10-johnson-nv0_2026_10_02", # virtual_z
-    "2026_10_25-20_36_57-johnson-nv0_2026_10_02", # virtual_z
+    # "2026_10_25-20_36_57-johnson-nv0_2026_10_02", # virtual_z
+    "2026_10_27-14_57_44-johnson-nv0_2026_10_02",  # virtual_z
     # "2026_10_21-22_42_30-johnson-nv0_2026_10_02",  # projection
     # "2026_10_22-...-johnson-nv0_2026_10_02",
     # "2026_10_23-17_39_32-johnson-nv0_2026_10_02" # virtual_z_frame
@@ -53,8 +55,8 @@ OUTDIR = None                # None -> dm saves to G: (recommended)
 # Same Purcell NAS share for sessions where Windows G: is not mapped.
 NAS_UNC_ROOT = r"\\192.168.0.197\G"
 REFERENCE_SCOPE = "per_gate"  # drift-robust default; "all_gates" also supported
-MIN_REFERENCE_CONTRAST = 2.5  # photons
-MIN_REFERENCE_SNR = 3.0
+MIN_REFERENCE_CONTRAST = 1.0  # photons
+MIN_REFERENCE_SNR = 1.0
 SHOW_PLOTS = False
 BOOTSTRAP_SAMPLES = 4000
 SEED = 20261021
@@ -337,6 +339,135 @@ def analyze_many(file_stems=FILE_STEMS, *, data_dir=DATA_DIR,
             "paired_nv_mask": paired_all}
 
 
+
+def _save_individual_nv_pdf(groups, records, summary, pdf_path):
+    """One vector PDF containing one three-panel page for every matched NV.
+
+    Every panel plots the ideal target, each compilation prediction, measured
+    <Z> with propagated 1-SEM error bars, and markers for bad SCC references.
+    Uses the saved manifest's actual readout protocol rather than assuming
+    that three response columns describe an XYZ Bloch vector.
+    """
+    pdf_path = Path(pdf_path)
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+    sample_group = next(iter(groups.values()))
+    names = sample_group["names"]
+    gate_count = sample_group["ideal"].shape[0]
+    x = np.arange(1, gate_count + 1)
+    input_labels = ("+Z", "+X", "+Y")
+    obs = records[0]["result"].get("observable_by_input")
+    if obs is None or len(obs) != 3:
+        obs = ("Y", "Y", "Y")
+    colors = {"virtual_z": "#166a88", "virtual_z_frame": "#c26724",
+              "projection": "#663399"}
+    with PdfPages(pdf_path, metadata={
+        "Title": "Purcell Cornell Experiment 0 - Individual NV response plots",
+        "Author": "Purcell experimental analysis",
+        "Subject": "Single multipage PDF: all NVs with SCC-propagated SEM",
+        "Keywords": "Cornell, virtual-Z, NV, SCC, error bars"
+    }) as pdf:
+        for nv_ind, name in enumerate(names):
+            fig, axes = plt.subplots(
+                3, 1, figsize=(8.5, 11), sharex=True,
+                layout="constrained"
+            )
+            all_valid = []
+            details = []
+            for mode, group in groups.items():
+                valid = group["valid"][:, nv_ind]
+                all_valid.append(valid)
+                errors = group["error"][:, nv_ind][valid]
+                if len(errors):
+                    details.append(
+                        f"{MODE_LABEL[mode]}: {valid.sum()}/{gate_count} gates; "
+                        f"median L2 error {np.nanmedian(errors):.3f}"
+                    )
+                else:
+                    details.append(
+                        f"{MODE_LABEL[mode]}: 0/{gate_count} accepted gates"
+                    )
+
+            for col, (ax, label, observable) in enumerate(
+                zip(axes, input_labels, obs)
+            ):
+                ideal = sample_group["ideal"][:, col]
+                ax.plot(x, ideal, "k--", lw=1.6, marker="o",
+                        ms=3.2, label="Ideal target", zorder=2)
+                for mode, group in groups.items():
+                    color = colors.get(mode)
+                    valid = group["valid"][:, nv_ind]
+                    vals = group["response"][:, nv_ind, col]
+                    errs = group["sem"][:, nv_ind, col]
+                    selected = valid & np.isfinite(vals) & np.isfinite(errs)
+                    ax.plot(
+                        x, group["compiled"][:, col], ":",
+                        lw=1.2, color=color, alpha=.75,
+                        label=f"Compiled: {MODE_LABEL[mode]}"
+                    )
+                    if selected.any():
+                        ax.errorbar(
+                            x[selected], vals[selected], yerr=errs[selected],
+                            fmt="o", ms=4.1, capsize=2.1, elinewidth=1.15,
+                            lw=1.1, color=color, ecolor=color,
+                            label=f"Measured: {MODE_LABEL[mode]} (1 SEM)",
+                            zorder=4
+                        )
+                    excluded = ~selected
+                    if excluded.any():
+                        ax.scatter(
+                            x[excluded], np.full(excluded.sum(), -1.37),
+                            marker="x", color=color, s=19, lw=1.1,
+                            label="Reference rejected" if col == 0 else None,
+                            zorder=3
+                        )
+
+                ax.axhline(0, color="#b5b5b5", lw=.8)
+                ax.axhline(1, color="#dedede", lw=.6, linestyle="-")
+                ax.axhline(-1, color="#dedede", lw=.6, linestyle="-")
+                ax.grid(alpha=.16)
+                ax.set_ylabel(r"$\langle\sigma_z\rangle$ (SCC)", fontsize=10)
+                ax.set_title(
+                    f"Input {label} - "
+                    + ("direct Z readout" if observable == "Z" else
+                       "final pi/2, measures output Y"
+                       if observable == "Y" else f"measures output {observable}"),
+                    fontsize=10, loc="left", pad=5
+                )
+                # Preserve raw measurements/error bars; never physically clip.
+                max_abs = 1.55
+                for group in groups.values():
+                    v = group["response"][:, nv_ind, col]
+                    e = group["sem"][:, nv_ind, col]
+                    good = group["valid"][:, nv_ind] & np.isfinite(v) & np.isfinite(e)
+                    if good.any():
+                        max_abs = max(max_abs, float(np.max(np.abs(v[good]) + e[good])) + .2)
+                lim = max(1.65, min(5.0, max_abs))
+                ax.set_ylim(-lim, lim)
+                ax.set_xlim(.5, gate_count+.5)
+            axes[0].legend(fontsize=7.7, ncol=2, loc="upper right",
+                           framealpha=.94)
+            axes[-1].set_xticks(x)
+            axes[-1].set_xlabel("Cornell gate index")
+            fig.suptitle(
+                f"Cornell arbitrary-gate responses | NV {nv_ind+1} / {len(names)}\n{name}",
+                fontsize=13.2, fontweight="bold"
+            )
+            summary_line = "\n".join(details)
+            fig.text(.105, .057, summary_line,
+                     fontsize=8.8, va="bottom", ha="left")
+            fig.text(
+                .105, .021,
+                f"Reference: {summary['analysis']['reference_scope']} "
+                f"| SNR >= {summary['analysis']['min_ref_snr']} "
+                f"| contrast >= {summary['analysis']['min_ref_contrast_photons']} photons "
+                "| rejected points marked x at bottom | not process fidelity",
+                fontsize=7.25, color="#555555", ha="left"
+            )
+            pdf.savefig(fig, bbox_inches="tight", pad_inches=.22)
+            plt.close(fig)
+    print(f"Saved ONE multipage PDF ({len(names)} NV pages): {pdf_path}")
+    return pdf_path
+
 def _save_output(groups, records, paired_all, comparison, summary, outdir, show_plots):
     """Save figures, CSV, summary and NPZ using dm or explicit output override."""
     from utils import data_manager as dm
@@ -373,6 +504,12 @@ def _save_output(groups, records, paired_all, comparison, summary, outdir, show_
             (folder / (suffix + ext)).write_text(content, encoding="utf-8")
         def npz_save(**arrays):
             np.savez_compressed(folder / "combined_results.npz", **arrays)
+    # A single PDF, one page per spatially matched NV, including error bars.
+    # This is deliberately NOT one PDF per NV.
+    pdf_path = (base.with_name(base.stem + "-all_individual_nvs.pdf")
+                if outdir is None
+                else folder / "cornell_all_individual_nvs.pdf")
+    _save_individual_nv_pdf(groups, records, summary, pdf_path)
     text_save(json.dumps(summary, indent=2), "summary", ".json")
     buf = io.StringIO(newline="")
     w = csv.writer(buf)

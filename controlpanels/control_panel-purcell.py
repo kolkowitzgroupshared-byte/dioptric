@@ -45,6 +45,7 @@ from majorroutines.widefield import (
     optimize_spin_pol,
     optimize_aod_access_time,
     power_rabi,
+    rabi_iq_amplitude,
     rabi_iq_phase,
     rabi,
     ramsey,
@@ -68,6 +69,7 @@ from majorroutines.widefield import (
     deer_hahn_p1_pulse_position_scan,
     rqs_c13,
     rqs_c13_random_x,
+    rqs_multisine,
 )
 
 # from slmsuite import optimize_slm_calibration
@@ -87,7 +89,6 @@ green_laser_aod = f"{green_laser}_aod"
 red_laser_aod = f"{red_laser}_aod"
 
 ### Major Routines
-
 
 def do_widefield_image_sample(nv_sig, num_reps=1):
     return image_sample.widefield_image(nv_sig, num_reps)
@@ -1006,44 +1007,6 @@ def do_resonance_dualgen(nv_list, uwave_ind_list=[0, 1]):
     )
 
 
-def do_arbitrary_gate_calibration(nv_list):
-    for _ in range(2):
-        do_widefield_image_sample(nv_sig, 50)
-
-        arbitrary_gate_tomography.main(
-            nv_list=nv_list,
-            num_reps=200,
-            num_runs=50,
-            uwave_ind_list=(1,),
-            mode="calibration",
-            show_plots=False,
-        )
-
-
-def do_arbitrary_gate_tomography(nv_list):
-    for _ in range(2):
-        do_widefield_image_sample(nv_sig, 50)
-        arbitrary_gate_tomography.main(
-            nv_list=nv_list,
-            num_reps=200,
-            num_runs=50,
-            uwave_ind_list=(1,),
-            mode="cornell",
-            show_plots=False,
-        )
-
-def do_arbitrary_gate_projection(nv_list):
-    for _ in range(1):
-        do_widefield_image_sample(nv_sig, 50)
-        arbitrary_gate_tomography.main(
-            nv_list=nv_list,
-            num_reps=200,
-            num_runs=10,
-            uwave_ind_list=(1,),
-            mode="projection",
-            show_plots=False,
-        )
-
 def do_arbitrary_gate_virtual_z(nv_list):
     for _ in range(1):
         do_widefield_image_sample(nv_sig, 50)
@@ -1056,18 +1019,17 @@ def do_arbitrary_gate_virtual_z(nv_list):
             show_plots=False,
         )
         
-def do_arbitrary_gate_virtual_z_frame(nv_list):
-    for _ in range(1):
-        do_widefield_image_sample(nv_sig, 50)
-        arbitrary_gate_tomography.main(
+def do_arbitrary_gate_virtual_z_z_only(nv_list):      
+    arbitrary_gate_tomography.main(
         nv_list=nv_list,
         num_reps=200,
         num_runs=10,
         uwave_ind_list=(1,),
-        mode="virtual_z_frame",
+        mode="virtual_z_z_only",
         show_plots=False,
-    )
-    
+        save_plots=True,
+)
+        
 
 def do_rqs_c13(nv_list):
     for _ in range(2):
@@ -1096,6 +1058,21 @@ def do_rqs_c13_random_x(nv_list):
             num_runs=400,
             readout="cos",
         )
+        
+
+def do_rqs_multisine(nv_list):
+    rqs_multisine.main(
+        nv_list,
+        duration_us=8.0,
+        n_settings=96,
+        bank_size=8192,
+        seed=37,
+        coupling_hz=2800.0,
+        uwave_ind_list=(1,),
+        num_reps=50,
+        num_runs=40,
+        phase_reference_confirmed=True,
+    )
     
 def do_rabi(nv_list):
     min_tau = 16
@@ -1106,6 +1083,20 @@ def do_rabi(nv_list):
     uwave_ind_list = [1]
     for _ in range(3):
         rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
+        
+
+def do_rabi_iq_amplitude(nv_list):
+    rabi_iq_amplitude.main(
+        nv_list=nv_list,
+        num_steps=24,
+        num_reps=10,
+        num_runs=100,
+        pulse_duration_ns=96,
+        uwave_ind_list=(1,),
+        min_amp_v=0.0,
+        max_amp_v=0.5,
+        phase_deg=0,
+    )
 
 def do_iq_phase_rabi(nv_list):
     phases = [0, 90, 180, 270]
@@ -2159,7 +2150,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)
+        do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list: 
@@ -2271,18 +2262,20 @@ if __name__ == "__main__":
 
         # do_widefield_coherence_test(nv_list, 800, "xy8")
         # do_bootstrapped_pulse_error_tomography(nv_list)
-        # do_arbitrary_gate_calibration(nv_list)
-        # do_arbitrary_gate_tomography(nv_list)
-        do_arbitrary_gate_virtual_z(nv_list)
+        # do_arbitrary_gate_virtual_z(nv_list)
+        do_arbitrary_gate_virtual_z_z_only(nv_list)
         # do_arbitrary_gate_projection(nv_list)
         # do_rqs_c13(nv_list)
         # do_rqs_c13_random_x(nv_list)
+        # do_rqs_multisine(nv_list)
         
         # do_calibrate_iq_delay(nv_list)
         # do_power_rabi(nv_list)
+        do_rabi_iq_amplitude(nv_list)
         # do_resonance(nv_list)
         # do_optimize_scc_amp(nv_list)
         # do_rabi(nv_list)
+        
         # do_iq_phase_rabi(nv_list)
         # do_resonance_zoom(nv_list)
         # do_spin_echo(nv_list)

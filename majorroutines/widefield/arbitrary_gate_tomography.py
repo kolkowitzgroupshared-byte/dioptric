@@ -157,30 +157,60 @@ def _attach_projection_targets(manifest):
 
 
 def prepare(uwave_ind=0, mode="cornell"):
-    """Precompute Cornell, calibration, projection, or virtual-Z manifest."""
-    if mode not in ("cornell", "calibration", "projection", "virtual_z", "virtual_z_frame"):
+    """Precompute Cornell, calibration, projection, virtual-Z or Z-only manifest."""
+    if mode not in ("cornell", "calibration", "projection", "virtual_z",
+                    "virtual_z_frame", "virtual_z_z_only"):
         raise ValueError(
-            "mode must be cornell, calibration, projection, virtual_z or virtual_z_frame"
+            "mode must be cornell, calibration, projection, virtual_z, "
+            "virtual_z_frame or virtual_z_z_only"
         )
     csv_path, folder = _paths()
     pi_ns = tb.get_virtual_sig_gen_dict(uwave_ind)["pi_pulse"]
 
-    if mode in ("cornell", "projection", "virtual_z", "virtual_z_frame"):
+    if mode in ("cornell", "projection", "virtual_z", "virtual_z_frame",
+                "virtual_z_z_only"):
         if not csv_path.exists():
             raise FileNotFoundError(f"Place Cornell CSV at {csv_path}")
         manifest = compile_gates(csv_path, pi_ns, uwave_ind)
         if mode == "projection":
             manifest = _attach_projection_targets(manifest)
             out_path = folder / f"purcell_uwave{uwave_ind}_projection.json"
-        elif mode in ("virtual_z", "virtual_z_frame"):
+        elif mode in ("virtual_z", "virtual_z_frame", "virtual_z_z_only"):
             pi_on_2_ns = tb.get_virtual_sig_gen_dict(uwave_ind)["pi_on_2_pulse"]
-            if abs(2.0 * pi_on_2_ns - pi_ns) > 1e-6:
+            if (mode != "virtual_z_z_only"
+                    and abs(2.0 * pi_on_2_ns - pi_ns) > 1e-6):
                 raise ValueError(
                     "Virtual-Z mode requires calibrated pi_on_2_pulse == pi_pulse/2"
                 )
             manifest = (compile_virtual_z_frame_manifest(manifest, pi_ns)
                         if mode == "virtual_z_frame"
                         else compile_virtual_z_manifest(manifest, pi_ns))
+            if mode == "virtual_z_z_only":
+                # Reuse the same phase/duration compilation as virtual_z.
+                # +Z is Z-frame invariant: only the gate's population rotation
+                # is observable; no prep or final tomography pulse is applied.
+                manifest["experiment_mode"] = "virtual_z_z_only"
+                manifest["readout_protocol"] = "virtual_z_z_only"
+                manifest["input_state_order"] = ["+Z"]
+                manifest["final_projection_by_input"] = {"+Z": False}
+                manifest["projected_observable"] = (
+                    "Direct SCC <sigma_z> after Cornell gate from optical +Z"
+                )
+                manifest["num_exps_per_gate"] = 2
+                manifest["measurement_components"] = ["Z"]
+                for gate in manifest["gates"]:
+                    gate["readout_protocol"] = "virtual_z_z_only"
+                    gate["final_projection_by_input"] = {"+Z": False}
+                    gate["expected_direct_z"] = float(
+                        gate["expected_bloch_xyz"][2]
+                    )
+                    gate["predicted_direct_z"] = float(
+                        gate["predicted_actual_bloch"][2]
+                    )
+                manifest["max_direct_z_compiler_error"] = max(
+                    abs(g["expected_direct_z"] - g["predicted_direct_z"])
+                    for g in manifest["gates"]
+                )
             out_path = folder / f"purcell_uwave{uwave_ind}_{mode}.json"
         else:
             manifest["experiment_mode"] = "cornell"
@@ -193,7 +223,7 @@ def prepare(uwave_ind=0, mode="cornell"):
     return manifest, out_path
 
 
-def _check_gate_raw(raw, gate_ind, num_runs):
+def _check_gate_raw(raw, gate_ind, num_runs, num_exps=4):
     """Reject incomplete data returned after a base_routine exception."""
     crash_counter = raw.get("crash_counter", [])
     completed = [
@@ -212,11 +242,11 @@ def _check_gate_raw(raw, gate_ind, num_runs):
 
     counts = np.asarray(raw["counts"])
 
-    expected_shape_prefix = (4, len(raw["nv_list"]), num_runs, 1)
+    expected_shape_prefix = (num_exps, len(raw["nv_list"]), num_runs, 1)
     if counts.ndim != 5 or counts.shape[:4] != expected_shape_prefix:
         raise RuntimeError(
             f"Cornell gate {gate_ind + 1}: unexpected counts shape "
-            f"{counts.shape}; expected (4, nv, run, 1, rep)."
+            f"{counts.shape}; expected ({num_exps}, nv, run, 1, rep)."
         )
 
     return completed
@@ -241,6 +271,8 @@ def main(
     mode='virtual_z' instead phase-shifts input preparation, applies ONE
     transverse gate pulse, and uses direct Z for +Z or the final +X pi/2
     projection for +X/+Y. Older saved virtual_z runs still use all-projection.
+    mode='virtual_z_z_only' uses only optical +Z, the compiled transverse
+    gate pulse, direct SCC Z readout, and the dual-rail reference (2 exps).
     mode='virtual_z_frame' keeps the same preparation as projection, applies
     ONE transverse gate pulse with logical Z frame tracking, and corrects the
     physical final pi/2 projection phase for the accumulated frame.
@@ -255,7 +287,7 @@ def main(
     each +Z/+X/+Y signal's final projection.
 
     Final counts shape:
-        [gate, experiment=4, NV, run, step=1, repetition]
+        [gate, experiment=2 for Z-only else 4, NV, run, step=1, repetition]
     """
     
     SEQ_FILE = "arbitrary_gate_tomography.py"
@@ -270,6 +302,8 @@ def main(
         raise ValueError("Use even num_reps >= 4 for alternating dual-rail ref")
     
     chain = int(uwave_ind_list[0])
+    z_only = mode == "virtual_z_z_only"
+    num_exps = 2 if z_only else 4
 
     manifest, manifest_path = prepare(chain, mode=mode)
 
@@ -293,7 +327,7 @@ def main(
             f"{[(p['phase_deg'], p['duration_ns']) for p in gate['pulses']]} ns "
             f"SO3 err={gate['rotation_error_rad']:.4f} rad"
         )
-        if mode in ("virtual_z", "virtual_z_frame"):
+        if mode in ("virtual_z", "virtual_z_frame", "virtual_z_z_only"):
             print(
                 "  prep phases:", gate["preparation_phases_deg"],
                 "final projection phase:", gate["projection_phase_deg"],
@@ -325,7 +359,8 @@ def main(
                     [gate],
                 ]
 
-                # One gate -> three signal preparations/bases plus reference.
+                # Z-only: one signal plus dual-rail reference.
+                # Other protocols: three signals plus reference.
                 pulse_gen.stream_load(
                     SEQ_FILE,
                     tb.encode_seq_args(seq_args),
@@ -339,7 +374,7 @@ def main(
                 num_runs=num_runs,
                 run_fn=run_fn,
                 uwave_ind_list=list(uwave_ind_list),
-                num_exps=4,
+                num_exps=num_exps,
                 load_iq=True,
             )
 
@@ -347,6 +382,7 @@ def main(
                 gate_raw,
                 gate_ind,
                 num_runs,
+                num_exps=num_exps,
             )
 
             gate_raw_list.append(gate_raw)
@@ -381,10 +417,10 @@ def main(
             "tomography_mode": mode,
             "readout_protocol": manifest.get("readout_protocol", "legacy_tomography"),
             "analysis_reference_scope": (
-                "per_gate" if mode == "virtual_z"
+                "per_gate" if mode in ("virtual_z", "virtual_z_z_only")
                 else arb_analysis.REFERENCE_SCOPE
             ),
-            "num_exps_per_gate": 4,
+            "num_exps_per_gate": num_exps,
             "num_steps": 1,
             "num_reps": num_reps,
             "num_runs": num_runs,
@@ -405,7 +441,9 @@ def main(
             "cornell_manifest": manifest,
             "cornell_manifest_path": str(manifest_path),
             "experiment": (
-                "Known-state tomography calibration"
+                "Cornell Experiment 0: virtual-Z +Z preparation, direct Z SCC"
+                if z_only
+                else "Known-state tomography calibration"
                 if mode == "calibration"
                 else "Cornell Experiment 0: virtual-Z phase-tracked projection"
                 if mode == "virtual_z"
@@ -416,7 +454,9 @@ def main(
                 else "Cornell-Berkeley Experiment 0, arbitrary SU2 tomography"
             ),
             "experiment_order": (
-                "Per gate: +Z direct Z; +X/+Y phase-shifted prep, one IQ gate pulse, final +X pi/2; dual-rail reference"
+                "Per gate: +Z optical preparation; one compiled IQ gate; direct SCC Z; parity-alternating reference"
+                if z_only
+                else "Per gate: +Z direct Z; +X/+Y phase-shifted prep, one IQ gate pulse, final +X pi/2; dual-rail reference"
                 if mode == "virtual_z"
                 else "Per gate: standard input +Z,+X,+Y; one IQ gate pulse; frame-corrected pi/2 projection; dual-rail reference"
                 if mode == "virtual_z_frame"
@@ -427,7 +467,9 @@ def main(
             "ref_even_rep": "ms0",
             "ref_odd_rep": "ms1",
             "acquisition_layout": (
-                "counts[gate, exp(inputZ,inputX,inputY,ref), nv, run, step, rep]"
+                "counts[gate, exp(inputZ,ref), nv, run, step, rep]"
+                if z_only
+                else "counts[gate, exp(inputZ,inputX,inputY,ref), nv, run, step, rep]"
                 if mode in ("projection", "virtual_z", "virtual_z_frame")
                 else "counts[gate, exp(ZXYref), nv, run, step, rep]"
             ),
@@ -435,14 +477,21 @@ def main(
 
         # Analyze before saving. save_raw_data replaces raw['counts']
         # with an NPZ path in the dictionary passed to it.
-        result = arb_analysis.analyze(
-            raw,
-            min_ref_contrast=2.5 if mode in ("projection", "virtual_z", "virtual_z_frame")
-                             else arb_analysis.MIN_REFERENCE_CONTRAST,
-            min_ref_snr=3.0 if mode in ("projection", "virtual_z", "virtual_z_frame")
-                        else arb_analysis.MIN_REFERENCE_SNR,
-            reference_scope=raw["analysis_reference_scope"],
-        )
+        if z_only:
+            from analysis import arbitrary_gate_z_only as z_analysis
+            result = z_analysis.analyze(
+                raw, min_ref_contrast=2.5, min_ref_snr=3.0,
+                reference_scope=raw["analysis_reference_scope"],
+            )
+        else:
+            result = arb_analysis.analyze(
+                raw,
+                min_ref_contrast=2.5 if mode in ("projection", "virtual_z", "virtual_z_frame")
+                                 else arb_analysis.MIN_REFERENCE_CONTRAST,
+                min_ref_snr=3.0 if mode in ("projection", "virtual_z", "virtual_z_frame")
+                            else arb_analysis.MIN_REFERENCE_SNR,
+                reference_scope=raw["analysis_reference_scope"],
+            )
 
         print()
         print(
@@ -468,15 +517,27 @@ def main(
         if save_plots or show_plots:
             from matplotlib import pyplot as plt
 
-            fig, fig2 = arb_analysis.plot_results(
-                raw, result, nv_ind=None,
-            )
+            if z_only:
+                fig, fig2 = z_analysis.plot_results(result)
+            else:
+                fig, fig2 = arb_analysis.plot_results(
+                    raw, result, nv_ind=None,
+                )
             if save_plots:
                 dm.save_figure(fig, file_path)
                 fig_path2 = dm.get_file_path(
                     __file__, raw["timestamp"], repr_nv.name + "-heatmap",
                 )
                 dm.save_figure(fig2, fig_path2)
+                if z_only:
+                    z_analysis.save_individual_pdf(
+                        result,
+                        z_analysis.resolve_pdf_path(
+                            file_path.with_name(
+                                file_path.stem + "-z-only-all-nvs.pdf"
+                            )
+                        ),
+                    )
 
             # Never block a calling loop. In unattended/batched mode keep only
             # the saved files, and close the figures to avoid accumulating GUI
