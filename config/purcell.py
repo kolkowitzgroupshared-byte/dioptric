@@ -38,14 +38,14 @@ calibration_coords_pixel = [
     [255.325, 177.995],    
 ]
 calibration_coords_green = [
-    [112.226, 119.47],
-    [100.558, 79.848],
-    [82.945, 92.343],
+    [112.219, 119.456],
+    [100.56, 79.872],
+    [82.969, 92.342],
 ]
 calibration_coords_red = [
-    [78.784, 85.634],
-    [69.613, 53.085],
-    [55.07, 62.918],
+    [78.778, 85.622],
+    [69.614, 53.105],
+    [55.09, 62.918],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -1132,14 +1132,7 @@ def build_phase_sweep(min_deg=-360, max_deg=360, step_deg=9):
     phases_cmd = phases_unwrapped % 360  # wrap to [0,360)
     return phases_unwrapped.tolist(), phases_cmd.tolist()
 
-# fmt: off
-# phases =[0, 45, 90, 135, 180, 225, 270, 315]
-# phases = [0, 9, 18, 27, 36, 45, 54, 63, 72, 81, 90, 
-#           99, 108, 117, 126, 135, 144, 153, 162, 171, 180,
-#           189, 198, 207, 216, 225, 234, 243, 252, 261, 270,
-#           279, 288, 297, 306, 315, 324, 333, 342, 351, 360]
 phases = list(range(360))
-# fmt:on
 generate_iq_pulses(["pi_pulse", "pi_on_2_pulse"], phases)
 
 if __name__ == "__main__":

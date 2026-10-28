@@ -37,15 +37,14 @@ from utils import data_manager as dm
 
 # Add complete timestamp-NV stems, one entry per independent saved batch.
 FILE_STEMS = [
-    # "2026_10_27-16_00_00-johnson-nv0_2026_10_02",
-    # "2026_10_27-17_00_00-johnson-nv0_2026_10_02",
+    "2026_10_27-16_51_38-johnson-nv0_2026_10_02",
 ]
 
 DATA_DIR = None          # None = normal Purcell G:/NAS lookup.
 OUTDIR = None            # None = save to configured data_manager folder.
 REFERENCE_SCOPE = "per_gate"
-MIN_REFERENCE_CONTRAST = 2.5
-MIN_REFERENCE_SNR = 3.0
+MIN_REFERENCE_CONTRAST = 0.0
+MIN_REFERENCE_SNR = 0.0
 
 
 def _file_stem(arg):
@@ -113,6 +112,8 @@ def _load_one(arg, data_dir, reference_scope, min_ref_contrast, min_ref_snr):
         result=result, names=names, index={name: i for i, name in enumerate(names)},
         shots=int(raw["num_runs"])*int(raw["num_reps"]),
         num_runs=int(raw["num_runs"]), num_reps=int(raw["num_reps"]),
+        microwave_freq=raw.get("uwave_freq"),
+        microwave_power_dbm=raw.get("uwave_power_dbm"),
     )
 
 
@@ -154,6 +155,21 @@ def combine(file_stems=FILE_STEMS, *, data_dir=DATA_DIR,
                 f"{r['stem']}: different Cornell gates, pulse compilation, "
                 "microwave chain or calibration; analyze separately"
             )
+        # New acquisitions save SG394 frequency/power for cross-batch checks.
+        for key in ("microwave_freq", "microwave_power_dbm"):
+            a, b = first[key], r[key]
+            if (a is None) != (b is None):
+                raise ValueError(
+                    f"{r['stem']}: {key} missing from only one file; "
+                    "cannot verify equal hardware settings"
+                )
+            if a is not None and not np.array_equal(np.asarray(a), np.asarray(b)):
+                raise ValueError(f"{r['stem']}: {key} differs between batches")
+    if first["microwave_freq"] is None or first["microwave_power_dbm"] is None:
+        warnings.warn(
+            "Microwave frequency/power absent from older acquisition metadata. "
+            "Verify identical SG394 settings before interpreting batch average."
+        )
     common = set(first["names"])
     for r in records[1:]:
         common &= set(r["names"])
@@ -296,6 +312,8 @@ def _save(result, outdir):
         "experiment":"Cornell Experiment 0: multi-batch virtual_z_z_only",
         "readout_protocol":"virtual_z_z_only",
         "num_input_files":result["num_files"],
+        "microwave_freq":result["records"][0]["microwave_freq"],
+        "microwave_power_dbm":result["records"][0]["microwave_power_dbm"],
         "file_stems":[r["stem"] for r in result["records"]],
         "matched_nvs":result["num_nvs"],
         "accepted_gate_nv_pairs":int(valid.sum()),

@@ -55,8 +55,8 @@ OUTDIR = None                # None -> dm saves to G: (recommended)
 # Same Purcell NAS share for sessions where Windows G: is not mapped.
 NAS_UNC_ROOT = r"\\192.168.0.197\G"
 REFERENCE_SCOPE = "per_gate"  # drift-robust default; "all_gates" also supported
-MIN_REFERENCE_CONTRAST = 1.0  # photons
-MIN_REFERENCE_SNR = 1.0
+MIN_REFERENCE_CONTRAST = 0.0  # photons
+MIN_REFERENCE_SNR = 0.0
 SHOW_PLOTS = False
 BOOTSTRAP_SAMPLES = 4000
 SEED = 20261021
@@ -65,7 +65,8 @@ MODES = ("virtual_z", "virtual_z_frame", "projection")
 MODE_LABEL = {"virtual_z": "Virtual-Z (shifted preparation)",
               "virtual_z_frame": "Virtual-Z (frame-corrected projection)",
               "projection": "Three-pulse projection"}
-INPUT_LABELS = ("+Z", "+X", "+Y")
+# INPUT_LABELS = ("+Z", "+X", "+Y")
+INPUT_LABELS = ("+Z",)
 
 
 def _name(nv):

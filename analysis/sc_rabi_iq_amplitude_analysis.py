@@ -28,7 +28,6 @@ NAS_EXPERIMENT_ROOT = Path(
     r"\\192.168.0.197\G\nvdata\pc_Purcell\branch_master\rabi_iq_amplitude"
 )
 
-
 def cosine_model(amplitude_v, baseline, contrast, period_v, phase_rad):
     """P(ms=-1) versus IQ voltage; a pi rotation occurs about half a period."""
     a = np.asarray(amplitude_v, dtype=float)
