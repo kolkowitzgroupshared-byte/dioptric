@@ -2074,7 +2074,7 @@ if __name__ == "__main__":
     # durations
     # -------------------------------------------
     scc_dur_data = dm.get_raw_data(
-        file_stem="2026_10_20-22_48_15-optimal_scc_parameters_robust",
+        file_stem="2026_10_28-17_21_46-optimal_scc_parameters_robust",
         load_npz=True,
     )
     scc_dur_dict = scc_dur_data["optimal_values"]
@@ -2255,7 +2255,7 @@ if __name__ == "__main__":
         # do_check_readout_fidelity(nv_list)
         # do_optimize_aod_access_time(nv_list)
 
-        # do_scc_snr_check(nv_list)
+        do_scc_snr_check(nv_list)
         # optimize_scc_amp_and_duration(nv_list)
         # do_optimize_scc_duration(nv_list)
         # do_optimize_scc_amp(nv_list)
@@ -2278,12 +2278,12 @@ if __name__ == "__main__":
         # do_widefield_coherence_test(nv_list, 800, "xy8")
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_arbitrary_gate_virtual_z(nv_list)
-        do_arbitrary_gate_virtual_z_z_only(nv_list)
+        # do_arbitrary_gate_virtual_z_z_only(nv_list)
         # do_arbitrary_gate_projection(nv_list)
         # do_rqs_c13(nv_list)
         # do_rqs_c13_random_x(nv_list)
-        do_rqs_c13_bath(nv_list)
-        do_rqs_multisine(nv_list)
+        # do_rqs_c13_bath(nv_list)
+        # do_rqs_multisine(nv_list)
         
         # do_calibrate_iq_delay(nv_list)
         # do_power_rabi(nv_list)

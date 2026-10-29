@@ -41,10 +41,11 @@ from utils import widefield
 # FILE_STEM = "2026_09_17-03_23_08-qnami-nv0_2026_02_20"
 # FILE_STEM = "2026_10_14-16_05_00-johnson-nv0_2026_10_02"
 # FILE_STEM = "2026_10_20-22_45_11-johnson-nv0_2026_10_02" #duration
-FILE_STEM = "2026_10_21-02_22_41-johnson-nv0_2026_10_02" #amp 
+# FILE_STEM = "2026_10_21-02_22_41-johnson-nv0_2026_10_02" #amp 
+FILE_STEM = "2026_10_28-16_21_53-johnson-nv0_2026_10_02"
 
 # "amplitude" or "duration"
-MODE = "amplitude"
+MODE = "duration"
 
 AMPLITUDE_VALID_RANGE = (0.4, 1.6)
 DURATION_VALID_RANGE_NS = (0.0, 400.0)

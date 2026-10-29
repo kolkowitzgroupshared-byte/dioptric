@@ -37,7 +37,8 @@ from utils import data_manager as dm
 
 # Add complete timestamp-NV stems, one entry per independent saved batch.
 FILE_STEMS = [
-    "2026_10_27-16_51_38-johnson-nv0_2026_10_02",
+    # "2026_10_27-16_51_38-johnson-nv0_2026_10_02",
+    "2026_10_28-00_20_49-johnson-nv0_2026_10_02"
 ]
 
 DATA_DIR = None          # None = normal Purcell G:/NAS lookup.
