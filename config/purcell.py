@@ -1037,12 +1037,12 @@ opx_config = {
         "green_aod_cw-shelving": {"type": "constant", "sample": 0.05},
         "green_aod_cw-scc": {"type": "constant", "sample": 0.13},
         # Red AOD
-        "red_aod_cw-opti": {"type": "constant", "sample": 0.15},
-        "red_aod_cw-ion": {"type": "constant", "sample": 0.15},
-        "red_aod_cw-scc": {"type": "constant", "sample": 0.15},
+        "red_aod_cw-opti": {"type": "constant", "sample": 0.12},
+        "red_aod_cw-ion": {"type": "constant", "sample": 0.12},
+        "red_aod_cw-scc": {"type": "constant", "sample": 0.12},
         # Yellow AOM
         "yellow_imaging": {"type": "constant", "sample": 0.35},
-        "yellow_charge_readout": {"type": "constant", "sample": 0.2832}, ##119NVs
+        "yellow_charge_readout": {"type": "constant", "sample": 0.2932}, ##119NVs
         # "yellow_charge_readout": {"type": "constant", "sample": 0.4}, ##693NVs
         "yellow_spin_pol": {"type": "constant", "sample": 0.38},
         "yellow_shelving": {"type": "constant", "sample": 0.20},

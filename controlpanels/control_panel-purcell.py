@@ -2085,7 +2085,7 @@ if __name__ == "__main__":
     ]
     
     pol_duration_list = [1000] * num_nvs
-    # scc_duration_list = [88] * num_nvs
+    scc_duration_list = [88] * num_nvs
 
     # sys.exit()
     # nv_list[i] will have the ith coordinates from the above lists
@@ -2165,7 +2165,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        do_widefield_image_sample(nv_sig, 50)
+        # do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list: 
@@ -2255,10 +2255,10 @@ if __name__ == "__main__":
         # do_check_readout_fidelity(nv_list)
         # do_optimize_aod_access_time(nv_list)
 
-        do_scc_snr_check(nv_list)
+        # do_scc_snr_check(nv_list)
         # optimize_scc_amp_and_duration(nv_list)
         # do_optimize_scc_duration(nv_list)
-        # do_optimize_scc_amp(nv_list)
+        do_optimize_scc_amp(nv_list)
         # do_optimize_scc_readout_amp(nv_list)
         # do_crosstalk_check(nv_sig)
         # do_spin_pol_check(nv_sig)

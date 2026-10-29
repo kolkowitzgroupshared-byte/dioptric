@@ -182,6 +182,7 @@ def _main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_li
         num_runs,
         run_fn=run_fn,
         uwave_ind_list=uwave_ind_list,
+        load_iq=True,
     )
 
     # save data
