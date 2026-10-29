@@ -1023,7 +1023,7 @@ def do_arbitrary_gate_virtual_z(nv_list):
 def do_arbitrary_gate_virtual_z_z_only(nv_list):      
     arbitrary_gate_tomography.main(
         nv_list=nv_list,
-        num_reps=400,
+        num_reps=600,
         num_runs=10,
         uwave_ind_list=(1,),
         mode="virtual_z_z_only",
@@ -1070,8 +1070,8 @@ def do_rqs_multisine(nv_list):
         seed=37,
         coupling_hz=2800.0,
         uwave_ind_list=(1,),
-        num_reps=5,
-        num_runs=600,
+        num_reps=6,
+        num_runs=500,
         phase_reference_confirmed=True,
     )
     
@@ -1085,8 +1085,8 @@ def do_rqs_c13_bath(nv_list):
         seed=37,
         n_masks=64,
         bank_size=8192,
-        num_reps=5,
-        num_runs=600,
+        num_reps=6,
+        num_runs=500,
     )
     
 def do_rabi(nv_list):
@@ -2051,10 +2051,10 @@ if __name__ == "__main__":
         for i in range(num_nvs)
     ]
     
-    # scc_amp_data = dm.get_raw_data(
-    #     file_stem="2026_09_17-15_31_19-optimal_scc_parameters_robust",
-    #     load_npz=True,
-    # )
+    scc_amp_data = dm.get_raw_data(
+        file_stem="2026_10_28-22_38_36-optimal_scc_parameters_robust",
+        load_npz=True,
+    )
 
     # AOD amplitude multiplier
     # scc_amp_dict = scc_amp_data["optimal_values"]
@@ -2111,7 +2111,7 @@ if __name__ == "__main__":
             pulse_amps={
                 # VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
                 # VirtualLaserKey.ION: scc_amp_list[ind],  
-                # VirtualLaserKey.SCC: scc_amp_list[ind],
+                VirtualLaserKey.SCC: scc_amp_list[ind],
             },
         )
         nv_list.append(nv_sig)
@@ -2165,7 +2165,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)
+        do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list: 
@@ -2257,8 +2257,8 @@ if __name__ == "__main__":
 
         # do_scc_snr_check(nv_list)
         # optimize_scc_amp_and_duration(nv_list)
-        # do_optimize_scc_duration(nv_list)
-        do_optimize_scc_amp(nv_list)
+        do_optimize_scc_duration(nv_list)
+        # do_optimize_scc_amp(nv_list)
         # do_optimize_scc_readout_amp(nv_list)
         # do_crosstalk_check(nv_sig)
         # do_spin_pol_check(nv_sig)
@@ -2278,12 +2278,12 @@ if __name__ == "__main__":
         # do_widefield_coherence_test(nv_list, 800, "xy8")
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_arbitrary_gate_virtual_z(nv_list)
-        # do_arbitrary_gate_virtual_z_z_only(nv_list)
+        do_arbitrary_gate_virtual_z_z_only(nv_list)
         # do_arbitrary_gate_projection(nv_list)
         # do_rqs_c13(nv_list)
         # do_rqs_c13_random_x(nv_list)
-        # do_rqs_c13_bath(nv_list)
-        # do_rqs_multisine(nv_list)
+        do_rqs_c13_bath(nv_list)
+        do_rqs_multisine(nv_list)
         
         # do_calibrate_iq_delay(nv_list)
         # do_power_rabi(nv_list)
