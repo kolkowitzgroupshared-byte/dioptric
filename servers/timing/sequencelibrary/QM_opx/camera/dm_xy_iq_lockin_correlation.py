@@ -19,8 +19,6 @@ tau_ns is the Hahn-tau convention you already use:
 This implementation uses XY4 with pulses separated by 2*tau:
   (pi/2)_X - tau - [pi_X - 2tau - pi_Y - 2tau - pi_X - 2tau - pi_Y] - tau - (pi/2)_phi
 Repeated n_xy4_blocks times with continuous 2tau spacing between pi pulses.
-
-@author: Saroj Chand (DM lock-in)
 """
 
 import numpy as np

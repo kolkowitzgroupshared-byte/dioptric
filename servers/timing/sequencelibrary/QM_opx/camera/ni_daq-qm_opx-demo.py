@@ -4,9 +4,6 @@ This file contains a few functions used in the Kolkowitz group NV experiment's c
 showcase how we use our NI DAQ and our QM OPX. The functions have been modified somewhat to
 make sense in this simplified context.
 
-Created on August 7th, 2025
-
-@author: mccambria
 """
 
 import nidaqmx

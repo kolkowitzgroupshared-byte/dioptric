@@ -10,8 +10,13 @@ noncommuting pooled-spectroscopy algorithm from Kannan's presentation.
 
 The host supplies the random schedules and interleaved XY8 comparison steps.
 """
-from qm import qua
+import numpy as np
+import matplotlib.pyplot as plt
 
+from qm import QuantumMachinesManager, qua
+from qm.simulate import SimulationConfig
+
+import utils.common as common
 from servers.timing.sequencelibrary.QM_opx import seq_utils
 from servers.timing.sequencelibrary.QM_opx.camera import base_scc_sequence
 
@@ -26,16 +31,6 @@ def get_seq(base_scc_seq_args, wait_tables_cc, num_reps=1):
     wait_tables_cc: nine same-length lists, column i = wait after pulse i.
     Every wait must be >= 4 clock cycles (16 ns); QUA waits are in 4-ns cc.
     """
-    if len(wait_tables_cc) != NUM_GAPS:
-        raise ValueError("Need nine wait vectors for eight XY8 pi pulses.")
-    lengths = [len(v) for v in wait_tables_cc]
-    if not lengths or lengths[0] == 0 or any(n != lengths[0] for n in lengths):
-        raise ValueError("Wait vectors must be nonempty and equally long.")
-    if any((type(w) is not int or w < 4) for vec in wait_tables_cc for w in vec):
-        raise ValueError("Every wait must be a Python integer >= 4 cc.")
-    if not isinstance(num_reps, int) or num_reps < 1:
-        raise ValueError("num_reps must be a positive int.")
-
     buffer = seq_utils.get_widefield_operation_buffer()
     with qua.program() as seq:
         seq_utils.init()
@@ -63,3 +58,43 @@ def get_seq(base_scc_seq_args, wait_tables_cc, num_reps=1):
             )
 
     return seq, []
+
+if __name__ == "__main__":
+    config_module = common.get_config_module()
+    config = config_module.config
+    opx_config = config_module.opx_config
+    opx_config["pulses"]["yellow_spin_pol"]["length"] = 2e3
+    
+    qm_opx_args = config["DeviceIDs"]["QM_opx_args"]
+    qmm = QuantumMachinesManager(**qm_opx_args)
+    opx = qmm.open_qm(opx_config)
+
+    try:
+        seq, seq_ret_vals = get_seq(
+            [
+                [[109.062, 107.003], [110.183, 105.383]],
+                [1000, 1000],
+                [1.0, 1.0],
+                [[73.477, 72.33], [74.328, 70.992]],
+                [168, 184],
+                [1.0, 1.0],
+                [False, False, False],
+                [0, 1],
+            ],
+            [
+                27200,
+                41832,
+            ],
+            10,
+        )
+
+        sim_config = SimulationConfig(duration=int(200e3 / 4))
+        sim = opx.simulate(seq, sim_config)
+        samples = sim.get_simulated_samples()
+        samples.con1.plot()
+        plt.show(block=True)
+
+    except Exception as exc:
+        raise exc
+    finally:
+        qmm.close_all_quantum_machines()

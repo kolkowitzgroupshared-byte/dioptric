@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Widefield ESR
-
-Created on October 13th, 2023
-
-@author: sbchand
+Widefield power Rabi sequence
 """
 
 import time

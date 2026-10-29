@@ -1,12 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Base spin sequence for widefield experiments with many spatially resolved NV centers.
-Accompanies base routine
-
-Created on December 11th, 2023
-
-@author: mccambria
-@author: sbchand
+Accompanies base routine get_base_scc_seq_args() in widefield.py, which returns the polarization and
 """
 
 from qm import qua

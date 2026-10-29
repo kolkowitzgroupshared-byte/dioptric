@@ -2,9 +2,6 @@
 """
 Scanning illumination and widefield collection
 
-Created on October 13th, 2023
-
-@author: mccambria
 """
 
 import matplotlib.pyplot as plt

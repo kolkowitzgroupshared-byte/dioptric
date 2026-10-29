@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Widefield ESR
-
-Created on October 13th, 2023
-
-@author: mccambria
+Widefield optimization of spin polarization duration and amplitude, no spin manipulations
 """
 
 import matplotlib.pyplot as plt

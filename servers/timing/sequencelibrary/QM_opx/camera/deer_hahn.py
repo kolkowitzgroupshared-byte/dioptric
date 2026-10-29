@@ -9,7 +9,6 @@ This version does the centering *in the QUA schedule* using element-specific wai
 so you don’t need any negative config delays.
 
 Created on October 3th, 2025
-@author: schand
 """
 
 import matplotlib.pyplot as plt

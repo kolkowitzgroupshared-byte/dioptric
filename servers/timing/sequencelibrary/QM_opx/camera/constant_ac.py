@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Constant sequence for the QM OPX
-
-Created on June 21st, 2023
-
-@author: mccambria
+Constant sequence for the QM OPX camera. This sequence is used to generate a constant trigger signal for the camera, with a specified period and number of repetitions.
 """
 
 import matplotlib.pyplot as plt

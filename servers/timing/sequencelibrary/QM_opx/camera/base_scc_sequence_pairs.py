@@ -15,9 +15,6 @@ Optional final entry in base_scc_seq_args:
     }
 
 If no options dict is provided, this behaves like the original serial sequence.
-
-@author: mccambria
-@author: sbchand
 """
 
 from qm import qua

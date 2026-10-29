@@ -10,8 +10,6 @@ Per repetition:
     widefield charge-state readout
     wait for trigger
 
-Put this file in:
-    servers/timing/sequencelibrary/QM_opx/camera/dmd_crosstalk_readout.py
 """
 
 import matplotlib.pyplot as plt
