@@ -45,7 +45,7 @@ def filter_bins(steps, bin_edges_hz, points_per_bin=65):
         for a,b in zip(edges[:-1],edges[1:]):
             freqs=np.linspace(a,b,points_per_bin)
             Y=toggling_filter(s["switch_ticks"],4,s["T_ns"],freqs)
-            row.append(float(np.trapezoid(abs(Y)**2,freqs)/(b-a)))
+            row.append(float(np.trapz(abs(Y)**2,freqs)/(b-a)))
         F.append(row)
     return np.asarray(F,dtype=float)
 

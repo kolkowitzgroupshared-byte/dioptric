@@ -362,8 +362,10 @@ def analyze(d, *, outdir=None, per_nv=12, quantum_nv=None):
     fig,(ax,ax2)=plt.subplots(2,1,figsize=(11,8),layout="constrained")
     observations=[np.nanmedian(cr,axis=1),C[:,xy4[0]],
                   C[:,xy8[0]],C[:,echo[0]]]
-    ax.boxplot([v[np.isfinite(v)] for v in observations],
-               tick_labels=["Random masks median","XY4 (~2/T)","XY8 (~4/T)","Hahn echo"])
+    ax.boxplot([v[np.isfinite(v)] for v in observations])
+    ax.set_xticks([1, 2, 3, 4])
+    ax.set_xticklabels(["Random masks median", "XY4 (~2/T)",
+                        "XY8 (~4/T)", "Hahn echo"])
     ax.set(ylabel="Measured SCC-normalized coherence",
            title=f"Same-T controls at {d['T_us']:.0f} us")
     ax.grid(alpha=.2)
@@ -492,11 +494,27 @@ def main():
                     help="Detailed NV pages; use 0 for all NVs")
     ap.add_argument("--quantum-nv",type=int,
                     help="Fit illustrative conditional single 13C to this NV index")
+    ap.add_argument("--one-figure-only",action="store_true",
+                    help="Create easy-to-read real-data mean/median overview only")
     args=ap.parse_args()
     files=args.files or [str(_latest())]
     print("Selected bath acquisition:",files)
+    if args.one_figure_only:
+        if len(files)!=1:
+            ap.error("--one-figure-only requires exactly one input dataset")
+        from analysis.sc_rqs_c13_bath_one_figure import create_figure
+        create_figure(files[0],min_reference=max(2.5,args.reference_min),
+                      outdir=args.outdir)
+        return
     d=pool_files([load_file(f,args.reference_min) for f in files])
     analyze(d,outdir=args.outdir,per_nv=args.per_nv,quantum_nv=args.quantum_nv)
+    if len(files)==1:
+        from analysis.sc_rqs_c13_bath_one_figure import create_figure
+        create_figure(files[0],min_reference=max(2.5,args.reference_min),
+                      outdir=args.outdir)
+    else:
+        print("Mean/median one-figure overview is available separately for "
+              "each input with --one-figure-only --files STEM")
 
 
 if __name__=="__main__":

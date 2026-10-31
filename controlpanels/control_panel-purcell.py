@@ -1062,18 +1062,19 @@ def do_rqs_c13_random_x(nv_list):
         
 
 def do_rqs_multisine(nv_list):
-    rqs_multisine.main(
-        nv_list,
-        duration_us=8.0,
-        n_settings=96,
-        bank_size=8192,
-        seed=37,
-        coupling_hz=2800.0,
-        uwave_ind_list=(1,),
-        num_reps=6,
-        num_runs=500,
-        phase_reference_confirmed=True,
-    )
+    for _ in range(2):
+        rqs_multisine.main(
+            nv_list=nv_list,
+            duration_us=8.0,
+            n_settings=96,
+            bank_size=8192,
+            seed=37,
+            coupling_hz=2800.0,
+            uwave_ind_list=(1,),
+            num_reps=6,
+            num_runs=500,
+            phase_reference_confirmed=True,
+        )
     
 
 def do_rqs_c13_bath(nv_list):
@@ -2165,7 +2166,7 @@ if __name__ == "__main__":
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
 
-        # do_widefield_image_sample(nv_sig, 50)
+        do_widefield_image_sample(nv_sig, 50)
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list: 
@@ -2255,7 +2256,7 @@ if __name__ == "__main__":
         # do_check_readout_fidelity(nv_list)
         # do_optimize_aod_access_time(nv_list)
 
-        do_scc_snr_check(nv_list)
+        # do_scc_snr_check(nv_list)
         # optimize_scc_amp_and_duration(nv_list)
         # do_optimize_scc_duration(nv_list)
         # do_optimize_scc_amp(nv_list)
@@ -2282,7 +2283,7 @@ if __name__ == "__main__":
         # do_arbitrary_gate_projection(nv_list)
         # do_rqs_c13(nv_list)
         # do_rqs_c13_random_x(nv_list)
-        do_rqs_c13_bath(nv_list)
+        # do_rqs_c13_bath(nv_list)
         do_rqs_multisine(nv_list)
         
         # do_calibrate_iq_delay(nv_list)
