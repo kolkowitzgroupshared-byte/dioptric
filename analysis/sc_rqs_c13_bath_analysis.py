@@ -362,8 +362,10 @@ def analyze(d, *, outdir=None, per_nv=12, quantum_nv=None):
     fig,(ax,ax2)=plt.subplots(2,1,figsize=(11,8),layout="constrained")
     observations=[np.nanmedian(cr,axis=1),C[:,xy4[0]],
                   C[:,xy8[0]],C[:,echo[0]]]
-    ax.boxplot([v[np.isfinite(v)] for v in observations],
-               tick_labels=["Random masks median","XY4 (~2/T)","XY8 (~4/T)","Hahn echo"])
+    ax.boxplot([v[np.isfinite(v)] for v in observations])
+    ax.set_xticks([1, 2, 3, 4])
+    ax.set_xticklabels(["Random masks median", "XY4 (~2/T)",
+                        "XY8 (~4/T)", "Hahn echo"])
     ax.set(ylabel="Measured SCC-normalized coherence",
            title=f"Same-T controls at {d['T_us']:.0f} us")
     ax.grid(alpha=.2)
