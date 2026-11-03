@@ -1023,7 +1023,7 @@ def do_arbitrary_gate_virtual_z(nv_list):
 def do_arbitrary_gate_virtual_z_z_only(nv_list):      
     arbitrary_gate_tomography.main(
         nv_list=nv_list,
-        num_reps=400,
+        num_reps=600,
         num_runs=10,
         uwave_ind_list=(1,),
         mode="virtual_z_z_only",
@@ -1062,18 +1062,19 @@ def do_rqs_c13_random_x(nv_list):
         
 
 def do_rqs_multisine(nv_list):
-    rqs_multisine.main(
-        nv_list,
-        duration_us=8.0,
-        n_settings=96,
-        bank_size=8192,
-        seed=37,
-        coupling_hz=2800.0,
-        uwave_ind_list=(1,),
-        num_reps=5,
-        num_runs=600,
-        phase_reference_confirmed=True,
-    )
+    for _ in range(2):
+        rqs_multisine.main(
+            nv_list=nv_list,
+            duration_us=8.0,
+            n_settings=96,
+            bank_size=8192,
+            seed=37,
+            coupling_hz=2800.0,
+            uwave_ind_list=(1,),
+            num_reps=6,
+            num_runs=500,
+            phase_reference_confirmed=True,
+        )
     
 
 def do_rqs_c13_bath(nv_list):
@@ -1085,8 +1086,8 @@ def do_rqs_c13_bath(nv_list):
         seed=37,
         n_masks=64,
         bank_size=8192,
-        num_reps=5,
-        num_runs=600,
+        num_reps=6,
+        num_runs=500,
     )
     
 def do_rabi(nv_list):
@@ -2051,10 +2052,10 @@ if __name__ == "__main__":
         for i in range(num_nvs)
     ]
     
-    # scc_amp_data = dm.get_raw_data(
-    #     file_stem="2026_09_17-15_31_19-optimal_scc_parameters_robust",
-    #     load_npz=True,
-    # )
+    scc_amp_data = dm.get_raw_data(
+        file_stem="2026_10_28-22_38_36-optimal_scc_parameters_robust",
+        load_npz=True,
+    )
 
     # AOD amplitude multiplier
     # scc_amp_dict = scc_amp_data["optimal_values"]
@@ -2074,7 +2075,7 @@ if __name__ == "__main__":
     # durations
     # -------------------------------------------
     scc_dur_data = dm.get_raw_data(
-        file_stem="2026_10_20-22_48_15-optimal_scc_parameters_robust",
+        file_stem="2026_10_29-12_33_35-optimal_scc_parameters_robust",
         load_npz=True,
     )
     scc_dur_dict = scc_dur_data["optimal_values"]
@@ -2111,7 +2112,7 @@ if __name__ == "__main__":
             pulse_amps={
                 # VirtualLaserKey.CHARGE_POL: charge_pol_amps[ind],
                 # VirtualLaserKey.ION: scc_amp_list[ind],  
-                # VirtualLaserKey.SCC: scc_amp_list[ind],
+                VirtualLaserKey.SCC: scc_amp_list[ind],
             },
         )
         nv_list.append(nv_sig)
@@ -2278,11 +2279,11 @@ if __name__ == "__main__":
         # do_widefield_coherence_test(nv_list, 800, "xy8")
         # do_bootstrapped_pulse_error_tomography(nv_list)
         # do_arbitrary_gate_virtual_z(nv_list)
-        do_arbitrary_gate_virtual_z_z_only(nv_list)
+        # do_arbitrary_gate_virtual_z_z_only(nv_list)
         # do_arbitrary_gate_projection(nv_list)
         # do_rqs_c13(nv_list)
         # do_rqs_c13_random_x(nv_list)
-        do_rqs_c13_bath(nv_list)
+        # do_rqs_c13_bath(nv_list)
         do_rqs_multisine(nv_list)
         
         # do_calibrate_iq_delay(nv_list)

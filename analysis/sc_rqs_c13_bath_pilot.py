@@ -158,8 +158,10 @@ def plot_pilot(file=None,ref_min=2.5,outdir=None):
     fig,(ax,ax2)=plt.subplots(2,1,figsize=(11,9),layout="constrained")
     keys=["random median","periodic_xy4","periodic_xy8","spin_echo"]
     ensembles=[np.nanmedian(R,axis=1)]+[full[:,controls[k]] for k in keys[1:]]
-    ax.boxplot([v[np.isfinite(v)] for v in ensembles],
-               tick_labels=["Random median","XY4 (~33.3 kHz)","XY8 (~66.7 kHz)","Echo"])
+    ax.boxplot([v[np.isfinite(v)] for v in ensembles])
+    ax.set_xticks([1, 2, 3, 4])
+    ax.set_xticklabels(["Random median", "XY4 (~33.3 kHz)",
+                        "XY8 (~66.7 kHz)", "Echo"])
     ax.set(ylabel="Normalized X coherence",
            title="Same-duration controls (negative sign may be readout convention)")
     ax.axhline(0,color="grey",lw=.8)

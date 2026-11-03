@@ -494,11 +494,27 @@ def main():
                     help="Detailed NV pages; use 0 for all NVs")
     ap.add_argument("--quantum-nv",type=int,
                     help="Fit illustrative conditional single 13C to this NV index")
+    ap.add_argument("--one-figure-only",action="store_true",
+                    help="Create easy-to-read real-data mean/median overview only")
     args=ap.parse_args()
     files=args.files or [str(_latest())]
     print("Selected bath acquisition:",files)
+    if args.one_figure_only:
+        if len(files)!=1:
+            ap.error("--one-figure-only requires exactly one input dataset")
+        from analysis.sc_rqs_c13_bath_one_figure import create_figure
+        create_figure(files[0],min_reference=max(2.5,args.reference_min),
+                      outdir=args.outdir)
+        return
     d=pool_files([load_file(f,args.reference_min) for f in files])
     analyze(d,outdir=args.outdir,per_nv=args.per_nv,quantum_nv=args.quantum_nv)
+    if len(files)==1:
+        from analysis.sc_rqs_c13_bath_one_figure import create_figure
+        create_figure(files[0],min_reference=max(2.5,args.reference_min),
+                      outdir=args.outdir)
+    else:
+        print("Mean/median one-figure overview is available separately for "
+              "each input with --one-figure-only --files STEM")
 
 
 if __name__=="__main__":
