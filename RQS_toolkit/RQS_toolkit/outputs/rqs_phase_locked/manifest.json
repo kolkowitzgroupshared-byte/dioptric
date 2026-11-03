@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "plan_id": "07dfa7db8ad1ce4d2aa4e31b923834e5443b917b6353e5f8a383bff6a5577f07",
+  "sha256": {
+    "RUN.txt": "ecb3fbc31e94f6e45260242a6818058454eb156b6b6a496c1239d23dbf8dc1ad",
+    "acquisition.csv": "9d906f3433c67f533abb73b82f9507f095b2a57346cdc643a646042e9e48b888",
+    "averages_template.csv": "04cd3222acb02473f35f281eb353d949dffc84a97e6491aa7b75a433a56d971f",
+    "bundle.json": "1963543db22158b59e14f23431e018ce3de8d00644f33ac77720bd5045292398",
+    "counts_template.csv": "fac6d0fd88a46695100cdbd4e88f4d78a8afb54432cc943d36b34d1ba71a72d0",
+    "intervals.csv": "1fad4f5c90e3b0ee50bf886d8afba9ba41005396700f77e6472eea86298fb328",
+    "pool.npz": "549b3c23a752f03bdfbcab0a9f8286272eaac5706058f1b7ea8863c163168e99",
+    "pulses.csv": "84ab1595229015f77e381362745a02c16c9eeff129fcf77b0eb34476934cf825",
+    "sequences.csv": "2d74d8e8e5ca328cb567b86392a2f04302df5660fe65b11b00387fa5f62100d1"
+  }
+}

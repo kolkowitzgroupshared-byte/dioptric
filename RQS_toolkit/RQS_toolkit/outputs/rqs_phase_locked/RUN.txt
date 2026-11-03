@@ -1,0 +1,34 @@
+Prepare |+X>; physical modulation starts at +1 for EVERY sequence.
+Apply only the internal X(pi) pulses listed in pulses.csv. No initial sign flip
+or extra endpoint pulse is needed. Ideal instantaneous pulses are assumed.
+Use physical X or Y analysis with the convention that a pulse-free shot has
+mean_X=bias+C*cos(phi), mean_Y=bias+C*sin(phi), phi=2*pi*coupling*integral(b).
+Odd pulse counts invert physical Y readout. Antithetic pool entries use the
+same physical pulses with a virtual response sign. Both effects are recorded
+in outcome_sign: corrected_mean=outcome_sign*(physical_mean-bias).
+The supplied decoder applies this correction; fill counts with RAW physical
++1 counts, without changing signs or subtracting bias yourself.
+The initial and final preparation/analysis operations are outside sensing time.
+Every sensing interval conservatively obeys max(min_gap,edge_guard), rounded UP
+to the design grid. A specified hardware clock overrides the numerical grid.
+Play acquisition rows with the listed repetitions; grouping iid draws is valid
+only for a fixed field. The tone phases at EVERY trigger must match start_time_s
+relative to the same phase origin. Phase-lock/reset the source; trigger waiting
+time is not predicted. Do not reuse a plan at arbitrary unknown starting phases.
+Counts template: save a COPY with integer physical +1 counts, preserving IDs.
+Choose observable weights after acquisition and pass them to decode. Different
+queries reuse the same pulses and raw counts; new bundles contain no queries.
+RQS uses approximate moment-law inversion with per-tone correction; RQS-ML
+adds local likelihood refinement. No uniform accuracy/confidence is certified.
+T2/visibility set simulation contrast and the small-X-mean guard only; contrast
+cancels in the unguarded moment ratio.
+Calibrate the additive readout bias.
+Finite pulse evolution, unrecorded timing jitter, field drift and calibration uncertainty
+are not modeled. Active sensing and specified per-shot overhead are separate.
+Alternatively, fill a COPY of averages_template.csv with raw physical means
+in [-1,1], one mean per sequence/basis row. Repetitions can record actual
+averaging counts and need not equal planned shots. Preserve row and plan IDs.
+read_averages/decode accept rounded means without integer-count conversion.
+RQS keeps the plan's random-draw weights; actual repetitions weight RQS-ML.
+Retain identical tone phases for every repetition of a row. Means from shots
+at different unknown phases cannot replace per-shot timestamped data.
