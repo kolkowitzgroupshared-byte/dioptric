@@ -54,9 +54,11 @@ from majorroutines.widefield import (
     resonance_dualgen,
     deer_hahn,
     deer_hahn_rabi,
+    rqs,
     scc_snr_check,
     simple_correlation_test,
     T2_correlation,
+    spin_echo_tone,
     two_block_hahn_spatial_correlation,
     spin_echo,
     two_block_hahn_correlation,
@@ -71,6 +73,8 @@ from majorroutines.widefield import (
     rqs_c13_random_x,
     rqs_multisine,
     rqs_c13_bath,
+    xy_tone,
+    pi_pair_check
 )
 
 # from slmsuite import optimize_slm_calibration
@@ -875,11 +879,11 @@ def do_dm_xy_iq_lockin(nv_list):
         )
 
 def do_calibrate_iq_delay(nv_list):
-    min_tau = 20
+    min_tau = 20 
     max_tau = 292
     num_steps = 18
     num_reps = 10
-    num_runs = 100
+    num_runs = 50
     uwave_ind_list = [1]
     taus = np.linspace(min_tau, max_tau, num_steps)
     calibrate_iq_delay.main(
@@ -888,8 +892,8 @@ def do_calibrate_iq_delay(nv_list):
 
 
 def do_resonance(nv_list):
-    freq_center = 2.87
-    freq_range = 0.20
+    freq_center = 2.7924 #2.87
+    freq_range = 0.05 #0.20
     num_steps = 41
     num_reps = 3
     num_runs = 500
@@ -898,7 +902,7 @@ def do_resonance(nv_list):
     # Remove duplicates and sort
     freqs = sorted(set(freqs))
     num_steps = len(freqs)
-    for _ in range(2):
+    for _ in range(1):
         resonance.main(
             nv_list,
             num_steps,
@@ -1065,13 +1069,13 @@ def do_rqs_multisine(nv_list):
     for _ in range(2):
         rqs_multisine.main(
             nv_list=nv_list,
-            duration_us=8.0,
+            duration_us=60.0,
             n_settings=96,
             bank_size=8192,
             seed=37,
             coupling_hz=2800.0,
             uwave_ind_list=(1,),
-            num_reps=6,
+            num_reps=4,
             num_runs=500,
             phase_reference_confirmed=True,
         )
@@ -1092,10 +1096,10 @@ def do_rqs_c13_bath(nv_list):
     
 def do_rabi(nv_list):
     min_tau = 16
-    max_tau = 480 + min_tau
+    max_tau = 720 + min_tau
     num_steps = 31
     num_reps = 10
-    num_runs = 100
+    num_runs = 30 #100
     uwave_ind_list = [1]
     for _ in range(3):
         rabi.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, uwave_ind_list)
@@ -1106,12 +1110,12 @@ def do_rabi_iq_amplitude(nv_list):
         nv_list=nv_list,
         num_steps=24,
         num_reps=10,
-        num_runs=100,
-        pulse_duration_ns=96,
+        num_runs=30,
+        pulse_duration_ns=160,
         uwave_ind_list=(1,),
         min_amp_v=0.0,
         max_amp_v=0.5,
-        phase_deg=0,
+        phase_deg=90,
     )
 
 def do_iq_phase_rabi(nv_list):
@@ -1155,47 +1159,47 @@ def do_ac_stark(nv_list):
     )
 
 
-def do_spin_echo(nv_list):
-    # revival_period = int(51.5e3 / 2) ### ~37.0 G
-    # revival_period = int(38.5e3 / 2)### 49.68 G
-    # revival_period = int(28.6e3 / 2) ### 65.14G
-    # revival_period = int(29.90e3 / 2) ### 62.14G
-    # revival_period = int(31.2e3 / 2) ### 59.69G
-    # revival_period = int(35.66e3 / 2)  # ~52.39 G
-    # revival_period = int(55.77e3 / 2)  # ~33.39 G
-    revival_period = int(59.38e3 / 2)  # ~31.46 G
-    min_tau = 200
-    taus = []
-    revival_width = 6e3
-    decay = np.linspace(min_tau, min_tau + revival_width, 6)
-    taus.extend(decay.tolist())
-    gap = np.linspace(min_tau + revival_width, revival_period - revival_width, 8)
-    taus.extend(gap[1:-1].tolist())
-    first_revival = np.linspace(
-        revival_period - revival_width, revival_period + revival_width, 65
-    )
-    taus.extend(first_revival.tolist())
-    gap = np.linspace(
-        revival_period + revival_width, 2 * revival_period - revival_width, 8
-    )
-    taus.extend(gap[1:-1].tolist())
-    second_revival = np.linspace(
-        2 * revival_period - revival_width, 2 * revival_period + revival_width, 11
-    )
-    taus.extend(second_revival.tolist())
-    taus = [round(el / 4) * 4 for el in taus]
+# def do_spin_echo(nv_list):
+#     # revival_period = int(51.5e3 / 2) ### ~37.0 G
+#     # revival_period = int(38.5e3 / 2)### 49.68 G
+#     # revival_period = int(28.6e3 / 2) ### 65.14G
+#     # revival_period = int(29.90e3 / 2) ### 62.14G
+#     # revival_period = int(31.2e3 / 2) ### 59.69G
+#     # revival_period = int(35.66e3 / 2)  # ~52.39 G
+#     # revival_period = int(55.77e3 / 2)  # ~33.39 G
+#     revival_period = int(59.38e3 / 2)  # ~31.46 G
+#     min_tau = 200
+#     taus = []
+#     revival_width = 6e3
+#     decay = np.linspace(min_tau, min_tau + revival_width, 6)
+#     taus.extend(decay.tolist())
+#     gap = np.linspace(min_tau + revival_width, revival_period - revival_width, 8)
+#     taus.extend(gap[1:-1].tolist())
+#     first_revival = np.linspace(
+#         revival_period - revival_width, revival_period + revival_width, 65
+#     )
+#     taus.extend(first_revival.tolist())
+#     gap = np.linspace(
+#         revival_period + revival_width, 2 * revival_period - revival_width, 8
+#     )
+#     taus.extend(gap[1:-1].tolist())
+#     second_revival = np.linspace(
+#         2 * revival_period - revival_width, 2 * revival_period + revival_width, 11
+#     )
+#     taus.extend(second_revival.tolist())
+#     taus = [round(el / 4) * 4 for el in taus]
 
-    # Remove duplicates and sort
-    taus = sorted(set(taus))
+#     # Remove duplicates and sort
+#     taus = sorted(set(taus))
 
-    # Experiment settings
-    num_steps = len(taus)
-    num_reps = 3
-    num_runs = 600
+#     # Experiment settings
+#     num_steps = len(taus)
+#     num_reps = 3
+#     num_runs = 600
     
-    for _ in range(3):
-        do_widefield_image_sample(nv_sig, 50)
-        spin_echo.main(nv_list, num_steps, num_reps, num_runs, taus=taus)
+#     for _ in range(3):
+#         do_widefield_image_sample(nv_sig, 50)
+#         spin_echo.main(nv_list, num_steps, num_reps, num_runs, taus=taus)
 
 
 def do_two_block_hahn_correlation(nv_list):
@@ -1225,36 +1229,62 @@ def do_two_block_hahn_correlation_dm(nv_list):
     # Slow band: waits dominate
     # two_block_hahn_correlation.main(nv_list, len(lags_C), num_reps, num_runs=30,  tau=tau, lag_taus=lags_C)
 
-def do_spin_echo_1(nv_lis):
-    min_tau = 200  # ns
-    # max_tau = 20e3  # fallback
-    revival_period = int(15e3)
-    # revival_period = int(13e3)
+# def do_spin_echo_1(nv_lis):
+#     min_tau = 200  # ns
+#     # max_tau = 20e3  # fallback
+#     revival_period = int(15e3)
+#     # revival_period = int(13e3)
+#     taus = []
+#     revival_width = 5e3
+#     decay = np.linspace(min_tau, min_tau + revival_width, 6)
+#     taus.extend(decay.tolist())
+#     gap = np.linspace(min_tau + revival_width, revival_period - revival_width, 6)
+#     taus.extend(gap[1:-1].tolist())
+#     first_revival = np.linspace(
+#         revival_period - revival_width, revival_period + revival_width, 61
+#     )
+#     taus.extend(first_revival.tolist())
+#     # Round to clock-cycle-compatible units
+#     taus = [round(el / 4) * 4 for el in taus]
+#     # Remove duplicates and sort
+#     taus = sorted(set(taus))
+#     num_steps = len(taus)
+#     num_reps = 3
+#     num_runs = 600
+
+#     print(
+#         f"[Spin Echo] Running with {num_steps} τ values, revival_period={revival_period}"
+#     )
+
+#     for _ in range(1):
+#         spin_echo.main(nv_list, num_steps, num_reps, num_runs, taus=taus)
+
+def do_spin_echo(nv_list):
+    revival_period = int(59.38e3 / 2)  # ~31.46 G
+    min_tau = 200
     taus = []
-    revival_width = 5e3
+    revival_width = 6e3
     decay = np.linspace(min_tau, min_tau + revival_width, 6)
     taus.extend(decay.tolist())
-    gap = np.linspace(min_tau + revival_width, revival_period - revival_width, 6)
+    gap = np.linspace(min_tau + revival_width, revival_period - revival_width, 8)
     taus.extend(gap[1:-1].tolist())
-    first_revival = np.linspace(
-        revival_period - revival_width, revival_period + revival_width, 61
-    )
+    first_revival = np.linspace(revival_period - revival_width, revival_period + revival_width, 65)
     taus.extend(first_revival.tolist())
-    # Round to clock-cycle-compatible units
-    taus = [round(el / 4) * 4 for el in taus]
-    # Remove duplicates and sort
-    taus = sorted(set(taus))
+    gap = np.linspace(revival_period + revival_width, 2 * revival_period - revival_width, 8)
+    taus.extend(gap[1:-1].tolist())
+    second_revival = np.linspace(2 * revival_period - revival_width, 2 * revival_period + revival_width, 11)
+    taus.extend(second_revival.tolist())
+    taus = sorted(set(round(el / 4) * 4 for el in taus))
+
     num_steps = len(taus)
     num_reps = 3
-    num_runs = 600
-
-    print(
-        f"[Spin Echo] Running with {num_steps} τ values, revival_period={revival_period}"
-    )
-
-    for _ in range(1):
-        spin_echo.main(nv_list, num_steps, num_reps, num_runs, taus=taus)
-
+    num_runs = 1#100  # ~2.3 min per run -> ~3.8 h per part
+    for part in range(1):  # three files, ~11.5 h in total
+        try:
+            do_widefield_image_sample(nv_sig, 50)
+            spin_echo.main(nv_list, num_steps, num_reps, num_runs, taus=taus)
+        except Exception as exc:
+            print(f"Part {part + 1} failed ({exc}); continuing with the next")
 
 def do_ramsey(nv_list):
     min_tau = 100
@@ -1262,8 +1292,7 @@ def do_ramsey(nv_list):
     detuning = 3
     num_steps = 101
     num_reps = 3
-    num_runs = 1600
-    # num_runs = 2
+    num_runs = 100
     ramsey.main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, detuning)
 
 
@@ -1388,6 +1417,10 @@ def do_xy(nv_list, xy_seq="xy8-1", min_tau_ns=200, hahn_max_tau_ns=1_000_000, n_
     do_widefield_image_sample(nv_sig, 50)
     xy.main(nv_list, len(taus), num_reps, num_runs, taus, uwave_ind_list, xy_seq)
 
+
+def do_xy4_no_tone(nv_list): 
+    taus = list(range(500, 10001, 200)) # ns; tau = 2500 is the XY4 tone run’s 5 us pulse spacing 
+    xy.main(nv_list, len(taus), 10, 30, taus, [1], "xy4-3")
 
 def do_xy_uniform_revival_scan(nv_list, xy_seq="xy8-1"):
     min_tau = 1e3
@@ -1650,10 +1683,10 @@ def do_opx_constant_ac():
     # print((stop - start) / num_reps)
 
     # Microwave test
-    sig_gen = cxn.sig_gen_STAN_sg394_0
-    freq = 1.0  #GHZ
-    amp = 10 #dBm
-    chan = 9
+    sig_gen = cxn.sig_gen_STAN_sg394_1
+    freq = 2.795  #GHZ
+    amp = 0  #dBm
+    chan = 10
     sig_gen.set_amp(amp)  
     sig_gen.set_freq(freq)
     sig_gen.uwave_on()
@@ -1665,13 +1698,13 @@ def do_opx_constant_ac():
     # opx.stream_load("camera_test.py", seq_args_string)
     # opx.stream_start()
 
-    # Yellow
-    opx.constant_ac(
-        [],  # Digital channels
-        [7],  # Analog channels
-        [0.45],  # Analog voltages
-        [0],  # Analog frequencies
-    )
+    # # Yellow
+    # opx.constant_ac(
+    #     [],  # Digital channels
+    #     [7],  # Analog channels
+    #     [0.45],  # Analog voltages
+    #     [0],  # Analog frequencies
+    # )
     # opx.constant_ac([4])  # Just laser
     # Red
     # freqs = [65, 75, 85]
@@ -1748,7 +1781,8 @@ def do_opx_constant_ac():
     #     [99, 99, 67, 67, 0],  # Analog frequencies
     # )
     input("Press enter to stop...")
-    # sig_gen.uwave_off()
+    cxn.QM_opx.halt()
+    sig_gen.uwave_off()
 
 def do_green_red_triplet_time_mux():
     cxn = common.labrad_connect()
@@ -1879,6 +1913,21 @@ def generate_equilateral_triangle_around_center(center=(0, 0), r=2.0):
     return points
 
 
+def do_test_ao1(freq_mhz=0.1, amp_v=0.4):
+    cxn = common.labrad_connect()
+    opx = cxn.QM_opx
+    opx.constant_ac([], [1], [amp_v], [freq_mhz]) # 100 kHz tone on analog 1
+    input("Press enter to stop...")
+    opx.halt()
+
+def do_test_rqs_tones(tones=((60e3, 0.1, 0.0), (100e3, 0.1, 0.0), (140e3, 0.1, 0.0))):
+    cxn = common.labrad_connect()
+    pulse_gen = cxn.QM_opx
+    seq_args_string = tb.encode_seq_args([[list(tone) for tone in tones]])
+    pulse_gen.stream_immediate("rqs_tone_test.py", seq_args_string, -1)
+    input("Press enter to stop...")
+    pulse_gen.halt()
+
 def scan_equilateral_triangle(nv_sig, center_coord=(0, 0), radius=0.2):
     triangle_coords = generate_equilateral_triangle_around_center(
         center_coord, r=radius
@@ -1892,6 +1941,85 @@ def scan_equilateral_triangle(nv_sig, center_coord=(0, 0), radius=0.2):
         # print(f"Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         do_scanning_image_sample(nv_sig)
 
+def do_spin_echo_tone(nv_list):
+    amps_v = np.linspace(0, 0.5, 21).tolist()
+    spin_echo_tone.main(nv_list, num_reps=10, num_runs=100, amps_v=amps_v,
+                        freq_hz=16.7e3, attenuation_db=20)
+def do_xy_tone(nv_list):
+    amps_v = np.linspace(0, 0.5, 21).tolist()
+    xy_tone.main(
+        nv_list,
+        num_reps=10,
+        num_runs=30,
+        amps_v=amps_v,
+        freq_hz=16.7e3,
+        n_pi=2,
+        attenuation_db=20,
+    )
+
+def do_spin_echo_tone_iq(nv_list):
+    amps_v = np.linspace(0, 0.5, 21).tolist()
+    for pulse_phases in ((0, 0, 0), (0, 90, 0), (0, 90, 90)):  # x,x,x / x,y,x / x,y,y, all with IQ on
+        spin_echo_tone.main(nv_list, num_reps=10, num_runs=60, amps_v=amps_v,
+                            freq_hz=16.7e3, attenuation_db=20, pulse_phases_deg=pulse_phases)
+        
+def do_check_camera_temp(tolerance_c=1.0, timeout_min=15):
+    #"""Wait until the camera reaches its target temperature; stop the script if it doesn't."""
+    import time
+
+    target_c = widefield._get_camera_temp()  # the same config value the camera server uses
+    cam =tb.get_server_camera()
+    for _ in range(int(timeout_min * 6)):
+        t = cam.get_detector_temp()
+        print(f"Camera detector temperature: {t:.1f} C (target {target_c:g} C)")
+        if abs(t - target_c) <= tolerance_c:
+            return t
+        time.sleep(10)
+    raise RuntimeError(f"Camera did not reach {target_c:g} C within {timeout_min} min")
+
+def do_xy4_tone_series(nv_list):
+    num_runs = 70
+    # (tone frequency, pi pulses, largest amplitude in V); 16.7 kHz senses for 120 us, the others for 60 us
+    settings = [(16.7e3, 4, 0.25), (100e3, 12, 0.5), (66.7e3, 8, 0.5), (133.3e3, 16, 0.5)]
+    for freq_hz, n_pi, max_amp in settings:
+        amps_v = np.linspace(0, max_amp, 21).tolist()
+        try:
+            xy_tone.main(nv_list, num_reps=10, num_runs=num_runs, amps_v=amps_v,
+                         freq_hz=freq_hz, n_pi=n_pi, attenuation_db=20)
+        except Exception as exc:
+            print(f"{freq_hz / 1e3:g} kHz failed ({exc}); continuing with the next frequency")
+    
+def do_rqs_16k7(nv_list, test=False, quick=True):
+    import pandas as pd
+
+    bundle_dir = r"C:\Users\matth\GitHub\dioptric\RQS_toolkit\RQS_toolkit\outputs\rqs_16k7_phase_locked"
+
+    if test:  # the first 20 rows at 0.04 V, a few minutes
+        rqs.main(nv_list, 1, 1, bundle_dir, rows=list(range(20)), phase_cycled=True,
+                 tones=[(16.7e3, 0.04, 0.0)], phase_locked=True)
+        return
+
+    acquisition = pd.read_csv(rqs.get_timing_dir(bundle_dir) / "opx_ready_acquisition.csv")
+    n_rows = len(acquisition)
+    if quick:  # 0 V, X rows only: at zero field, these are the rows that show the echo (~10 min)
+        x_rows = np.flatnonzero(acquisition["row_id"].astype(str).str.startswith("X").to_numpy())
+        blocks = np.array_split(x_rows, 2)
+        amplitudes = (0.0,)
+    else:      # the plan lists Y rows first, then X rows: shuffle so every block mixes both bases
+        order = np.random.default_rng(1).permutation(n_rows)
+        blocks = np.array_split(order, max(1, round(n_rows / 380)))
+        amplitudes = (0.0, 0.04)
+    for amp_v in amplitudes:
+        tones = [(16.7e3, amp_v, 0.0)] if amp_v > 0 else None
+        for k, block in enumerate(blocks):
+            print(f"RQS 16.7 kHz, {amp_v:.2f} V: block {k + 1} of {len(blocks)}")
+            rqs.main(nv_list, 1, 1, bundle_dir, rows=block.tolist(), phase_cycled=True,
+                     tones=tones, phase_locked=True)
+
+def do_pi_pair_check(nv_list):
+    gaps = (100, 1000, 10000, 30000)  # ns between the two pi pulses
+    pi_pair_check.main(nv_list, num_reps=10, num_runs=20, gaps_ns=gaps, iq_phase=0)     # IQ, as RQS and XY
+    pi_pair_check.main(nv_list, num_reps=10, num_runs=20, gaps_ns=gaps, iq_phase=None)  # CW, for comparison
 
 def piezo_voltage_to_pixel_calibration():
     cal_voltage_coords = np.array(
@@ -2122,7 +2250,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    nv_sig.expected_counts = 810.0
+    nv_sig.expected_counts = 870.0#810.0
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:100]
     print(f"length of NVs list:{len(nv_list)}")
@@ -2158,15 +2286,24 @@ if __name__ == "__main__":
         #     scc_amp_list,
         # )
 
-        do_compensate_for_drift(nv_sig)
-        
+        # do_xy4_tone_series(nv_list)
         # do_red_calibration_image(
         #     nv_sig, 
         #     green_coords_list,
         #     force_laser_key=VirtualLaserKey.IMAGING,
         # )
+        
+        
+        do_compensate_for_drift(nv_sig)
 
-        do_widefield_image_sample(nv_sig, 50)
+        # try:
+        #     # do_rqs_16k7(nv_list)
+        # #     do_pi_pair_check(nv_list)
+        # except BaseException:
+        #     import traceback
+        #     traceback.print_exc()
+        #     raise
+        # do_widefield_image_sample(nv_sig, 50)  #yellow
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list: 
@@ -2208,11 +2345,11 @@ if __name__ == "__main__":
         #         print(f"Scanning SAMPLE: {sample_coord}, estimated Z: {z:.3f}")
         #         do_scanning_image_sample(nv_sig)
 
-        # do_opx_constant_ac()
+        # do_opx_constant_ac()   #sending a constant ttl signal to the switch
         # do_opx_square_wave()
-        
+        # do_test_ao1()           #testing external continues signal thorgh OPX channel 1
         # do_green_red_triplet_time_mux()
-        
+        # do_test_rqs_tones([(60e3, 0.1, 0.0), (100e3, 0.15, 0.0), (140e3, 0.2, 0.0)])
         # do_optimize_pixel(nv_sig)
         # do_optimize_green(nv_sig)
         # repr_nv_sig = widefield.get_repr_nv_sig(nv_list)
@@ -2227,6 +2364,7 @@ if __name__ == "__main__":
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
         # do_charge_state_histograms(nv_list)
+        # do_spin_echo_tone_iq(nv_list)
         # do_charge_state_conditional_init(nv_list)
         # do_adaptive_charge_initialization(nv_list)
         # do_charge_state_particle_memory(nv_list)
@@ -2284,15 +2422,28 @@ if __name__ == "__main__":
         # do_rqs_c13(nv_list)
         # do_rqs_c13_random_x(nv_list)
         # do_rqs_c13_bath(nv_list)
-        do_rqs_multisine(nv_list)
+        # do_rqs_multisine(nv_list)
         
         # do_calibrate_iq_delay(nv_list)
         # do_power_rabi(nv_list)
         # do_rabi_iq_amplitude(nv_list)
         # do_resonance(nv_list)
         # do_optimize_scc_amp(nv_list)
-        # do_rabi(nv_list)
+        do_rabi(nv_list)
+        # do_xy_tone(nv_list)
         
+        # do_xy4_no_tone(nv_list)
+        # do_spin_echo_tone(nv_list)
+
+        # do_xy4_tone_series(nv_list)
+        
+        # do_check_camera_temp(tolerance_c=1.0, timeout_min=5)
+        # for experiment in (do_xy_tone, do_spin_echo_tone):
+        #     try:
+        #         experiment(nv_list)
+        #     except Exception as exc:
+        #         print(f"{experiment.__name__} failed: {exc}")
+                
         # do_iq_phase_rabi(nv_list)
         # do_resonance_zoom(nv_list)
         # do_spin_echo(nv_list)

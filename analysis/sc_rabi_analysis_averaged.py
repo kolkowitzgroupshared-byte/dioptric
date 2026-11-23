@@ -10,9 +10,12 @@ kpl.init_kplotlib()
 # file_stem = "2026_10_15-21_23_07-johnson-nv0_2026_10_02"
 # file_stem = "2026_10_17-16_42_02-johnson-nv0_2026_10_02" # iq
 # file_stem = "2026_10_19-13_02_37-johnson-nv0_2026_10_02" # no iq
-file_stem = "2026_10_22-17_43_47-johnson-nv0_2026_10_02" # no iq
+# file_stem = "2026_10_22-17_43_47-johnson-nv0_2026_10_02" # no iq
+# file_stem = "2026_11_10-14_38_47-johnson-nv0_2026_10_02" # resonator
+file_stem = "2026_11_12-20_18_16-johnson-nv0_2026_10_02" #loop
+# file_stem = "2026_11_15-16_43_52-johnson-nv0_2026_10_02" #resonator
 # o2_inds = [
-#     1, 2, 3, 7, 8, 9, 10, 11, 13, 14, 15,
+#     1, 2, 3,4,5, 7, 8, 9, 10, 11,12, 13, 14, 15,16,1
 #     20, 21, 23, 26, 27, 28, 29, 30, 31, 32, 33, 34,
 #     37, 38, 41, 44, 45, 46, 47, 50, 51, 53, 54,
 #     57, 58, 59, 60, 61, 62, 63, 64, 65, 66,
@@ -20,13 +23,20 @@ file_stem = "2026_10_22-17_43_47-johnson-nv0_2026_10_02" # no iq
 #     90, 92, 95, 96, 98, 101, 102, 105, 106, 107,
 #     108, 111, 112, 113, 114, 115, 117
 # ]
-o2_inds = [0, 4, 6, 9, 11, 12, 14, 15, 17, 18, 19, 21, 23, 27, 28,31, 32, 35, 36, 40, 42, 44, 46, 47, 49, 54, 56, 59, 60, 61, 62, 63, 66, 68, 71, 73, 75, 79, 81, 83, 85, 92, 93, 98, 100, 102, 103, 107, 113, 114, 116, 117, 118, 121, 123,124, 125, 131, 140, 141, 143, 145, 150, 152, 156, 158, 159, 161, 162, 166, 169, 173, 176, 180, 182, 185, 189, 194, 195, 200, 201, 202, 203, 204, 205, 208, 209, 212, 213, 214, 216, 218, 220, 225, 232, 235, 237, 240, 243, 246, 247, 250, 253, 254, 255, 258, 259, 260, 264, 265, 266, 267,269, 273, 274, 278, 279, 280, 281, 283, 284, 285, 288, 291, 292, 302, 303, 306, 310, 314, 318, 319, 320, 322, 323, 324, 328, 329, 330, 331, 333, 340, 341, 342, 343, 344, 348, 354, 356, 359, 360, 361, 365, 366, 367, 377, 385, 390, 391, 392, 394, 395, 396, 399, 400, 402, 403, 404, 406,408, 411, 412, 418, 421, 424, 426, 427, 438, 441, 442, 443, 444, 446, 448, 455, 456, 460, 461, 463, 464, 466, 468, 469, 470, 471, 480, 483, 485, 489, 490, 494, 495, 496, 497, 502, 503, 504, 505, 506, 507, 511, 517, 518, 520, 522, 523, 526, 531, 532, 533, 534, 537, 543, 544]
+# o2_inds = [0, 4, 6, 9, 11, 12, 14, 15, 17, 18, 19, 21, 23, 27, 28,31, 32, 35, 36, 40, 42, 44, 46, 47, 49, 54, 56, 59, 60, 61, 62, 63, 66, 68, 71, 73, 75, 79, 81, 83, 85, 92, 93, 98, 100, 102, 103, 107, 113, 114, 116, 117, 118, 121, 123,124, 125, 131, 140, 141, 143, 145, 150, 152, 156, 158, 159, 161, 162, 166, 169, 173, 176, 180, 182, 185, 189, 194, 195, 200, 201, 202, 203, 204, 205, 208, 209, 212, 213, 214, 216, 218, 220, 225, 232, 235, 237, 240, 243, 246, 247, 250, 253, 254, 255, 258, 259, 260, 264, 265, 266, 267,269, 273, 274, 278, 279, 280, 281, 283, 284, 285, 288, 291, 292, 302, 303, 306, 310, 314, 318, 319, 320, 322, 323, 324, 328, 329, 330, 331, 333, 340, 341, 342, 343, 344, 348, 354, 356, 359, 360, 361, 365, 366, 367, 377, 385, 390, 391, 392, 394, 395, 396, 399, 400, 402, 403, 404, 406,408, 411, 412, 418, 421, 424, 426, 427, 438, 441, 442, 443, 444, 446, 448, 455, 456, 460, 461, 463, 464, 466, 468, 469, 470, 471, 480, 483, 485, 489, 490, 494, 495, 496, 497, 502, 503, 504, 505, 506, 507, 511, 517, 518, 520, 522, 523, 526, 531, 532, 533, 534, 537, 543, 544]
+
+
 data = dm.get_raw_data(
     file_stem=file_stem,
     load_npz=True,
 )
 
 nv_list = data["nv_list"]
+exclude_inds = {0 ,6}
+o2_inds = [
+    ind for ind in range(len(nv_list))
+    if ind not in exclude_inds]
+
 taus = np.asarray(data["taus"])
 counts = np.asarray(data["counts"])
 
@@ -103,7 +113,11 @@ q25, q75 = np.nanpercentile(
 )
 
 median_period = 1 / abs(median_popt[1])
-median_pi = median_period / 2
+
+dense_taus = np.linspace(taus.min(), taus.max(), 1000)
+
+first = dense_taus < 0.75 * median_period
+median_pi = dense_taus[first][np.argmax(median_fit_fn(dense_taus[first]))]
 
 
 # ==================================================
@@ -126,7 +140,8 @@ mean_fit_fn = mean_fit_fns[0]
 mean_popt = mean_popts[0]
 
 mean_period = 1 / abs(mean_popt[1])
-mean_pi = mean_period / 2
+first = dense_taus < 0.75 * mean_period
+mean_pi = dense_taus[first][np.argmax(mean_fit_fn(dense_taus[first]))]
 
 
 # ==================================================
@@ -198,8 +213,15 @@ ax.set_ylabel(
     "Normalized signal"
 )
 
+try:
+    sig_gens = data["config"]["Microwaves"]["VirtualSigGens"]
+    sig_gen = sig_gens.get("1", sig_gens.get(1))
+    freq_text = f"{float(sig_gen['frequency']):.5f} GHz"
+except (KeyError, TypeError, AttributeError):
+    freq_text = "frequency not in file"
+
 ax.set_title(
-    "O2 [11-1] Rabi — 2.7924 GHz"
+    f"O2 [11-1] Rabi — {freq_text}"
 )
 
 ax.legend()
@@ -216,5 +238,30 @@ print(
     f"Median: TR={median_period:.2f} ns, "
     f"pi={median_pi:.2f} ns"
 )
+
+#==================================================Save the figure and the results==================================================
+timestamp = dm.get_time_stamp()
+file_path = dm.get_file_path("sc_rabi_analysis_averaged.py", timestamp, f"{file_stem}-rabi-average")
+dm.save_figure(fig, file_path)
+
+as_list = lambda popt: None if popt is None else [float(x) for x in popt]
+dm.save_raw_data(
+{
+    "source_file": file_stem,
+    "nv_indices": [int(ind) for ind in o2_inds],
+    "taus_ns": taus.tolist(),
+    "mean_trace": mean_trace.tolist(),
+    "mean_sem": mean_sem.tolist(),
+    "median_trace": median_trace.tolist(),
+    "mean_period_ns": float(mean_period),
+    "mean_pi_ns": float(mean_pi),
+    "median_period_ns": float(median_period),
+    "median_pi_ns": float(median_pi),
+    "mean_fit_params": as_list(mean_popt),
+    "median_fit_params": as_list(median_popt),
+},
+file_path,
+)
+print(f"Saved to {file_path}")
 
 plt.show(block=True)

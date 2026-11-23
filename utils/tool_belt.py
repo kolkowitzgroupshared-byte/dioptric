@@ -716,7 +716,9 @@ def get_physical_laser_name(laser_key):
 @cache
 def get_uwave_dict(uwave_ind):
     config = common.get_config_dict()
-    return config["Microwaves"][f"sig_gen_{uwave_ind}"]
+    # return config["Microwaves"][f"sig_gen_{uwave_ind}"]
+    sig_gens = config["Microwaves"]["VirtualSigGens"]
+    return sig_gens[uwave_ind] if uwave_ind in sig_gens else sig_gens[str(uwave_ind)]
 
 
 # Server getters

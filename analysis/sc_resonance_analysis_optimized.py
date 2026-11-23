@@ -55,12 +55,12 @@ FIT_VERBOSE = 5
 FIT_CACHE = True
 
 # Bump this whenever the fitter changes so stale cached fits are not reused.
-FIT_CACHE_VERSION = "multistart_free_voigt_v1"
+FIT_CACHE_VERSION = "multistart_free_voigt_v2_minwidth4"
 
 # Conservative multi-start settings. Frequencies below are specified in MHz
 # and automatically converted when the dataset frequency axis is in GHz.
-FIT_WIDTH_STARTS_MHZ = (2.0, 5.0, 10.0)
-FIT_MIN_WIDTH_MHZ = 0.2
+FIT_WIDTH_STARTS_MHZ = (5.0, 8.0, 12.0)
+FIT_MIN_WIDTH_MHZ = 4.0
 FIT_MAX_WIDTH_MHZ = 30.0
 FIT_SMOOTH_POINTS = 3
 
@@ -95,14 +95,16 @@ FIT_GRID_COLS = 3
 # ---------------------------------------------------------------------------
 # Peaks identified from the SNR overview (GHz).
 RESONANCE_TARGETS_GHZ = (
-    2.7539,
-    2.7773,
-    2.8212,
-    2.8421,
-    2.9195,
-    2.9370,
-    2.9758,
-    2.9906,
+    2.79236,
+    2.95223,
+    # 2.7539,
+    # 2.7773,
+    # 2.8212,
+    # 2.8421,
+    # 2.9195,
+    # 2.9370,
+    # 2.9758,
+    # 2.9906,
 )
 
 # Main knob to edit:
@@ -2072,6 +2074,11 @@ if __name__ == "__main__":
     ]
     # This line is missing the quotes and should be added to the file_ids list.
     file_ids = ["2026_10_15-07_28_21-johnson-nv0_2026_10_02"]
+    
+    file_ids = ["2026_11_10-08_28_26-johnson-nv0_2026_10_02"]
+    
+    file_ids = ["2026_11_12-15_45_07-johnson-nv0_2026_10_02"]
+
 
     # Run analysis using the final active file_ids assignment above.
     analyze(file_ids)

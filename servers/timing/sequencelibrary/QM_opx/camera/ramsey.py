@@ -15,8 +15,13 @@ from servers.timing.sequencelibrary.QM_opx.camera import base_scc_sequence
 def get_seq(base_scc_seq_args, step_vals, num_reps=1):
     buffer = seq_utils.get_widefield_operation_buffer()
     uwave_ind_list = base_scc_seq_args[-1]
-    macro_pi_on_2_pulse_duration = seq_utils.get_macro_pi_on_2_pulse_duration(
-        uwave_ind_list
+    # macro_pi_on_2_pulse_duration = seq_utils.get_macro_pi_on_2_pulse_duration(
+        # uwave_ind_list
+    # )
+    # from the config (in clock cycles). With one generator this is simply its pi/2 length.
+    sig_gens = common.get_config_module().config["Microwaves"]["VirtualSigGens"]
+    macro_pi_on_2_pulse_duration = max(
+        seq_utils.convert_ns_to_cc(sig_gens[ind]["pi_on_2_pulse"]) for ind in uwave_ind_list
     )
 
     # Protect against negative wait values

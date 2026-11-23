@@ -9,6 +9,8 @@ Created on Spring, 2024
 
 import os
 import sys
+import ctypes
+import time 
 import warnings
 from datetime import datetime
 from pathlib import Path
@@ -31,7 +33,7 @@ from slmsuite.hardware.slms.thorlabs import ThorSLM
 from slmsuite.holography import analysis, toolbox
 from slmsuite.holography.algorithms import SpotHologram
 
-from slmsuite.nv_coords_weights_reorder_reassign import curve_extreme_weights_simple
+# from slmsuite.nv_coords_weights_reorder_reassign import curve_extreme_weights_simple
 
 warnings.filterwarnings("ignore")
 mpl.rc("image", cmap="Blues")
@@ -454,6 +456,38 @@ class DummyCamera:
         """
         self.closed = True
         print(f"DummyCamera {self.name} closed.")
+        
+def hold_pattern():
+#"""Keep the pattern on the SLM until "close" is typed.
+
+#The Thorlabs display window only repaints while this thread processes its Windows
+#messages. A plain input() blocks them, so the SLM can keep showing the window's black
+#background instead of the pattern. This loop processes the messages while it waits.
+#"""
+    import msvcrt
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32
+    msg = wintypes.MSG()
+    typed = ""
+    print("Pattern displayed and held. Type close and press Enter to close.", flush=True)
+    while True:
+        while user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 1):  # 1 = PM_REMOVE
+            user32.TranslateMessage(ctypes.byref(msg))
+            user32.DispatchMessageW(ctypes.byref(msg))
+        while msvcrt.kbhit():
+            char = msvcrt.getwche()
+            if char in ("\r", "\n"):
+                print(flush=True)
+                if typed.strip().lower() == "close":
+                    return
+                typed = ""
+                print("Still holding. Type close and press Enter to close.", flush=True)
+            elif char == "\b":
+                typed = typed[:-1]
+            else:
+                typed += char
+        time.sleep(0.02)
 
 try:
     slm = ThorSLM()
@@ -482,8 +516,10 @@ try:
     # write_pre_computed_circles()
     # smiley()
     # cam_plot()
-    
-    input("Pattern displayed and held. Press Enter to close...")
+    hold_pattern()  # keeps the window repainting; type close + Enter to release the SLM
+
+    # input("Pattern displayed and held. Press Enter to close...")
+
 finally:
     print("Closing")
 

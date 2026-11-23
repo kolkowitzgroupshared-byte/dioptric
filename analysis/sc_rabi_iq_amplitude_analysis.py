@@ -249,7 +249,8 @@ def main(file_stem, data_dir=None, outdir=None, nv_indices=None):
 
 if __name__ == "__main__":
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--file",required=True,help="Run stem or full TXT path")
+    parser.add_argument("--file", default="2026_11_16-12_24_53-johnson-nv0_2026_10_02",
+                        help="Run stem or full TXT path")
     parser.add_argument("--data-dir",default=None)
     parser.add_argument("--outdir",default=None)
     parser.add_argument("--nv-indices",nargs="+",type=int,default=None,

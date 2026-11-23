@@ -25,9 +25,10 @@ def get_seq(base_scc_seq_args, step_vals, xy_seq, num_reps=1):
     buffer = seq_utils.get_widefield_operation_buffer()
     uwave_ind_list = base_scc_seq_args[-1]
 
-    # Prefer using your library helper (not hard-coded 88 ns)
-    t_pi_cc  = seq_utils.get_macro_pi_pulse_duration(uwave_ind_list[0])  # if available
-    t_pi2_cc = t_pi_cc // 2  # if pi/2 is exactly half; otherwise get explicitly
+    # seq_utils.get_macro_pi_pulse_duration no longer exists: take both lengths from the config
+    sig_gen = common.get_config_module().config["Microwaves"]["VirtualSigGens"][uwave_ind_list[0]]
+    t_pi_cc = seq_utils.convert_ns_to_cc(sig_gen["pi_pulse"])
+    t_pi2_cc = seq_utils.convert_ns_to_cc(sig_gen["pi_on_2_pulse"])
 
     phase_dict = {
         "hahn": [0],

@@ -32,6 +32,11 @@ def get_seq(base_scc_seq_args, gaps_cc, n_pi_list, basis_list, parity_list, num_
         seq_utils.init()
         seq_utils.macro_run_aods()
         gaps=tuple(qua.declare(int) for _ in range(limit+1))
+        # One indexed pulse loop instead of 18+ separately compiled branches.
+        # This keeps the large random-multisine bank from exploding the
+        # QOP compiler's control-flow graph.
+        gap_array=qua.declare(int,size=limit+1)
+        pulse_index=qua.declare(int)
         count=qua.declare(int)
         basis=qua.declare(int)
         even_flag=qua.declare(int)
@@ -43,12 +48,13 @@ def get_seq(base_scc_seq_args, gaps_cc, n_pi_list, basis_list, parity_list, num_
             final_basis=params[limit+2]
             is_even=params[limit+3]
             qua.align()
+            for k in range(limit+1):
+                qua.assign(gap_array[k],g[k])
             seq_utils.macro_pi_on_2_pulse(inds,phase=0)
-            qua.wait(g[0])
-            for j in range(limit):
-                with qua.if_(num>j):
-                    seq_utils.macro_pi_pulse(inds,phase=0)
-                    qua.wait(g[j+1])
+            qua.wait(gap_array[0])
+            with qua.for_(pulse_index,0,pulse_index<num,pulse_index+1):
+                seq_utils.macro_pi_pulse(inds,phase=0)
+                qua.wait(gap_array[pulse_index+1])
             with qua.if_(final_basis==0):
                 with qua.if_(is_even==1):
                     seq_utils.macro_pi_on_2_pulse(inds,phase=180)

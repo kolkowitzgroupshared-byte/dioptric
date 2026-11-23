@@ -104,13 +104,21 @@ def main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, detuning):
     seq_file = "ramsey.py"
     taus = np.linspace(min_tau, max_tau, num_steps)
 
-    uwave_ind_list = [0, 1]
-    uwave_freq_list = []
+    # #uwave_ind_list = [0,1]
+    # uwave_freq_list = []
+    # for ind in uwave_ind_list:
+    #     uwave_dict = tb.get_uwave_dict(ind)
+    #     uwave_freq = uwave_dict["frequency"]
+    #     uwave_freq -= detuning / 1000
+    #     uwave_freq_list.append(uwave_freq)
+    
+    uwave_ind_list = [1] 
+    # base_routine looks frequencies up by generator number (uwave_freq_list[uwave_ind]), 
+    # so keep one entry per generator up to the highest one used; only those in  
+    # # uwave_ind_list are driven 
+    uwave_freq_list = [tb.get_uwave_dict(ind)["frequency"] for ind in range(max(uwave_ind_list) + 1)]
     for ind in uwave_ind_list:
-        uwave_dict = tb.get_uwave_dict(ind)
-        uwave_freq = uwave_dict["frequency"]
-        uwave_freq -= detuning / 1000
-        uwave_freq_list.append(uwave_freq)
+        uwave_freq_list[ind] -= detuning / 1000
 
     ### Collect the data
 
@@ -136,13 +144,16 @@ def main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, detuning):
 
     ### Process and plot
 
-    try:
-        raw_fig = create_raw_data_figure(raw_data)
-        fit_fig = create_fit_figure(raw_data)
-    except Exception as exc:
-        print(exc)
-        raw_fig = None
-        fit_fig = None
+    # try:
+    #     raw_fig = create_raw_data_figure(raw_data)
+    #     fit_fig = create_fit_figure(raw_data)
+    # except Exception as exc:
+    #     print(exc)
+    #     raw_fig = None
+    #     fit_fig = None
+    
+    raw_fig = None
+    fit_fig = None
 
     ### Clean up and return
 
@@ -156,6 +167,10 @@ def main(nv_list, num_steps, num_reps, num_runs, min_tau, max_tau, detuning):
         "tau-units": "ns",
         "min_tau": min_tau,
         "max_tau": max_tau,
+        "detuning": detuning,
+        "detuning-units": "MHz",
+        "uwave_ind_list": uwave_ind_list,
+        "uwave_freq_list": uwave_freq_list,
     }
 
     repr_nv_sig = widefield.get_repr_nv_sig(nv_list)

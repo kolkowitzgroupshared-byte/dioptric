@@ -184,10 +184,10 @@ config |= {
             1: {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
-                "frequency": 2.7924,
-                "rabi_period": 184, ## loop iq
-                "pi_pulse": 96, ## loop iq
-                "pi_on_2_pulse": 48, ## loop iq
+                "frequency": 2.79163, #2.7924,  # 2.79151 with the resonator
+                "rabi_period": 368, #184 ## loop iq
+                "pi_pulse": 160, #96, ## loop iq
+                "pi_on_2_pulse": 80,#48, ## loop iq
                 # "rabi_period": 180, ## loop
                 # "pi_pulse": 88, ## loop
                 # "pi_on_2_pulse": 44, ## loop
@@ -1134,6 +1134,15 @@ def build_phase_sweep(min_deg=-360, max_deg=360, step_deg=9):
 
 phases = list(range(360))
 generate_iq_pulses(["pi_pulse", "pi_on_2_pulse"], phases)
+
+#region RQS test-field tones: up to 5 tones summed on analog output 1 (rqs.py sets each frequency)
+for tone_ind in range(5):
+    opx_config["elements"][f"ao_rqs_tone_{tone_ind}"] = {
+        "singleInput": {"port": ("con1", 1)},
+        "intermediate_frequency": 100e3,
+        "operations": {"cw": "ao_cw", "off": "ao_off"},
+}
+#endregion
 
 if __name__ == "__main__":
     key = "pixel_to_sample_affine_transformation_matrix"
