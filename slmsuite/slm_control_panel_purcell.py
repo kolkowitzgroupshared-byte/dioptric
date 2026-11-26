@@ -278,69 +278,29 @@ def calibration_triangle():
     save(phase, file_path, filename)
     # cam_plot()
     
-def nuvu2thorcam_calibration(coords):
-    """
-    Calibrates and transforms coordinates from the Nuvu camera's coordinate system
-    to the Thorlabs camera's coordinate system using an affine transformation.
-    """
-    # cal_coords_thorcam = np.array(
-    #     [[883.205,   640. ], [536.795,  640. ], [710., 340.]], dtype="float32"
-    # )
+# def nuvu2thorcam_slm(
+#     coords,
+#     calib_path="slmsuite/calibration/nuvu_to_thorcam_slm.npz",
+# ):
+#     data = np.load(calib_path, allow_pickle=True)
+#     M = np.asarray(data["M_nuvu_to_thorcam_slm"], dtype=np.float32)
+#     return apply_affine(M, coords)
 
-    # cal_coords_nuvu = np.array(
-    #     [[338.04, 361.354], [311.711, 11.032], [18.043, 209.58]], dtype="float32"
-    # )
+def nuvu2thorcam_slm(coords):
+    """Transform Nuvu pixels to SLM-calibrated ThorCam pixels."""
+    config = common.get_config_dict()
+    cal = config["SpatialCalibrations"]
     
-    cal_coords_thorcam = np.array(
-        [                
-            [848.56406461, 620.0],
-            [571.43593539, 620.0],
-            [710.0,        380.0],
-        ], dtype="float32"
-    )
+    src = np.asarray(cal["calibration_coords_nuvu"], dtype=np.float64)
+    dst = np.asarray(cal["calibration_coords_thorcam"], dtype=np.float64)
 
-    cal_coords_nuvu = np.array(
-        [
-            [84.57, 7.014],
-            [92.258, 353.467],
-            [337.832, 184.63],
-        ], dtype="float32"
-    )
-    # Compute the affine transformation matrix
-    M = cv2.getAffineTransform(cal_coords_nuvu, cal_coords_thorcam)
-    # Append a column of ones to the input coordinates to facilitate affine transformation
-    ones_column = np.ones((coords.shape[0], 1))
-    coords_homogeneous = np.hstack((coords, ones_column))
-    thorcam_coords = np.dot(coords_homogeneous, M.T)
+    # Fit affine transformation using all calibration points.
+    X = np.column_stack((src, np.ones(len(src))))
+    M = np.linalg.lstsq(X, dst, rcond=None)[0].T
 
-    return thorcam_coords
-
-def apply_affine(M, coords):
-    coords = np.asarray(coords, dtype=np.float32)
-
-    single_point = False
-    if coords.ndim == 1:
-        coords = coords[None, :]
-        single_point = True
-
-    ones = np.ones((coords.shape[0], 1), dtype=np.float32)
-    coords_h = np.hstack([coords, ones])
-    out = coords_h @ M.T
-
-    if single_point:
-        return out[0]
-
-    return out
-
-
-def nuvu2thorcam_slm(
-    coords,
-    calib_path="slmsuite/calibration/nuvu_to_thorcam_slm.npz",
-):
-    data = np.load(calib_path, allow_pickle=True)
-    M = np.asarray(data["M_nuvu_to_thorcam_slm"], dtype=np.float32)
-    return apply_affine(M, coords)
-
+    # Transform NV coordinates.
+    coords = np.asarray(coords, dtype=np.float64)
+    return coords @ M[:, :2].T + M[:, 2]
 
 def load_nv_coords():
     config = common.get_config_dict()
@@ -516,10 +476,9 @@ try:
     # write_pre_computed_circles()
     # smiley()
     # cam_plot()
+    
     hold_pattern()  # keeps the window repainting; type close + Enter to release the SLM
-
     # input("Pattern displayed and held. Press Enter to close...")
-
 finally:
     print("Closing")
 

@@ -4,22 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import curve_fit
 
-### green and red calibaton at RT setup 2025-09-15
-# pixel_coords_list = [[119.522, 118.997], [111.538, 95.186], [96.194, 118.343]]
-# red_coords_list = [[82.395, 81.819], [76.707, 62.056], [63.349, 80.092]]
-
-# green_coords_list =[
-#     [73.715, 115.446],
-#     [100.72, 68.894],
-#     [126.953, 127.76],
-#     ]
-# pixel_coords_list = green_coords_list
-# red_coords_list = [
-#     [47.273, 81.38],
-#     [69.645, 44.033],
-#     [90.325, 92.229],
-#     ]
-
+### green and red calibaton 
 green_coords_list =[
     [112.226, 119.47],
     [100.558, 79.848],
@@ -31,128 +16,30 @@ red_coords_list = [
     [69.613, 53.085],
     [55.07, 62.918],
     ]
-# Given pixel coordinates and corresponding red coordinates
-# pixel_coords_list = np.array(
-#     [
-#         [122.217, 28.629],
-#         [27.396, 150.264],
-#         [220.452, 192.19],
-#     ]
-# )
-# red_coords_list = np.array(
-#     [
-#         [72.293, 80.694],
-#         [82.931, 71.034],
-#         [65.743, 64.346],
-#     ]
-# )
+M = cv2.getAffineTransform(
+    np.float32(pixel_coords_list), np.float32(red_coords_list)
+)
+# New pixel coordinate for which we want to find the corresponding red coordinate
+new_pixel_coord = np.array(
+[       
+    [100.295, 100.588],
+    [112.204, 119.398],
+    [100.614, 79.875],
+    [83.01, 92.325],
+],
+    dtype=np.float32,
+)
 
-## greeen
-# pixel_coords_list = np.array([[27.805, 30.303], [138.235, 235.17], [228.671, 15.343]])
-# red_coords_list = np.array([[[29.437, 41.77], [147.414, 233.083], [224.636, 21.373]]])
+# Apply the affine transformation to the new pixel coordinate
+new_red_coord = cv2.transform(np.array([new_pixel_coord]), M)
+# Print the corresponding red coordinates
+print("[")
+for coord in new_red_coord[0]:
+    rounded_coord = [round(x, 3) for x in coord]
+    print(f"    {rounded_coord},")
+print("]")
 
-# For two points, a simpler method is necessary, but let's try using cv2.estimateAffinePartial2D
-if len(pixel_coords_list) >= 3:
-    # Use cv2.estimateAffinePartial2D to get the affine transformation matrix
-    M = cv2.getAffineTransform(
-        np.float32(pixel_coords_list), np.float32(red_coords_list)
-    )
-
-    # New pixel coordinate for which we want to find the corresponding red coordinate
-    new_pixel_coord = np.array(
-    [       
-        [100.295, 100.588],
-        [112.204, 119.398],
-        [100.614, 79.875],
-        [83.01, 92.325],
-    ],
-        dtype=np.float32,
-    )
-
-    # Apply the affine transformation to the new pixel coordinate
-    new_red_coord = cv2.transform(np.array([new_pixel_coord]), M)
-
-    # Print the corresponding red coordinates
-    print("[")
-    for coord in new_red_coord[0]:
-        rounded_coord = [round(x, 3) for x in coord]
-        print(f"    {rounded_coord},")
-    print("]")
-else:
-    # Calculate manually if only two points are available
-    # Define the simple transformation function
-    def simple_transform(pixel_point, src_points, dst_points):
-        # Calculate scaling and translation manually
-        scale_x = (dst_points[1][0] - dst_points[0][0]) / (
-            src_points[1][0] - src_points[0][0]
-        )
-        scale_y = (dst_points[1][1] - dst_points[0][1]) / (
-            src_points[1][1] - src_points[0][1]
-        )
-
-        # Calculate translation
-        translation_x = dst_points[0][0] - scale_x * src_points[0][0]
-        translation_y = dst_points[0][1] - scale_y * src_points[0][1]
-
-        # Apply transformation
-        new_x = scale_x * pixel_point[0] + translation_x
-        new_y = scale_y * pixel_point[1] + translation_y
-
-        return np.array([new_x, new_y])
-
-    # New pixel coordinates to transform
-    new_pixel_coord = np.array(
-        [
-        [100.676, 99.485],
-        [118.265, 121.632],
-        [89.063, 73.449],
-        [89.121, 108.998],
-        ],
-        dtype=np.float32,
-    )
-
-    # Apply the transformation to each new pixel coordinate
-    transformed_red_coords = [
-        simple_transform(coord, pixel_coords_list, red_coords_list)
-        for coord in new_pixel_coord
-    ]
-
-    # Print the transformed red coordinates
-    print("[")
-    for coord in transformed_red_coords:
-        rounded_coord = [round(x, 3) for x in coord]
-        print(f"    {rounded_coord},")
-    print("]")
-
-    # Calculate using simple linear transform
-    # new_red_coord = simple_transform(
-    #     [42.749, 125.763], pixel_coords_list, red_coords_list
-    # )
-    # print("Corresponding red coordinates:", new_red_coord)
-# sys.exit()
-
-min_tau = 16  # ns
-max_tau = 100e3  # fallback if no revival_period given
-taus = []
-
-# Densely sample early decay
-decay_width = 5e3
-decay = np.linspace(min_tau, min_tau + decay_width, 6)
-taus.extend(decay.tolist())
-
-taus.extend(np.geomspace(min_tau + decay_width, max_tau, 81).tolist())
-
-# Round to clock-cycle-compatible units
-taus = [round(el / 4) * 4 for el in taus]
-
-# Remove duplicates and sort
-taus = sorted(set(taus))
-taus_x = np.linspace(1, len(taus), len(taus))
-plt.figure()
-plt.scatter(taus_x, taus)
-plt.show(block=True)
-# sys.exit()
-
+sys.exit()
 
 def generate_divisible_by_4(min_val, max_val, num_steps):
     step_size = (max_val - min_val) / (num_steps - 1)
@@ -165,7 +52,6 @@ def generate_divisible_by_4(min_val, max_val, num_steps):
 
     return values
 
-
 # Example Usage
 min_duration = 16
 max_duration = 1000
@@ -175,6 +61,8 @@ step_values = generate_divisible_by_4(min_duration, max_duration, num_steps)
 print(step_values)
 print(len(step_values))
 sys.exit()
+
+
 def logspace_div4(min_val, max_val, num_steps, base=10.0):
     if not (min_val > 0 and max_val > min_val and num_steps >= 2):
         raise ValueError("Bad inputs.")
@@ -205,7 +93,6 @@ def logspace_div4(min_val, max_val, num_steps, base=10.0):
 print(logspace_div4(16, 200, 18))
 sys.exit()
 
-# sys.exit()
 # Updating plot with center frequencies in the legend
 # # Given data
 # green_aod_freq_MHz = np.array([90, 95, 100, 105, 110, 115, 120, 125])

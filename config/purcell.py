@@ -25,7 +25,6 @@ from utils.constants import (
 home = Path.home()
 
 # region Widefield calibration coords
-
 green_laser = "laser_INTE_520"
 yellow_laser = "laser_OPTO_589"
 red_laser = "laser_COBO_638"
@@ -47,6 +46,7 @@ calibration_coords_red = [
     [69.659, 53.108],
     [55.123, 62.905],
 ]
+
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
     CoordsKey.PIXEL: calibration_coords_pixel[0],
@@ -66,16 +66,34 @@ calibration_coords_nv3 = {
     red_laser_aod: calibration_coords_red[2],
 }
 
-
 pixel_to_sample_affine_transformation_matrix = [
     [0.02470551, -0.00346857, -4.83284846],
     [0.00701627, 0.02788312, -6.73371684],
 ]
 
+# SLM–ThorCam–Nuvu spatial calibration
+# ThorCam target coordinates are fixed using the SLM Fourier calibration.
+# Generate these three spots using the SLM and measure their corresponding
+# positions on the Nuvu camera.
+# Update Nuvu coordinates after optical realignment.
+# Coordinates are [x, y], with matching point order.
+
+calibration_coords_thorcam = [
+    [841.24355653, 600.0],
+    [598.75644347, 600.0],
+    [720.0,        390.0],
+]
+
+calibration_coords_nuvu = [
+    [33.532,   32.355],
+    [96.177,  276.129],
+    [274.886, 101.128],
+]
 
 # endregion
+
+
 # region Base config
-# Add on to the default config
 config |= {
     ###
     "apd_indices": [0],  # APD indices for the tagger
@@ -160,6 +178,8 @@ config |= {
         "nuvu_to_thorcam_dmd_calib_path": (
             "calibrations/purcell/current/nuvu_to_thorcam_dmd.npz"
         ),
+        "calibration_coords_thorcam": calibration_coords_thorcam,
+        "calibration_coords_nuvu": calibration_coords_nuvu,
     },
     ###
     "Microwaves": {
