@@ -1096,7 +1096,7 @@ def do_rqs_c13_bath(nv_list):
     
 def do_rabi(nv_list):
     min_tau = 16
-    max_tau = 720 + min_tau
+    max_tau = 400 + min_tau
     num_steps = 31
     num_reps = 10
     num_runs = 30 #100
@@ -2059,9 +2059,7 @@ if __name__ == "__main__":
     magnet_angle = 90
     date_str = "2026_10_02"
     sample_coords = [0.1, 0.0]
-    z_coord = 0.0   
-    # z_coord =-0.1 #Clibrated layer
-
+    z_coord = -0.4   
     
     config = common.get_config_dict()
     file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
@@ -2118,7 +2116,7 @@ if __name__ == "__main__":
     # ]
 
 
-    #ref parameters for -0.1 layer
+    # # ref parameters for -0.1 layer
     # pixel_coords_list =[
     #     [151.893, 147.049],
     #     [68.942, 52.819],
@@ -2126,16 +2124,17 @@ if __name__ == "__main__":
     #     [255.325, 177.995],      
     # ]
     # green_coords_list = [
-    #     [100.292, 100.603],
-    #     [112.219, 119.456],
-    #     [100.56, 79.872],
-    #     [82.969, 92.342],
+    #     [100.295, 100.588],
+    #     [112.204, 119.398],
+    #     [100.614, 79.875],
+    #     [83.01, 92.325],
+
     # ]
     # red_coords_list = [
-    #     [69.194, 70.006],
-    #     [78.778, 85.622],
-    #     [69.614, 53.105],
-    #     [55.09, 62.918],
+    #     [69.197, 69.994],
+    #     [78.767, 85.575],
+    #     [69.659, 53.108],
+    #     [55.123, 62.905],
     # ]
     
     # -------------------------------------------
@@ -2250,7 +2249,7 @@ if __name__ == "__main__":
     nv_sig = widefield.get_repr_nv_sig(nv_list)
     # print(f"Created NV: {nv_sig.name}, Coords: {nv_sig.coords}")
     # nv_sig.expected_counts =  3093.0
-    nv_sig.expected_counts = 870.0#810.0
+    nv_sig.expected_counts = 850.0 
     # nv_list = nv_list[::-1]  # flipping the order of NVs
     # nv_list = nv_list[:100]
     print(f"length of NVs list:{len(nv_list)}")
@@ -2264,7 +2263,6 @@ if __name__ == "__main__":
         # this is to create a flag that tell expt is runnig
         with open("experiment_running.flag", "w") as f:
             f.write("running")
-        # pass
         kpl.init_kplotlib()
         # tb.init_safe_stop()
         # widefield.reset_all_drift()1
@@ -2294,7 +2292,7 @@ if __name__ == "__main__":
         # )
         
         
-        do_compensate_for_drift(nv_sig)
+        # do_compensate_for_drift(nv_sig)
 
         # try:
         #     # do_rqs_16k7(nv_list)
@@ -2303,7 +2301,8 @@ if __name__ == "__main__":
         #     import traceback
         #     traceback.print_exc()
         #     raise
-        # do_widefield_image_sample(nv_sig, 50)  #yellow
+        
+        do_widefield_image_sample(nv_sig, 50)  #yellow
         # do_widefield_image_sample(nv_sig, 400)
 
         # for nv in nv_list: 
@@ -2318,7 +2317,7 @@ if __name__ == "__main__":
         # piezo_voltage_to_pixel_calibration()
         # do_image_nv_list(nv_list)
         # do_image_single_nv(nv_sig)
-        # z_range = np.linspace(0.0, 1.0, 21)
+        # z_range = np.linspace(-1.0, 1.0, 11)
         # for z in z_range:
         #     nv_sig.coords[CoordsKey.Z] = z
         #     do_scanning_image_sample(nv_sig)
@@ -2358,9 +2357,9 @@ if __name__ == "__main__":
 
         # do_optimize_sample(nv_sig)
         # optimize.optimize_pixel_and_z(nv_sig, do_plot=True)
-        # coords_key = None
-        # coords_key = green_laser
-        # coords_key = red_laser
+        # coords_key = None    
+        # coords_key = green_laser  #first calibration laser
+        # coords_key = red_laser  # write the slm pattern second calibration 
         # do_optimize_loop(np.array(nv_list), np.array(coords_key))
  
         # do_charge_state_histograms(nv_list)
@@ -2429,7 +2428,7 @@ if __name__ == "__main__":
         # do_rabi_iq_amplitude(nv_list)
         # do_resonance(nv_list)
         # do_optimize_scc_amp(nv_list)
-        do_rabi(nv_list)
+        # do_rabi(nv_list)
         # do_xy_tone(nv_list)
         
         # do_xy4_no_tone(nv_list)

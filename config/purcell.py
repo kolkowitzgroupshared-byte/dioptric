@@ -38,14 +38,14 @@ calibration_coords_pixel = [
     [255.325, 177.995],    
 ]
 calibration_coords_green = [
-    [112.219, 119.456],
-    [100.56, 79.872],
-    [82.969, 92.342],
+    [112.204, 119.398],
+    [100.614, 79.875],
+    [83.01, 92.325],
 ]
 calibration_coords_red = [
-    [78.778, 85.622],
-    [69.614, 53.105],
-    [55.09, 62.918],
+    [78.767, 85.575],
+    [69.659, 53.108],
+    [55.123, 62.905],
 ]
 # Create the dictionaries using the provided lists
 calibration_coords_nv1 = {
@@ -185,9 +185,9 @@ config |= {
                 "physical_name": "sig_gen_STAN_sg394_1",
                 "uwave_power": 11.0,
                 "frequency": 2.79163, #2.7924,  # 2.79151 with the resonator
-                "rabi_period": 368, #184 ## loop iq
-                "pi_pulse": 160, #96, ## loop iq
-                "pi_on_2_pulse": 80,#48, ## loop iq
+                "rabi_period": 192, #184 ## loop iq
+                "pi_pulse": 92, #96, ## loop iq
+                "pi_on_2_pulse": 44,#48, ## loop iq
                 # "rabi_period": 180, ## loop
                 # "pi_pulse": 88, ## loop
                 # "pi_on_2_pulse": 44, ## loop
@@ -1011,6 +1011,7 @@ opx_config = {
             "operation": "control",
             "length": int(pi_on_2_pulse_1),
             "digital_marker": "on",
+            
         },
         "do_pi_pulse_2": {
             "operation": "control",

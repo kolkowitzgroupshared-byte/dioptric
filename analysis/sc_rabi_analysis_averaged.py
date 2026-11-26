@@ -12,8 +12,13 @@ kpl.init_kplotlib()
 # file_stem = "2026_10_19-13_02_37-johnson-nv0_2026_10_02" # no iq
 # file_stem = "2026_10_22-17_43_47-johnson-nv0_2026_10_02" # no iq
 # file_stem = "2026_11_10-14_38_47-johnson-nv0_2026_10_02" # resonator
-file_stem = "2026_11_12-20_18_16-johnson-nv0_2026_10_02" #loop
+# file_stem = "2026_11_12-20_18_16-johnson-nv0_2026_10_02" #loop
 # file_stem = "2026_11_15-16_43_52-johnson-nv0_2026_10_02" #resonator
+file_stem = ["2026_11_22-01_30_13-johnson-nv0_2026_10_02",
+             "2026_11_22-00_27_55-johnson-nv0_2026_10_02",
+             "2026_11_21-23_25_02-johnson-nv0_2026_10_02"
+             ] #loop
+
 # o2_inds = [
 #     1, 2, 3,4,5, 7, 8, 9, 10, 11,12, 13, 14, 15,16,1
 #     20, 21, 23, 26, 27, 28, 29, 30, 31, 32, 33, 34,
