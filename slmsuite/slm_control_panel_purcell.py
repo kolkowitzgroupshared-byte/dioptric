@@ -32,8 +32,6 @@ from slmsuite.hardware.slms.thorlabs import ThorSLM
 from slmsuite.holography import analysis, toolbox
 from slmsuite.holography.algorithms import SpotHologram
 
-# from slmsuite.nv_coords_weights_reorder_reassign import curve_extreme_weights_simple
-
 warnings.filterwarnings("ignore")
 mpl.rc("image", cmap="Blues")
 
@@ -78,12 +76,10 @@ def cam_plot():
     plt.show()
 
     # # Save the image
-
     file_path = r"slmsuite\cam_image"
-    num_nvs = len(nuvu_pixel_coords)
     now = datetime.now()
     date_time_str = now.strftime("%Y%m%d_%H%M%S")
-    filename = f"slm_generated_spots_{num_nvs}nvs_{date_time_str}.npy"
+    filename = f"slm_generated_spots_{date_time_str}.npy"
     # Save the phase data
     save(img, file_path, filename)
     print(f"Image saved at {file_path}")
@@ -300,22 +296,19 @@ def load_nv_coords():
     print(f"len of nv coords: {len(nv_coordinates)}")
     return nv_coordinates, spot_weights
 
-# ----------------------------
-# Load coordinates and weights
-# ----------------------------
-nuvu_pixel_coords, spot_weights = load_nv_coords()
-# Transform Nuvu coordinates to ThorCam coordinates
-thorcam_coords = nuvu2thorcam_slm(nuvu_pixel_coords)  # shape: (N, 2)
-thorcam_coords_xy = thorcam_coords.T                  # shape: (2, N)
-
-print("nuvu_pixel_coords shape:", nuvu_pixel_coords.shape)
-print("thorcam_coords shape:", thorcam_coords_xy.shape)
-print("spot_weights shape:", spot_weights.shape)
-print("spot weight min/max:", np.nanmin(spot_weights), np.nanmax(spot_weights))
-
-# sys.exit()
-
 def compute_and_write_nvs_phase():
+    # ----------------------------
+    # Load coordinates and weights
+    # ----------------------------
+    nuvu_pixel_coords, spot_weights = load_nv_coords()
+    # Transform Nuvu coordinates to ThorCam coordinates
+    thorcam_coords = nuvu2thorcam_slm(nuvu_pixel_coords)  # shape: (N, 2)
+    thorcam_coords_xy = thorcam_coords.T                  # shape: (2, N)
+    print("nuvu_pixel_coords shape:", nuvu_pixel_coords.shape)
+    print("thorcam_coords shape:", thorcam_coords_xy.shape)
+    print("spot_weights shape:", spot_weights.shape)
+    print("spot weight min/max:", np.nanmin(spot_weights), np.nanmax(spot_weights))
+    
     hologram = SpotHologram(
         shape=(4096, 2048),
         spot_vectors=thorcam_coords_xy,
@@ -374,6 +367,7 @@ def save(data, path, filename):
     return saved_path
 
 #endregion
+
 class DummyCamera:
     """
     Minimal Camera-like object for slmsuite CameraSLM/FourierSLM.
@@ -409,7 +403,6 @@ class DummyCamera:
         
 def hold_pattern():
 #"""Keep the pattern on the SLM until "close" is typed.
-
 #The Thorlabs display window only repaints while this thread processes its Windows
 #messages. A plain input() blocks them, so the SLM can keep showing the window's black
 #background instead of the pattern. This loop processes the messages while it waits.
