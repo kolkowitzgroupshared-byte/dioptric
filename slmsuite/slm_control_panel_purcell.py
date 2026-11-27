@@ -24,7 +24,6 @@ import numpy as np
 
 from utils import common
 from utils import data_manager as dm
-# Generate a phase .gif
 from IPython.display import Image
 
 from slmsuite.hardware.cameras.thorlabs import ThorCam
@@ -97,7 +96,7 @@ def blaze(vector_deg=(0.2, 0.2)):
     plot_phase(blaze_phase, title="Blaze at {} deg".format(vector_deg))
 
 
-# region "calibration"
+# region "calibration functions"
 def fourier_calibration():
     cam.set_exposure(0.0001)  # Increase exposure because power will be split many ways
     fs.fourier_calibrate(
@@ -149,48 +148,9 @@ def wavefront_calibration():
     )
     calibration_file = fs.save_wavefront_calibration(path=str(output_dir))
     print("Wavefront calibration saved to:", calibration_file)
-
-
-def load_fourier_calibration():
-    calibration_file_path = (
-        # "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00003.h5"
-        # "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00006.h5"
-        # "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00008.h5"
-        "calibrations/purcell/current/slm_fourier.h5"
-    )
     
-    fs.load_fourier_calibration(calibration_file_path)
-    print(fs.fourier_calibration)
-    print("Fourier calibration loaded from:", calibration_file_path)
-
-
-def load_wavefront_calibration():
-    calibration_file_path = (
-        "slmsuite/wavefront_calibration/26438-SLM-wavefront-calibration_00004.h5"
-    )
-    fs.load_wavefront_calibration(calibration_file_path)
-    print("Wavefront calibration loaded from:", calibration_file_path)
-
-
-def evaluate_uniformity(vectors=None, size=25):
-    # Set exposure and capture image
-    cam.set_exposure(0.001)
-    img = cam.get_image()
-    # Extract subimages
-    if vectors is None:
-        subimages = analysis.take(img, vectors=None, size=size)
-    else:
-        subimages = analysis.take(img, vectors=vectors, size=size)
-
-    # Plot subimages
-    analysis.take_plot(subimages)
-    # Normalize subimages and compute powers
-    powers = analysis.image_normalization(subimages)
-    # Plot histogram of powers
-    plt.hist(powers / np.mean(powers))
-    plt.show()
-
-
+    
+# region "phase patterns"
 def circles():
     # cam.set_exposure(0.1)
 
@@ -231,15 +191,15 @@ def circles():
     phase = hologram.extract_phase()
     slm.write(phase, settle=True)
     
-    file_path = r"slmsuite\phase"
-    now = datetime.now()
-    date_time_str = now.strftime("%Y%m%d_%H%M%S")  # Format: YYYYMMDD_HHMMSS
-    filename = f"slm_calibration_circle_{date_time_str}.npy"
-    # Save the phase data
-    save(phase, file_path, filename)
+    ### save the phase data
+    # file_path = r"slmsuite\phase"
+    # now = datetime.now()
+    # date_time_str = now.strftime("%Y%m%d_%H%M%S")  # Format: YYYYMMDD_HHMMSS
+    # filename = f"slm_calibration_circle_{date_time_str}.npy"
+    # # Save the phase data
+    # save(phase, file_path, filename)
     # cam_plot()
 
-# region "nv phase calulation"
 def calibration_triangle():
     # Define parameters for the equilateral triangle
     center = (720, 530)  # Center of the triangle
@@ -270,14 +230,39 @@ def calibration_triangle():
 
     phase = hologram.extract_phase()
     slm.write(phase, settle=True)
-    file_path = r"slmsuite\phase"
-    now = datetime.now()
-    date_time_str = now.strftime("%Y%m%d_%H%M%S")  # Format: YYYYMMDD_HHMMSS
-    filename = f"slm_calibration_triangle_{date_time_str}.npy"
+    
+    ### save the phase data
+    # file_path = r"slmsuite\phase"
+    # now = datetime.now()
+    # date_time_str = now.strftime("%Y%m%d_%H%M%S")  # Format: YYYYMMDD_HHMMSS
+    # filename = f"slm_calibration_triangle_{date_time_str}.npy"
     # Save the phase data
-    save(phase, file_path, filename)
+    # save(phase, file_path, filename)
     # cam_plot()
     
+# endregion
+
+# region Load calibration
+def load_fourier_calibration():
+    calibration_file_path = (
+        # "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00003.h5"
+        # "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00006.h5"
+        # "slmsuite/fourier_calibration/26438-SLM-fourier-calibration_00008.h5"
+        "calibrations/purcell/current/slm_fourier.h5"
+    )
+    
+    fs.load_fourier_calibration(calibration_file_path)
+    print(fs.fourier_calibration)
+    print("Fourier calibration loaded from:", calibration_file_path)
+
+
+def load_wavefront_calibration():
+    calibration_file_path = (
+        "slmsuite/wavefront_calibration/26438-SLM-wavefront-calibration_00004.h5"
+    )
+    fs.load_wavefront_calibration(calibration_file_path)
+    print("Wavefront calibration loaded from:", calibration_file_path)
+  
 # def nuvu2thorcam_slm(
 #     coords,
 #     calib_path="slmsuite/calibration/nuvu_to_thorcam_slm.npz",
@@ -302,6 +287,10 @@ def nuvu2thorcam_slm(coords):
     coords = np.asarray(coords, dtype=np.float64)
     return coords @ M[:, :2].T + M[:, 2]
 
+# endregion
+
+
+# nv phase computation
 def load_nv_coords():
     config = common.get_config_dict()
     file_path = config["SpatialCalibrations"]["active_nv_coords_path"]
@@ -383,7 +372,8 @@ def save(data, path, filename):
     saved_path = dm.save_npy(data, file_path)
     print(f"Saved to {saved_path}")
     return saved_path
-    
+
+#endregion
 class DummyCamera:
     """
     Minimal Camera-like object for slmsuite CameraSLM/FourierSLM.
@@ -484,7 +474,6 @@ finally:
 
     if slm is not None:
         slm.close()
-
 
     if cam is not None:
         cam.close()

@@ -159,16 +159,23 @@ config |= {
     ###
     "SpatialCalibrations": {
         "active_nv_coords_path": (
+            # "slmsuite/nv_blob_detection/nv_blob_564nvs_reordered.npz"
             # "slmsuite/nv_blob_detection/nv_blob_300nvs_reordered.npz"
             "slmsuite/nv_blob_detection/nv_blob_119nvs_reordered.npz"
-            # "slmsuite/nv_blob_detection/nv_blob_564nvs_reordered.npz"
         ),
+        
+        ### SLM / ThorCam / Nuvu calibration files
         "slm_fourier_calib_path": (
             "calibrations/purcell/current/slm_fourier.h5"
         ),
-        "nuvu_to_thorcam_slm_calib_path": (
-            "calibrations/purcell/current/nuvu_to_thorcam_slm.npz"
-        ),
+        "calibration_coords_thorcam": calibration_coords_thorcam,
+        "calibration_coords_nuvu": calibration_coords_nuvu,
+        
+        # "nuvu_to_thorcam_slm_calib_path": (
+        #     "calibrations/purcell/current/nuvu_to_thorcam_slm.npz"
+        # ),
+        
+        ### DMD / DLP6500 calibration files
         "dmd_zero_order_calib_path": (
             "calibrations/purcell/current/dmd_zero_order.npz"
         ),
@@ -178,8 +185,6 @@ config |= {
         "nuvu_to_thorcam_dmd_calib_path": (
             "calibrations/purcell/current/nuvu_to_thorcam_dmd.npz"
         ),
-        "calibration_coords_thorcam": calibration_coords_thorcam,
-        "calibration_coords_nuvu": calibration_coords_nuvu,
     },
     ###
     "Microwaves": {
